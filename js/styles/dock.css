@@ -1,0 +1,93 @@
+.ml-dock {
+  z-index: var(--ml-z-dock);
+  top: max(78px, calc(env(safe-area-inset-top) + 74px));
+  right: 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ml-space-8);
+  pointer-events: none;
+  filter: var(--ml-dock-filter);
+  animation: mlToolbarEnter var(--ml-duration-toolbar) var(--ml-ease-out) both;
+  transition:
+    filter var(--ml-duration-toolbar) var(--ml-ease-toolbar),
+    transform var(--ml-duration-toolbar) var(--ml-ease-toolbar);
+}
+
+.ml-dock[data-positioned="true"] {
+  top: auto;
+  right: auto;
+}
+
+.ml-dock[data-dragging="true"] {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.ml-dock[data-popup-open="true"] .ml-panel {
+  display: none;
+}
+
+.ml-dock > .ml-tooltip-anchor {
+  flex: 0 0 var(--ml-dock-height);
+  width: var(--ml-dock-height);
+}
+
+.ml-launcher {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--ml-dock-height);
+  height: var(--ml-dock-height);
+  border: 1px solid var(--ml-line);
+  border-radius: var(--ml-radius-pill);
+  padding: 0;
+  background: var(--ml-toolbar-sheen), var(--ml-bg);
+  box-shadow: var(--ml-shadow);
+  color: var(--ml-text);
+  cursor: grab;
+  pointer-events: auto;
+  touch-action: none;
+  transition:
+    width var(--ml-duration-toolbar) var(--ml-ease-toolbar),
+    transform var(--ml-duration-toolbar) var(--ml-ease-toolbar),
+    background-color var(--ml-duration-base) ease,
+    border-color var(--ml-duration-base) ease,
+    border-radius var(--ml-duration-toolbar) var(--ml-ease-toolbar);
+}
+
+.ml-launcher:hover {
+  transform: var(--ml-transform-lift);
+  border-color: var(--ml-accent-border-strong);
+}
+
+.ml-launcher:active {
+  transform: var(--ml-transform-press);
+}
+
+.ml-dock[data-dragging="true"] .ml-launcher {
+  cursor: grabbing;
+  transform: var(--ml-transform-press);
+}
+
+.ml-launcher__spark {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--ml-radius-pill);
+  background: var(--ml-accent);
+  box-shadow: 0 0 0 5px var(--ml-accent-ring-soft);
+  color: var(--ml-accent-ink);
+  animation: mlPulse 1.8s ease-in-out infinite;
+  transition:
+    transform var(--ml-duration-toolbar) var(--ml-ease-toolbar),
+    box-shadow var(--ml-duration-toolbar) var(--ml-ease-toolbar);
+}
+
+.ml-launcher:hover .ml-launcher__spark {
+  transform: scale(1.04);
+}
+
+.ml-launcher--open {
+  border-color: var(--ml-accent-border-strong);
+}

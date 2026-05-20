@@ -1,0 +1,41 @@
+{
+  "name": "marimo-lens",
+  "private": true,
+  "scripts": {
+    "dev": "esbuild js/widget.tsx --format=esm --bundle --alias:@=./js --outdir=src/marimo_lens/static --sourcemap=inline --watch",
+    "build": "esbuild js/widget.tsx --minify --format=esm --bundle --alias:@=./js --outdir=src/marimo_lens/static",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint js",
+    "lint:fix": "oxlint js --fix",
+    "test": "vitest run --environment jsdom",
+    "fmt": "oxfmt js package.json tsconfig.json vitest.config.ts pyproject.toml README.md AGENTS.md .oxlintrc.json .oxfmtrc.json",
+    "fmt:check": "oxfmt --check js package.json tsconfig.json vitest.config.ts pyproject.toml README.md AGENTS.md .oxlintrc.json .oxfmtrc.json",
+    "qa": "pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
+  },
+  "dependencies": {
+    "@anywidget/react": "^0.2.1",
+    "@use-gesture/react": "10.3.1",
+    "lucide-react": "1.16.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "zustand": "5.0.13"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.9",
+    "@types/react-dom": "^19.2.3",
+    "esbuild": "^0.28.0",
+    "jsdom": "29.1.1",
+    "oxfmt": "0.50.0",
+    "oxlint": "1.65.0",
+    "typescript": "^6.0.2",
+    "vitest": "4.1.6"
+  },
+  "packageManager": "pnpm@10.33.3",
+  "reactDoctor": {
+    "ignore": {
+      "files": [
+        "src/marimo_lens/static/**"
+      ]
+    }
+  }
+}

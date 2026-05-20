@@ -1,0 +1,433 @@
+.marimo_lens {
+  /* Stacking */
+  --ml-z-root: 2147483647;
+  --ml-z-scrim: 99995;
+  --ml-z-lineage: 99996;
+  --ml-z-highlight: 99997;
+  --ml-z-agent: 99998;
+  --ml-z-marker: 99999;
+  --ml-z-hover: 100000;
+  --ml-z-dock: 100001;
+  --ml-z-popup: 100002;
+  --ml-z-tooltip: 2147483647;
+
+  /* Typography, geometry, and motion */
+  --ml-font-family:
+    var(--text-font), system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --ml-font-family-mono:
+    var(--monospace-font), ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --ml-font-xs: 10px;
+  --ml-font-sm: 11px;
+  --ml-font-md: 12px;
+  --ml-font-lg: 13px;
+  --ml-line-tight: 1.1;
+  --ml-line-normal: 1.35;
+  --ml-line-relaxed: 1.45;
+  --ml-radius-xs: 3px;
+  --ml-radius-sm: 6px;
+  --ml-radius-md: 8px;
+  --ml-radius-lg: 10px;
+  --ml-radius-xl: 14px;
+  --ml-radius-2xl: 16px;
+  --ml-radius-pill: 999px;
+  --ml-space-1: 2px;
+  --ml-space-2: 3px;
+  --ml-space-3: 4px;
+  --ml-space-4: 5px;
+  --ml-space-5: 6px;
+  --ml-space-6: 7px;
+  --ml-space-7: 8px;
+  --ml-space-8: 9px;
+  --ml-space-9: 10px;
+  --ml-space-10: 11px;
+  --ml-space-11: 12px;
+  --ml-space-12: 13px;
+  --ml-space-13: 14px;
+  --ml-control-sm: 24px;
+  --ml-control-md: 28px;
+  --ml-control-lg: 32px;
+  --ml-dock-height: 42px;
+  --ml-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ml-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ml-ease-toolbar: cubic-bezier(0.19, 1, 0.22, 1);
+  --ml-ease-accordion: cubic-bezier(0.16, 1, 0.3, 1);
+  --ml-duration-fast: 120ms;
+  --ml-duration-base: 150ms;
+  --ml-duration-enter: 180ms;
+  --ml-duration-toolbar: 260ms;
+  --ml-transform-lift: translateY(-1px);
+  --ml-transform-press: scale(0.96);
+  --ml-transform-icon-press: scale(0.92);
+
+  /* Core palette */
+  --ml-color-scheme: dark;
+  --ml-bg: #101214;
+  --ml-panel: rgba(18, 21, 24, 0.94);
+  --ml-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.02));
+  --ml-toolbar-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02));
+  --ml-drag-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.025));
+  --ml-popup-bg: #1a1a1a;
+  --ml-hover-card-bg: rgba(15, 17, 19, 0.94);
+  --ml-tooltip-bg: #383838;
+  --ml-text: #f7f9fb;
+  --ml-muted: rgba(247, 249, 251, 0.58);
+  --ml-subtle: rgba(247, 249, 251, 0.35);
+  --ml-faint: rgba(247, 249, 251, 0.12);
+  --ml-line: rgba(247, 249, 251, 0.16);
+  --ml-line-soft: rgba(247, 249, 251, 0.1);
+  --ml-line-strong: rgba(247, 249, 251, 0.35);
+  --ml-popup-line: rgba(255, 255, 255, 0.08);
+  --ml-control-bg: rgba(255, 255, 255, 0.045);
+  --ml-control-hover: rgba(255, 255, 255, 0.085);
+  --ml-control-active: rgba(255, 255, 255, 0.065);
+  --ml-icon-bg: rgba(255, 255, 255, 0.055);
+  --ml-tooltip-text: rgba(255, 255, 255, 0.78);
+  --ml-placeholder: rgba(255, 255, 255, 0.35);
+  --ml-scrim-bg: rgba(4, 8, 10, 0.08);
+  --ml-hover-outline: color-mix(in srgb, var(--ml-accent) 58%, transparent);
+  --ml-focus-ring: color-mix(in srgb, var(--ml-accent) 72%, white);
+  --ml-scrollbar-thumb: rgba(255, 255, 255, 0.2);
+
+  /* Brand and semantic accents */
+  --ml-accent: #367968;
+  --ml-accent-ink: #ffffff;
+  --ml-blue: #5aa7ff;
+  --ml-amber: #f4b84a;
+  --ml-red: #ff6b73;
+
+  /* Interaction and selection tokens */
+  --ml-accent-border-muted: color-mix(in srgb, var(--ml-accent) 38%, var(--ml-line));
+  --ml-accent-border-strong: color-mix(in srgb, var(--ml-accent) 44%, var(--ml-line));
+  --ml-accent-ring-soft: color-mix(in srgb, var(--ml-accent) 14%, transparent);
+  --ml-accent-ring-muted: color-mix(in srgb, var(--ml-accent) 8%, transparent);
+  --ml-accent-ring-faint: color-mix(in srgb, var(--ml-accent) 7%, transparent);
+  --ml-target-dot: var(--ml-blue);
+  --ml-target-dot-columnar: var(--ml-accent);
+  --ml-target-dot-visual: var(--ml-amber);
+  --ml-identity-icon: var(--ml-blue);
+  --ml-identity-icon-columnar: var(--ml-accent);
+  --ml-identity-icon-visual: var(--ml-amber);
+  --ml-highlight-bg: color-mix(in srgb, var(--ml-accent) 5%, transparent);
+  --ml-highlight-bg-fallback: rgba(54, 121, 104, 0.05);
+  --ml-highlight-muted-bg: color-mix(in srgb, var(--ml-accent) 3%, transparent);
+  --ml-highlight-muted-bg-fallback: rgba(54, 121, 104, 0.03);
+  --ml-highlight-border: color-mix(in srgb, var(--ml-accent) 72%, transparent);
+  --ml-highlight-muted-border: color-mix(in srgb, var(--ml-accent) 42%, transparent);
+  --ml-highlight-ring: color-mix(in srgb, var(--ml-accent) 5%, transparent);
+  --ml-highlight-muted-ring: color-mix(in srgb, var(--ml-accent) 3%, transparent);
+  --ml-lineage-border: color-mix(in srgb, var(--ml-muted) 18%, transparent);
+  --ml-lineage-inner: color-mix(in srgb, var(--ml-muted) 6%, transparent);
+  --ml-lineage-bg: rgba(255, 255, 255, 0.045);
+  --ml-lineage-focus-border: color-mix(in srgb, var(--ml-accent) 62%, transparent);
+  --ml-lineage-focus-inner: color-mix(in srgb, var(--ml-accent) 8%, transparent);
+  --ml-lineage-focus-ring: color-mix(in srgb, var(--ml-accent) 4%, transparent);
+  --ml-lineage-upstream-border: color-mix(in srgb, var(--ml-blue) 36%, transparent);
+  --ml-lineage-downstream-border: color-mix(in srgb, var(--ml-amber) 38%, transparent);
+  --ml-lineage-rail: color-mix(in srgb, var(--ml-muted) 38%, transparent);
+  --ml-lineage-node: color-mix(in srgb, var(--ml-muted) 50%, transparent);
+  --ml-lineage-node-active: color-mix(in srgb, var(--ml-blue) 76%, var(--ml-muted));
+  --ml-marker-bg: var(--ml-amber);
+  --ml-marker-ink: #181108;
+  --ml-marker-border: rgba(255, 255, 255, 0.35);
+  --ml-agent-read: #8da1b5;
+  --ml-agent-claimed: #7f93ff;
+  --ml-agent-edited: #17b8a6;
+  --ml-agent-ran: #5aa7ff;
+  --ml-agent-failed: var(--ml-red);
+  --ml-agent-needs-review: var(--ml-amber);
+
+  /* Popup form tokens */
+  --ml-provenance-border: rgba(255, 255, 255, 0.1);
+  --ml-provenance-bg: var(--ml-control-bg);
+  --ml-provenance-text: rgba(255, 255, 255, 0.52);
+  --ml-textarea-border: rgba(255, 255, 255, 0.15);
+  --ml-textarea-bg: rgba(255, 255, 255, 0.05);
+  --ml-textarea-focus-bg: rgba(255, 255, 255, 0.065);
+  --ml-chip-border: rgba(255, 255, 255, 0.12);
+  --ml-chip-text: rgba(255, 255, 255, 0.54);
+  --ml-chip-hover-bg: rgba(255, 255, 255, 0.07);
+  --ml-chip-hover-text: rgba(255, 255, 255, 0.82);
+  --ml-chip-selected-bg: color-mix(in srgb, var(--ml-accent) 18%, transparent);
+  --ml-chip-selected-border: color-mix(in srgb, var(--ml-accent) 60%, rgba(255, 255, 255, 0.18));
+  --ml-popup-icon-text: rgba(255, 255, 255, 0.45);
+  --ml-popup-icon-hover-bg: rgba(255, 255, 255, 0.08);
+  --ml-popup-icon-hover-text: rgba(255, 255, 255, 0.78);
+
+  /* Elevation */
+  --ml-shadow: 0 22px 60px rgba(0, 0, 0, 0.28), 0 2px 10px rgba(0, 0, 0, 0.22);
+  --ml-shadow-compact: 0 14px 34px rgba(0, 0, 0, 0.18);
+  --ml-shadow-highlight: 0 12px 34px rgba(0, 0, 0, 0.16);
+  --ml-shadow-tooltip: 0 1px 8px rgba(0, 0, 0, 0.28);
+  --ml-shadow-marker: 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --ml-dock-filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.16));
+  --ml-popup-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--ml-popup-line);
+
+  position: fixed;
+  inset: 0;
+  z-index: var(--ml-z-root);
+  width: 100vw;
+  height: 100vh;
+  contain: layout style;
+  isolation: isolate;
+  pointer-events: none;
+  color-scheme: var(--ml-color-scheme);
+  color: var(--ml-text);
+  font-family: var(--ml-font-family);
+}
+
+@supports (color: color(display-p3 0 0 0)) {
+  .marimo_lens {
+    --ml-blue: color(display-p3 0.35 0.65 1);
+    --ml-amber: color(display-p3 0.96 0.72 0.29);
+    --ml-red: color(display-p3 1 0.42 0.45);
+  }
+}
+
+.marimo_lens,
+.marimo_lens * {
+  box-sizing: border-box;
+}
+
+.marimo_lens :where(button, input, select, textarea, label) {
+  margin: 0;
+  border: unset;
+  border-radius: unset;
+  padding: unset;
+  background: unset;
+  box-shadow: unset;
+  color: unset;
+  font: inherit;
+  letter-spacing: 0;
+  line-height: unset;
+  text-decoration: unset;
+  text-transform: unset;
+}
+
+.marimo_lens svg[fill="none"],
+.marimo_lens svg[fill="none"] :not([fill]) {
+  fill: none !important;
+}
+
+.marimo-lens-target {
+  position: relative;
+  border-radius: var(--ml-radius-md);
+}
+
+.marimo-lens-target:hover {
+  outline: 1px solid var(--ml-hover-outline);
+  outline-offset: var(--ml-space-2);
+}
+
+.ml-tooltip-anchor {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.ml-tooltip-anchor > button {
+  width: 100%;
+}
+
+.ml-tooltip-popover {
+  position: fixed;
+  z-index: var(--ml-z-tooltip, 2147483647);
+  width: max-content;
+  max-width: min(260px, calc(100vw - 32px));
+  border: 1px solid color-mix(in srgb, var(--ml-line) 82%, transparent);
+  border-radius: var(--ml-radius-md);
+  padding: var(--ml-space-4) var(--ml-space-7);
+  background: color-mix(in srgb, var(--ml-tooltip-bg) 92%, transparent);
+  box-shadow: var(--ml-shadow-compact);
+  color: var(--ml-tooltip-text);
+  font-family: var(--ml-font-family);
+  font-size: var(--ml-font-xs);
+  font-weight: 400;
+  line-height: var(--ml-line-normal);
+  opacity: 0;
+  pointer-events: none;
+  text-align: left;
+  transition:
+    opacity var(--ml-duration-base) ease,
+    transform var(--ml-duration-base) ease;
+}
+
+.ml-tooltip-popover[data-visible="true"] {
+  opacity: 1;
+}
+
+.ml-tooltip-popover[data-side="top"] {
+  transform: translate(-50%, calc(-100% + var(--ml-space-3))) scale(0.96);
+}
+
+.ml-tooltip-popover[data-side="top"][data-visible="true"] {
+  transform: translate(-50%, -100%) scale(1);
+}
+
+.ml-tooltip-popover[data-side="bottom"] {
+  transform: translate(-50%, calc(var(--ml-space-3) * -1)) scale(0.96);
+}
+
+.ml-tooltip-popover[data-side="bottom"][data-visible="true"] {
+  transform: translate(-50%, 0) scale(1);
+}
+
+.ml-dock,
+.ml-popup,
+.ml-agent-region,
+.ml-agent-message,
+.ml-highlight,
+.ml-lineage-region,
+.ml-hover-card,
+.ml-marker,
+.ml-scrim {
+  position: fixed;
+  font-family: inherit;
+  letter-spacing: 0;
+}
+
+.ml-primary,
+.ml-secondary,
+.ml-icon-button,
+.ml-submit,
+.ml-chip,
+.ml-dot-chip,
+.ml-feed-remove {
+  font: inherit;
+  letter-spacing: 0;
+}
+
+.ml-launcher:focus-visible,
+.ml-target-pill:focus-visible,
+.ml-primary:focus-visible,
+.ml-secondary:focus-visible,
+.ml-icon-button:focus-visible,
+.ml-agent-message__dismiss:focus-visible,
+.ml-feed-remove:focus-visible,
+.ml-marker:focus-visible,
+.ml-chip:focus-visible,
+.ml-dot-chip:focus-visible,
+.ml-submit:focus-visible {
+  outline: 2px solid var(--ml-focus-ring);
+  outline-offset: var(--ml-space-1);
+}
+
+.ml-popup::-webkit-scrollbar,
+.ml-textarea::-webkit-scrollbar,
+.ml-target-strip::-webkit-scrollbar {
+  width: var(--ml-space-5);
+  height: var(--ml-space-5);
+}
+
+.ml-popup::-webkit-scrollbar-track,
+.ml-textarea::-webkit-scrollbar-track,
+.ml-target-strip::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ml-popup::-webkit-scrollbar-thumb,
+.ml-textarea::-webkit-scrollbar-thumb,
+.ml-target-strip::-webkit-scrollbar-thumb {
+  border-radius: var(--ml-radius-xs);
+  background: var(--ml-scrollbar-thumb);
+}
+
+.marimo_lens[data-theme="light"] {
+  --ml-color-scheme: light;
+  --ml-bg: #ffffff;
+  --ml-panel: rgba(255, 255, 255, 0.985);
+  --ml-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 248, 250, 0.86));
+  --ml-toolbar-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.9));
+  --ml-drag-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.88));
+  --ml-popup-bg: #ffffff;
+  --ml-hover-card-bg: rgba(255, 255, 255, 0.96);
+  --ml-tooltip-bg: #3b3f43;
+  --ml-text: #15191d;
+  --ml-muted: rgba(21, 25, 29, 0.58);
+  --ml-subtle: rgba(21, 25, 29, 0.42);
+  --ml-faint: rgba(21, 25, 29, 0.1);
+  --ml-line: rgba(21, 25, 29, 0.16);
+  --ml-line-soft: rgba(21, 25, 29, 0.08);
+  --ml-line-strong: rgba(21, 25, 29, 0.24);
+  --ml-popup-line: rgba(0, 0, 0, 0.06);
+  --ml-control-bg: rgba(0, 0, 0, 0.035);
+  --ml-control-hover: rgba(0, 0, 0, 0.06);
+  --ml-control-active: rgba(0, 0, 0, 0.045);
+  --ml-icon-bg: rgba(0, 0, 0, 0.035);
+  --ml-tooltip-text: rgba(255, 255, 255, 0.82);
+  --ml-placeholder: rgba(0, 0, 0, 0.4);
+  --ml-scrim-bg: rgba(255, 255, 255, 0.12);
+  --ml-scrollbar-thumb: rgba(21, 25, 29, 0.24);
+  --ml-lineage-bg: rgba(0, 0, 0, 0.035);
+  --ml-marker-border: rgba(255, 255, 255, 0.78);
+  --ml-provenance-border: rgba(0, 0, 0, 0.08);
+  --ml-provenance-bg: rgba(0, 0, 0, 0.03);
+  --ml-provenance-text: rgba(21, 25, 29, 0.5);
+  --ml-textarea-border: rgba(0, 0, 0, 0.12);
+  --ml-textarea-bg: rgba(0, 0, 0, 0.03);
+  --ml-textarea-focus-bg: rgba(0, 0, 0, 0.045);
+  --ml-chip-border: rgba(0, 0, 0, 0.1);
+  --ml-chip-text: rgba(21, 25, 29, 0.5);
+  --ml-chip-hover-bg: rgba(0, 0, 0, 0.055);
+  --ml-chip-hover-text: rgba(21, 25, 29, 0.78);
+  --ml-chip-selected-border: color-mix(in srgb, var(--ml-accent) 58%, rgba(0, 0, 0, 0.12));
+  --ml-popup-icon-text: rgba(21, 25, 29, 0.5);
+  --ml-popup-icon-hover-bg: rgba(0, 0, 0, 0.06);
+  --ml-popup-icon-hover-text: rgba(21, 25, 29, 0.78);
+  --ml-shadow: 0 22px 60px rgba(28, 38, 48, 0.16), 0 2px 10px rgba(28, 38, 48, 0.12);
+  --ml-shadow-compact: 0 14px 34px rgba(28, 38, 48, 0.12);
+  --ml-shadow-highlight: 0 12px 34px rgba(28, 38, 48, 0.13);
+  --ml-shadow-tooltip: 0 1px 8px rgba(0, 0, 0, 0.24);
+  --ml-shadow-marker: 0 2px 6px rgba(28, 38, 48, 0.16), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --ml-dock-filter: drop-shadow(0 16px 34px rgba(28, 38, 48, 0.1));
+  --ml-popup-shadow: 0 4px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px var(--ml-popup-line);
+}
+
+.marimo_lens[data-theme="dark"] {
+  --ml-color-scheme: dark;
+  --ml-bg: #101214;
+  --ml-panel: rgba(18, 21, 24, 0.94);
+  --ml-panel-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.02));
+  --ml-toolbar-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.02));
+  --ml-drag-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.025));
+  --ml-popup-bg: #1a1a1a;
+  --ml-hover-card-bg: rgba(15, 17, 19, 0.94);
+  --ml-tooltip-bg: #383838;
+  --ml-text: #f7f9fb;
+  --ml-muted: rgba(247, 249, 251, 0.58);
+  --ml-subtle: rgba(247, 249, 251, 0.35);
+  --ml-faint: rgba(247, 249, 251, 0.12);
+  --ml-line: rgba(247, 249, 251, 0.16);
+  --ml-line-soft: rgba(247, 249, 251, 0.1);
+  --ml-line-strong: rgba(247, 249, 251, 0.35);
+  --ml-popup-line: rgba(255, 255, 255, 0.08);
+  --ml-control-bg: rgba(255, 255, 255, 0.045);
+  --ml-control-hover: rgba(255, 255, 255, 0.085);
+  --ml-control-active: rgba(255, 255, 255, 0.065);
+  --ml-icon-bg: rgba(255, 255, 255, 0.055);
+  --ml-tooltip-text: rgba(255, 255, 255, 0.78);
+  --ml-placeholder: rgba(255, 255, 255, 0.35);
+  --ml-scrim-bg: rgba(4, 8, 10, 0.08);
+  --ml-scrollbar-thumb: rgba(255, 255, 255, 0.2);
+  --ml-lineage-bg: rgba(255, 255, 255, 0.045);
+  --ml-marker-border: rgba(255, 255, 255, 0.35);
+  --ml-provenance-border: rgba(255, 255, 255, 0.1);
+  --ml-provenance-bg: var(--ml-control-bg);
+  --ml-provenance-text: rgba(255, 255, 255, 0.52);
+  --ml-textarea-border: rgba(255, 255, 255, 0.15);
+  --ml-textarea-bg: rgba(255, 255, 255, 0.05);
+  --ml-textarea-focus-bg: rgba(255, 255, 255, 0.065);
+  --ml-chip-border: rgba(255, 255, 255, 0.12);
+  --ml-chip-text: rgba(255, 255, 255, 0.54);
+  --ml-chip-hover-bg: rgba(255, 255, 255, 0.07);
+  --ml-chip-hover-text: rgba(255, 255, 255, 0.82);
+  --ml-chip-selected-border: color-mix(in srgb, var(--ml-accent) 60%, rgba(255, 255, 255, 0.18));
+  --ml-popup-icon-text: rgba(255, 255, 255, 0.45);
+  --ml-popup-icon-hover-bg: rgba(255, 255, 255, 0.08);
+  --ml-popup-icon-hover-text: rgba(255, 255, 255, 0.78);
+  --ml-shadow: 0 22px 60px rgba(0, 0, 0, 0.28), 0 2px 10px rgba(0, 0, 0, 0.22);
+  --ml-shadow-compact: 0 14px 34px rgba(0, 0, 0, 0.18);
+  --ml-shadow-highlight: 0 12px 34px rgba(0, 0, 0, 0.16);
+  --ml-shadow-tooltip: 0 1px 8px rgba(0, 0, 0, 0.28);
+  --ml-shadow-marker: 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+  --ml-dock-filter: drop-shadow(0 16px 34px rgba(0, 0, 0, 0.16));
+  --ml-popup-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px var(--ml-popup-line);
+}

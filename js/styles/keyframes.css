@@ -1,0 +1,145 @@
+@keyframes mlToolbarEnter {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes mlPanelIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes mlPopupIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.95) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes mlHighlightIn {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes mlAgentRegionIn {
+  from {
+    opacity: 0;
+    transform: scale(0.992);
+  }
+  to {
+    opacity: 0.96;
+    transform: scale(1);
+  }
+}
+
+@keyframes mlAgentRanPulse {
+  0% {
+    opacity: 1;
+    box-shadow:
+      inset 5px 0 0 color-mix(in srgb, var(--ml-agent-color) 100%, transparent),
+      inset 0 0 0 1px color-mix(in srgb, var(--ml-agent-color) 44%, transparent),
+      0 0 0 3px color-mix(in srgb, var(--ml-agent-color) 20%, transparent),
+      0 8px 20px color-mix(in srgb, var(--ml-agent-color) 12%, transparent);
+  }
+  70% {
+    opacity: 0.95;
+    box-shadow:
+      inset 5px 0 0 color-mix(in srgb, var(--ml-agent-color) 100%, transparent),
+      inset 0 0 0 1px color-mix(in srgb, var(--ml-agent-color) 38%, transparent),
+      0 0 0 8px color-mix(in srgb, var(--ml-agent-color) 0%, transparent),
+      0 8px 20px color-mix(in srgb, var(--ml-agent-color) 8%, transparent);
+  }
+  100% {
+    opacity: 0.96;
+  }
+}
+
+@keyframes mlAgentSweep {
+  0% {
+    opacity: 0;
+    transform: translateX(-115%);
+  }
+  18% {
+    opacity: 1;
+  }
+  74% {
+    opacity: 0.55;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(115%);
+  }
+}
+
+@keyframes mlAgentMessageIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes mlTooltipIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(4px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes mlMarkerIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.65);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@keyframes mlFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mlPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 5px var(--ml-accent-ring-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 8px var(--ml-accent-ring-muted);
+  }
+}

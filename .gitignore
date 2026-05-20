@@ -1,0 +1,12 @@
+node_modules
+.venv
+dist
+.DS_Store
+.pytest_cache
+.ruff_cache
+
+# Python
+__pycache__
+.ipynb_checkpoints
+
+src/marimo_lens/static

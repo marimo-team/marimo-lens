@@ -1,0 +1,29 @@
+@media (max-width: 520px) {
+  .ml-dock {
+    top: max(12px, env(safe-area-inset-top));
+    right: 12px;
+  }
+
+  .ml-dock[data-open="true"] {
+    width: calc(100vw - 24px);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .ml-dock[data-open="true"] .ml-panel {
+    order: -1;
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marimo_lens *,
+  .marimo_lens *::before,
+  .marimo_lens *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+}
