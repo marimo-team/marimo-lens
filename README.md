@@ -119,3 +119,8 @@ pnpm dlx react-doctor@latest . --verbose --diff
 `pnpm run qa` formats/checks the frontend, runs TypeScript and Vitest, rebuilds
 the bundled widget assets. Use `pnpm run qa:package` for the slower wheel and
 sdist artifact check.
+
+## Acknowledgements
+
+marimo-lens was inspired by
+[Agentation](https://github.com/benjitaylor/agentation).
