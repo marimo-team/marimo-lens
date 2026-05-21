@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type FormEvent } from "react";
 
 import type { LensAnnotation, PopupState } from "@/types";
 
+import { SelectionIdentityIcon } from "@/components/selection-identity";
 import { createFeedbackDraft } from "@/feedback/create-feedback-draft";
 import { popupStyle } from "@/lib/overlay-layout";
 import { useLensUiStore } from "@/store";
@@ -52,7 +53,8 @@ export function LensPopup({ popup, onSubmit, onCancel }: LensPopupProps) {
     >
       <form className="ml-popup__form" onSubmit={submitForm}>
         <div className="ml-popup__selection" id={titleId}>
-          {selectionTitle}
+          <SelectionIdentityIcon hover={popup.hover} size={15} />
+          <span>{selectionTitle}</span>
         </div>
 
         <textarea

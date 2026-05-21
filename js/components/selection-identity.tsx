@@ -133,20 +133,33 @@ const SELECTION_IDENTITY_RULES: SelectionIdentityRule[] = [
 
 export function SelectionIdentity({ hover, variant = "hover" }: SelectionIdentityProps) {
   const identity = selectionIdentity(hover);
-  const Icon = identity.icon;
   return (
     <div className="ml-identity" data-variant={variant}>
-      <span
-        className="ml-identity__icon"
-        data-kind={hover.chartPart?.kind ?? hover.semanticSelection.kind ?? hover.target.kind}
-      >
-        <Icon size={variant === "popup" ? 16 : 14} strokeWidth={1.8} />
-      </span>
+      <SelectionIdentityIcon hover={hover} size={variant === "popup" ? 16 : 14} />
       <span className="ml-identity__copy">
         <span className="ml-identity__primary">{identity.primary}</span>
         <span className="ml-identity__secondary">{identity.secondary}</span>
       </span>
     </div>
+  );
+}
+
+export function SelectionIdentityIcon({
+  hover,
+  size = 14,
+}: {
+  hover: ResolvedHover;
+  size?: number;
+}) {
+  const identity = selectionIdentity(hover);
+  const Icon = identity.icon;
+  return (
+    <span
+      className="ml-identity__icon"
+      data-kind={hover.chartPart?.kind ?? hover.semanticSelection.kind ?? hover.target.kind}
+    >
+      <Icon size={size} strokeWidth={1.8} />
+    </span>
   );
 }
 

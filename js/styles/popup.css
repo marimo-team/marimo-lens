@@ -26,12 +26,20 @@
 }
 
 .ml-popup__selection {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ml-space-6);
   min-width: 0;
-  overflow: hidden;
   color: var(--ml-subtle);
   font-size: var(--ml-font-lg);
   font-weight: 470;
   line-height: var(--ml-line-normal);
+}
+
+.ml-popup__selection > span:last-child {
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
