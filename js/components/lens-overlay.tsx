@@ -40,6 +40,7 @@ export function LensOverlay({
   onUpdateAnnotation,
   onDeleteAnnotation,
 }: LensOverlayProps) {
+  const open = useLensUiStore((state) => state.open);
   const armed = useLensUiStore((state) => state.armed);
   const hover = useLensUiStore((state) => state.hover);
   const markersVisible = useLensUiStore((state) => state.markersVisible);
@@ -47,6 +48,8 @@ export function LensOverlay({
   const popup = useLensUiStore((state) => state.popup);
   const resetInteraction = useLensUiStore((state) => state.resetInteraction);
   useViewportRevision();
+  if (!open) return null;
+
   const activeHover = hover ?? selectedHover;
   const measuredHoverRect = activeHover
     ? semanticHighlightRect(activeHover.semanticSelection.highlight)

@@ -167,10 +167,12 @@ export function createLensUiStore(
       set((state) =>
         state.open
           ? {
+              armed: false,
               hover: null,
               inventoryOpen: false,
               open: false,
               popup: null,
+              selectedHover: null,
               settingsOpen: false,
             }
           : { open: true },

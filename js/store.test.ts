@@ -202,4 +202,23 @@ describe("target selection store", () => {
     expect(store.getState().selectedHover).toBe(semanticPartSelection);
     expect(store.getState().popup?.hover).toBe(semanticPartSelection);
   });
+
+  test("clears selected overlays when Lens closes", () => {
+    const store = createLensUiStore("test-close-clears-selection");
+    const targetSelection = resolvedHover(dataframeTarget);
+
+    store.getState().toggleOpen();
+    store.getState().setSelectedHover(targetSelection);
+    store.getState().toggleOpen();
+
+    expect(store.getState()).toMatchObject({
+      armed: false,
+      hover: null,
+      inventoryOpen: false,
+      open: false,
+      popup: null,
+      selectedHover: null,
+      settingsOpen: false,
+    });
+  });
 });
