@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from marimo_lens.inspectors import ChartEntity, ChartInspector
 from marimo_lens.inspectors.charts.altair import AltairChartAdapter
+from marimo_lens.inspectors.charts._metadata import chart_spec_fields
 
 from tests.support.sample_entities import lens_entity
 
@@ -33,6 +34,68 @@ def test_altair_adapter_generates_mark_axes_and_legend_parts() -> None:
     assert any(kind == "legend" for kind, _label in parts)
 
 
+def test_altair_adapter_generates_title_and_row_column_facet_parts() -> None:
+    import altair as alt
+
+    chart = (
+        alt.Chart(
+            alt.Data(
+                values=[
+                    {
+                        "site": "Crookston",
+                        "variety": "Manchuria",
+                        "year_label": "1931",
+                        "yield_amount": 27,
+                    },
+                    {
+                        "site": "Crookston",
+                        "variety": "Velvet",
+                        "year_label": "1932",
+                        "yield_amount": 31,
+                    },
+                    {
+                        "site": "Morris",
+                        "variety": "Manchuria",
+                        "year_label": "1931",
+                        "yield_amount": 29,
+                    },
+                ]
+            )
+        )
+        .mark_bar()
+        .encode(x="year_label:N", y="sum(yield_amount):Q", color="variety:N")
+        .facet(column="site:N", row="variety")
+        .properties(title="Faceted site yield")
+    )
+    metadata = AltairChartAdapter().inspect(ChartEntity(chart))
+
+    assert metadata is not None
+    parts = metadata["parts"]
+    assert ("title", "Faceted site yield") in {
+        (part["kind"], part["label"]) for part in parts
+    }
+    column_facet = next(
+        part
+        for part in parts
+        if part["kind"] == "facet" and part.get("channel") == "column"
+    )
+    row_facet = next(
+        part
+        for part in parts
+        if part["kind"] == "facet" and part.get("channel") == "row"
+    )
+    assert column_facet["field"] == "site"
+    assert column_facet["context"] == {
+        "values": ["Crookston", "Morris"],
+        "count": 2,
+    }
+    assert row_facet["field"] == "variety"
+    assert row_facet["context"] == {
+        "values": ["Manchuria", "Velvet"],
+        "count": 2,
+    }
+
+
 def test_altair_chart_inspector_exposes_visual_target_metadata() -> None:
     import altair as alt
 
@@ -46,3 +109,115 @@ def test_altair_chart_inspector_exposes_visual_target_metadata() -> None:
     assert metadata["chart"]["library"] == "altair"
     assert metadata["capabilities"]["visualSurface"] is True
     assert {part["library"] for part in metadata["chart"]["parts"]} == {"altair"}
+
+
+def test_altair_adapter_omits_null_mark_for_composed_specs() -> None:
+    import altair as alt
+
+    chart = alt.layer(
+        alt.Chart({"values": [{"x": "Q1", "y": 1}]})
+        .mark_bar()
+        .encode(x="x:N", y="y:Q"),
+        alt.Chart({"values": [{"x": "Q1", "y": 1}]})
+        .mark_line()
+        .encode(x="x:N", y="y:Q"),
+    )
+    metadata = AltairChartAdapter().inspect(ChartEntity(chart))
+
+    assert metadata is not None
+    assert "mark" not in metadata
+    parts = {(part["kind"], part["label"]) for part in metadata["parts"]}
+    assert ("mark", "bar") in parts
+    assert ("mark", "line") in parts
+    assert ("axis", "x axis") in parts
+    assert ("axis", "y axis") in parts
+
+
+def test_altair_adapter_retries_without_validation_when_default_to_dict_fails() -> None:
+    class ChartWithInvalidValidatedSpec:
+        __module__ = "altair.vegalite.v6.api"
+
+        def to_dict(self, *, validate: bool = True) -> dict[str, object]:
+            if validate:
+                raise ValueError("validated spec rejected runtime data transformer")
+            return {
+                "mark": {"type": "bar"},
+                "encoding": {
+                    "x": {"field": "quarter"},
+                    "y": {"field": "revenue"},
+                },
+            }
+
+    metadata = AltairChartAdapter().inspect(
+        ChartEntity(ChartWithInvalidValidatedSpec())
+    )
+
+    assert metadata is not None
+    assert metadata["library"] == "altair"
+    assert ("mark", "bar") in {
+        (part["kind"], part["label"]) for part in metadata["parts"]
+    }
+
+
+def test_altair_adapter_ignores_charts_when_spec_cannot_be_read() -> None:
+    class BrokenAltairChart:
+        __module__ = "altair.vegalite.v6.api"
+
+        def to_dict(self, *, validate: bool = True) -> dict[str, object]:
+            del validate
+            raise RuntimeError("broken chart")
+
+    assert AltairChartAdapter().inspect(ChartEntity(BrokenAltairChart())) is None
+
+
+def test_chart_spec_fields_walks_tooltip_facet_and_repeat_fields() -> None:
+    fields = chart_spec_fields(
+        {
+            "facet": {"field": "region"},
+            "spec": {
+                "mark": "bar",
+                "encoding": {
+                    "x": {"field": "quarter"},
+                    "tooltip": [
+                        {"field": "revenue"},
+                        {"field": "margin"},
+                    ],
+                },
+            },
+            "repeat": {"column": ["revenue", "margin"]},
+        }
+    )
+
+    assert [field["name"] for field in fields] == [
+        "region",
+        "quarter",
+        "revenue",
+        "margin",
+    ]
+
+
+def test_chart_spec_fields_and_parts_resolve_repeat_encoding_fields() -> None:
+    from marimo_lens.inspectors.charts._metadata import chart_spec_parts
+
+    spec = {
+        "repeat": {"column": ["revenue", "margin"]},
+        "spec": {
+            "mark": "bar",
+            "encoding": {
+                "x": {"field": "quarter"},
+                "y": {"field": {"repeat": "column"}},
+            },
+        },
+    }
+
+    assert [field["name"] for field in chart_spec_fields(spec)] == [
+        "quarter",
+        "revenue",
+        "margin",
+    ]
+    y_axes = [
+        part
+        for part in chart_spec_parts(spec)
+        if part["kind"] == "axis" and part["label"] == "y axis"
+    ]
+    assert y_axes[0]["detail"] == "revenue, margin"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any
 
 from .inspectors.charts import (
@@ -34,66 +35,226 @@ class _PartNamespace:
         self,
         label: str,
         detail: str | None = None,
-        **metadata: Any,
+        *,
+        id: str | None = None,
+        channel: str | None = None,
+        field: str | None = None,
+        orientation: str | None = None,
+        selector: str | None = None,
+        datum: Mapping[str, Any] | None = None,
+        context: Mapping[str, Any] | None = None,
+        extensions: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return chart_part("axis", label, detail, **metadata)
+        return chart_part(
+            "axis",
+            label,
+            detail,
+            id=id,
+            channel=channel,
+            field=field,
+            orientation=orientation,
+            selector=selector,
+            datum=datum,
+            context=context,
+            extensions=extensions,
+        )
 
     def mark(
         self,
         label: str,
         detail: str | None = None,
-        **metadata: Any,
+        *,
+        id: str | None = None,
+        channel: str | None = None,
+        field: str | None = None,
+        orientation: str | None = None,
+        selector: str | None = None,
+        datum: Mapping[str, Any] | None = None,
+        context: Mapping[str, Any] | None = None,
+        extensions: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return chart_part("mark", label, detail, **metadata)
+        return chart_part(
+            "mark",
+            label,
+            detail,
+            id=id,
+            channel=channel,
+            field=field,
+            orientation=orientation,
+            selector=selector,
+            datum=datum,
+            context=context,
+            extensions=extensions,
+        )
 
     def legend(
         self,
         label: str,
         detail: str | None = None,
-        **metadata: Any,
+        *,
+        id: str | None = None,
+        channel: str | None = None,
+        field: str | None = None,
+        orientation: str | None = None,
+        selector: str | None = None,
+        datum: Mapping[str, Any] | None = None,
+        context: Mapping[str, Any] | None = None,
+        extensions: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return chart_part("legend", label, detail, **metadata)
+        return chart_part(
+            "legend",
+            label,
+            detail,
+            id=id,
+            channel=channel,
+            field=field,
+            orientation=orientation,
+            selector=selector,
+            datum=datum,
+            context=context,
+            extensions=extensions,
+        )
 
     def annotation(
         self,
         label: str,
         detail: str | None = None,
-        **metadata: Any,
+        *,
+        id: str | None = None,
+        channel: str | None = None,
+        field: str | None = None,
+        orientation: str | None = None,
+        selector: str | None = None,
+        datum: Mapping[str, Any] | None = None,
+        context: Mapping[str, Any] | None = None,
+        extensions: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return chart_part("annotation", label, detail, **metadata)
+        return chart_part(
+            "annotation",
+            label,
+            detail,
+            id=id,
+            channel=channel,
+            field=field,
+            orientation=orientation,
+            selector=selector,
+            datum=datum,
+            context=context,
+            extensions=extensions,
+        )
 
     def plot_area(
         self,
         label: str,
         detail: str | None = None,
-        **metadata: Any,
+        *,
+        id: str | None = None,
+        channel: str | None = None,
+        field: str | None = None,
+        orientation: str | None = None,
+        selector: str | None = None,
+        datum: Mapping[str, Any] | None = None,
+        context: Mapping[str, Any] | None = None,
+        extensions: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return chart_part("plot-area", label, detail, **metadata)
+        return chart_part(
+            "plot-area",
+            label,
+            detail,
+            id=id,
+            channel=channel,
+            field=field,
+            orientation=orientation,
+            selector=selector,
+            datum=datum,
+            context=context,
+            extensions=extensions,
+        )
 
     def title(
         self,
         label: str,
         detail: str | None = None,
-        **metadata: Any,
+        *,
+        id: str | None = None,
+        channel: str | None = None,
+        field: str | None = None,
+        orientation: str | None = None,
+        selector: str | None = None,
+        datum: Mapping[str, Any] | None = None,
+        context: Mapping[str, Any] | None = None,
+        extensions: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return chart_part("title", label, detail, **metadata)
+        return chart_part(
+            "title",
+            label,
+            detail,
+            id=id,
+            channel=channel,
+            field=field,
+            orientation=orientation,
+            selector=selector,
+            datum=datum,
+            context=context,
+            extensions=extensions,
+        )
 
     def trace(
         self,
         label: str,
         detail: str | None = None,
-        **metadata: Any,
+        *,
+        id: str | None = None,
+        channel: str | None = None,
+        field: str | None = None,
+        orientation: str | None = None,
+        selector: str | None = None,
+        datum: Mapping[str, Any] | None = None,
+        context: Mapping[str, Any] | None = None,
+        extensions: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return chart_part("trace", label, detail, **metadata)
+        return chart_part(
+            "trace",
+            label,
+            detail,
+            id=id,
+            channel=channel,
+            field=field,
+            orientation=orientation,
+            selector=selector,
+            datum=datum,
+            context=context,
+            extensions=extensions,
+        )
 
     def custom(
         self,
         kind: str,
         label: str,
         detail: str | None = None,
-        **metadata: Any,
+        *,
+        id: str | None = None,
+        channel: str | None = None,
+        field: str | None = None,
+        orientation: str | None = None,
+        selector: str | None = None,
+        datum: Mapping[str, Any] | None = None,
+        context: Mapping[str, Any] | None = None,
+        extensions: Mapping[str, Any] | None = None,
     ) -> dict[str, Any]:
-        return chart_part(kind, label, detail, **metadata)
+        return chart_part(
+            kind,
+            label,
+            detail,
+            id=id,
+            channel=channel,
+            field=field,
+            orientation=orientation,
+            selector=selector,
+            datum=datum,
+            context=context,
+            extensions=extensions,
+        )
 
 
 part = _PartNamespace()

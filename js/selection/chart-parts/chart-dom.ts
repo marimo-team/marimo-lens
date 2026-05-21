@@ -1,5 +1,6 @@
-import { ancestryCrossingShadow, closestCrossingShadow } from "@/lib/shadow-dom";
 import type { LensChartPart } from "@/types";
+
+import { ancestryCrossingShadow, closestCrossingShadow } from "@/lib/shadow-dom";
 
 export function closestMatching(element: Element, selectors: string): Element | null {
   for (const candidate of ancestryCrossingShadow(element)) {
@@ -45,7 +46,7 @@ export function isSvgTextElement(element: Element): boolean {
   return element.tagName.toLowerCase() === "text" || closestMatching(element, "text") !== null;
 }
 
-export function unit(
+export function part(
   library: LensChartPart["library"],
   kind: LensChartPart["kind"],
   label: string,

@@ -53,7 +53,7 @@ class ChartInspector:
             ),
             "selectionPolicy": selection_policy(
                 "columnar-dom" if value_columns else "",
-                "chart-unit",
+                "chart-part",
                 "visual-surface",
             ),
             "summary": visualization_summary(entity.name, value_columns),

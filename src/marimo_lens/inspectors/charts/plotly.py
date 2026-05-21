@@ -26,10 +26,20 @@ class PlotlyChartAdapter:
         return plotly_chart_metadata(value)
 
 
-def plotly_chart_metadata(value: Any) -> dict[str, Any]:
+def plotly_chart_metadata(value: Any) -> dict[str, Any] | None:
     spec = call_chart_method(value, "to_plotly_json")
-    data = spec.get("data", []) if isinstance(spec, Mapping) else []
-    layout = spec.get("layout", {}) if isinstance(spec, Mapping) else {}
+    if spec is None:
+        return None
+    return plotly_chart_metadata_from_spec(spec)
+
+
+def plotly_chart_metadata_from_spec(
+    spec: Mapping[str, Any],
+    *,
+    renderer: str | None = None,
+) -> dict[str, Any]:
+    data = spec.get("data", [])
+    layout = spec.get("layout", {})
     parts: list[dict[str, Any]] = []
     if isinstance(data, Sequence):
         for index, trace in enumerate(data[:MAX_VALUE_ITEMS], start=1):
@@ -53,8 +63,11 @@ def plotly_chart_metadata(value: Any) -> dict[str, Any]:
         title = axis_title(layout.get("title"))
         if title:
             parts.append(chart_part("title", title))
-    return {
+    metadata: dict[str, Any] = {
         "library": "plotly",
         "traceCount": len(data) if isinstance(data, Sequence) else 0,
         "parts": dedupe_chart_parts(parts),
     }
+    if renderer:
+        metadata["renderer"] = renderer
+    return metadata

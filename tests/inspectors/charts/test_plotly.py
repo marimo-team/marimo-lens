@@ -36,7 +36,18 @@ def test_plotly_adapter_generates_trace_axis_legend_and_title_parts() -> None:
     assert metadata["library"] == "plotly"
     assert metadata["traceCount"] == 2
     assert ("trace", "Revenue", "bar") in parts
-    assert ("axis", "x axis", "{'text': 'Quarter'}") in parts
+    assert ("axis", "x axis", "Quarter") in parts
     assert ("axis", "y axis", "Revenue") in parts
     assert ("legend", "legend", None) in parts
     assert ("title", "Sales", None) in parts
+
+
+def test_plotly_adapter_ignores_charts_when_spec_cannot_be_read() -> None:
+    class BrokenPlotlyFigure:
+        __module__ = "plotly.graph_objs._figure"
+
+        def to_plotly_json(self, **kwargs: object) -> dict[str, object]:
+            del kwargs
+            raise RuntimeError("broken plotly figure")
+
+    assert PlotlyChartAdapter().inspect(ChartEntity(BrokenPlotlyFigure())) is None

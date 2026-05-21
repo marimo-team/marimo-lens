@@ -1,22 +1,33 @@
-import { ancestryCrossingShadow } from "@/lib/shadow-dom";
-import { chartLabel, classOrTag, dataAttributes, unit } from "@/selection/chart-units/chart-dom";
-import type { ChartUnitMatch } from "@/selection/chart-units/chart-unit-adapter";
-import type { LensChartPartKind, ViewportPoint } from "@/types";
+import type { ChartPartMatch } from "@/selection/chart-parts/chart-part-adapter";
+import type { ViewportPoint } from "@/types";
 
-type AxisOrientation = "x" | "y" | "unknown";
-type SvgRole = LensChartPartKind;
-
-type SvgBox = {
-  left: number;
-  top: number;
-  right: number;
-  bottom: number;
-  width: number;
-  height: number;
-  centerX: number;
-  centerY: number;
-  area: number;
-};
+import { ancestryCrossingShadow, closestCrossingShadow } from "@/lib/shadow-dom";
+import { chartLabel, classOrTag, dataAttributes, part } from "@/selection/chart-parts/chart-dom";
+import {
+  boxDistance,
+  meanBy,
+  pointInside,
+  spreadBy,
+  toBox,
+  unionBoxes,
+  type SvgBox,
+} from "@/selection/chart-parts/generic-svg-geometry";
+import {
+  MARK_SELECTOR,
+  ROLE_CONTAINER_SELECTOR,
+  TEXT_SELECTOR,
+  axisLabel,
+  axisOrientationFromHint,
+  explicitSvgRoleFromHint,
+  hitPadding,
+  isBackgroundHint,
+  isMarkTag,
+  roleRank,
+  visualLabelForTag,
+  visualRoleForTag,
+  type AxisOrientation,
+  type SvgRole,
+} from "@/selection/chart-parts/generic-svg-rules";
 
 type AxisEvidence = {
   orientation: AxisOrientation;
@@ -68,9 +79,6 @@ type LegendCluster = {
   textElements: Set<Element>;
 };
 
-const MARK_SELECTOR = "path,rect,circle,ellipse,line,polyline,polygon,use";
-const TEXT_SELECTOR = "text";
-const ROLE_CONTAINER_SELECTOR = "g,[role],[aria-label],[data-role],[data-testid],[data-name]";
 const ALIGNMENT_EPSILON = 8;
 const AXIS_EDGE_RATIO = 0.22;
 const LEGEND_PAIR_DISTANCE = 48;
@@ -78,7 +86,8 @@ const LEGEND_PAIR_DISTANCE = 48;
 export function resolveGenericSvgSceneMatch(
   element: Element,
   point?: ViewportPoint,
-): ChartUnitMatch | null {
+): ChartPartMatch | null {
+  if (isChartChrome(element)) return null;
   const svg = closestSvg(element);
   if (!svg) return null;
   const scene = parseGenericSvgScene(svg);
@@ -87,7 +96,7 @@ export function resolveGenericSvgSceneMatch(
   if (node) {
     return {
       element: node.element,
-      unit: unit("visual", node.role, node.label, node.detail, node.datum),
+      part: part("visual", node.role, node.label, node.detail, node.datum),
       score: node.score,
       context: node.context,
     };
@@ -95,7 +104,7 @@ export function resolveGenericSvgSceneMatch(
 
   return {
     element: svg,
-    unit: unit("visual", "plot-area", "plot area", classOrTag(svg)),
+    part: part("visual", "plot-area", "plot area", classOrTag(svg)),
     score: 54,
     context: genericSvgContext(svg, scene.rect, "plot-area"),
   };
@@ -103,7 +112,7 @@ export function resolveGenericSvgSceneMatch(
 
 function parseGenericSvgScene(svg: Element): SvgScene {
   const rect = toBox(svg.getBoundingClientRect());
-  const seedNodes = collectSeedNodes(svg);
+  const seedNodes = collectSeedNodes(svg, rect);
   const axisClusters = inferAxisClusters(seedNodes, rect);
   const legendClusters = inferLegendClusters(seedNodes, axisClusters);
   const nodes = seedNodes.map((seed) => sceneNodeFor(seed, rect, axisClusters, legendClusters));
@@ -111,18 +120,20 @@ function parseGenericSvgScene(svg: Element): SvgScene {
   return { svg, rect, nodes, nodeByElement };
 }
 
-function collectSeedNodes(svg: Element): SeedNode[] {
+function collectSeedNodes(svg: Element, svgBox: SvgBox): SeedNode[] {
   const seeds = new Map<Element, SeedNode>();
   const add = (element: Element) => {
     if (seeds.has(element) || isIgnoredSvgElement(element)) return;
     const rect = toBox(element.getBoundingClientRect());
     if (!isUsableBox(rect) && element !== svg) return;
+    const explicitRole = explicitSvgRole(element, svg);
+    if (!explicitRole && looksLikeBackgroundRect(element, rect, svgBox)) return;
     seeds.set(element, {
       element,
       rect,
       tag: element.tagName.toLowerCase(),
       text: normalizedText(element),
-      explicitRole: explicitSvgRole(element, svg),
+      explicitRole,
     });
   };
 
@@ -423,13 +434,8 @@ function pickSceneNode(
 }
 
 function explicitSvgRole(element: Element, svg: Element): SvgRole | null {
-  const hint = semanticHint(element, svg);
-  if (hasToken(hint, ["legend", "swatch", "legenditem", "legend-item"])) return "legend";
-  if (hasToken(hint, ["axis", "tick", "gridline", "grid-line", "domain"])) return "axis";
-  if (hasToken(hint, ["title", "headline"])) return "title";
-  if (hasToken(hint, ["annotation", "callout", "label"])) return "annotation";
-  if (hasToken(hint, ["trace", "series", "line-series"])) return "trace";
-  if (hasToken(hint, ["mark", "bar", "point", "symbol", "area", "arc"])) return "mark";
+  const role = explicitSvgRoleFromHint(semanticHintWithoutSvgRoot(element, svg));
+  if (role || element === svg) return role;
   return null;
 }
 
@@ -459,31 +465,15 @@ function inferredTextRole(seed: SeedNode, svgBox: SvgBox): "annotation" | "title
 }
 
 function visualRole(seed: SeedNode): "mark" | "trace" {
-  if (seed.tag === "line" || seed.tag === "polyline") return "trace";
-  if (seed.tag === "path" && !isClosedPath(seed.element.getAttribute("d"))) return "trace";
-  return "mark";
+  return visualRoleForTag(seed.tag, seed.element.getAttribute("d"));
 }
 
 function visualLabel(seed: SeedNode, role: SvgRole): string {
-  if (role === "trace") {
-    if (seed.tag === "polyline" || seed.tag === "line") return "line trace";
-    return "path trace";
-  }
-  if (seed.tag === "rect") return "bar";
-  if (seed.tag === "circle" || seed.tag === "ellipse") return "point";
-  if (seed.tag === "polygon") return "shape";
-  if (seed.tag === "path") return isClosedPath(seed.element.getAttribute("d")) ? "shape" : "path";
-  return role === "mark" ? "mark" : role;
+  return visualLabelForTag(seed.tag, role, seed.element.getAttribute("d"));
 }
 
 function visualDetail(seed: SeedNode): string {
   return firstUsefulText(seed, classOrTag(seed.element));
-}
-
-function axisLabel(orientation: AxisOrientation): string {
-  if (orientation === "x") return "x axis";
-  if (orientation === "y") return "y axis";
-  return "axis";
 }
 
 function axisDetail(seed: SeedNode, evidence: AxisEvidence): string {
@@ -550,8 +540,8 @@ function dedupeAxisClusters(clusters: AxisCluster[]): AxisCluster[] {
 
 function axisOrientation(seed: SeedNode, svgBox: SvgBox): AxisOrientation {
   const hint = semanticHint(seed.element, seed.element);
-  if (hasToken(hint, ["x", "xaxis", "x-axis", "bottom", "top"])) return "x";
-  if (hasToken(hint, ["y", "yaxis", "y-axis", "left", "right"])) return "y";
+  const hintedOrientation = axisOrientationFromHint(hint);
+  if (hintedOrientation) return hintedOrientation;
   const horizontalEdge = Math.min(
     Math.abs(seed.rect.centerY - svgBox.top),
     Math.abs(seed.rect.centerY - svgBox.bottom),
@@ -599,9 +589,33 @@ function looksLikeTickCandidate(
 }
 
 function looksLikeBackground(seed: SeedNode): boolean {
-  if (seed.tag !== "rect") return false;
-  const hint = semanticHint(seed.element, seed.element);
-  return hasToken(hint, ["background", "plot-background", "canvas", "frame"]);
+  return isBackgroundHint(seed.tag, semanticHint(seed.element, seed.element));
+}
+
+function looksLikeBackgroundRect(element: Element, rect: SvgBox, svgBox: SvgBox): boolean {
+  if (element.tagName.toLowerCase() !== "rect") return false;
+  if (isBackgroundHint("rect", semanticHint(element, element))) return true;
+  if (Object.keys(dataAttributes(element)).length > 0) return false;
+  return rect.area >= svgBox.area * 0.75;
+}
+
+function isChartChrome(element: Element): boolean {
+  return Boolean(
+    closestCrossingShadow(
+      element,
+      [
+        "button",
+        '[role="button"]',
+        ".modebar",
+        ".modebar-btn",
+        ".toolbar",
+        ".toolbox",
+        ".vega-actions",
+        '[data-testid*="toolbar"]',
+        '[aria-label*="toolbar" i]',
+      ].join(","),
+    ),
+  );
 }
 
 function closestSharedContainer(left: Element, right: Element): Element {
@@ -627,6 +641,24 @@ function semanticHint(element: Element, stopAt: Element): string {
   return values.join(" ").toLowerCase();
 }
 
+function semanticHintWithoutSvgRoot(element: Element, svg: Element): string {
+  const values: string[] = [];
+  for (const current of ancestryCrossingShadow(element)) {
+    if (current === svg && current !== element) break;
+    values.push(
+      current.getAttribute("id") ?? "",
+      current.getAttribute("class") ?? "",
+      current.getAttribute("role") ?? "",
+      current.getAttribute("aria-label") ?? "",
+      current.getAttribute("data-role") ?? "",
+      current.getAttribute("data-testid") ?? "",
+      current.getAttribute("data-name") ?? "",
+    );
+    if (current === svg) break;
+  }
+  return values.join(" ").toLowerCase();
+}
+
 function labelList(element: Element): string[] {
   return [...element.querySelectorAll(TEXT_SELECTOR)]
     .map((text) => normalizedText(text))
@@ -642,90 +674,12 @@ function normalizedText(element: Element): string {
   return element.textContent?.trim().replace(/\s+/g, " ").slice(0, 80) ?? "";
 }
 
-function isClosedPath(pathData: string | null): boolean {
-  return /z\s*$/i.test(pathData?.trim() ?? "");
-}
-
-function isMarkTag(tag: string): boolean {
-  return MARK_SELECTOR.split(",").includes(tag);
-}
-
 function isIgnoredSvgElement(element: Element): boolean {
   return Boolean(element.closest("defs,clipPath,mask,metadata,pattern,script,style,symbol"));
 }
 
-function hasToken(hint: string, tokens: string[]): boolean {
-  return tokens.some((token) => {
-    const escaped = token.replace(/-/g, "[-_\\s]?");
-    return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(hint);
-  });
-}
-
-function toBox(rect: DOMRect): SvgBox {
-  const left = Math.min(rect.left, rect.right);
-  const right = Math.max(rect.left, rect.right);
-  const top = Math.min(rect.top, rect.bottom);
-  const bottom = Math.max(rect.top, rect.bottom);
-  const width = right - left;
-  const height = bottom - top;
-  return {
-    left,
-    top,
-    right,
-    bottom,
-    width,
-    height,
-    centerX: left + width / 2,
-    centerY: top + height / 2,
-    area: Math.max(1, width * height),
-  };
-}
-
 function isUsableBox(rect: SvgBox): boolean {
   return rect.width >= 1 || rect.height >= 1;
-}
-
-function pointInside(rect: SvgBox, point: ViewportPoint, padding: number): boolean {
-  return (
-    point.x >= rect.left - padding &&
-    point.x <= rect.right + padding &&
-    point.y >= rect.top - padding &&
-    point.y <= rect.bottom + padding
-  );
-}
-
-function hitPadding(role: SvgRole): number {
-  return role === "axis" || role === "trace" ? 5 : 3;
-}
-
-function roleRank(role: SvgRole): number {
-  if (role === "mark" || role === "trace") return 5;
-  if (role === "legend" || role === "axis") return 4;
-  if (role === "title" || role === "annotation") return 3;
-  return 1;
-}
-
-function boxDistance(left: SvgBox, right: SvgBox): number {
-  const dx = Math.max(0, left.left - right.right, right.left - left.right);
-  const dy = Math.max(0, left.top - right.bottom, right.top - left.bottom);
-  return Math.hypot(dx, dy);
-}
-
-function unionBoxes(boxes: SvgBox[]): SvgBox {
-  const left = Math.min(...boxes.map((box) => box.left));
-  const right = Math.max(...boxes.map((box) => box.right));
-  const top = Math.min(...boxes.map((box) => box.top));
-  const bottom = Math.max(...boxes.map((box) => box.bottom));
-  return toBox(new DOMRect(left, top, right - left, bottom - top));
-}
-
-function spreadBy(seeds: SeedNode[], key: "centerX" | "centerY"): number {
-  const values = seeds.map((seed) => seed.rect[key]);
-  return Math.max(...values) - Math.min(...values);
-}
-
-function meanBy<T>(items: T[], value: (item: T) => number): number {
-  return items.reduce((sum, item) => sum + value(item), 0) / Math.max(1, items.length);
 }
 
 function closestSvg(element: Element): Element | null {
