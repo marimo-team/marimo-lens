@@ -1,0 +1,7 @@
+packages:
+  - "."
+
+allowBuilds:
+  esbuild: true
+
+minimumReleaseAge: 2880

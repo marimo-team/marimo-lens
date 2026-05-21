@@ -10,6 +10,7 @@
     "test": "vitest run --environment jsdom",
     "fmt": "oxfmt js package.json tsconfig.json vitest.config.ts pyproject.toml README.md AGENTS.md .oxlintrc.json .oxfmtrc.json",
     "fmt:check": "oxfmt --check js package.json tsconfig.json vitest.config.ts pyproject.toml README.md AGENTS.md .oxlintrc.json .oxfmtrc.json",
+    "qa:package": "MARIMO_LENS_RUN_PACKAGE_ARTIFACTS=1 uv run pytest tests/test_package_artifacts.py",
     "qa": "pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
   },
   "dependencies": {
@@ -18,6 +19,7 @@
     "lucide-react": "1.16.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
+    "valibot": "1.4.0",
     "zustand": "5.0.13"
   },
   "devDependencies": {
@@ -30,7 +32,14 @@
     "typescript": "^6.0.2",
     "vitest": "4.1.6"
   },
-  "packageManager": "pnpm@10.33.3",
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.14.1",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "pnpm@11.1.3+sha512.c85357fe17ca12dd23dd7071822666dfd7e3cb76fe214e3370b5ea2fb34f2a231185509b63e717f3cd0acb38dd3f8d82bcd5e8172400ae678b70ea4fbed0896d",
   "reactDoctor": {
     "ignore": {
       "files": [

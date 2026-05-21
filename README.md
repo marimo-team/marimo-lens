@@ -29,19 +29,13 @@ not redacted.
 
 ## Install
 
-Until the first package release, install from a checkout:
+Install from a checkout:
 
 ```sh
 uv sync --dev
 uv pip install -e .
 pnpm install
 pnpm run build
-```
-
-After release, the package should install as:
-
-```sh
-pip install marimo-lens
 ```
 
 ## Feedback
@@ -119,5 +113,9 @@ uv run ty check
 uv run pytest
 pnpm run fmt
 pnpm run qa
-npx -y react-doctor@latest . --verbose --diff
+pnpm dlx react-doctor@latest . --verbose --diff
 ```
+
+`pnpm run qa` formats/checks the frontend, runs TypeScript and Vitest, rebuilds
+the bundled widget assets. Use `pnpm run qa:package` for the slower wheel and
+sdist artifact check.

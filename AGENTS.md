@@ -126,7 +126,7 @@ uv run ty check
 uv run pytest
 pnpm run fmt
 pnpm run qa
-npx -y react-doctor@latest . --verbose --diff
+pnpm dlx react-doctor@latest . --verbose --diff
 ```
 
 What these cover:
