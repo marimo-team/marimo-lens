@@ -73,6 +73,7 @@ export function LensActions({
   const secondaryActions: ActionSpec[] = [
     {
       Icon: ListTree,
+      active: inventoryOpen,
       ariaExpanded: inventoryOpen,
       ariaLabel: inventoryOpen ? "Close target inventory" : "Open target inventory",
       ariaPressed: inventoryOpen,
@@ -118,6 +119,7 @@ export function LensActions({
     },
     {
       Icon: Settings,
+      active: settingsOpen,
       ariaExpanded: settingsOpen,
       ariaLabel: settingsOpen ? "Close Lens settings" : "Open Lens settings",
       ariaPressed: settingsOpen,
@@ -199,6 +201,7 @@ export function LensActions({
 
 type ActionSpec = {
   Icon: LucideIcon;
+  active?: boolean;
   ariaDisabled?: boolean;
   ariaExpanded?: boolean;
   ariaLabel: string;
@@ -289,7 +292,7 @@ function ActionButton({ action, interactive }: { action: ActionSpec; interactive
         aria-disabled={action.ariaDisabled ? "true" : undefined}
         aria-expanded={action.ariaExpanded}
         aria-pressed={action.ariaPressed}
-        data-active={action.ariaPressed ? "true" : undefined}
+        data-active={action.active ? "true" : undefined}
         data-danger={action.danger ? "true" : undefined}
         data-marimo-lens-tooltip={action.tooltip}
         tabIndex={interactive ? undefined : -1}
