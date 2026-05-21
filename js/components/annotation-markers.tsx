@@ -32,6 +32,8 @@ type PositionedAnnotation = {
 };
 
 const MARKER_EDITOR_EXIT_MS = 150;
+const MARKER_TOOLTIP_WIDTH = 280;
+const MARKER_EDITOR_WIDTH = 296;
 
 type AnnotationMarkersProps = {
   annotations: LensAnnotation[];
@@ -399,12 +401,14 @@ function markerEditorClassName({
 }
 
 function markerTooltipStyle(position: MarkerPoint): CSSProperties {
-  const width = 300;
   const margin = 14;
   const left = clamp(
     position.left,
-    margin + width / 2,
-    Math.max(margin + width / 2, window.innerWidth - margin - width / 2),
+    margin + MARKER_TOOLTIP_WIDTH / 2,
+    Math.max(
+      margin + MARKER_TOOLTIP_WIDTH / 2,
+      window.innerWidth - margin - MARKER_TOOLTIP_WIDTH / 2,
+    ),
   );
   const belowTop = position.top + 28;
   const placeAbove = belowTop > window.innerHeight - 82;
@@ -416,15 +420,17 @@ function markerTooltipStyle(position: MarkerPoint): CSSProperties {
 }
 
 function markerEditorStyle(position: MarkerPoint): CSSProperties {
-  const width = 326;
   const margin = 14;
   const left = clamp(
     position.left,
-    margin + width / 2,
-    Math.max(margin + width / 2, window.innerWidth - margin - width / 2),
+    margin + MARKER_EDITOR_WIDTH / 2,
+    Math.max(
+      margin + MARKER_EDITOR_WIDTH / 2,
+      window.innerWidth - margin - MARKER_EDITOR_WIDTH / 2,
+    ),
   );
   const belowTop = position.top + 24;
-  if (belowTop > window.innerHeight - 320) {
+  if (belowTop > window.innerHeight - 300) {
     return {
       left,
       bottom: clamp(window.innerHeight - position.top + 20, margin, window.innerHeight - margin),
