@@ -18,6 +18,7 @@ export const visualSelectionPlugin = defineSelectionPlugin({
       target: visualTargets[0],
       semanticSelection: surfaceSemanticSelection({
         target: visualTargets[0],
+        surface: "visual-surface",
         element: surface,
         sourceElement: element,
         kind: "visual-surface",

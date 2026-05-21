@@ -1,6 +1,7 @@
-import { closestCrossingShadow } from "@/lib/shadow-dom";
-import type { LensTarget, SelectionSurface } from "@/types";
 import type { SelectionScope } from "@/selection/selection-plugin";
+import type { LensTarget, SelectionSurface } from "@/types";
+
+import { closestCrossingShadow } from "@/lib/shadow-dom";
 
 export function outputCellIdFor(element: Element | null): string | null {
   let current: Element | null = element;

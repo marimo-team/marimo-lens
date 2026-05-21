@@ -1,11 +1,12 @@
-import { identifyElement } from "@/lib/element-identification";
-import { elementsAtPointCrossingShadow } from "@/lib/shadow-dom";
-import type { LensTarget, ResolvedHover, ViewportPoint } from "@/types";
 import type {
   SelectionContext,
   SelectionMatch,
   SelectionPlugin,
 } from "@/selection/selection-plugin";
+import type { LensTarget, ResolvedHover, ViewportPoint } from "@/types";
+
+import { identifyElement } from "@/lib/element-identification";
+import { elementsAtPointCrossingShadow } from "@/lib/shadow-dom";
 import { defaultSelectionPlugins } from "@/selection/plugins/default-selection-plugins";
 import {
   outputCellIdFor,
@@ -99,6 +100,7 @@ export function hoverForTargetSelection(
       target,
       semanticSelection: surfaceSemanticSelection({
         target,
+        surface: "selector",
         element,
         kind: "target",
         granularity: "target",
@@ -157,8 +159,13 @@ function toResolvedHover(
     selection: {
       adapter: plugin.surface,
       kind: match.semanticSelection.kind,
+      source: stringValue(match.semanticSelection.data?.evidenceSource),
       score: match.score,
     },
     context,
   };
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }

@@ -1,3 +1,5 @@
+import { cssEscape } from "@/lib/css-selectors";
+
 export type CellElementPreference = "output" | "cell";
 
 export function cellElement(
@@ -53,8 +55,4 @@ function isCellLikeAnchor(element: Element): boolean {
     id.startsWith("output-") ||
     element.classList.contains("marimo-cell")
   );
-}
-
-function cssEscape(value: string): string {
-  return globalThis.CSS?.escape?.(value) ?? value.replace(/["\\]/g, "\\$&");
 }

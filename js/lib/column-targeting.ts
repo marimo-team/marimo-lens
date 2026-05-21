@@ -1,3 +1,5 @@
+import type { LensTarget, ViewportPoint } from "@/types";
+
 import { COLUMN_ATTRIBUTES, columnNamesFromCellId, normalizeColumnName } from "@/lib/column-names";
 import { resolveColumn } from "@/lib/column-resolution";
 import {
@@ -6,7 +8,6 @@ import {
   elementsAtPointCrossingShadow,
   queryAllCrossingShadow,
 } from "@/lib/shadow-dom";
-import type { LensTarget, ViewportPoint } from "@/types";
 
 export { resolveColumn } from "@/lib/column-resolution";
 

@@ -83,6 +83,7 @@ export function elementsAtPointCrossingShadow(point?: ViewportPoint): Element[] 
     }
   };
 
-  visit(document.elementsFromPoint(point.x, point.y));
+  const documentElements = document.elementsFromPoint?.(point.x, point.y) ?? [];
+  visit(documentElements);
   return found;
 }

@@ -1,18 +1,23 @@
-import { identifyElement } from "@/lib/element-identification";
 import type {
   LensChartPart,
   LensColumn,
   LensTarget,
   SelectionGranularity,
   SelectionHighlight,
+  SelectionSurface,
   SemanticSelection,
   SerializedSemanticSelection,
 } from "@/types";
+
+import { createDomRect } from "@/lib/dom-geometry";
+import { identifyElement } from "@/lib/element-identification";
+import { semanticSelectionFromHit } from "@/selection/selection-model";
 
 type SurfaceSemanticSelectionOptions = {
   target: LensTarget;
   id?: string;
   kind: string;
+  surface?: SelectionSurface;
   granularity?: SelectionGranularity;
   label?: string;
   element: Element;
@@ -30,6 +35,7 @@ export function surfaceSemanticSelection({
   target,
   id,
   kind,
+  surface = "selector",
   granularity = "surface",
   label,
   element,
@@ -40,34 +46,30 @@ export function surfaceSemanticSelection({
   highlight,
 }: SurfaceSemanticSelectionOptions): SemanticSelection {
   const evidenceElement = sourceElement ?? element;
-  const identified = identifyElement(evidenceElement);
-  return {
-    id: id ?? `${kind}:${target.id}`,
-    targetId: target.id,
-    kind,
+  const semanticSelection = semanticSelectionFromHit(target, {
+    surface,
+    desiredKind: kind,
+    id,
+    element,
+    sourceElement: evidenceElement,
+    label,
     granularity,
-    label: label ?? target.variable ?? target.label,
-    parentId: target.id,
     data,
-    evidence: [
-      {
-        kind: "dom-hit",
-        hitKind: hitKind ?? kind,
-        selector,
-        element: evidenceElement,
-        elementName: identified.name,
-      },
-    ],
+    evidenceKind: "dom-hit",
+    hitKind: hitKind ?? kind,
+    selector,
     highlight: highlight ?? {
       kind: "element",
       element,
       strategy: kind,
     },
-    anchor: {
-      element: evidenceElement,
-      selector,
-    },
-  };
+  });
+  const identified = identifyElement(evidenceElement);
+  semanticSelection.evidence = semanticSelection.evidence.map((item) => ({
+    ...item,
+    elementName: item.elementName ?? identified.name,
+  }));
+  return semanticSelection;
 }
 
 export function serializeSemanticSelection(
@@ -144,7 +146,9 @@ export function chartPartFromSemanticSelection(selection: SemanticSelection): Le
 
 function usableElementRect(element: Element, padding = 0): DOMRect | null {
   const rect = element.getBoundingClientRect();
-  if (rect.width < MIN_RECT_SIZE || rect.height < MIN_RECT_SIZE) return null;
+  if (rect.width < MIN_RECT_SIZE || rect.height < MIN_RECT_SIZE) {
+    return padding > 0 ? paddedRect(rect, padding) : null;
+  }
   return paddedRect(rect, padding);
 }
 
@@ -174,21 +178,6 @@ function rectToBox(rect: DOMRect): { x: number; y: number; width: number; height
     width: rect.width,
     height: rect.height,
   };
-}
-
-function createDomRect(x: number, y: number, width: number, height: number): DOMRect {
-  if (typeof DOMRect !== "undefined") return new DOMRect(x, y, width, height);
-  return {
-    bottom: y + height,
-    height,
-    left: x,
-    right: x + width,
-    top: y,
-    width,
-    x,
-    y,
-    toJSON: () => ({ x, y, width, height }),
-  } as DOMRect;
 }
 
 function isChartPart(value: unknown): value is LensChartPart {

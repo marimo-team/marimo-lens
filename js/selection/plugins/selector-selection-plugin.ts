@@ -1,7 +1,8 @@
+import type { LensTarget } from "@/types";
+
 import { closestCrossingShadow, queryFirstCrossingShadow } from "@/lib/shadow-dom";
 import { defineSelectionPlugin, type SelectionPlugin } from "@/selection/selection-plugin";
 import { surfaceSemanticSelection } from "@/selection/semantic-selection";
-import type { LensTarget } from "@/types";
 
 type SelectorPluginOptions = {
   id: string;
@@ -21,6 +22,7 @@ export function createSelectorSelectionPlugin(options: SelectorPluginOptions): S
         target: match.target,
         semanticSelection: surfaceSemanticSelection({
           target: match.target,
+          surface: "selector",
           element,
           sourceElement: element,
           kind: "target",
@@ -55,6 +57,7 @@ export function createSelectorSelectionPlugin(options: SelectorPluginOptions): S
         target,
         semanticSelection: surfaceSemanticSelection({
           target,
+          surface: "selector",
           element,
           kind: "target",
           granularity: "target",

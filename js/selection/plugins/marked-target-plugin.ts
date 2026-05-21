@@ -19,6 +19,7 @@ export const markedTargetPlugin = defineSelectionPlugin({
       target,
       semanticSelection: surfaceSemanticSelection({
         target,
+        surface: "marked",
         element: marker ?? element,
         sourceElement: element,
         kind: "target",

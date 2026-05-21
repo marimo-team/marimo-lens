@@ -1,18 +1,15 @@
-import { resolveColumn } from "@/lib/column-targeting";
+import type { LensColumn, LensTarget, SemanticSelection, ViewportPoint } from "@/types";
+
+import { canvasGridColumnRects, gridCanvasElement } from "@/lib/canvas-grid-geometry";
 import { COLUMN_ATTRIBUTES } from "@/lib/column-names";
-import { identifyElement } from "@/lib/element-identification";
+import { resolveColumn } from "@/lib/column-targeting";
 import {
   ancestryCrossingShadow,
   closestCrossingShadow,
+  elementsAtPointCrossingShadow,
   queryAllCrossingShadow,
 } from "@/lib/shadow-dom";
-import type {
-  LensColumn,
-  LensTarget,
-  SemanticSelection,
-  SelectionModelUnit,
-  ViewportPoint,
-} from "@/types";
+import { semanticSelectionFromHit } from "@/selection/selection-model";
 
 type TableSemanticSelectionOptions = {
   target: LensTarget;
@@ -72,122 +69,67 @@ export function tableSemanticSelection({
 }: TableSemanticSelectionOptions): SemanticSelection | null {
   const tableSurface =
     closestCrossingShadow(sourceElement, "table,[role='table'],[role='grid']") ?? surface;
-  const hit = classifyTableHit(sourceElement, tableSurface);
+  const hit = classifyTableHit(sourceElement, tableSurface, point);
   const column = resolveColumn(sourceElement, target, point);
   if (!column) return surfaceSelection(target, sourceElement, tableSurface, surfaceName, hit);
 
   const desiredKind = desiredKindForHit(hit.kind);
-  const supportedKind = supportedKindForHit(target, desiredKind, column);
-  if (supportedKind === "cell") {
-    return cellSelection(target, column, sourceElement, hit, surfaceName);
-  }
-  if (supportedKind === "column") {
-    return columnSelection(target, column, sourceElement, tableSurface, surfaceName, hit);
-  }
-  return surfaceSelection(target, sourceElement, tableSurface, surfaceName, hit);
-}
-
-function columnSelection(
-  target: LensTarget,
-  column: LensColumn,
-  sourceElement: Element,
-  surface: Element,
-  surfaceName: string,
-  hit: TableHit,
-): SemanticSelection {
-  const unit = selectionModelUnit(target, "column", column);
-  const elements = columnElements(surface, target, column);
-  return {
-    id: unit?.id ?? `col:${column.name}`,
-    targetId: target.id,
-    kind: "column",
-    granularity: "group",
-    label: unit?.label ?? column.name,
-    parentId: target.id,
+  return semanticSelectionFromHit(target, {
+    surface: surfaceName === "columnar-grid" ? "columnar-grid" : "columnar-dom",
+    desiredKind,
+    element: hit.element,
+    sourceElement,
+    point,
+    label: tableHitLabel(column, hit),
+    granularity: desiredKind === "cell" ? "item" : "group",
     data: {
       column: column.name,
       columnDtype: column.dtype ?? null,
       hitKind: hit.kind,
       rowIndex: hit.rowIndex,
       surface: surfaceName,
-      unit: unit ? unitData(unit) : undefined,
     },
-    evidence: [
-      {
-        kind: "table-hit",
-        hitKind: hit.kind,
-        element: sourceElement,
-        elementName: identifyElement(sourceElement).name,
-        column: column.name,
-        rowIndex: hit.rowIndex,
-        data: {
-          degradedFrom: desiredKindForHit(hit.kind),
-          surface: surfaceName,
-        },
-      },
-    ],
-    highlight: {
-      kind: "elements",
-      elements,
-      fallbackElement: hit.element,
+    evidenceKind: "table-hit",
+    hitKind: hit.kind,
+    highlights: {
+      cell: cellHighlight(hit),
+      column: columnHighlight(target, column, tableSurface, hit, point),
+      "dtype-label": cellHighlight(hit),
+      "summary-stat": cellHighlight(hit),
+      surface: surfaceHighlight(tableSurface),
+    },
+    anchorData: {
+      hitKind: hit.kind,
+      column: column.name,
+      rowIndex: hit.rowIndex,
+    },
+  });
+}
+
+function columnHighlight(
+  target: LensTarget,
+  column: LensColumn,
+  surface: Element,
+  hit: TableHit,
+  point?: ViewportPoint,
+): SemanticSelection["highlight"] {
+  const elements = columnElements(surface, target, column).filter(hasUsableRect);
+  const rectHighlight =
+    elements.length === 0 ? gridColumnHighlightRect(surface, target, column, point) : null;
+  if (rectHighlight) {
+    return {
+      kind: "rect",
+      rect: rectHighlight,
       padding: 1,
       strategy: "table-column",
-    },
-    anchor: {
-      element: sourceElement,
-      data: {
-        hitKind: hit.kind,
-        column: column.name,
-      },
-    },
-  };
-}
-
-function cellSelection(
-  target: LensTarget,
-  column: LensColumn,
-  sourceElement: Element,
-  hit: TableHit,
-  surfaceName: string,
-): SemanticSelection {
+    };
+  }
   return {
-    id: `cell:${hit.rowIndex ?? "unknown"}:${column.name}`,
-    targetId: target.id,
-    kind: "cell",
-    granularity: "item",
-    label: `${column.name}${hit.rowIndex === undefined ? "" : ` row ${hit.rowIndex + 1}`}`,
-    parentId: `col:${column.name}`,
-    data: {
-      column: column.name,
-      columnDtype: column.dtype ?? null,
-      hitKind: hit.kind,
-      rowIndex: hit.rowIndex,
-      surface: surfaceName,
-    },
-    evidence: [
-      {
-        kind: "table-hit",
-        hitKind: hit.kind,
-        element: sourceElement,
-        elementName: identifyElement(sourceElement).name,
-        column: column.name,
-        rowIndex: hit.rowIndex,
-      },
-    ],
-    highlight: {
-      kind: "element",
-      element: hit.element,
-      padding: 1,
-      strategy: "table-cell",
-    },
-    anchor: {
-      element: sourceElement,
-      data: {
-        hitKind: hit.kind,
-        column: column.name,
-        rowIndex: hit.rowIndex,
-      },
-    },
+    kind: "elements",
+    elements: elements.length > 0 ? elements : [surface],
+    fallbackElement: hit.element,
+    padding: 1,
+    strategy: "table-column",
   };
 }
 
@@ -198,46 +140,43 @@ function surfaceSelection(
   surfaceName: string,
   hit: TableHit,
 ): SemanticSelection {
-  return {
+  return semanticSelectionFromHit(target, {
+    surface: surfaceName === "columnar-grid" ? "columnar-grid" : "columnar-dom",
+    desiredKind: "surface",
     id: `surface:${target.id}`,
-    targetId: target.id,
-    kind: "surface",
-    granularity: "surface",
+    element: surface,
+    sourceElement,
     label: target.variable ?? target.label,
-    parentId: target.id,
+    granularity: "surface",
     data: {
       hitKind: hit.kind,
       surface: surfaceName,
     },
-    evidence: [
-      {
-        kind: "table-hit",
-        hitKind: hit.kind,
-        element: sourceElement,
-        elementName: identifyElement(sourceElement).name,
-        rowIndex: hit.rowIndex,
-        data: {
-          surface: surfaceName,
-        },
-      },
-    ],
+    evidenceKind: "table-hit",
+    hitKind: hit.kind,
+    anchorData: {
+      hitKind: hit.kind,
+      rowIndex: hit.rowIndex,
+    },
     highlight: {
       kind: "element",
       element: surface,
       strategy: "table-surface",
     },
-    anchor: {
-      element: sourceElement,
-      data: {
-        hitKind: hit.kind,
-      },
-    },
-  };
+  });
 }
 
-function classifyTableHit(sourceElement: Element, surface: Element): TableHit {
-  const semantic = closestCrossingShadow(sourceElement, `${DTYPE_SELECTOR},${SUMMARY_SELECTOR}`);
-  const hitElement = closestCrossingShadow(sourceElement, CELL_SELECTOR) ?? semantic ?? surface;
+function classifyTableHit(
+  sourceElement: Element,
+  surface: Element,
+  point?: ViewportPoint,
+): TableHit {
+  const canvasHit = classifyCanvasGridHit(sourceElement, surface, point);
+  if (canvasHit) return canvasHit;
+
+  const evidenceElement = tableEvidenceElement(sourceElement, point) ?? sourceElement;
+  const semantic = closestCrossingShadow(evidenceElement, `${DTYPE_SELECTOR},${SUMMARY_SELECTOR}`);
+  const hitElement = closestCrossingShadow(evidenceElement, CELL_SELECTOR) ?? semantic ?? surface;
   const rowIndex = rowIndexFor(hitElement, surface);
   if (semantic?.matches(DTYPE_SELECTOR))
     return { element: hitElement, kind: "dtype-label", rowIndex };
@@ -258,6 +197,16 @@ function classifyTableHit(sourceElement: Element, surface: Element): TableHit {
   return { element: surface, kind: "surface", rowIndex };
 }
 
+function tableEvidenceElement(sourceElement: Element, point?: ViewportPoint): Element | null {
+  for (const candidate of elementsAtPointCrossingShadow(point)) {
+    if (closestCrossingShadow(candidate, CELL_SELECTOR)) return candidate;
+    if (closestCrossingShadow(candidate, `${DTYPE_SELECTOR},${SUMMARY_SELECTOR}`)) {
+      return candidate;
+    }
+  }
+  return sourceElement;
+}
+
 function desiredKindForHit(hitKind: TableHit["kind"]): string {
   if (hitKind === "body-cell" || hitKind === "grid-cell") return "cell";
   if (hitKind === "dtype-label" || hitKind === "summary-stat") return hitKind;
@@ -265,39 +214,55 @@ function desiredKindForHit(hitKind: TableHit["kind"]): string {
   return "surface";
 }
 
-function supportedKindForHit(target: LensTarget, desiredKind: string, column: LensColumn): string {
-  if (isSupported(target, desiredKind, column)) return desiredKind;
-  const fallback = target.selectionModel?.units.find((unit) => {
-    return unit.supported !== false && (unit.fallbackFor ?? []).includes(desiredKind);
-  });
-  if (fallback) return fallback.kind;
-  const defaultFallback = target.selectionModel?.defaultFallback;
-  if (defaultFallback && isSupported(target, defaultFallback, column)) return defaultFallback;
-  return "column";
-}
-
-function isSupported(target: LensTarget, kind: string, column: LensColumn): boolean {
-  if (kind === "column") return Boolean(column);
-  const units = target.selectionModel?.units ?? [];
-  return units.some((unit) => unit.kind === kind && unit.supported !== false);
-}
-
-function selectionModelUnit(
-  target: LensTarget,
-  kind: string,
-  column: LensColumn,
-): SelectionModelUnit | undefined {
-  return (target.selectionModel?.units ?? []).find((unit) => {
-    if (unit.kind !== kind || unit.supported === false) return false;
-    return unit.data?.column === column.name || unit.id === `col:${column.name}`;
-  });
-}
-
 function columnElements(surface: Element, target: LensTarget, column: LensColumn): Element[] {
   const elements = queryAllCrossingShadow(surface, CELL_SELECTOR).filter((candidate) => {
     return resolveColumn(candidate, target)?.name === column.name;
   });
-  return elements.length > 0 ? elements : [surface];
+  return elements;
+}
+
+function classifyCanvasGridHit(
+  sourceElement: Element,
+  surface: Element,
+  point?: ViewportPoint,
+): TableHit | null {
+  if (!point) return null;
+  const canvas = gridCanvasElement(surface) ?? gridCanvasElement(sourceElement);
+  if (!canvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  if (
+    rect.width < 2 ||
+    rect.height < 2 ||
+    point.x < rect.left ||
+    point.x > rect.right ||
+    point.y < rect.top ||
+    point.y > rect.bottom
+  ) {
+    return null;
+  }
+  const headerHeight = Math.min(40, Math.max(28, rect.height * 0.14));
+  const rowHeight = Math.max(24, headerHeight);
+  return {
+    element: canvas,
+    kind: point.y <= rect.top + headerHeight ? "header" : "grid-cell",
+    rowIndex:
+      point.y <= rect.top + headerHeight
+        ? undefined
+        : Math.max(0, Math.floor((point.y - rect.top - headerHeight) / rowHeight)),
+  };
+}
+
+function gridColumnHighlightRect(
+  surface: Element,
+  target: LensTarget,
+  column: LensColumn,
+  point?: ViewportPoint,
+): DOMRect | null {
+  if (!point) return null;
+  const columns = target.columns ?? [];
+  const index = columns.findIndex((candidate) => candidate.name === column.name);
+  if (index < 0 || columns.length === 0) return null;
+  return canvasGridColumnRects(surface, columns.length)[index] ?? null;
 }
 
 function rowIndexFor(element: Element, surface: Element): number | undefined {
@@ -315,10 +280,31 @@ function hasColumnEvidence(element: Element): boolean {
   return false;
 }
 
-function unitData(unit: SelectionModelUnit): Record<string, unknown> {
+function hasUsableRect(element: Element): boolean {
+  const rect = element.getBoundingClientRect();
+  return rect.width >= 2 && rect.height >= 2;
+}
+
+function cellHighlight(hit: TableHit): SemanticSelection["highlight"] {
   return {
-    id: unit.id,
-    fallbackFor: unit.fallbackFor ?? [],
-    selectors: unit.selectors ?? [],
+    kind: "element",
+    element: hit.element,
+    padding: 1,
+    strategy: "table-cell",
   };
+}
+
+function surfaceHighlight(surface: Element): SemanticSelection["highlight"] {
+  return {
+    kind: "element",
+    element: surface,
+    strategy: "table-surface",
+  };
+}
+
+function tableHitLabel(column: LensColumn, hit: TableHit): string {
+  if (hit.kind === "body-cell" || hit.kind === "grid-cell") {
+    return `${column.name}${hit.rowIndex === undefined ? "" : ` row ${hit.rowIndex + 1}`}`;
+  }
+  return column.name;
 }

@@ -1,3 +1,4 @@
+import { cssEscape } from "@/lib/css-selectors";
 import { queryFirstCrossingShadow } from "@/lib/shadow-dom";
 import { defineSelectionPlugin } from "@/selection/selection-plugin";
 import { surfaceSemanticSelection } from "@/selection/semantic-selection";
@@ -15,6 +16,7 @@ export const displayCellSelectionPlugin = defineSelectionPlugin({
       target,
       semanticSelection: surfaceSemanticSelection({
         target,
+        surface: "display-cell",
         element: cellElement,
         sourceElement: element,
         kind: target.kind === "output" ? "output" : "target",
@@ -66,8 +68,4 @@ function elementForCellId(cellId: string): Element | null {
     document,
     `[id="output-${escaped}"],[id="cell-${escaped}"],[id="${escaped}"],[data-cell-id="${escaped}"]`,
   );
-}
-
-function cssEscape(value: string): string {
-  return globalThis.CSS?.escape?.(value) ?? value.replace(/["\\]/g, "\\$&");
 }

@@ -19,6 +19,7 @@ export const mediaSelectionPlugin = defineSelectionPlugin({
       target: mediaTargets[0],
       semanticSelection: surfaceSemanticSelection({
         target: mediaTargets[0],
+        surface: "media",
         element: surface,
         sourceElement: element,
         kind: "media-surface",

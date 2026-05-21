@@ -3,8 +3,8 @@ import {
   isColumnarDomTarget,
   isColumnarGridTarget,
 } from "@/lib/column-targeting";
-import { closestCrossingShadow, elementsAtPointCrossingShadow } from "@/lib/shadow-dom";
 import { defineSelectionPlugin } from "@/selection/selection-plugin";
+import { surfaceAtElementOrPoint } from "@/selection/surface-targeting";
 import { tableSemanticSelection } from "@/selection/table-semantic-selection";
 
 const COLUMNAR_DOM_SELECTOR = "table,[role='table'],[data-column],[data-column-name],[data-field]";
@@ -15,12 +15,6 @@ export const columnarDomSelectionPlugin = defineSelectionPlugin({
   surface: "columnar-dom",
   priority: 900,
   select: ({ element, point, targets }) => {
-    if (
-      targets.some(isColumnarGridTarget) &&
-      columnarSurface(element, COLUMNAR_GRID_SELECTOR, point)
-    ) {
-      return null;
-    }
     const surface = columnarSurface(element, COLUMNAR_DOM_SELECTOR, point);
     if (!surface) return null;
     const target = bestColumnarTarget(element, targets.filter(isColumnarDomTarget), point);
@@ -61,7 +55,7 @@ export const columnarGridSelectionPlugin = defineSelectionPlugin({
     return {
       target,
       semanticSelection,
-      score: semanticSelection.kind === "column" ? 80 : 70,
+      score: semanticSelection.kind === "column" ? 88 : 70,
     };
   },
 });
@@ -71,11 +65,5 @@ function columnarSurface(
   selector: string,
   point?: { x: number; y: number },
 ): Element | null {
-  const direct = closestCrossingShadow(element, selector);
-  if (direct) return direct;
-  for (const candidate of elementsAtPointCrossingShadow(point)) {
-    const surface = closestCrossingShadow(candidate, selector);
-    if (surface) return surface;
-  }
-  return null;
+  return surfaceAtElementOrPoint(element, selector, point);
 }

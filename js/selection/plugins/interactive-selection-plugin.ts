@@ -1,8 +1,10 @@
+import type { LensTarget, ViewportPoint } from "@/types";
+
 import { isInteractiveTarget } from "@/lib/column-targeting";
-import { closestCrossingShadow, queryFirstCrossingShadow } from "@/lib/shadow-dom";
+import { queryFirstCrossingShadow } from "@/lib/shadow-dom";
 import { defineSelectionPlugin } from "@/selection/selection-plugin";
 import { surfaceSemanticSelection } from "@/selection/semantic-selection";
-import type { LensTarget } from "@/types";
+import { surfaceAtElementOrPoint } from "@/selection/surface-targeting";
 
 const INTERACTIVE_SELECTOR = [
   "button",
@@ -17,6 +19,20 @@ const INTERACTIVE_SELECTOR = [
   "[role='slider']",
   "[role='spinbutton']",
   "[role='switch']",
+  "marimo-button",
+  "marimo-checkbox",
+  "marimo-code-editor",
+  "marimo-date",
+  "marimo-datetime",
+  "marimo-dropdown",
+  "marimo-file",
+  "marimo-multiselect",
+  "marimo-number",
+  "marimo-radio",
+  "marimo-slider",
+  "marimo-switch",
+  "marimo-text",
+  "marimo-text-area",
   "marimo-anywidget",
   "marimo-ui-element",
   "[data-marimo-ui-element]",
@@ -26,29 +42,36 @@ export const interactiveSelectionPlugin = defineSelectionPlugin({
   id: "interactive",
   surface: "interactive",
   priority: 830,
-  select: ({ element, targets }) => {
-    const surface = closestCrossingShadow(element, INTERACTIVE_SELECTOR);
-    if (!surface) return null;
-    const target = bestInteractiveTarget(surface, targets.filter(isInteractiveTarget));
+  select: ({ displayCellId, displayTargets, element, point, targets }) => {
+    const surface = interactiveSurface(element, point);
+    const interactiveTargets = targets.filter(isInteractiveTarget);
+    const target = surface
+      ? bestInteractiveTarget(surface, interactiveTargets)
+      : fallbackDisplayInteractiveTarget(displayTargets);
     if (!target) return null;
+    const selectionElement = surface ?? element;
     return {
       target,
       semanticSelection: surfaceSemanticSelection({
         target,
-        element: surface,
+        surface: "interactive",
+        element: selectionElement,
         sourceElement: element,
         kind: "interactive-control",
         granularity: "item",
         hitKind: "interactive-control",
-        selector: describeSurface(surface),
+        selector: describeSurface(selectionElement),
         data: {
-          component: componentName(surface),
-          interactiveRole: surface.getAttribute("role") || surface.tagName.toLowerCase(),
+          component: componentName(selectionElement) ?? target.component,
+          displayCellId,
+          interactiveRole:
+            selectionElement.getAttribute("role") || selectionElement.tagName.toLowerCase(),
           surface: "interactive",
-          surfaceSelector: describeSurface(surface),
+          surfaceSelector: describeSurface(selectionElement),
         },
       }),
-      score: target.component && componentName(surface) === target.component ? 82 : 72,
+      displayCellId,
+      score: surface && target.component && componentName(surface) === target.component ? 82 : 72,
     };
   },
   previewElement: ({ target }) => {
@@ -60,6 +83,17 @@ export const interactiveSelectionPlugin = defineSelectionPlugin({
     return null;
   },
 });
+
+function interactiveSurface(element: Element, point?: ViewportPoint): Element | null {
+  return surfaceAtElementOrPoint(element, INTERACTIVE_SELECTOR, point);
+}
+
+function fallbackDisplayInteractiveTarget(targets: LensTarget[]): LensTarget | null {
+  const candidates = targets.filter(
+    (target) => isInteractiveTarget(target) && target.kind !== "output",
+  );
+  return candidates.length === 1 ? candidates[0] : null;
+}
 
 function bestInteractiveTarget(surface: Element, targets: LensTarget[]): LensTarget | null {
   if (targets.length === 0) return null;
@@ -85,6 +119,7 @@ function scoreInteractiveTarget(
   const variable = normalize(target.variable);
   if (label && text.includes(label)) score += 16;
   if (variable && text.includes(variable)) score += 12;
+  if (target.kind === "output") score -= 4;
   return score;
 }
 
@@ -119,6 +154,7 @@ function normalize(value: unknown): string {
   return String(value ?? "")
     .trim()
     .toLowerCase()
+    .replace(/[_-]+/g, " ")
     .replace(/\s+/g, " ");
 }
 
