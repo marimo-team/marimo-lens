@@ -191,7 +191,8 @@ function ColumnStepButton({
 }) {
   const { Icon, label: labelForStep } = COLUMN_STEP_PRESENTATION[step];
   const label = labelForStep(targetLabel);
-  const showRemaining = step === "next" && typeof remainingColumns === "number";
+  const showRemaining =
+    step === "next" && typeof remainingColumns === "number" && remainingColumns > 0;
   return (
     <span className="ml-target-column-pager__step-wrap">
       {showRemaining ? (

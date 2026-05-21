@@ -491,6 +491,7 @@
 .ml-target-list {
   display: grid;
   grid-row: 4;
+  align-content: start;
   min-height: 0;
   gap: var(--ml-space-4);
   margin: 0;
