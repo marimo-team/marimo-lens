@@ -108,7 +108,6 @@ type LensUiState = {
   stopCapture: () => void;
   setDragging: (dragging: boolean) => void;
   setDockPosition: (position: DockPosition, options?: { persist?: boolean }) => void;
-  resetDockPosition: () => void;
   setHover: (hover: ResolvedHover | null) => void;
   setSelectedHover: (selectedHover: ResolvedHover | null) => void;
   setPopup: (popup: PopupState | null) => void;
@@ -229,10 +228,6 @@ export function createLensUiStore(
         if (samePosition(state.dockPosition, dockPosition)) return state;
         return { dockPosition };
       }),
-    resetDockPosition: () => {
-      writeStoredPosition(storageKey, null);
-      set({ dockPosition: null, dragging: false });
-    },
     setHover: (hover) => set({ hover }),
     setSelectedHover: (selectedHover) => set({ hover: null, selectedHover }),
     setPopup: (popup) =>

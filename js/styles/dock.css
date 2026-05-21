@@ -2,12 +2,12 @@
   z-index: var(--ml-z-dock);
   bottom: max(18px, calc(env(safe-area-inset-bottom) + 16px));
   right: 18px;
+  width: min(var(--ml-toolbar-expanded), calc(100vw - 24px));
+  height: var(--ml-toolbar-height);
   pointer-events: none;
   filter: var(--ml-dock-filter);
   animation: mlToolbarEnter var(--ml-duration-toolbar) var(--ml-ease-out) both;
-  transition:
-    filter var(--ml-duration-toolbar) var(--ml-ease-toolbar),
-    transform var(--ml-duration-toolbar) var(--ml-ease-toolbar);
+  transition: filter var(--ml-duration-toolbar) var(--ml-ease-toolbar);
 }
 
 .ml-dock[data-positioned="true"] {
@@ -19,12 +19,15 @@
 .ml-dock[data-dragging="true"] {
   cursor: grabbing;
   user-select: none;
+  transition: none;
+  will-change: transform;
 }
 
 .ml-toolbar {
   position: relative;
   display: flex;
   align-items: center;
+  margin-left: auto;
   width: var(--ml-toolbar-collapsed);
   height: var(--ml-toolbar-height);
   border: 0;
@@ -38,6 +41,7 @@
   -webkit-tap-highlight-color: transparent;
   transition:
     filter var(--ml-duration-base) ease,
+    width var(--ml-duration-toolbar) var(--ml-ease-toolbar),
     transform var(--ml-duration-toolbar) var(--ml-ease-toolbar);
 }
 
@@ -45,7 +49,7 @@
   position: absolute;
   top: 0;
   right: 0;
-  width: var(--ml-toolbar-collapsed);
+  width: 100%;
   height: var(--ml-toolbar-height);
   border: 1px solid var(--ml-toolbar-border);
   border-radius: var(--ml-radius-pill);
@@ -59,12 +63,16 @@
 }
 
 .ml-toolbar[data-open="true"]::before {
-  width: min(var(--ml-toolbar-expanded), calc(100vw - 24px));
+  width: 100%;
+}
+
+.ml-toolbar[data-open="true"] {
+  width: 100%;
 }
 
 .ml-toolbar[data-dragging="true"] {
   cursor: grabbing;
-  transform: var(--ml-transform-press);
+  transform: none;
 }
 
 .ml-toolbar-toggle {
@@ -116,7 +124,7 @@
   z-index: 1;
   display: flex;
   align-items: center;
-  width: min(var(--ml-toolbar-expanded), calc(100vw - 24px));
+  width: 100%;
   height: var(--ml-toolbar-height);
   padding: var(--ml-toolbar-padding);
   opacity: 0;

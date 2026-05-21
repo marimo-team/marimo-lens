@@ -74,10 +74,10 @@ export function LensDock({
   const stopCapture = useLensUiStore((state) => state.stopCapture);
   const setHover = useLensUiStore((state) => state.setHover);
   const setSelectedHover = useLensUiStore((state) => state.setSelectedHover);
-  const { consumeDragClick, dockDragProps, dockRef, dockStyle } = useDraggableDock();
+  const toolbarOpen = open && !popupOpen;
+  const { consumeDragClick, dockDragProps, dockRef, dockStyle } = useDraggableDock(toolbarOpen);
   const feedbackText = renderPairPromptForDetail(pairFeedback, outputDetail, pair_prompt, markdown);
   const noteCount = visibleAnnotations(annotations, agentActivity).length;
-  const toolbarOpen = open && !popupOpen;
   const inspectorPresent = useInspectorPresence(inventoryOpen && toolbarOpen);
   const settingsPresent = useSettingsPresence(settingsOpen && toolbarOpen);
 

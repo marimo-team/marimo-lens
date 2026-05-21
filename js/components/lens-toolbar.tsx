@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { useId, type MouseEvent as ReactMouseEvent } from "react";
 
 import type { useDraggableDock } from "@/hooks/use-draggable-dock";
 
@@ -57,12 +57,21 @@ export function LensToolbar({
   const toggleLabel = open ? "Collapse Lens" : "Open Lens";
   const controlsId = useId();
   const toggleDescriptionId = useId();
+  const { onKeyDown, ...pointerDragProps } = dragProps;
+  const openCollapsedToolbar = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (open || event.target !== event.currentTarget) return;
+    if (consumeDragClick()) return;
+    onToggleOpen();
+  };
   return (
     <div
-      {...dragProps}
+      {...pointerDragProps}
       className="ml-toolbar"
       role="toolbar"
+      tabIndex={-1}
       aria-label={`${label} controls`}
+      onKeyDown={onKeyDown}
+      onClick={openCollapsedToolbar}
       data-open={open ? "true" : "false"}
       data-dragging={dragging ? "true" : "false"}
     >

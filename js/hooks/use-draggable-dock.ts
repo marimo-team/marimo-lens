@@ -1,11 +1,12 @@
-import { useDrag } from "@use-gesture/react";
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   type CSSProperties,
   type KeyboardEvent,
   type HTMLAttributes,
+  type PointerEvent as ReactPointerEvent,
   type RefObject,
 } from "react";
 
@@ -15,15 +16,28 @@ import { clamp } from "@/lib/dom-geometry";
 import { useLensUiStore } from "@/store";
 
 const VIEWPORT_GUTTER = 12;
-const RIGHT_ALIGNED_OPEN_FOOTPRINT = 340;
 const KEYBOARD_STEP = 24;
 const KEYBOARD_LARGE_STEP = 96;
 const DRAG_CLICK_SUPPRESSION_MS = 160;
 const DRAG_CLICK_THRESHOLD = 4;
 
 type DockDragProps = HTMLAttributes<HTMLDivElement>;
+type DockBounds = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+type DragSession = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  origin: DockPosition;
+  bounds: DockBounds;
+  position: DockPosition;
+};
 
-export function useDraggableDock(): {
+export function useDraggableDock(expanded: boolean): {
   dockRef: RefObject<HTMLDivElement | null>;
   dockStyle: CSSProperties | undefined;
   dockDragProps: DockDragProps;
@@ -32,19 +46,39 @@ export function useDraggableDock(): {
   const dockRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
   const didDragRef = useRef(false);
+  const positionRef = useRef<DockPosition | null>(null);
+  const dragSessionRef = useRef<DragSession | null>(null);
   const dockPosition = useLensUiStore((state) => state.dockPosition);
   const setDragging = useLensUiStore((state) => state.setDragging);
   const setDockPosition = useLensUiStore((state) => state.setDockPosition);
-  const resetDockPosition = useLensUiStore((state) => state.resetDockPosition);
+
+  useLayoutEffect(() => {
+    const element = dockRef.current;
+    positionRef.current = dockPosition;
+    if (!element) return;
+    if (dockPosition) {
+      const clamped = clampPosition(dockPosition, boundsForElement(element));
+      positionRef.current = clamped;
+      applyDockPosition(element, clamped);
+      if (clamped.x !== dockPosition.x || clamped.y !== dockPosition.y) {
+        setDockPosition(clamped);
+      }
+      return;
+    }
+    clearDockPosition(element);
+  }, [dockPosition, expanded, setDockPosition]);
 
   useEffect(() => {
-    if (!dockPosition) return;
     const element = dockRef.current;
     if (!element) return;
 
     const clampCurrentPosition = () => {
-      const clamped = clampPosition(dockPosition, element.getBoundingClientRect());
-      if (clamped.x !== dockPosition.x || clamped.y !== dockPosition.y) {
+      const position = positionRef.current;
+      if (!position) return;
+      const clamped = clampPosition(position, boundsForElement(element));
+      if (clamped.x !== position.x || clamped.y !== position.y) {
+        positionRef.current = clamped;
+        applyDockPosition(element, clamped);
         setDockPosition(clamped);
       }
     };
@@ -58,77 +92,143 @@ export function useDraggableDock(): {
       observer?.disconnect();
       window.removeEventListener("resize", clampCurrentPosition);
     };
-  }, [dockPosition, setDockPosition]);
+  }, [setDockPosition]);
 
   const currentPosition = useCallback((): DockPosition | null => {
-    const rect = dockRef.current?.getBoundingClientRect();
-    if (!rect) return dockPosition;
-    return clampPosition(dockPosition ?? { x: rect.left, y: rect.top }, rect);
-  }, [dockPosition]);
-
-  const dragBounds = useCallback(() => {
-    const rect = dockRef.current?.getBoundingClientRect();
-    if (!rect) {
-      return {
-        left: VIEWPORT_GUTTER,
-        top: VIEWPORT_GUTTER,
-        right: window.innerWidth - VIEWPORT_GUTTER,
-        bottom: window.innerHeight - VIEWPORT_GUTTER,
-      };
-    }
-    return boundsForRect(rect);
+    const element = dockRef.current;
+    if (!element) return positionRef.current;
+    const rect = element.getBoundingClientRect();
+    return clampPosition(
+      positionRef.current ?? { x: rect.left, y: rect.top },
+      boundsForElement(element),
+    );
   }, []);
 
   const moveBy = useCallback(
     (deltaX: number, deltaY: number) => {
-      const rect = dockRef.current?.getBoundingClientRect();
-      if (!rect) return;
+      const element = dockRef.current;
+      if (!element) return;
       const origin = currentPosition();
       if (!origin) return;
-      setDockPosition(clampPosition({ x: origin.x + deltaX, y: origin.y + deltaY }, rect));
+      const position = clampPosition(
+        { x: origin.x + deltaX, y: origin.y + deltaY },
+        boundsForElement(element),
+      );
+      positionRef.current = position;
+      applyDockPosition(element, position);
+      setDockPosition(position);
     },
     [currentPosition, setDockPosition],
   );
 
-  const bindDrag = useDrag(
-    ({ first, last, movement, offset }) => {
-      if (first) didDragRef.current = false;
+  const commitDragPosition = useCallback(
+    (position: DockPosition) => {
+      const element = dockRef.current;
+      const finalPosition = element ? currentVisualPosition(element) : position;
+      positionRef.current = finalPosition;
+      if (element) {
+        applyDockPosition(element, finalPosition);
+        element.style.transform = "";
+        clearDragStyles(element);
+      }
+      setDockPosition(finalPosition);
+    },
+    [setDockPosition],
+  );
+
+  const restoreRestingPosition = useCallback(() => {
+    const element = dockRef.current;
+    if (!element) return;
+    element.style.transform = "";
+    clearDragStyles(element);
+    const position = positionRef.current;
+    if (position) {
+      applyDockPosition(element, position);
+      return;
+    }
+    clearDockPosition(element);
+  }, []);
+
+  const onPointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      const element = dockRef.current;
+      if (!element) return;
+      if (expanded && isToolbarControlTarget(event.target)) return;
+      const origin = currentPosition();
+      if (!origin) return;
+      didDragRef.current = false;
+      dragSessionRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        origin,
+        bounds: boundsForElement(element),
+        position: origin,
+      };
+      applyDockPosition(element, origin);
+      element.style.transform = "";
+      prepareDragStyles(element);
+      event.currentTarget.setPointerCapture(event.pointerId);
+    },
+    [currentPosition, expanded],
+  );
+
+  const onPointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const session = dragSessionRef.current;
+      if (!session || session.pointerId !== event.pointerId) return;
+      const deltaX = event.clientX - session.startX;
+      const deltaY = event.clientY - session.startY;
+      const position = clampPosition(
+        { x: session.origin.x + deltaX, y: session.origin.y + deltaY },
+        session.bounds,
+      );
+      session.position = position;
+      const element = dockRef.current;
+      if (element) applyDragTransform(element, session.origin, position);
       const wasDrag =
-        Math.abs(movement[0]) > DRAG_CLICK_THRESHOLD ||
-        Math.abs(movement[1]) > DRAG_CLICK_THRESHOLD;
-      const position = { x: offset[0], y: offset[1] };
-      if (wasDrag) {
-        if (!didDragRef.current) {
-          didDragRef.current = true;
-          setDragging(true);
-        }
-        setDockPosition(position, { persist: last });
+        Math.abs(deltaX) > DRAG_CLICK_THRESHOLD || Math.abs(deltaY) > DRAG_CLICK_THRESHOLD;
+      if (wasDrag && !didDragRef.current) {
+        didDragRef.current = true;
+        setDragging(true);
       }
-      if (last) {
-        if (didDragRef.current) {
-          setDragging(false);
-          suppressClickRef.current = true;
-          window.setTimeout(() => {
-            suppressClickRef.current = false;
-          }, DRAG_CLICK_SUPPRESSION_MS);
-        }
-        didDragRef.current = false;
+      if (wasDrag) event.preventDefault();
+    },
+    [setDragging],
+  );
+
+  const endPointerDrag = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>, cancelled: boolean) => {
+      const session = dragSessionRef.current;
+      if (!session || session.pointerId !== event.pointerId) return;
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
       }
+      if (didDragRef.current && !cancelled) {
+        commitDragPosition(session.position);
+        setDragging(false);
+        suppressClickRef.current = true;
+        window.setTimeout(() => {
+          suppressClickRef.current = false;
+        }, DRAG_CLICK_SUPPRESSION_MS);
+      } else {
+        restoreRestingPosition();
+      }
+      didDragRef.current = false;
+      dragSessionRef.current = null;
     },
-    {
-      bounds: dragBounds,
-      eventOptions: { passive: false },
-      filterTaps: true,
-      from: () => {
-        const position = currentPosition();
-        return [position?.x ?? 0, position?.y ?? 0];
-      },
-      pointer: {
-        capture: false,
-        keys: false,
-      },
-      preventDefault: true,
-    },
+    [commitDragPosition, restoreRestingPosition, setDragging],
+  );
+
+  const onPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => endPointerDrag(event, false),
+    [endPointerDrag],
+  );
+
+  const onPointerCancel = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => endPointerDrag(event, true),
+    [endPointerDrag],
   );
 
   const consumeDragClick = useCallback(() => {
@@ -152,12 +252,8 @@ export function useDraggableDock(): {
         moveBy(move[0], move[1]);
         return;
       }
-      if (event.key === "Home") {
-        event.preventDefault();
-        resetDockPosition();
-      }
     },
-    [moveBy, resetDockPosition],
+    [moveBy],
   );
 
   const dockStyle = dockPosition
@@ -168,33 +264,89 @@ export function useDraggableDock(): {
     dockRef,
     dockStyle,
     dockDragProps: {
-      ...bindDrag(),
-      onDoubleClick: resetDockPosition,
       onKeyDown,
+      onPointerCancel,
+      onPointerDown,
+      onPointerMove,
+      onPointerUp,
     },
     consumeDragClick,
   };
 }
 
-function boundsForRect(rect: DOMRect) {
-  const footprintWidth = Math.max(
-    rect.width,
-    Math.min(RIGHT_ALIGNED_OPEN_FOOTPRINT, window.innerWidth - VIEWPORT_GUTTER * 2),
-  );
-  const left = VIEWPORT_GUTTER + Math.max(0, footprintWidth - rect.width);
-  const right = Math.max(left, window.innerWidth - rect.width - VIEWPORT_GUTTER);
+function boundsForElement(element: HTMLElement): DockBounds {
+  const frame = element.getBoundingClientRect();
+  const visible = visibleToolbarRect(element) ?? frame;
+  const offsetX = visible.left - frame.left;
+  const offsetY = visible.top - frame.top;
+  const left = VIEWPORT_GUTTER - offsetX;
+  const top = VIEWPORT_GUTTER - offsetY;
+  const right = Math.max(left, window.innerWidth - VIEWPORT_GUTTER - offsetX - visible.width);
+  const bottom = Math.max(top, window.innerHeight - VIEWPORT_GUTTER - offsetY - visible.height);
   return {
     left,
-    top: VIEWPORT_GUTTER,
+    top,
     right,
-    bottom: Math.max(VIEWPORT_GUTTER, window.innerHeight - rect.height - VIEWPORT_GUTTER),
+    bottom,
   };
 }
 
-function clampPosition(position: DockPosition, rect: DOMRect): DockPosition {
-  const bounds = boundsForRect(rect);
+function visibleToolbarRect(element: HTMLElement): DOMRect | null {
+  return element.querySelector<HTMLElement>(".ml-toolbar")?.getBoundingClientRect() ?? null;
+}
+
+function isToolbarControlTarget(target: EventTarget): boolean {
+  return (
+    target instanceof Element &&
+    target.closest(
+      'button, input, select, textarea, a[href], [role="button"], [contenteditable="true"]',
+    ) !== null
+  );
+}
+
+function clampPosition(position: DockPosition, bounds: DockBounds): DockPosition {
   return {
     x: clamp(position.x, bounds.left, bounds.right),
     y: clamp(position.y, bounds.top, bounds.bottom),
   };
+}
+
+function applyDockPosition(element: HTMLElement, position: DockPosition): void {
+  element.style.left = `${position.x}px`;
+  element.style.top = `${position.y}px`;
+  element.style.right = "auto";
+  element.style.bottom = "auto";
+}
+
+function clearDockPosition(element: HTMLElement): void {
+  element.style.left = "";
+  element.style.top = "";
+  element.style.right = "";
+  element.style.bottom = "";
+  element.style.transform = "";
+}
+
+function prepareDragStyles(element: HTMLElement): void {
+  element.style.transition = "none";
+  element.style.willChange = "transform";
+}
+
+function clearDragStyles(element: HTMLElement): void {
+  element.style.transition = "";
+  element.style.willChange = "";
+}
+
+function currentVisualPosition(element: HTMLElement): DockPosition {
+  const rect = element.getBoundingClientRect();
+  return clampPosition({ x: rect.left, y: rect.top }, boundsForElement(element));
+}
+
+function applyDragTransform(
+  element: HTMLElement,
+  origin: DockPosition,
+  position: DockPosition,
+): void {
+  element.style.transform = `translate3d(${position.x - origin.x}px, ${
+    position.y - origin.y
+  }px, 0)`;
 }
