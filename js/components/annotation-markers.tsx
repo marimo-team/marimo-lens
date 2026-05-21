@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import {
   useCallback,
   useEffect,
+  useEffectEvent,
   useRef,
   useState,
   type CSSProperties,
@@ -29,6 +30,8 @@ type PositionedAnnotation = {
   position: MarkerPoint;
   receipt?: AnnotationReceipt;
 };
+
+const MARKER_EDITOR_EXIT_MS = 150;
 
 type AnnotationMarkersProps = {
   annotations: LensAnnotation[];
@@ -200,16 +203,31 @@ function AnnotationMarkerEditor({
   const { annotation } = marker;
   const [comment, setComment] = useState(annotation.comment);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
   const [shaking, setShaking] = useState(false);
   const popupRef = useRef<HTMLFormElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const exitTimerRef = useRef<number | null>(null);
   const shakeTimerRef = useRef<number | null>(null);
   const blockNextClickRef = useRef(false);
   const canSave = Boolean(comment.trim());
   const details = semanticDetails(annotation);
   const summary = semanticSummary(annotation) || annotation.element || "selected output";
 
+  const closeWithAnimation = useCallback(
+    (complete: () => void) => {
+      if (closing) return;
+      if (shakeTimerRef.current !== null) window.clearTimeout(shakeTimerRef.current);
+      if (exitTimerRef.current !== null) window.clearTimeout(exitTimerRef.current);
+      setShaking(false);
+      setClosing(true);
+      exitTimerRef.current = window.setTimeout(complete, MARKER_EDITOR_EXIT_MS);
+    },
+    [closing],
+  );
+
   const shake = useCallback(() => {
+    if (closing) return;
     if (shakeTimerRef.current !== null) window.clearTimeout(shakeTimerRef.current);
     setShaking(false);
     window.requestAnimationFrame(() => {
@@ -219,7 +237,13 @@ function AnnotationMarkerEditor({
         textareaRef.current?.focus();
       }, 260);
     });
-  }, []);
+  }, [closing]);
+
+  const shakeOutsidePopup = useEffectEvent(() => {
+    if (closing) return false;
+    shake();
+    return true;
+  });
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -237,10 +261,10 @@ function AnnotationMarkerEditor({
     };
     const onPointerDown = (event: PointerEvent) => {
       if (!isOutsidePopup(event.target)) return;
+      if (!shakeOutsidePopup()) return;
       blockNextClickRef.current = true;
       event.preventDefault();
       event.stopPropagation();
-      shake();
     };
     const onClick = (event: MouseEvent) => {
       if (!blockNextClickRef.current || !isOutsidePopup(event.target)) return;
@@ -254,10 +278,11 @@ function AnnotationMarkerEditor({
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("click", onClick, true);
     };
-  }, [shake]);
+  }, []);
 
   useEffect(
     () => () => {
+      if (exitTimerRef.current !== null) window.clearTimeout(exitTimerRef.current);
       if (shakeTimerRef.current !== null) window.clearTimeout(shakeTimerRef.current);
     },
     [],
@@ -269,7 +294,7 @@ function AnnotationMarkerEditor({
       shake();
       return;
     }
-    onSave({ comment: trimmed });
+    closeWithAnimation(() => onSave({ comment: trimmed }));
   };
 
   const submitForm = (event: FormEvent<HTMLFormElement>) => {
@@ -280,7 +305,7 @@ function AnnotationMarkerEditor({
   return (
     <form
       ref={popupRef}
-      className={shaking ? "ml-marker-editor ml-marker-editor--shake" : "ml-marker-editor"}
+      className={markerEditorClassName({ closing, shaking })}
       style={markerEditorStyle(marker.position)}
       aria-label={`Edit feedback ${marker.index + 1}`}
       data-marimo-lens-ui
@@ -329,7 +354,7 @@ function AnnotationMarkerEditor({
             event.preventDefault();
             submit();
           }
-          if (event.key === "Escape") onCancel();
+          if (event.key === "Escape") closeWithAnimation(onCancel);
         }}
       />
 
@@ -338,11 +363,15 @@ function AnnotationMarkerEditor({
           className="ml-marker-editor__delete"
           type="button"
           aria-label={`Delete feedback ${marker.index + 1}`}
-          onClick={onDelete}
+          onClick={() => closeWithAnimation(onDelete)}
         >
           <Trash2 size={17} strokeWidth={2} />
         </button>
-        <button className="ml-marker-editor__cancel" type="button" onClick={onCancel}>
+        <button
+          className="ml-marker-editor__cancel"
+          type="button"
+          onClick={() => closeWithAnimation(onCancel)}
+        >
           Cancel
         </button>
         <button className="ml-marker-editor__save" type="submit" disabled={!canSave}>
@@ -351,6 +380,22 @@ function AnnotationMarkerEditor({
       </div>
     </form>
   );
+}
+
+function markerEditorClassName({
+  closing,
+  shaking,
+}: {
+  closing: boolean;
+  shaking: boolean;
+}): string {
+  return [
+    "ml-marker-editor",
+    closing ? "ml-marker-editor--closing" : null,
+    shaking ? "ml-marker-editor--shake" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 function markerTooltipStyle(position: MarkerPoint): CSSProperties {
@@ -441,9 +486,7 @@ function semanticDetails(annotation: LensAnnotation): Array<{ label: string; val
   const shape = target?.shape;
   const semantic = annotation.semanticSelection;
   const chartPart = annotation.chartPart;
-  const evidenceKinds = semantic
-    ? [...new Set(semantic.evidence.map((evidence) => evidence.kind).filter(Boolean))]
-    : [];
+  const evidenceKinds = semantic ? semanticEvidenceKinds(semantic) : [];
   return [
     {
       label: "Target",
@@ -496,8 +539,23 @@ function compactDetail(item: { label: string; value: string | null }): Array<{
 }
 
 function joinParts(parts: Array<string | null | undefined>): string {
-  return parts
-    .map((part) => part?.trim())
-    .filter((part): part is string => Boolean(part))
-    .join(" · ");
+  const result: string[] = [];
+  for (const part of parts) {
+    const text = part?.trim();
+    if (text) result.push(text);
+  }
+  return result.join(" · ");
+}
+
+function semanticEvidenceKinds(
+  semantic: NonNullable<LensAnnotation["semanticSelection"]>,
+): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const evidence of semantic.evidence) {
+    if (!evidence.kind || seen.has(evidence.kind)) continue;
+    seen.add(evidence.kind);
+    result.push(evidence.kind);
+  }
+  return result;
 }

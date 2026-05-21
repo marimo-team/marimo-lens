@@ -573,6 +573,11 @@ html[data-marimo-lens-capture] embed[data-marimo-document] {
   animation: mlMarkerEditShake 250ms ease-out;
 }
 
+.ml-marker-editor--closing {
+  pointer-events: none;
+  animation: mlMarkerPopoverOut 150ms ease-in forwards;
+}
+
 .ml-marker-editor__summary {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

@@ -191,6 +191,17 @@
   }
 }
 
+@keyframes mlMarkerPopoverOut {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) translateY(5px) scale(0.95);
+  }
+}
+
 @keyframes mlMarkerEditShake {
   0%,
   100% {
