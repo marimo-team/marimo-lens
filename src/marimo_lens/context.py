@@ -67,7 +67,7 @@ class State:
     """Restorable Lens state.
 
     Human annotations and agent receipts are state, not collection source. Keeping
-    them here keeps the normal ``Lens(...)`` path focused on author intent.
+    them here keeps the normal ``Lens(...)`` path focused on collected notebook context.
     """
 
     title: str | None = None

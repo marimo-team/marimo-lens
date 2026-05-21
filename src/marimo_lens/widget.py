@@ -51,15 +51,15 @@ def _static_text(filename: str) -> str:
 class Lens(anywidget.AnyWidget):
     """A marimo-aware feedback lens exposed as an anywidget.
 
-    The widget is intentionally split into two parts:
+    The widget has two parts:
 
     - Python collects notebook/dataflow provenance and typed targets.
     - JavaScript owns the document-level inspection UI and writes feedback back
       through synced traitlets.
 
     Pass custom ``EntityInspector`` instances for domain-specific target
-    metadata. The collection/rendering pipeline is intentionally internal so
-    the public widget API stays small while Lens is still young.
+    metadata. The collection/rendering pipeline stays internal so the public
+    widget API stays small while Lens is still young.
     """
 
     _marimo_lens_widget = True

@@ -54,6 +54,9 @@ _TABULAR_COMPONENTS = frozenset(
         "marimo-table",
     }
 )
+_TABULAR_SURFACES = {
+    "marimo-data-editor": "columnar-grid",
+}
 _CHART_COMPONENTS = frozenset(
     {
         "marimo-matplotlib",
@@ -304,9 +307,7 @@ def _component_column(name: Any, dtype: Any, index: int) -> dict[str, Any]:
 
 
 def _tabular_surface(name: str) -> str:
-    if name == "marimo-data-editor":
-        return "columnar-grid"
-    return "columnar-dom"
+    return _TABULAR_SURFACES.get(name, "columnar-dom")
 
 
 def _component_shape(

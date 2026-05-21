@@ -20,6 +20,7 @@ _SYSTEM_TRAITS = {
     "tabbable",
     "tooltip",
 }
+_FILE_SUMMARY_FIELDS = ("name", "size", "type")
 
 
 def safe_anywidget_state(widget: anywidget.AnyWidget) -> dict[str, Any]:
@@ -89,22 +90,17 @@ def summarize_file_value(value: Any) -> Any:
     if value is None:
         return None
     files = value if isinstance(value, list) else [value]
-    result = []
-    for item in files[:MAX_VALUE_ITEMS]:
-        result.append(
-            {
-                "name": safe_value(getattr(item, "name", None)),
-                "size": safe_value(getattr(item, "size", None)),
-                "type": safe_value(getattr(item, "type", None)),
-            }
-            if not isinstance(item, Mapping)
-            else {
-                "name": safe_value(item.get("name")),
-                "size": safe_value(item.get("size")),
-                "type": safe_value(item.get("type")),
-            }
-        )
-    return result
+    return [_file_summary(item) for item in files[:MAX_VALUE_ITEMS]]
+
+
+def _file_summary(item: Any) -> dict[str, Any]:
+    return {
+        field: safe_value(_file_field(item, field)) for field in _FILE_SUMMARY_FIELDS
+    }
+
+
+def _file_field(item: Any, field: str) -> Any:
+    return item.get(field) if isinstance(item, Mapping) else getattr(item, field, None)
 
 
 __all__ = [

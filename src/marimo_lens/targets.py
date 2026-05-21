@@ -41,6 +41,14 @@ from .metadata import (
 from .selection import Model as SelectionModel
 from .selection import Policy as SelectionPolicy
 
+_OUTPUT_LABEL_PREFIXES = {
+    "dataframe": "Table output",
+    "document": "Document output",
+    "media": "Media output",
+    "table": "Table output",
+    "visualization": "Chart output",
+}
+
 
 def create(
     kind: TargetKind | str,
@@ -466,15 +474,8 @@ def _related_output_cell_ids(
 
 
 def _output_label(cell: Mapping[str, Any], inspected_kind: str) -> str:
-    if inspected_kind == "visualization":
-        return f"Chart output from cell {cell.get('id')}"
-    if inspected_kind in {"dataframe", "table"}:
-        return f"Table output from cell {cell.get('id')}"
-    if inspected_kind == "document":
-        return f"Document output from cell {cell.get('id')}"
-    if inspected_kind == "media":
-        return f"Media output from cell {cell.get('id')}"
-    return f"Output from cell {cell.get('id')}"
+    prefix = _OUTPUT_LABEL_PREFIXES.get(inspected_kind, "Output")
+    return f"{prefix} from cell {cell.get('id')}"
 
 
 def _output_summary(cell: Mapping[str, Any], output_type: str) -> str:
