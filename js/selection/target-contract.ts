@@ -51,10 +51,6 @@ export const CHART_PART_KINDS = [
   "trace",
 ] as const;
 
-export const FEEDBACK_INTENTS = ["fix", "question", "explain", "approve"] as const;
-
-export const FEEDBACK_SEVERITIES = ["blocking", "important", "suggestion"] as const;
-
 export const AGENT_ACTIVITY_KINDS = [
   "agent-started",
   "agent-finished",
@@ -84,5 +80,3 @@ export type LensTargetKind = (typeof LENS_TARGET_KINDS)[number];
 export type SelectionSurface = (typeof SELECTION_SURFACES)[number];
 export type SelectionGranularity = (typeof SELECTION_GRANULARITIES)[number];
 export type LensChartPartKind = (typeof CHART_PART_KINDS)[number];
-export type FeedbackIntent = (typeof FEEDBACK_INTENTS)[number];
-export type FeedbackSeverity = (typeof FEEDBACK_SEVERITIES)[number];

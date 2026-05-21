@@ -43,7 +43,6 @@ export function pairFeedback(overrides: Partial<PairFeedback> = {}): PairFeedbac
     contextPolicy: { redaction: "none" },
     summary: {
       annotationCount: 1,
-      hasBlocking: true,
       targetCells: ["cell-data", "cell-view"],
     },
     groups: [{ cellId: "cell-data", annotationIds: ["a1"] }],
@@ -61,8 +60,6 @@ export function feedbackAnnotation(
     id: "a1",
     index: 1,
     createdAt: "2026-05-21T00:00:00Z",
-    severity: "blocking",
-    intent: "fix",
     request: "Sort by revenue descending.",
     target: {
       id: "var:sales",
@@ -117,8 +114,6 @@ export function feedbackAnnotation(
       boundingBox: { x: 0, y: 0, width: 100, height: 24 },
     },
     marimoPair: {
-      action: "fix",
-      requiresClarification: false,
       editBoundary: {
         mode: "marimo-code-mode",
         cellIds: ["cell-data"],
@@ -127,9 +122,6 @@ export function feedbackAnnotation(
       readBeforeEdit: ["cell-data", "cell-view"],
       runAfterEdit: ["cell-data", "cell-view"],
       reportingProtocol: {},
-      recommendedAction: "inspect the target cells",
-      needsClarification: false,
-      suggestedFocus: "sort sales",
       editGuardrail: "Use ctx.edit_cell.",
     },
     ...overrides,

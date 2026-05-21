@@ -30,7 +30,6 @@ _SUMMARY_CELL_STATUSES = {
     "edited": "cellsEdited",
     "ran": "cellsRun",
 }
-_QUESTION_STATUSES = frozenset(("needs-review", "needs_human", "blocked"))
 _WARNING_STATUSES = frozenset(("failed", "blocked"))
 
 
@@ -172,7 +171,6 @@ def build_pair_result(
         },
         "summary": summary,
         "activity": items,
-        "openQuestions": _open_questions(items),
         "warnings": _warnings(items),
     }
 
@@ -262,23 +260,6 @@ def _activity_summary(items: Sequence[Mapping[str, Any]]) -> dict[str, int]:
         "cellsRun": len(counters["cellsRun"]),
         "annotationsAddressed": len(addressed),
     }
-
-
-def _open_questions(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    questions: list[dict[str, Any]] = []
-    for item in items:
-        status = item.get("status")
-        if status not in _QUESTION_STATUSES:
-            continue
-        questions.append(
-            {
-                "activityId": item.get("id") or "",
-                "cellIds": _strings(item.get("cellIds", ())),
-                "annotationIds": _strings(item.get("annotationIds", ())),
-                "note": item.get("note") or "",
-            }
-        )
-    return questions
 
 
 def _warnings(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:

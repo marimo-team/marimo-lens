@@ -6,8 +6,6 @@ import {
   AGENT_FINISH_STATUSES,
   CAPABILITY_KEYS,
   CHART_PART_KINDS,
-  FEEDBACK_INTENTS,
-  FEEDBACK_SEVERITIES,
   LENS_TARGET_KINDS,
   SELECTION_GRANULARITIES,
   SELECTION_SURFACES,
@@ -328,9 +326,6 @@ export const DomEvidenceSchema = v.strictObject({
   boundingBox: v.optional(RectSchema),
 });
 
-export const FeedbackIntentSchema = v.picklist(FEEDBACK_INTENTS);
-export const FeedbackSeveritySchema = v.picklist(FEEDBACK_SEVERITIES);
-
 export const LensAnnotationSchema = v.strictObject({
   id: v.string(),
   targetId: v.string(),
@@ -344,8 +339,6 @@ export const LensAnnotationSchema = v.strictObject({
   cellId: v.optional(v.nullish(v.string())),
   displayCellId: v.optional(v.nullish(v.string())),
   comment: v.string(),
-  intent: v.optional(FeedbackIntentSchema, "fix"),
-  severity: v.optional(FeedbackSeveritySchema, "important"),
   element: v.optional(v.string(), ""),
   elementPath: v.optional(v.string(), ""),
   documentX: v.optional(v.number(), 0),
@@ -452,7 +445,6 @@ export const PairResultSchema = v.strictObject({
     }),
   ),
   activity: v.optional(AgentActivityArraySchema),
-  openQuestions: v.optional(v.array(v.unknown())),
   warnings: v.optional(v.array(v.unknown())),
 });
 
@@ -460,8 +452,6 @@ export const PairFeedbackAnnotationSchema = v.strictObject({
   id: v.string(),
   index: v.number(),
   createdAt: v.string(),
-  severity: FeedbackSeveritySchema,
-  intent: FeedbackIntentSchema,
   request: v.string(),
   target: v.strictObject({
     id: v.string(),
@@ -520,8 +510,6 @@ export const PairFeedbackAnnotationSchema = v.strictObject({
     context: v.optional(UnknownRecordSchema),
   }),
   marimoPair: v.strictObject({
-    action: FeedbackIntentSchema,
-    requiresClarification: v.boolean(),
     editBoundary: v.strictObject({
       mode: v.literal("marimo-code-mode"),
       cellIds: StringArraySchema,
@@ -530,9 +518,6 @@ export const PairFeedbackAnnotationSchema = v.strictObject({
     readBeforeEdit: StringArraySchema,
     runAfterEdit: StringArraySchema,
     reportingProtocol: UnknownRecordSchema,
-    recommendedAction: v.string(),
-    needsClarification: v.boolean(),
-    suggestedFocus: v.string(),
     editGuardrail: v.string(),
   }),
 });

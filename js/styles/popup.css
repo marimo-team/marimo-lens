@@ -1,12 +1,11 @@
 .ml-popup {
   z-index: var(--ml-z-popup);
-  width: 320px;
   max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 144px);
+  max-height: calc(100vh - 96px);
   margin: 0;
   border: 0;
   border-radius: var(--ml-radius-2xl);
-  padding: var(--ml-space-11) var(--ml-space-13) var(--ml-space-13);
+  padding: var(--ml-space-12);
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--ml-popup-bg);
@@ -21,52 +20,35 @@
 }
 
 .ml-popup__form {
+  display: grid;
+  gap: var(--ml-space-8);
   margin: 0;
 }
 
-.ml-popup__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ml-space-9);
-  margin-bottom: var(--ml-space-8);
-}
-
-.ml-popup__summary {
-  max-width: 260px;
-  margin-top: var(--ml-space-2);
+.ml-popup__selection {
+  min-width: 0;
   overflow: hidden;
   color: var(--ml-subtle);
-  font-size: var(--ml-font-xs);
-  font-weight: 430;
+  font-size: var(--ml-font-lg);
+  font-weight: 470;
   line-height: var(--ml-line-normal);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ml-provenance {
+.ml-popup__footer {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--ml-space-4);
-  margin: 0 0 var(--ml-space-8);
-}
-
-.ml-provenance span {
-  border: 1px solid var(--ml-provenance-border);
-  border-radius: var(--ml-radius-pill);
-  padding: var(--ml-space-1) var(--ml-space-6);
-  background: var(--ml-provenance-bg);
-  color: var(--ml-provenance-text);
-  font-size: var(--ml-font-xs);
-  line-height: 1.5;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ml-space-7);
 }
 
 .ml-textarea {
   width: 100%;
-  min-height: 86px;
+  min-height: 96px;
   border: 1px solid var(--ml-textarea-border);
   border-radius: var(--ml-radius-md);
-  padding: var(--ml-space-7) var(--ml-space-9);
+  padding: var(--ml-space-8) var(--ml-space-9);
   resize: none;
   background: var(--ml-textarea-bg);
   color: var(--ml-text);
@@ -80,7 +62,7 @@
 }
 
 .ml-textarea:focus {
-  border-color: var(--ml-blue);
+  border-color: var(--ml-feedback-accent);
   background: var(--ml-textarea-focus-bg);
 }
 
@@ -88,84 +70,33 @@
   color: var(--ml-placeholder);
 }
 
-.ml-chip-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ml-space-5);
-  min-width: 0;
-  margin-top: var(--ml-space-7);
-  border: 0;
-  padding: 0;
-}
-
-.ml-chip,
-.ml-dot-chip {
-  border: 1px solid var(--ml-chip-border);
+.ml-popup__cancel {
+  height: 30px;
   border-radius: var(--ml-radius-pill);
+  padding: 0 var(--ml-space-12);
   background: transparent;
-  color: var(--ml-chip-text);
+  color: var(--ml-muted);
   cursor: pointer;
+  font-size: var(--ml-font-md);
+  font-weight: 620;
   transition:
     background-color var(--ml-duration-base) ease,
-    color var(--ml-duration-base) ease,
-    border-color var(--ml-duration-base) ease,
-    transform var(--ml-duration-fast) ease;
+    color var(--ml-duration-base) ease;
 }
 
-.ml-chip:hover,
-.ml-dot-chip:hover {
-  transform: var(--ml-transform-lift);
-  background: var(--ml-chip-hover-bg);
-  color: var(--ml-chip-hover-text);
-}
-
-.ml-chip {
-  height: 25px;
-  padding: 0 var(--ml-space-9);
-  font-size: var(--ml-font-sm);
-}
-
-.ml-dot-chip {
-  height: var(--ml-control-sm);
-  padding: 0 var(--ml-space-7);
-  font-size: var(--ml-font-xs);
-}
-
-.ml-chip--selected,
-.ml-dot-chip--selected {
-  border-color: var(--ml-chip-selected-border);
-  background: var(--ml-chip-selected-bg);
+.ml-popup__cancel:hover {
+  background: var(--ml-control-hover);
   color: var(--ml-text);
 }
 
-.ml-popup__footer {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--ml-space-9);
-  margin-top: var(--ml-space-3);
-}
-
-.ml-popup .ml-icon-button {
-  min-width: 28px;
-  height: var(--ml-control-md);
-  border: 0;
-  background: transparent;
-  color: var(--ml-popup-icon-text);
-}
-
-.ml-popup .ml-icon-button:hover:not(:disabled) {
-  transform: none;
-  background: var(--ml-popup-icon-hover-bg);
-  color: var(--ml-popup-icon-hover-text);
-}
-
-.ml-popup .ml-icon-button:active:not(:disabled) {
-  transform: var(--ml-transform-icon-press);
+.ml-popup__cancel:focus-visible {
+  outline: 2px solid var(--ml-focus-ring);
+  outline-offset: var(--ml-space-1);
 }
 
 .ml-popup .ml-submit {
-  height: 29px;
+  height: 30px;
+  min-width: 72px;
   padding: 0 var(--ml-space-13);
   font-size: var(--ml-font-md);
   font-weight: 600;

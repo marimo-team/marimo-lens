@@ -47,8 +47,6 @@ def test_lens_pipeline_renders_the_canonical_feedback_contract() -> None:
                 "variable": "sales",
                 "kind": "dataframe",
                 "comment": "Review this table.",
-                "intent": "fix",
-                "severity": "important",
             }
         ],
         metadata={"audience": "agent", "api_token": "metadata-secret"},

@@ -5,8 +5,8 @@ import type { LensColumn, LensTarget, PopupState } from "@/types";
 import { clamp } from "@/lib/dom-geometry";
 import { shapeText } from "@/lib/target-labels";
 
-const POPUP_WIDTH = 320;
-const POPUP_ESTIMATED_HEIGHT = 292;
+const POPUP_WIDTH = 326;
+const POPUP_ESTIMATED_HEIGHT = 184;
 const VIEWPORT_GUTTER = 16;
 const MARIMO_TOP_SAFE_AREA = 72;
 const MARIMO_BOTTOM_SAFE_AREA = 104;

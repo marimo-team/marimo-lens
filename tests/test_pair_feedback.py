@@ -35,7 +35,6 @@ def test_pair_feedback_packet_maps_annotation_cells_and_summary(
     assert feedback["contextPolicy"]["redaction"] == "none"
     assert feedback["displayProvenance"][0]["targetStatus"] == "current"
     assert feedback["summary"]["annotationCount"] == 1
-    assert feedback["summary"]["hasBlocking"] is True
     assert feedback["summary"]["targetCells"] == ["cell-data", "cell-view"]
     assert feedback["groups"][0]["cellId"] == "cell-data"
     assert annotation["target"]["variable"] == "sales"
@@ -48,7 +47,6 @@ def test_pair_feedback_packet_maps_annotation_cells_and_summary(
     assert annotation["target"]["semanticSelection"]["kind"] == "column"
     assert annotation["targetSnapshot"]["id"] == "var:sales"
     assert annotation["evidence"]["semanticSelection"]["data"]["column"] == "revenue"
-    assert annotation["marimoPair"]["action"] == "fix"
     assert annotation["marimoPair"]["editBoundary"]["mode"] == "marimo-code-mode"
     assert "ctx.edit_cell" in annotation["marimoPair"]["editGuardrail"]
     assert lens.pair_feedback == feedback
@@ -60,7 +58,7 @@ def test_pair_feedback_markdown_formats_annotation_evidence() -> None:
         {"filename": "demo.py"},
     )
 
-    assert "Intent: `fix`" in markdown
+    assert "Intent:" not in markdown
     assert "Display cell: `cell-view`" in markdown
     assert "Selection: `column` revenue" in markdown
     assert "Sort the table by revenue descending." in markdown
@@ -413,7 +411,6 @@ def test_pair_feedback_preserves_annotation_context(
             annotations=[
                 _annotation(
                     comment="Authorization: Bearer comment-secret",
-                    severity="important",
                     semanticSelection={
                         "id": "col:revenue",
                         "targetId": "var:sales",
@@ -457,7 +454,6 @@ def test_pair_feedback_keeps_stale_annotation_targets_from_evidence() -> None:
             annotations=[
                 _annotation(
                     comment="Still relevant after rename.",
-                    severity="important",
                     targetSnapshot={
                         "id": "var:sales",
                         "label": "sales",
@@ -496,7 +492,6 @@ def test_pair_feedback_marks_missing_annotation_targets_diagnostic() -> None:
             annotations=[
                 _annotation(
                     comment="The original target disappeared.",
-                    severity="important",
                 )
             ]
         ),
@@ -514,10 +509,7 @@ def test_pair_feedback_marks_missing_annotation_targets_diagnostic() -> None:
     assert annotation["marimoPair"]["editBoundary"]["cellIds"] == []
     assert annotation["marimoPair"]["readBeforeEdit"] == []
     assert annotation["marimoPair"]["runAfterEdit"] == []
-    assert (
-        "Do not edit from this stale Lens annotation alone"
-        in annotation["marimoPair"]["recommendedAction"]
-    )
+    assert "stale Lens annotation" in annotation["marimoPair"]["editGuardrail"]
 
 
 def test_pair_feedback_prefers_refreshed_current_target_cells_over_annotation_cells() -> (
@@ -696,17 +688,12 @@ def test_pair_feedback_uses_annotation_target_snapshot_when_current_target_is_go
     assert annotation["marimoPair"]["editBoundary"]["cellIds"] == []
     assert annotation["marimoPair"]["readBeforeEdit"] == []
     assert annotation["marimoPair"]["runAfterEdit"] == []
-    assert (
-        "Do not edit from this stale Lens annotation alone"
-        in annotation["marimoPair"]["recommendedAction"]
-    )
+    assert "stale Lens annotation" in annotation["marimoPair"]["editGuardrail"]
 
 
 @pytest.mark.parametrize(
     ("annotation", "match"),
     [
-        (_annotation(intent="rewrite"), "unknown intent"),
-        (_annotation(severity="urgent"), "unknown severity"),
         (
             _annotation(
                 semanticSelection={

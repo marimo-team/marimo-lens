@@ -98,7 +98,7 @@ def test_focus_command_requires_cell_id() -> None:
         build_focus_command("")
 
 
-def test_pair_result_summarizes_activity_questions_and_warnings() -> None:
+def test_pair_result_summarizes_activity_and_warnings() -> None:
     activity = [
         build_cell_mark(["cell-a"], kind="read", run_id="run-1"),
         build_cell_mark(["cell-b"], kind="edited", run_id="run-1"),
@@ -120,7 +120,6 @@ def test_pair_result_summarizes_activity_questions_and_warnings() -> None:
         "cellsRun": 1,
         "annotationsAddressed": 1,
     }
-    assert result["openQuestions"][0]["note"] == "Choose a threshold"
     assert result["warnings"][0]["status"] == "failed"
     assert "marimo-pair.result" in render_pair_result_prompt(result)
 
@@ -155,8 +154,6 @@ def test_lens_resolve_annotation_keeps_canonical_annotation_log() -> None:
         "targetId": "manual:thing",
         "targetLabel": "Thing",
         "comment": "Please check this output.",
-        "intent": "fix",
-        "severity": "important",
         "element": "div",
         "elementPath": "div",
         "documentX": 0,
@@ -193,8 +190,6 @@ def test_lens_resolve_annotation_keeps_marker_for_non_terminal_status() -> None:
         "targetId": "manual:thing",
         "targetLabel": "Thing",
         "comment": "Please check this output.",
-        "intent": "fix",
-        "severity": "important",
         "element": "div",
         "elementPath": "div",
         "documentX": 0,

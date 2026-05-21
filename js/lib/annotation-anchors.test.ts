@@ -67,6 +67,33 @@ describe("annotation anchors", () => {
     });
   });
 
+  test("preserves the clicked point inside a selected element", () => {
+    const root = document.createElement("section");
+    root.id = "output-cell-a";
+    const button = document.createElement("button");
+    root.append(button);
+    document.body.append(root);
+
+    setRect(root, 20, 100, 300, 220);
+    setRect(button, 40, 150, 120, 40);
+
+    const anchor = createAnnotationAnchor(
+      hoverFor(button, {
+        displayCellId: "cell-a",
+        rect: rect(40, 150, 120, 40),
+      }),
+      { x: 136, y: 182 },
+    );
+
+    setRect(root, 20, 420, 300, 220);
+    setRect(button, 60, 460, 240, 80);
+
+    expect(markerPosition(annotationWith(anchor))).toEqual({
+      left: 252,
+      top: 524,
+    });
+  });
+
   test("does not position annotations without structured anchors", () => {
     vi.spyOn(window, "scrollX", "get").mockReturnValue(12);
     vi.spyOn(window, "scrollY", "get").mockReturnValue(30);
@@ -87,8 +114,6 @@ function annotationWith(anchor: LensAnnotation["anchor"]): LensAnnotation {
     targetId: "target-a",
     targetLabel: "Target A",
     comment: "Check this.",
-    intent: "fix",
-    severity: "important",
     element: "button",
     elementPath: "button",
     documentX: 0,

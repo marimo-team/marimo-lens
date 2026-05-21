@@ -63,19 +63,6 @@ CHART_PART_KINDS = (
     "trace",
 )
 
-FEEDBACK_INTENTS = (
-    "fix",
-    "question",
-    "explain",
-    "approve",
-)
-
-FEEDBACK_SEVERITIES = (
-    "blocking",
-    "important",
-    "suggestion",
-)
-
 AGENT_ACTIVITY_KINDS = (
     "agent-started",
     "agent-finished",
@@ -170,8 +157,6 @@ ChartPartKind: TypeAlias = Literal[
     "title",
     "trace",
 ]
-FeedbackIntent: TypeAlias = Literal["fix", "question", "explain", "approve"]
-FeedbackSeverity: TypeAlias = Literal["blocking", "important", "suggestion"]
 AgentActivityKind: TypeAlias = Literal[
     "agent-started",
     "agent-finished",
@@ -201,8 +186,6 @@ __all__ = [
     "AGENT_FINISH_STATUSES",
     "CAPABILITY_KEYS",
     "CHART_PART_KINDS",
-    "FEEDBACK_INTENTS",
-    "FEEDBACK_SEVERITIES",
     "SELECTION_GRANULARITIES",
     "SELECTION_SURFACES",
     "TARGET_CONTRACT_KEYS",
@@ -212,8 +195,6 @@ __all__ = [
     "AgentFinishStatus",
     "AnnotationStatus",
     "ChartPartKind",
-    "FeedbackIntent",
-    "FeedbackSeverity",
     "SelectionGranularity",
     "SelectionSurface",
     "TargetKind",

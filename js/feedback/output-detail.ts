@@ -84,9 +84,6 @@ function basePromptLines(feedback: PairFeedback, detail: OutputDetailLevel): str
   if (targetCells.length > 0) {
     lines.push(`- Target cells: ${targetCells.join(", ")}`);
   }
-  if (summary.hasBlocking === true) {
-    lines.push("- Blocking feedback is present.");
-  }
   lines.push("");
   return lines;
 }
@@ -97,7 +94,7 @@ function appendCompactAnnotations(lines: string[], annotations: PairFeedbackAnno
     const cells = compactCells(annotation);
     const selection = selectionLabel(annotation);
     lines.push(
-      `${annotation.index}. [${annotation.severity}/${annotation.intent}] ${targetLabel(annotation)}${selection ? ` - ${selection}` : ""}`,
+      `${annotation.index}. ${targetLabel(annotation)}${selection ? ` - ${selection}` : ""}`,
     );
     lines.push(`   Request: ${annotation.request}`);
     if (cells) lines.push(`   Cells: ${cells}`);
@@ -113,8 +110,6 @@ function appendStandardAnnotations(
   for (const annotation of annotations) {
     lines.push(`### ${annotation.index}. ${targetLabel(annotation)}`);
     lines.push(`- Request: ${annotation.request}`);
-    lines.push(`- Intent: ${annotation.intent}`);
-    lines.push(`- Severity: ${annotation.severity}`);
     const cells = compactCells(annotation);
     if (cells) lines.push(`- Cells: ${cells}`);
     const selection = selectionLabel(annotation);
@@ -188,8 +183,6 @@ function standardAnnotation(annotation: PairFeedbackAnnotation) {
   return {
     id: annotation.id,
     index: annotation.index,
-    severity: annotation.severity,
-    intent: annotation.intent,
     request: annotation.request,
     target: {
       id: annotation.target.id,
@@ -218,7 +211,6 @@ function standardAnnotation(annotation: PairFeedbackAnnotation) {
         : null,
     },
     marimoPair: {
-      recommendedAction: annotation.marimoPair.recommendedAction,
       readBeforeEdit: annotation.marimoPair.readBeforeEdit,
       runAfterEdit: annotation.marimoPair.runAfterEdit,
     },

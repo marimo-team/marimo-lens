@@ -9,8 +9,6 @@ from typing import Any
 
 from ._contract import (
     CHART_PART_KINDS,
-    FEEDBACK_INTENTS,
-    FEEDBACK_SEVERITIES,
     SELECTION_GRANULARITIES,
 )
 from ._serialization import (
@@ -25,23 +23,6 @@ from .metadata import _normalize_targets
 PAIR_FEEDBACK_PROTOCOL = "marimo-pair.feedback"
 PAIR_FEEDBACK_VERSION = 1
 PAIR_GRAPH_VALUE_DEPTH = MAX_VALUE_DEPTH + 4
-
-_PAIR_ACTIONS = {
-    "fix": "inspect the target cells, edit the smallest full cell bodies, and run the edited cells",
-    "question": "inspect the target cells and answer with the relevant runtime evidence before editing",
-    "explain": "inspect the target cells and explain the current behavior from the live graph",
-    "approve": "preserve the target behavior; treat this as positive guidance while changing related cells",
-}
-_SEVERITY_RANK = {severity: index for index, severity in enumerate(FEEDBACK_SEVERITIES)}
-_VALID_INTENTS = frozenset(FEEDBACK_INTENTS)
-_VALID_SEVERITIES = frozenset(FEEDBACK_SEVERITIES)
-_SUGGESTED_FOCUS_BY_INTENT = {
-    "question": "answer from inspected live notebook state before changing code",
-    "approve": "preserve this behavior while editing adjacent cells",
-}
-_SUGGESTED_FOCUS_BY_SEVERITY = {
-    "blocking": "resolve before continuing with downstream notebook work",
-}
 
 
 @dataclass(frozen=True)
@@ -89,8 +70,6 @@ class PairAnnotation:
     id: str
     index: int
     created_at: str
-    severity: str
-    intent: str
     request: str
     target: Mapping[str, Any]
     target_snapshot: Mapping[str, Any]
@@ -103,8 +82,6 @@ class PairAnnotation:
             "id": self.id,
             "index": self.index,
             "createdAt": self.created_at,
-            "severity": self.severity,
-            "intent": self.intent,
             "request": self.request,
             "target": dict(self.target),
             "targetSnapshot": dict(self.target_snapshot),
@@ -173,8 +150,6 @@ def render_markdown(
             or "unknown target"
         )
         lines.append(f"### {index}. {target_name}")
-        lines.append(f"- Intent: `{annotation.get('intent') or 'fix'}`")
-        lines.append(f"- Severity: `{annotation.get('severity') or 'important'}`")
         if annotation.get("kind"):
             lines.append(f"- Kind: `{annotation['kind']}`")
         if context.column:
@@ -436,28 +411,12 @@ def _pair_annotation(
         graph=graph,
     )
     annotation_id = str(annotation.get("id") or f"annotation-{index}")
-    severity = _required_choice(
-        annotation.get("severity"),
-        valid=_VALID_SEVERITIES,
-        default="important",
-        field="severity",
-        annotation_id=annotation_id,
-    )
-    intent = _required_choice(
-        annotation.get("intent"),
-        valid=_VALID_INTENTS,
-        default="fix",
-        field="intent",
-        annotation_id=annotation_id,
-    )
     context = _annotation_context_view(annotation, annotation_id=annotation_id)
     target_snapshot = dict(target)
     return PairAnnotation(
         id=annotation_id,
         index=index,
         created_at=str(annotation.get("createdAt") or ""),
-        severity=severity,
-        intent=intent,
         request=str(annotation.get("comment") or ""),
         target=_annotation_target_payload(
             target,
@@ -473,12 +432,7 @@ def _pair_annotation(
         evidence=_annotation_evidence(
             annotation, context.dom_evidence, context.semantic
         ),
-        marimo_pair=_marimo_pair_instruction(
-            cells,
-            intent=intent,
-            severity=severity,
-            target_status=target_status,
-        ),
+        marimo_pair=_marimo_pair_instruction(cells, target_status=target_status),
     ).to_dict()
 
 
@@ -601,8 +555,6 @@ def _annotation_evidence(
 def _marimo_pair_instruction(
     cells: Mapping[str, Any],
     *,
-    intent: str,
-    severity: str,
     target_status: str,
 ) -> dict[str, Any]:
     has_editable_target = target_status == "current"
@@ -610,8 +562,6 @@ def _marimo_pair_instruction(
     definition_cell = cells.get("definition")
     output_cell = cells.get("output")
     return {
-        "action": intent,
-        "requiresClarification": intent == "question",
         "editBoundary": {
             "mode": "marimo-code-mode",
             "cellIds": _unique_strings([edit_focus, definition_cell, output_cell])
@@ -636,9 +586,6 @@ def _marimo_pair_instruction(
             "resolveNeedsHuman": "lens.resolve_annotation(annotation_id, status='needs_human', note='...')",
             "finish": "lens.agent_finished(summary=..., cells_read=[...], cells_edited=[...], cells_run=[...])",
         },
-        "recommendedAction": _recommended_action(intent, target_status),
-        "needsClarification": intent == "question",
-        "suggestedFocus": _suggested_focus(intent, severity),
         "editGuardrail": (
             "Use marimo._code_mode ctx.edit_cell with the full replacement cell body, then run the edited cell."
             if has_editable_target
@@ -777,36 +724,6 @@ def _normalized_chart_part(value: Any, *, annotation_id: str) -> Any:
             **unknown,
         }
     return safe_value(part)
-
-
-def _required_choice(
-    value: Any,
-    *,
-    valid: frozenset[str],
-    default: str,
-    field: str,
-    annotation_id: str,
-) -> str:
-    if value is None or value == "":
-        return default
-    text = str(value)
-    if text not in valid:
-        valid_values = ", ".join(sorted(valid))
-        raise ValueError(
-            f"Lens annotation {annotation_id} has unknown {field}: {text}. "
-            f"Valid values: {valid_values}"
-        )
-    return text
-
-
-def _recommended_action(intent: str, target_status: str) -> str:
-    if target_status != "current":
-        return (
-            "Do not edit from this stale Lens annotation alone. Re-discover the "
-            "live notebook target first; the original target is missing or its "
-            "snapshot failed validation."
-        )
-    return _PAIR_ACTIONS.get(intent, _PAIR_ACTIONS["fix"])
 
 
 def _dom_evidence(annotation: Mapping[str, Any]) -> dict[str, Any]:
@@ -1005,8 +922,6 @@ def _pair_summary(
     control_summary = graph.get("controls", {}).get("summary", {})
     return {
         "annotationCount": len(items),
-        "bySeverity": _count_by(items, "severity"),
-        "byIntent": _count_by(items, "intent"),
         "targetVariables": _unique_strings(
             item.get("target", {}).get("variable") for item in items
         ),
@@ -1015,7 +930,6 @@ def _pair_summary(
             for item in items
             for cell_id in item.get("cells", {}).get("related", [])
         ),
-        "hasBlocking": any(item.get("severity") == "blocking" for item in items),
         "uiElementCount": int(control_summary.get("uiElementCount", 0) or 0),
         "widgetCount": int(control_summary.get("widgetCount", 0) or 0),
         "traitletsObjectCount": int(
@@ -1039,34 +953,9 @@ def _pair_groups(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
                 "variables": _unique_strings(
                     item.get("target", {}).get("variable") for item in group_items
                 ),
-                "severity": _highest_severity(
-                    str(item.get("severity")) for item in group_items
-                ),
-                "intents": _unique_strings(item.get("intent") for item in group_items),
             }
         )
     return groups
-
-
-def _count_by(items: Sequence[Mapping[str, Any]], key: str) -> dict[str, int]:
-    counts: dict[str, int] = {}
-    for item in items:
-        value = str(item.get(key) or "unknown")
-        counts[value] = counts.get(value, 0) + 1
-    return counts
-
-
-def _highest_severity(values: Iterable[str]) -> str:
-    ordered = sorted(values, key=lambda value: _SEVERITY_RANK.get(value, 99))
-    return ordered[0] if ordered else "suggestion"
-
-
-def _suggested_focus(intent: str, severity: str) -> str:
-    return (
-        _SUGGESTED_FOCUS_BY_SEVERITY.get(severity)
-        or _SUGGESTED_FOCUS_BY_INTENT.get(intent)
-        or "make the smallest notebook change that satisfies the feedback"
-    )
 
 
 def _unique_strings(values: Iterable[Any]) -> list[str]:

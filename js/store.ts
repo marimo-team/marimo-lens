@@ -3,7 +3,7 @@ import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 
 import type { OutputDetailLevel } from "@/feedback/output-detail";
-import type { DockPosition, LensAnnotation, PopupState, ResolvedHover } from "@/types";
+import type { DockPosition, LensTheme, PopupState, ResolvedHover } from "@/types";
 
 import { isOutputDetailLevel } from "@/feedback/output-detail";
 
@@ -40,25 +40,33 @@ function samePosition(a: DockPosition | null, b: DockPosition | null): boolean {
 
 type StoredLensSettings = {
   outputDetail?: unknown;
+  theme?: unknown;
 };
 
-function readStoredSettings(storageKey: string): { outputDetail: OutputDetailLevel } {
+type LensSettings = {
+  outputDetail: OutputDetailLevel;
+  theme: LensTheme | null;
+};
+
+function isLensTheme(value: unknown): value is LensTheme {
+  return value === "dark" || value === "light";
+}
+
+function readStoredSettings(storageKey: string): LensSettings {
   try {
     const raw = window.localStorage.getItem(storageKey);
-    if (!raw) return { outputDetail: "standard" };
+    if (!raw) return { outputDetail: "standard", theme: null };
     const parsed = JSON.parse(raw) as StoredLensSettings;
     return {
       outputDetail: isOutputDetailLevel(parsed.outputDetail) ? parsed.outputDetail : "standard",
+      theme: isLensTheme(parsed.theme) ? parsed.theme : null,
     };
   } catch {
-    return { outputDetail: "standard" };
+    return { outputDetail: "standard", theme: null };
   }
 }
 
-function writeStoredSettings(
-  storageKey: string,
-  settings: { outputDetail: OutputDetailLevel },
-): void {
+function writeStoredSettings(storageKey: string, settings: LensSettings): void {
   try {
     window.localStorage.setItem(storageKey, JSON.stringify(settings));
   } catch {
@@ -70,10 +78,14 @@ type LensUiState = {
   open: boolean;
   armed: boolean;
   dragging: boolean;
+  inventoryOpen: boolean;
   settingsOpen: boolean;
+  markersVisible: boolean;
   outputDetail: OutputDetailLevel;
+  theme: LensTheme | null;
   dockPosition: DockPosition | null;
   hover: ResolvedHover | null;
+  selectedHover: ResolvedHover | null;
   popup: PopupState | null;
   popupDraft: PopupDraft;
   copied: boolean;
@@ -84,15 +96,21 @@ type LensUiState = {
   copyError: string;
   dismissedAgentMessageIds: string[];
   toggleOpen: () => void;
+  toggleInventory: () => void;
+  setInventoryOpen: (inventoryOpen: boolean) => void;
   toggleSettings: () => void;
   setSettingsOpen: (settingsOpen: boolean) => void;
+  toggleMarkersVisible: () => void;
+  setMarkersVisible: (markersVisible: boolean) => void;
   setOutputDetail: (outputDetail: OutputDetailLevel) => void;
+  setTheme: (theme: LensTheme) => void;
   startCapture: () => void;
   stopCapture: () => void;
   setDragging: (dragging: boolean) => void;
   setDockPosition: (position: DockPosition, options?: { persist?: boolean }) => void;
   resetDockPosition: () => void;
   setHover: (hover: ResolvedHover | null) => void;
+  setSelectedHover: (selectedHover: ResolvedHover | null) => void;
   setPopup: (popup: PopupState | null) => void;
   updatePopupDraft: (draft: Partial<PopupDraft>) => void;
   resetPopupDraft: () => void;
@@ -107,14 +125,10 @@ type LensUiState = {
 
 type PopupDraft = {
   comment: string;
-  intent: LensAnnotation["intent"];
-  severity: LensAnnotation["severity"];
 };
 
 const DEFAULT_POPUP_DRAFT: PopupDraft = {
   comment: "",
-  intent: "fix",
-  severity: "important",
 };
 
 function defaultPopupDraft(): PopupDraft {
@@ -123,16 +137,23 @@ function defaultPopupDraft(): PopupDraft {
 
 export type LensUiStore = StoreApi<LensUiState>;
 
-export function createLensUiStore(storageKey = POSITION_STORAGE_KEY): LensUiStore {
-  const initialSettings = readStoredSettings(SETTINGS_STORAGE_KEY);
+export function createLensUiStore(
+  storageKey = POSITION_STORAGE_KEY,
+  settingsStorageKey = SETTINGS_STORAGE_KEY,
+): LensUiStore {
+  const initialSettings = readStoredSettings(settingsStorageKey);
   return createStore<LensUiState>((set) => ({
     open: false,
     armed: false,
     dragging: false,
+    inventoryOpen: false,
     settingsOpen: false,
+    markersVisible: true,
     outputDetail: initialSettings.outputDetail,
+    theme: initialSettings.theme,
     dockPosition: readStoredPosition(storageKey),
     hover: null,
+    selectedHover: null,
     popup: null,
     popupDraft: defaultPopupDraft(),
     copied: false,
@@ -145,24 +166,57 @@ export function createLensUiStore(storageKey = POSITION_STORAGE_KEY): LensUiStor
     toggleOpen: () =>
       set((state) =>
         state.open
-          ? { hover: null, open: false, popup: null, settingsOpen: false }
+          ? {
+              hover: null,
+              inventoryOpen: false,
+              open: false,
+              popup: null,
+              settingsOpen: false,
+            }
           : { open: true },
       ),
+    toggleInventory: () =>
+      set((state) => ({
+        armed: false,
+        hover: null,
+        inventoryOpen: !state.inventoryOpen,
+        open: true,
+        popup: null,
+        settingsOpen: false,
+      })),
+    setInventoryOpen: (inventoryOpen) =>
+      set({ armed: false, hover: null, inventoryOpen, popup: null }),
     toggleSettings: () =>
       set((state) => ({
         armed: false,
         hover: null,
+        inventoryOpen: false,
         open: true,
         popup: null,
         settingsOpen: !state.settingsOpen,
       })),
     setSettingsOpen: (settingsOpen) =>
-      set({ armed: false, hover: null, popup: null, settingsOpen }),
-    setOutputDetail: (outputDetail) => {
-      writeStoredSettings(SETTINGS_STORAGE_KEY, { outputDetail });
-      set({ outputDetail });
-    },
-    startCapture: () => set({ armed: true, popup: null, hover: null }),
+      set((state) => ({
+        armed: false,
+        hover: null,
+        inventoryOpen: settingsOpen ? false : state.inventoryOpen,
+        popup: null,
+        settingsOpen,
+      })),
+    toggleMarkersVisible: () => set((state) => ({ markersVisible: !state.markersVisible })),
+    setMarkersVisible: (markersVisible) => set({ markersVisible }),
+    setOutputDetail: (outputDetail) =>
+      set((state) => {
+        writeStoredSettings(settingsStorageKey, { outputDetail, theme: state.theme });
+        return { outputDetail };
+      }),
+    setTheme: (theme) =>
+      set((state) => {
+        writeStoredSettings(settingsStorageKey, { outputDetail: state.outputDetail, theme });
+        return { theme };
+      }),
+    startCapture: () =>
+      set({ armed: true, hover: null, inventoryOpen: false, popup: null, settingsOpen: false }),
     stopCapture: () => set({ armed: false, hover: null }),
     setDragging: (dragging) => set({ dragging }),
     setDockPosition: (dockPosition, options) =>
@@ -178,7 +232,13 @@ export function createLensUiStore(storageKey = POSITION_STORAGE_KEY): LensUiStor
       set({ dockPosition: null, dragging: false });
     },
     setHover: (hover) => set({ hover }),
-    setPopup: (popup) => set({ popup, popupDraft: defaultPopupDraft() }),
+    setSelectedHover: (selectedHover) => set({ hover: null, selectedHover }),
+    setPopup: (popup) =>
+      set((state) => ({
+        popup,
+        popupDraft: defaultPopupDraft(),
+        selectedHover: popup?.hover ?? state.selectedHover,
+      })),
     updatePopupDraft: (popupDraft) =>
       set((state) => ({ popupDraft: { ...state.popupDraft, ...popupDraft } })),
     resetPopupDraft: () => set({ popupDraft: defaultPopupDraft() }),
@@ -223,7 +283,8 @@ export function createLensUiStore(storageKey = POSITION_STORAGE_KEY): LensUiStor
           ? state
           : { dismissedAgentMessageIds: [...state.dismissedAgentMessageIds, messageId] },
       ),
-    resetInteraction: () => set({ armed: false, hover: null, popup: null, settingsOpen: false }),
+    resetInteraction: () =>
+      set({ armed: false, hover: null, inventoryOpen: false, popup: null, settingsOpen: false }),
   }));
 }
 

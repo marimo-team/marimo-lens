@@ -3,10 +3,12 @@ import type {
   LensAnnotationAnchor,
   LensAnchorPathStep,
   ResolvedHover,
+  ViewportPoint,
 } from "@/types";
 
 import { cellElement, isUsableRegion } from "@/lib/cell-regions";
 import { cssEscape, cssString } from "@/lib/css-selectors";
+import { clamp } from "@/lib/dom-geometry";
 import { semanticAnchorElement, semanticHighlightRect } from "@/selection/semantic-selection";
 
 type MarkerPosition = {
@@ -16,14 +18,15 @@ type MarkerPosition = {
 
 const CENTER = { x: 0.5, y: 0.5 };
 
-export function createAnnotationAnchor(hover: ResolvedHover): LensAnnotationAnchor {
+export function createAnnotationAnchor(
+  hover: ResolvedHover,
+  viewportPoint?: ViewportPoint,
+): LensAnnotationAnchor {
   const anchorElement = semanticAnchorElement(hover.semanticSelection) ?? hover.element;
   const liveRect = semanticHighlightRect(hover.semanticSelection.highlight);
   const rect = liveRect && isUsableRegion(liveRect) ? liveRect : hover.rect;
-  const point = {
-    x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2,
-  };
+  const point = pointInRect(rect, viewportPoint);
+  const elementOffset = offsetInRect(rect, point);
   const rootCellId = hover.displayCellId ?? hover.target.cellId ?? null;
   const root = rootCellId ? cellElement(rootCellId) : null;
   const rootRect = root?.getBoundingClientRect() ?? null;
@@ -42,7 +45,7 @@ export function createAnnotationAnchor(hover: ResolvedHover): LensAnnotationAnch
     rootCellId,
     elementPath: hover.elementPath,
     selectorPath,
-    elementOffset: CENTER,
+    elementOffset,
     cellOffset,
     viewportPoint: point,
     documentPoint: {
@@ -210,4 +213,25 @@ function stableClassName(className: unknown): string {
 function clampRatio(value: number): number {
   if (!Number.isFinite(value)) return 0.5;
   return Math.max(0, Math.min(1, value));
+}
+
+function pointInRect(rect: DOMRect, point: ViewportPoint | undefined): ViewportPoint {
+  if (!point) {
+    return {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2,
+    };
+  }
+  return {
+    x: clamp(point.x, rect.left, rect.right),
+    y: clamp(point.y, rect.top, rect.bottom),
+  };
+}
+
+function offsetInRect(rect: DOMRect, point: ViewportPoint): ViewportPoint {
+  if (!isUsableRegion(rect)) return CENTER;
+  return {
+    x: clampRatio((point.x - rect.left) / rect.width),
+    y: clampRatio((point.y - rect.top) / rect.height),
+  };
 }

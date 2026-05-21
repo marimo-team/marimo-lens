@@ -9,10 +9,7 @@ import type {
   SerializedSemanticSelection,
 } from "@/contracts";
 
-import {
-  FEEDBACK_INTENTS as CONTRACT_FEEDBACK_INTENTS,
-  FEEDBACK_SEVERITIES as CONTRACT_FEEDBACK_SEVERITIES,
-} from "@/selection/target-contract";
+export type LensTheme = "dark" | "light";
 
 export type {
   AgentActivity,
@@ -138,14 +135,6 @@ export type DockPosition = {
 };
 
 export const EMPTY_GRAPH: NotebookGraph = {};
-export const FEEDBACK_INTENTS: Array<LensAnnotation["intent"]> = [...CONTRACT_FEEDBACK_INTENTS];
-export const FEEDBACK_SEVERITIES: Array<LensAnnotation["severity"]> = [
-  "important",
-  "blocking",
-  "suggestion",
-].filter((severity): severity is LensAnnotation["severity"] =>
-  CONTRACT_FEEDBACK_SEVERITIES.includes(severity as LensAnnotation["severity"]),
-);
 
 export type AnnotationDraft = Omit<LensAnnotation, "id" | "createdAt">;
 
