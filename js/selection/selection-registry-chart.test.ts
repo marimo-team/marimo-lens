@@ -204,10 +204,15 @@ describe("resolveElementSelection chart surfaces", () => {
     expect(mark?.chartPart).toMatchObject({
       kind: "mark",
       label: "bar",
+      datum: {
+        site: "Crookston",
+        variety: "Manchuria",
+      },
     });
     expect(mark?.rect.height).toBeLessThan(220);
     expect(mark?.context).toMatchObject({
       columnValue: "Crookston",
+      degraded: true,
       region: "facet-panel",
       rowValue: "Manchuria",
     });
@@ -270,6 +275,120 @@ describe("resolveElementSelection chart surfaces", () => {
       kind: "facet",
       channel: "column",
       field: "site",
+      datum: {
+        site: "Crookston",
+      },
+    });
+  });
+
+  test("resolves faceted Vega SVG point marks to concrete datum", () => {
+    document.body.innerHTML = `
+      <div id="output-chart-cell">
+        <div class="vega-embed">
+          <svg class="marks">
+            <g class="mark-group role-column-header column_header">
+              <text>C</text>
+              <text>J</text>
+              <text>M</text>
+            </g>
+            <g class="mark-group role-row-header row_header">
+              <text>InfoVis</text>
+              <text>SciVis</text>
+              <text>VAST</text>
+            </g>
+            <g class="mark-symbol role-mark child_marks">
+              <path
+                role="graphics-symbol"
+                aria-roledescription="point"
+                aria-label="Downloads_Xplore: 2605; PubsCited_CrossRef: 11"
+              ></path>
+            </g>
+          </svg>
+        </div>
+      </div>
+    `;
+    const svg = document.querySelector("svg")!;
+    const point = document.querySelector("path")!;
+    const columnTexts = [...document.querySelectorAll(".role-column-header text")];
+    const rowTexts = [...document.querySelectorAll(".role-row-header text")];
+    setRect(svg, { height: 520, width: 620, x: 100, y: 40 });
+    columnTexts.forEach((text, index) =>
+      setRect(text, { height: 16, width: 20, x: 240 + index * 170, y: 72 }),
+    );
+    rowTexts.forEach((text, index) =>
+      setRect(text, { height: 16, width: 60, x: 118, y: 180 + index * 150 }),
+    );
+    setRect(point, { height: 6, width: 6, x: 248, y: 488 });
+
+    const target: LensTarget = {
+      ...chartTarget,
+      displayCellIds: ["chart-cell"],
+      chart: {
+        library: "altair",
+        parts: [
+          { library: "altair", kind: "mark", label: "point" },
+          {
+            library: "altair",
+            kind: "facet",
+            label: "column facet",
+            detail: "PaperType",
+            channel: "column",
+            field: "PaperType",
+            orientation: "column",
+            context: { values: ["J", "C", "M"], count: 3 },
+          },
+          {
+            library: "altair",
+            kind: "facet",
+            label: "row facet",
+            detail: "Conference",
+            channel: "row",
+            field: "Conference",
+            orientation: "row",
+            context: { values: ["InfoVis", "SciVis", "Vis", "VAST"], count: 4 },
+          },
+          { library: "altair", kind: "axis", label: "x axis", detail: "Downloads_Xplore" },
+          { library: "altair", kind: "axis", label: "y axis", detail: "PubsCited_CrossRef" },
+        ],
+      },
+      selectionModel: {
+        defaultFallback: "mark",
+        units: [
+          {
+            data: {
+              chartPart: { library: "altair", kind: "mark", label: "point" },
+            },
+            granularity: "item",
+            id: "chart:mark:0",
+            kind: "mark",
+            label: "point",
+            requires: [],
+            selectors: [],
+            supported: true,
+          },
+        ],
+      },
+    };
+
+    const resolved = resolveElementSelection(point, [target], { x: 251, y: 491 });
+
+    expect(resolved?.selection?.adapter).toBe("chart-part");
+    expect(resolved?.element).toBe(point);
+    expect(resolved?.chartPart).toMatchObject({
+      kind: "mark",
+      label: "point",
+      datum: {
+        Conference: "VAST",
+        Downloads_Xplore: 2605,
+        PaperType: "C",
+        PubsCited_CrossRef: 11,
+      },
+    });
+    expect(resolved?.rect.width).toBeLessThan(16);
+    expect(resolved?.context).toMatchObject({
+      chartRenderer: "vega-svg",
+      columnValue: "C",
+      rowValue: "VAST",
     });
   });
 
@@ -398,7 +517,13 @@ describe("resolveElementSelection chart surfaces", () => {
         <svg>
           <g class="scatterlayer">
             <g class="trace scatter">
-              <g class="points"><path class="point"></path></g>
+              <g class="points">
+                <path
+                  class="point"
+                  data-point-number="4"
+                  aria-label="Conference: VIS; PaperType: C; Downloads_Xplore: 2605"
+                ></path>
+              </g>
             </g>
           </g>
           <g class="draglayer"><rect class="nsewdrag drag"></rect></g>
@@ -432,8 +557,15 @@ describe("resolveElementSelection chart surfaces", () => {
         kind: "trace",
         library: "plotly",
         label: "scatter trace",
+        datum: {
+          Conference: "VIS",
+          Downloads_Xplore: 2605,
+          PaperType: "C",
+          "point-number": "4",
+        },
       });
       expect(resolved?.element).toBe(point);
+      expect(resolved?.rect.width).toBeLessThan(16);
     } finally {
       document.elementsFromPoint = originalDocumentElementsFromPoint;
     }
@@ -465,7 +597,7 @@ describe("resolveElementSelection chart surfaces", () => {
       <svg>
         <g id="figure_1">
           <g id="axes_1">
-            <g id="line2d_12"><path d="M0 0L10 10"></path></g>
+            <g id="line2d_12"><path data-row="7" d="M0 0L10 10"></path></g>
           </g>
         </g>
       </svg>
@@ -480,6 +612,9 @@ describe("resolveElementSelection chart surfaces", () => {
       kind: "mark",
       library: "matplotlib",
       label: "line",
+      datum: {
+        row: "7",
+      },
     });
   });
 
@@ -511,6 +646,11 @@ describe("resolveElementSelection chart surfaces", () => {
     const legend = resolveElementSelection(canvas, [baseTarget], { x: 488, y: 78 });
 
     expect(mark?.chartPart).toMatchObject({ kind: "mark", library: "matplotlib" });
+    expect(mark?.context).toMatchObject({
+      degraded: true,
+      unsupportedReason:
+        "Matplotlib canvas exposes axes regions and pointer coordinates, not per-datum artists.",
+    });
     expect(xAxis?.chartPart).toMatchObject({ kind: "axis", label: "x axis" });
     expect(yAxis?.chartPart).toMatchObject({ kind: "axis", label: "y axis" });
     expect(legend?.chartPart).toMatchObject({ kind: "legend", library: "matplotlib" });
@@ -551,9 +691,11 @@ describe("resolveElementSelection chart surfaces", () => {
 
   test("keeps Matplotlib chart parts when equivalent chart targets tie", () => {
     document.body.innerHTML = `
-      <marimo-matplotlib>
-        <canvas class="block cursor-crosshair" width="550" height="270"></canvas>
-      </marimo-matplotlib>
+      <section id="output-ZHCJ">
+        <marimo-matplotlib>
+          <canvas class="block cursor-crosshair" width="550" height="270"></canvas>
+        </marimo-matplotlib>
+      </section>
     `;
     const canvas = document.querySelector("canvas")!;
     setRect(canvas, { height: 270, width: 550, x: 20, y: 30 });

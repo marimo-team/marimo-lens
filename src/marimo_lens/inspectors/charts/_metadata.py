@@ -158,6 +158,7 @@ def encoding_chart_parts(
     *,
     mark: Any,
     repeat_context: Mapping[str, Sequence[str]] | None = None,
+    rows: Sequence[Mapping[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     parts = []
     if mark is not None or (isinstance(encoding, Mapping) and encoding):
@@ -174,6 +175,32 @@ def encoding_chart_parts(
         if channel_name in _LEGEND_CHANNELS:
             detail = ", ".join(fields[:4]) if fields else channel_name
             parts.append(chart_part("legend", f"{channel_name} legend", detail))
+            continue
+        if channel_name in _FACET_CHANNELS:
+            field = fields[0] if fields else ""
+            detail = ", ".join(fields[:4]) if fields else channel_name
+            domain = field_domain(rows, field) if field else []
+            context: dict[str, Any] = {}
+            if domain:
+                context = {
+                    "values": domain,
+                    "count": len(domain),
+                }
+            parts.append(
+                chart_part(
+                    "facet",
+                    f"{channel_name} facet"
+                    if channel_name in {"column", "row"}
+                    else "facet",
+                    detail,
+                    channel=channel_name,
+                    field=field,
+                    orientation=channel_name
+                    if channel_name in {"column", "row"}
+                    else None,
+                    context=context,
+                )
+            )
             continue
         for field_name in fields:
             parts.append(chart_part("annotation", channel_name, field_name))
@@ -203,12 +230,14 @@ def chart_spec_parts(
     )
     encoding = spec.get("encoding")
     mark = spec.get("mark")
+    rows = inline_data_rows(spec)
     if mark is not None or isinstance(encoding, Mapping):
         parts.extend(
             encoding_chart_parts(
                 encoding,
                 mark=mark,
                 repeat_context=repeat_context,
+                rows=rows,
             )
         )
     for child in child_chart_specs(spec):

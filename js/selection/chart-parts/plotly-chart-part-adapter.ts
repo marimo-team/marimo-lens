@@ -122,13 +122,36 @@ function pointTraceAt(plotlyRoot: Element, point: ViewportPoint): ChartPartMatch
     candidate.element.closest(".trace") ??
     candidate.element.closest(".points,.scatterlayer") ??
     candidate.element;
+  const datum = plotlyDatum(candidate.element, trace);
+  const rootRect = plotlyRoot.getBoundingClientRect();
+  const hasDatum = Object.keys(datum).length > 0;
   return {
     element: candidate.element,
     part: part("plotly", "trace", traceLabel(trace), classOrTag(candidate.element), {
-      ...dataAttributes(trace),
-      ...dataAttributes(candidate.element),
+      ...datum,
     }),
     score: 97,
+    highlight: {
+      kind: "element",
+      element: candidate.element,
+      padding: 3,
+      strategy: "plotly-svg-point",
+    },
+    anchorData: {
+      chartRenderer: "plotly-svg",
+      localX: point.x - rootRect.left,
+      localY: point.y - rootRect.top,
+    },
+    context: {
+      chartRenderer: "plotly-svg",
+      datumSource: hasDatum ? "svg-point-attributes" : "trace-element",
+      ...(hasDatum
+        ? {}
+        : {
+            degraded: true,
+            unsupportedReason: "Plotly SVG point did not expose datum attributes.",
+          }),
+    },
   };
 }
 
@@ -183,6 +206,42 @@ function pointCandidate(element: Element, point: ViewportPoint): PointCandidate 
   const distance = Math.hypot(dx, dy);
   if (distance > padding) return null;
   return { element, distance };
+}
+
+function plotlyDatum(point: Element, trace: Element): Record<string, unknown> {
+  return {
+    ...dataAttributes(trace),
+    ...dataAttributes(point),
+    ...datumFromText(
+      point.getAttribute("aria-label") ?? point.querySelector("title")?.textContent ?? "",
+    ),
+  };
+}
+
+function datumFromText(text: string): Record<string, unknown> {
+  return Object.fromEntries(
+    text
+      .split(/[;\n]/)
+      .map((entry) => entry.trim())
+      .map((entry): [string, unknown] | null => {
+        const separator = entry.indexOf(":");
+        if (separator <= 0) return null;
+        const key = entry.slice(0, separator).trim();
+        const value = entry.slice(separator + 1).trim();
+        return key ? [key, parseDatumScalar(value)] : null;
+      })
+      .filter((entry): entry is [string, unknown] => entry !== null),
+  );
+}
+
+function parseDatumScalar(value: string): unknown {
+  if (!value) return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  const numberValue = Number(value.replace(/,/g, ""));
+  return Number.isFinite(numberValue) && /^-?[\d,.]+(?:e[-+]?\d+)?$/i.test(value)
+    ? numberValue
+    : value;
 }
 
 function axisLabel(element: Element): string {

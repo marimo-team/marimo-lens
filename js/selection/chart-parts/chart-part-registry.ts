@@ -4,7 +4,7 @@ import type { LensTarget, ViewportPoint } from "@/types";
 
 import { elementsAtPointCrossingShadow } from "@/lib/shadow-dom";
 import { altairVegaChartPartAdapter } from "@/selection/chart-parts/altair-vega-chart-part-adapter";
-import { compatibleChartLibraries } from "@/selection/chart-parts/chart-library-compatibility";
+import { matchingChartLibraries } from "@/selection/chart-parts/chart-library-matching";
 import { genericSvgChartPartAdapter } from "@/selection/chart-parts/generic-svg-chart-part-adapter";
 import { matplotlibChartPartAdapter } from "@/selection/chart-parts/matplotlib-chart-part-adapter";
 import { metadataChartPartAdapter } from "@/selection/chart-parts/metadata-chart-part-adapter";
@@ -88,7 +88,7 @@ function adapterSupportsTarget(adapter: ChartPartAdapter, target?: LensTarget): 
   }
   if (!library || !adapter.libraries) return true;
   return adapter.libraries.some((adapterLibrary) =>
-    compatibleChartLibraries(adapterLibrary, library),
+    matchingChartLibraries(adapterLibrary, library),
   );
 }
 

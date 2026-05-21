@@ -2,7 +2,7 @@ import type { ChartPartMatch } from "@/selection/chart-parts/chart-part-adapter"
 import type { LensChartPart, LensChartPartKind, LensTarget, ViewportPoint } from "@/types";
 
 import { closestCrossingShadow } from "@/lib/shadow-dom";
-import { chartLabel, classOrTag, part } from "@/selection/chart-parts/chart-dom";
+import { chartLabel, classOrTag, dataAttributes, part } from "@/selection/chart-parts/chart-dom";
 import { defineChartPartAdapter } from "@/selection/chart-parts/chart-part-adapter";
 
 export const matplotlibChartPartAdapter = defineChartPartAdapter({
@@ -51,10 +51,26 @@ export const matplotlibChartPartAdapter = defineChartPartAdapter({
       ),
     );
     if (!mark) return null;
+    const datum = dataAttributes(element);
+    const hasDatum = Object.keys(datum).length > 0;
     return {
       element,
-      part: part("matplotlib", "mark", markLabel(mark), classOrTag(element)),
+      part: part("matplotlib", "mark", markLabel(mark), classOrTag(element), datum),
       score: 87,
+      anchorData: {
+        artistId: mark,
+      },
+      context: {
+        chartRenderer: "matplotlib-svg",
+        datumSource: hasDatum ? "data-attributes" : "svg-artist-id",
+        ...(hasDatum
+          ? {}
+          : {
+              degraded: true,
+              unsupportedReason:
+                "Matplotlib SVG exposes the artist element but not the original row datum.",
+            }),
+      },
     };
   },
 });
@@ -126,7 +142,13 @@ function canvasChartPart(
       "mark",
       "canvas axes",
       localRect(rect, axes.left, axes.top, axes.right - axes.left, axes.bottom - axes.top),
-      { localX, localY, region: "axes" },
+      {
+        localX,
+        localY,
+        normalizedAxesX: (localX - axes.left) / Math.max(axes.right - axes.left, 1),
+        normalizedAxesY: (localY - axes.top) / Math.max(axes.bottom - axes.top, 1),
+        region: "axes",
+      },
     );
   }
   return canvasMatch(canvas, target, "plot-area", "plot area", "canvas", rect, {
@@ -165,6 +187,13 @@ function canvasMatch(
     context: {
       chartRenderer: "matplotlib-canvas",
       evidence: "canvas-axes-bounds",
+      ...(kind === "mark"
+        ? {
+            degraded: true,
+            unsupportedReason:
+              "Matplotlib canvas exposes axes regions and pointer coordinates, not per-datum artists.",
+          }
+        : {}),
     },
   };
 }

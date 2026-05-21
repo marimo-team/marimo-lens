@@ -96,6 +96,62 @@ def test_altair_adapter_generates_title_and_row_column_facet_parts() -> None:
     }
 
 
+def test_altair_adapter_treats_row_column_encodings_as_facets() -> None:
+    import altair as alt
+    import polars as pl
+
+    chart = (
+        alt.Chart(
+            pl.DataFrame(
+                {
+                    "Downloads_Xplore": [2605, 777, 1200],
+                    "PubsCited_CrossRef": [11, 3, 5],
+                    "PaperType": ["C", "J", "M"],
+                    "Conference": ["InfoVis", "SciVis", "VAST"],
+                }
+            )
+        )
+        .mark_point()
+        .encode(
+            x="Downloads_Xplore",
+            y="PubsCited_CrossRef",
+            column="PaperType",
+            row="Conference",
+        )
+        .properties(width=150, height=150)
+    )
+
+    metadata = AltairChartAdapter().inspect(ChartEntity(chart))
+
+    assert metadata is not None
+    facets = {
+        part["channel"]: part for part in metadata["parts"] if part["kind"] == "facet"
+    }
+    assert facets["column"] == {
+        "kind": "facet",
+        "label": "column facet",
+        "detail": "PaperType",
+        "channel": "column",
+        "field": "PaperType",
+        "orientation": "column",
+        "context": {"values": ["C", "J", "M"], "count": 3},
+    }
+    assert facets["row"] == {
+        "kind": "facet",
+        "label": "row facet",
+        "detail": "Conference",
+        "channel": "row",
+        "field": "Conference",
+        "orientation": "row",
+        "context": {"values": ["InfoVis", "SciVis", "VAST"], "count": 3},
+    }
+    assert not any(
+        part["kind"] == "annotation"
+        and part.get("detail") in {"PaperType", "Conference"}
+        for part in metadata["parts"]
+    )
+
+
 def test_altair_chart_inspector_exposes_visual_target_metadata() -> None:
     import altair as alt
 

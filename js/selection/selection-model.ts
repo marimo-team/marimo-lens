@@ -12,7 +12,7 @@ import type {
 
 import { identifyElement } from "@/lib/element-identification";
 import { closestCrossingShadow } from "@/lib/shadow-dom";
-import { compatibleChartLibraries } from "@/selection/chart-parts/chart-library-compatibility";
+import { matchingChartLibraries } from "@/selection/chart-parts/chart-library-matching";
 import { granularityForSelectionKind } from "@/selection/selection-granularity";
 
 export type SemanticHit = {
@@ -56,8 +56,7 @@ export function semanticSelectionFromHit(target: LensTarget, hit: SemanticHit): 
     };
   const unitData = unit ? selectionUnitData(unit, resolution.reason) : undefined;
   const data = {
-    ...hit.data,
-    ...unit?.data,
+    ...mergedHitData(unit?.data, hit.data),
     surface: hit.data?.surface ?? hit.surface,
     selectionSurface: hit.surface,
     desiredKind: hit.desiredKind,
@@ -91,6 +90,40 @@ export function semanticSelectionFromHit(target: LensTarget, hit: SemanticHit): 
       },
     },
   };
+}
+
+function mergedHitData(
+  unitData: Record<string, unknown> | undefined,
+  hitData: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const data = unitData ? { ...unitData } : {};
+  if (hitData) Object.assign(data, hitData);
+  const chartPart = mergedChartPart(unitData?.chartPart, hitData?.chartPart);
+  return chartPart ? { ...data, chartPart } : data;
+}
+
+function mergedChartPart(unitPart: unknown, hitPart: unknown): unknown {
+  if (!isRecord(unitPart)) return hitPart;
+  if (!isRecord(hitPart)) return unitPart;
+  return {
+    ...hitPart,
+    ...unitPart,
+    context: mergeOptionalRecord(unitPart.context, hitPart.context),
+    datum: mergeOptionalRecord(unitPart.datum, hitPart.datum),
+    extensions: mergeOptionalRecord(unitPart.extensions, hitPart.extensions),
+  };
+}
+
+function mergeOptionalRecord(left: unknown, right: unknown): Record<string, unknown> | undefined {
+  const merged = {
+    ...(isRecord(left) ? left : {}),
+    ...(isRecord(right) ? right : {}),
+  };
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 export function resolveSelectionUnit(target: LensTarget, hit: SemanticHit): UnitResolution {
@@ -197,7 +230,7 @@ function chartPartMatchScore(unit: SelectionModelUnit, hit: SemanticHit): number
   if (
     unitPart.library &&
     hitPart.library &&
-    compatibleChartLibraries(unitPart.library, hitPart.library)
+    matchingChartLibraries(unitPart.library, hitPart.library)
   ) {
     score += 8;
   }
@@ -238,7 +271,7 @@ function chartPartValue(hit: SemanticHit, key: string): unknown {
 
 function matchesExpectedValue(key: string, actual: unknown, expected: unknown): boolean {
   if (key === "library") {
-    return compatibleChartLibraries(String(expected), String(actual));
+    return matchingChartLibraries(String(expected), String(actual));
   }
   if (key === "label" || key === "detail") {
     return normalize(actual) === normalize(expected);

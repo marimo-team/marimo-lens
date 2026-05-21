@@ -16,6 +16,13 @@ const LEGEND_SELECTOR = ".role-legend,[aria-label*='legend' i]";
 const TITLE_SELECTOR = ".role-title,.role-title-text,[aria-label*='title' i]";
 const MARK_SELECTOR =
   ".mark-arc,.mark-area,.mark-bar,.mark-group,.mark-line,.mark-path,.mark-rect,.mark-rule,.mark-shape,.mark-symbol,.mark-text,[role='graphics-symbol']";
+const CONCRETE_MARK_SELECTOR = [
+  "[aria-roledescription='point']",
+  "[aria-roledescription='symbol']",
+  "circle[aria-label]",
+  "path[aria-label]",
+  "rect[aria-label]",
+].join(",");
 
 export const altairVegaChartPartAdapter = defineChartPartAdapter({
   id: "altair-vega",
@@ -49,16 +56,28 @@ export const altairVegaChartPartAdapter = defineChartPartAdapter({
       );
       return {
         element: facet.element,
-        part: chartPartFromMetadata(
-          "vega",
-          "facet",
-          `${facet.orientation} facet`,
-          facet.value ?? classOrTag(facet.element),
-          metadata,
+        part: facetPartWithValue(
+          chartPartFromMetadata(
+            "vega",
+            "facet",
+            `${facet.orientation} facet`,
+            facet.value ?? classOrTag(facet.element),
+            metadata,
+          ),
+          facet,
         ),
         score: 93,
+        context: facet.value
+          ? {
+              facetValue: facet.value,
+              orientation: facet.orientation,
+            }
+          : undefined,
       };
     }
+
+    const concreteMark = concreteMarkElement(element, point);
+    if (concreteMark) return markMatch(concreteMark, point, target);
 
     const axis =
       closestSemanticLayer(element, AXIS_SELECTOR) ??
@@ -90,13 +109,45 @@ export const altairVegaChartPartAdapter = defineChartPartAdapter({
       closestMatching(element, MARK_SELECTOR) ??
       semanticSvgElementAtPoint(element, point, MARK_SELECTOR);
     if (!mark) return null;
-    return {
-      element: mark,
-      part: part("vega", "mark", markLabel(mark), classOrTag(mark), dataAttributes(mark)),
-      score: 88,
-    };
+    return markMatch(mark, point, target);
   },
 });
+
+function markMatch(
+  mark: Element,
+  point: ViewportPoint | undefined,
+  target: LensTarget | undefined,
+): ChartPartMatch {
+  const metadata = metadataPart(target, "mark", markLabel(mark));
+  const markEvidence = vegaMarkEvidence(mark, point, target);
+  const markPart = withDatum(
+    chartPartFromMetadata(
+      chartLibrary(target),
+      "mark",
+      markLabel(mark),
+      classOrTag(mark),
+      metadata,
+    ),
+    markEvidence.datum,
+  );
+  const markRect = mark.getBoundingClientRect();
+  return {
+    element: mark,
+    part: markPart,
+    score: Object.keys(markEvidence.datum).length > 0 ? 98 : 88,
+    highlight:
+      markRect.width > 0 && markRect.height > 0
+        ? {
+            kind: "rect",
+            rect: markRect,
+            padding: 3,
+            strategy: "vega-svg-mark",
+          }
+        : undefined,
+    anchorData: markEvidence.anchorData,
+    context: markEvidence.context,
+  };
+}
 
 function canvasChartPart(
   element: Element,
@@ -248,9 +299,13 @@ function canvasMatch(
   metadata: LensChartPart | null = null,
 ): ChartPartMatch {
   const library = chartLibrary(target);
+  const chartPart = withDatum(
+    chartPartFromMetadata(library, kind, fallbackLabel, fallbackDetail, metadata),
+    canvasFacetDatum(target, kind, anchorData),
+  );
   return {
     element,
-    part: chartPartFromMetadata(library, kind, fallbackLabel, fallbackDetail, metadata),
+    part: chartPart,
     score: kind === "mark" ? 89 : 91,
     highlight: {
       kind: "rect",
@@ -262,8 +317,288 @@ function canvasMatch(
     context: {
       chartRenderer: "vega-canvas",
       evidence: "normalized-canvas-region",
+      ...canvasFacetContext(target, kind, anchorData),
+      ...(kind === "mark"
+        ? {
+            degraded: true,
+            unsupportedReason:
+              "Vega canvas exposes the facet panel and pointer location, not the concrete encoded datum.",
+          }
+        : {}),
     },
   };
+}
+
+type DatumEvidence = {
+  anchorData: Record<string, unknown>;
+  context: Record<string, unknown>;
+  datum: Record<string, unknown>;
+};
+
+function concreteMarkElement(element: Element, point: ViewportPoint | undefined): Element | null {
+  const closestConcrete = closestMatching(element, CONCRETE_MARK_SELECTOR);
+  if (closestConcrete && closestMatching(closestConcrete, MARK_SELECTOR)) return closestConcrete;
+  const pointConcrete = semanticSvgElementAtPoint(element, point, CONCRETE_MARK_SELECTOR);
+  if (pointConcrete && closestMatching(pointConcrete, MARK_SELECTOR)) return pointConcrete;
+  return null;
+}
+
+function vegaMarkEvidence(
+  element: Element,
+  point: ViewportPoint | undefined,
+  target: LensTarget | undefined,
+): DatumEvidence {
+  const svg = closestMatching(element, "svg.marks,svg");
+  const svgRect = svg?.getBoundingClientRect();
+  const localPoint =
+    point && svgRect
+      ? {
+          localX: point.x - svgRect.left,
+          localY: point.y - svgRect.top,
+        }
+      : {};
+  const ariaDatum = datumFromText(
+    element.getAttribute("aria-label") ?? element.querySelector("title")?.textContent ?? "",
+  );
+  const facetEvidence = svg && point ? svgFacetDatum(svg, point, target) : emptyFacetEvidence();
+  const rawData = dataAttributes(element);
+  const datum = {
+    ...rawData,
+    ...facetEvidence.datum,
+    ...ariaDatum,
+  };
+  const datumSources = [
+    Object.keys(rawData).length > 0 ? "data-attributes" : null,
+    Object.keys(facetEvidence.datum).length > 0 ? "facet-layout" : null,
+    Object.keys(ariaDatum).length > 0 ? "aria-label" : null,
+  ].filter(Boolean);
+  return {
+    datum,
+    anchorData: {
+      chartRenderer: "vega-svg",
+      ...localPoint,
+      ...facetEvidence.anchorData,
+    },
+    context: {
+      chartRenderer: "vega-svg",
+      datumSource: datumSources.join("+") || "svg-mark",
+      element: classOrTag(element),
+      ...facetEvidence.context,
+      ...localPoint,
+    },
+  };
+}
+
+type FacetEvidence = {
+  anchorData: Record<string, unknown>;
+  context: Record<string, unknown>;
+  datum: Record<string, unknown>;
+};
+
+type FacetHit = {
+  channel: "column" | "row";
+  field: string;
+  index: number;
+  value: unknown;
+};
+
+function emptyFacetEvidence(): FacetEvidence {
+  return { anchorData: {}, context: {}, datum: {} };
+}
+
+function svgFacetDatum(
+  svg: Element,
+  point: ViewportPoint,
+  target: LensTarget | undefined,
+): FacetEvidence {
+  const hits = (["column", "row"] as const)
+    .map((channel) => svgFacetHit(svg, point, target, channel))
+    .filter((hit): hit is FacetHit => hit !== null);
+  if (hits.length === 0) return emptyFacetEvidence();
+  const datum = Object.fromEntries(hits.map((hit) => [hit.field, hit.value]));
+  const values = Object.fromEntries(hits.map((hit) => [`${hit.channel}Value`, hit.value]));
+  const indexes = Object.fromEntries(hits.map((hit) => [`${hit.channel}Index`, hit.index]));
+  return {
+    datum,
+    anchorData: {
+      ...values,
+      ...indexes,
+    },
+    context: {
+      facets: hits.map(({ channel, field, index, value }) => ({ channel, field, index, value })),
+      ...values,
+      ...indexes,
+    },
+  };
+}
+
+function svgFacetHit(
+  svg: Element,
+  point: ViewportPoint,
+  target: LensTarget | undefined,
+  channel: "column" | "row",
+): FacetHit | null {
+  const facetPart = metadataPart(target, "facet", `${channel} facet`, channel);
+  if (!facetPart?.field) return null;
+  const values = partValues(facetPart);
+  if (values.length === 0) return null;
+  const labels = facetHeaderLabels(svg, channel, values);
+  const index = labels.length > 0 ? nearestFacetLabelIndex(labels, point, channel) : null;
+  const fallbackIndex = approximateFacetIndex(svg, point, channel, values.length);
+  const resolvedIndex = clampIndex(index ?? fallbackIndex, values.length);
+  const headerValue = labels[resolvedIndex]?.label;
+  return {
+    channel,
+    field: facetPart.field,
+    index: resolvedIndex,
+    value: headerValue && values.includes(headerValue) ? headerValue : values[resolvedIndex],
+  };
+}
+
+type FacetHeaderLabel = {
+  centerX: number;
+  centerY: number;
+  label: string;
+};
+
+function facetHeaderLabels(
+  svg: Element,
+  channel: "column" | "row",
+  values: string[],
+): FacetHeaderLabel[] {
+  const facetValues = new Set(values);
+  const selector =
+    channel === "column"
+      ? ".role-column-header text,.column_header text"
+      : ".role-row-header text,.row_header text";
+  return [...svg.querySelectorAll(selector)]
+    .map((element): FacetHeaderLabel | null => {
+      const rect = element.getBoundingClientRect();
+      const label = textLabel(element);
+      if (!facetValues.has(label) || rect.width <= 0 || rect.height <= 0) return null;
+      return {
+        centerX: rect.left + rect.width / 2,
+        centerY: rect.top + rect.height / 2,
+        label,
+      };
+    })
+    .filter((label): label is FacetHeaderLabel => label !== null)
+    .sort((left, right) =>
+      channel === "column" ? left.centerX - right.centerX : left.centerY - right.centerY,
+    );
+}
+
+function nearestFacetLabelIndex(
+  labels: FacetHeaderLabel[],
+  point: ViewportPoint,
+  channel: "column" | "row",
+): number | null {
+  const ranked = labels
+    .map((label, index) => ({
+      distance: Math.abs(
+        (channel === "column" ? label.centerX : label.centerY) -
+          point[channel === "column" ? "x" : "y"],
+      ),
+      index,
+    }))
+    .sort((left, right) => left.distance - right.distance);
+  return ranked[0]?.index ?? null;
+}
+
+function approximateFacetIndex(
+  svg: Element,
+  point: ViewportPoint,
+  channel: "column" | "row",
+  count: number,
+): number {
+  const rect = svg.getBoundingClientRect();
+  const position =
+    channel === "column"
+      ? (point.x - rect.left) / Math.max(rect.width, 1)
+      : (point.y - rect.top) / Math.max(rect.height, 1);
+  return Math.floor(clamp(position, 0, 0.999999) * count);
+}
+
+function canvasFacetDatum(
+  target: LensTarget | undefined,
+  kind: LensChartPartKind,
+  anchorData: Record<string, unknown>,
+): Record<string, unknown> {
+  const hits = canvasFacetHits(target, anchorData).filter(
+    () => kind === "mark" || kind === "facet",
+  );
+  return Object.fromEntries(hits.map((hit) => [hit.field, hit.value]));
+}
+
+function canvasFacetContext(
+  target: LensTarget | undefined,
+  kind: LensChartPartKind,
+  anchorData: Record<string, unknown>,
+): Record<string, unknown> {
+  const hits = canvasFacetHits(target, anchorData).filter(
+    () => kind === "mark" || kind === "facet",
+  );
+  return hits.length > 0
+    ? {
+        facets: hits,
+      }
+    : {};
+}
+
+function canvasFacetHits(
+  target: LensTarget | undefined,
+  anchorData: Record<string, unknown>,
+): FacetHit[] {
+  return (["column", "row"] as const)
+    .map((channel): FacetHit | null => {
+      const field = metadataPart(target, "facet", `${channel} facet`, channel)?.field;
+      const value = anchorData[`${channel}Value`];
+      const index = Number(anchorData[`${channel}Index`]);
+      if (!field || value === undefined) return null;
+      return {
+        channel,
+        field,
+        index: Number.isFinite(index) ? index : 0,
+        value,
+      };
+    })
+    .filter((hit): hit is FacetHit => hit !== null);
+}
+
+function datumFromText(text: string): Record<string, unknown> {
+  return Object.fromEntries(
+    text
+      .split(";")
+      .map((entry) => entry.trim())
+      .map((entry): [string, unknown] | null => {
+        const separator = entry.indexOf(":");
+        if (separator <= 0) return null;
+        const key = entry.slice(0, separator).trim();
+        const value = entry.slice(separator + 1).trim();
+        return key ? [key, parseDatumScalar(value)] : null;
+      })
+      .filter((entry): entry is [string, unknown] => entry !== null),
+  );
+}
+
+function parseDatumScalar(value: string): unknown {
+  if (!value) return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  const numberValue = Number(value.replace(/,/g, ""));
+  return Number.isFinite(numberValue) && /^-?[\d,.]+(?:e[-+]?\d+)?$/i.test(value)
+    ? numberValue
+    : value;
+}
+
+function withDatum(partValue: LensChartPart, datum: Record<string, unknown>): LensChartPart {
+  const merged = partValue.datum ? { ...partValue.datum, ...datum } : { ...datum };
+  return Object.keys(merged).length > 0 ? { ...partValue, datum: merged } : partValue;
+}
+
+function facetPartWithValue(partValue: LensChartPart, facet: FacetLayer): LensChartPart {
+  if (!partValue.field || !facet.value) return partValue;
+  return withDatum(partValue, { [partValue.field]: parseDatumScalar(facet.value) });
 }
 
 function metadataPart(

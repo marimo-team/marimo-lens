@@ -55,6 +55,12 @@ from .inspectors._capabilities import target_capabilities as _target_capabilitie
 
 _INTERNAL_NAMES = {"mo", "app", "Lens", "target", "lens"}
 _LENS_WIDGET_MARKER = "_marimo_lens_widget"
+_CHART_PART_GRANULARITY_BY_KIND = {
+    "axis": "group",
+    "legend": "group",
+    "mark": "item",
+    "trace": "item",
+}
 
 
 def _summarize_ui_element(
@@ -573,11 +579,7 @@ def _chart_part_granularity(
 ) -> str:
     if part.get("datum"):
         return "datum"
-    if part_kind in {"mark", "trace"}:
-        return "item"
-    if part_kind in {"axis", "legend"}:
-        return "group"
-    return "surface"
+    return _CHART_PART_GRANULARITY_BY_KIND.get(part_kind, "surface")
 
 
 def _chart_part_match(part: Mapping[str, Any]) -> dict[str, Any]:
