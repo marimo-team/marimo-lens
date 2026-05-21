@@ -34,6 +34,24 @@ from tests.support.assertions import _capabilities
                 "id": "custom:orders",
                 "label": "orders",
                 "kind": "dataframe",
+                "oldApi": True,
+            },
+            "unknown keys",
+        ),
+        (
+            {
+                "id": "custom:orders",
+                "label": "orders",
+                "kind": "dataframe",
+                "columns": ["amount"],
+            },
+            "column 0 must be a mapping",
+        ),
+        (
+            {
+                "id": "custom:orders",
+                "label": "orders",
+                "kind": "dataframe",
                 "selectionPolicy": {"prefer": ["magic"]},
             },
             "unknown surfaces",
@@ -45,7 +63,7 @@ from tests.support.assertions import _capabilities
                 "kind": "visualization",
                 "chart": {"parts": [{"kind": "tooltip", "label": "tip"}]},
             },
-            "chart unit kind",
+            "chart part kind",
         ),
         (
             {
@@ -110,6 +128,32 @@ def test_typed_manual_target_builders_normalize_to_wire_contract() -> None:
     assert target["columns"] == [{"name": "amount", "dtype": "float"}]
     assert target["selectors"] == ["[data-orders-grid]"]
     assert target["selectionPolicy"]["context"] == {"source": "manual"}
+
+
+def test_column_metadata_cannot_clobber_canonical_column_fields() -> None:
+    [target] = _normalize_targets(
+        [
+            targets.dataframe(
+                id="custom:orders",
+                label="Orders",
+                columns=[
+                    targets.Column(
+                        "amount",
+                        "float",
+                        metadata={"name": "wrong", "dtype": "wrong", "role": "metric"},
+                    )
+                ],
+            )
+        ]
+    )
+
+    assert target["columns"] == [
+        {
+            "name": "amount",
+            "dtype": "float",
+            "metadata": {"name": "wrong", "dtype": "wrong", "role": "metric"},
+        }
+    ]
 
 
 def test_manual_targets_accept_new_output_kinds() -> None:
@@ -201,6 +245,58 @@ def test_selection_policy_adds_interactive_and_dedupes_selector() -> None:
     }
 
 
+def test_explicit_false_capability_overrides_default() -> None:
+    [target] = _normalize_targets(
+        [
+            {
+                "id": "custom:orders",
+                "label": "orders",
+                "kind": "dataframe",
+                "columns": [{"name": "amount", "dtype": "float"}],
+                "capabilities": {"columnarDom": False},
+            }
+        ]
+    )
+
+    assert target["capabilities"]["columnarDom"] is False
+    assert target["selectionPolicy"]["prefer"] == ["selector"]
+
+
+def test_manual_target_extensions_do_not_clobber_canonical_fields() -> None:
+    [target] = _normalize_targets(
+        [
+            targets.object(
+                id="custom:object",
+                label="Object",
+                extensions={"kind": "dataframe", "family": "custom"},
+            )
+        ]
+    )
+
+    assert target["kind"] == "object"
+    assert target["extensions"] == {"kind": "dataframe", "family": "custom"}
+
+
+def test_manual_target_entity_output_and_extensions_match_wire_contract() -> None:
+    [target] = _normalize_targets(
+        [
+            {
+                "id": "custom:output",
+                "label": "output",
+                "kind": "output",
+                "entity": {"inspector": "custom"},
+                "output": {"kind": "object", "custom": object()},
+                "extensions": {"raw": object()},
+            }
+        ]
+    )
+
+    assert target["entity"] == {"inspector": "custom", "family": "output"}
+    assert target["output"] == {"kind": "object"}
+    assert "custom" in target["extensions"]["output"]
+    json.dumps(target)
+
+
 def test_selection_model_defaults_to_column_units_with_cell_degradation() -> None:
     [target] = _normalize_targets(
         [
@@ -221,6 +317,7 @@ def test_selection_model_defaults_to_column_units_with_cell_degradation() -> Non
         "kind": "column",
         "id": "col:revenue",
         "label": "revenue",
+        "granularity": "group",
         "selectors": [],
         "fallbackFor": [
             "cell",
@@ -231,16 +328,19 @@ def test_selection_model_defaults_to_column_units_with_cell_degradation() -> Non
         ],
         "requires": [],
         "supported": True,
+        "match": {"column": "revenue"},
         "data": {"column": "revenue", "columnDtype": "int64"},
     }
     assert target["selectionModel"]["units"][2] == {
         "kind": "cell",
         "id": "cell",
         "label": "cell",
+        "granularity": "item",
         "requires": ["rowId", "column"],
         "selectors": [],
         "fallbackFor": [],
         "supported": False,
+        "match": {},
         "data": {},
     }
 
@@ -279,9 +379,43 @@ def test_manual_selection_model_is_normalized() -> None:
                 "selectors": [],
                 "fallbackFor": ["cell"],
                 "supported": True,
+                "match": {"column": "revenue"},
                 "data": {"column": "revenue"},
             }
         ],
+    }
+
+
+def test_selection_unit_helpers_emit_resolver_hints() -> None:
+    [target] = _normalize_targets(
+        [
+            {
+                "id": "custom:orders",
+                "label": "orders",
+                "kind": "dataframe",
+                "selectionModel": selection.Model(
+                    units=[
+                        selection.column("amount", dtype="float"),
+                        selection.unit(
+                            "segment",
+                            id="segment:enterprise",
+                            label="Enterprise segment",
+                            granularity="group",
+                            match={"column": "segment", "value": "enterprise"},
+                            data={"segment": "enterprise"},
+                        ),
+                    ],
+                    default_fallback="column",
+                ),
+            }
+        ]
+    )
+
+    assert target["selectionModel"]["units"][0]["match"] == {"column": "amount"}
+    assert target["selectionModel"]["units"][0]["granularity"] == "group"
+    assert target["selectionModel"]["units"][1]["match"] == {
+        "column": "segment",
+        "value": "enterprise",
     }
 
 
@@ -307,3 +441,50 @@ def test_chart_part_metadata_accepts_valid_parts() -> None:
         {"kind": "axis", "label": "x axis"},
         {"kind": "mark", "label": "bars"},
     ]
+
+
+def test_chart_part_metadata_moves_unknown_keys_to_extensions() -> None:
+    [target] = _normalize_targets(
+        [
+            {
+                "id": "custom:chart",
+                "label": "chart",
+                "kind": "visualization",
+                "chart": {
+                    "library": "custom",
+                    "parts": [{"kind": "axis", "label": "x axis", "foo": "bar"}],
+                },
+            }
+        ]
+    )
+
+    part = target["chart"]["parts"][0]
+
+    assert "foo" not in part
+    assert part["extensions"]["foo"] == "bar"
+
+
+def test_chart_metadata_normalization_drops_null_optional_fields() -> None:
+    [target] = _normalize_targets(
+        [
+            {
+                "id": "custom:chart",
+                "label": "chart",
+                "kind": "visualization",
+                "chart": {
+                    "library": "custom",
+                    "mark": None,
+                    "parts": [
+                        {
+                            "kind": "axis",
+                            "label": "x axis",
+                            "detail": None,
+                        }
+                    ],
+                },
+            }
+        ]
+    )
+
+    assert "mark" not in target["chart"]
+    assert target["chart"]["parts"] == [{"kind": "axis", "label": "x axis"}]

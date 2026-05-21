@@ -85,6 +85,40 @@ def test_manual_empty_namespace_does_not_fall_back_to_runtime_globals(
     assert graph["globals"] == []
 
 
+def test_explicit_source_does_not_fall_back_to_runtime_cell_outputs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ctx = _runtime_context(globals={"secret_df": FrameLike()}, display_sales=True)
+    ctx.graph.cells["cell-view"].output = FrameLike()
+    _install_context(monkeypatch, ctx)
+
+    lens = Lens(
+        source=context.mapping(
+            {"local_df": FrameLike()},
+            notebook={
+                "available": True,
+                "cells": [
+                    {
+                        "id": "cell-view",
+                        "defs": ["view"],
+                        "refs": ["local_df"],
+                        "outputRefs": [],
+                        "outputType": "",
+                        "hasOutputExpression": False,
+                        "codePreview": "view = mo.ui.table(local_df)",
+                    }
+                ],
+                "definitions": {"local_df": ["cell-data"], "view": ["cell-view"]},
+                "edges": [],
+                "globals": [],
+                "controls": {"summary": {}},
+            },
+        )
+    )
+
+    assert {target["id"] for target in lens.targets} == {"var:local_df"}
+
+
 def test_lens_from_snapshot_and_restore_make_state_explicit() -> None:
     snapshot = context.Snapshot(
         namespace={},
@@ -167,6 +201,18 @@ def test_lens_refresh_context_updates_sniffed_ui_state() -> None:
     assert refreshed["controls"]["uiElements"][0]["value"] == 8
     assert lens.notebook["controls"]["uiElements"][0]["value"] == 8
     assert lens.export_pair_feedback()["summary"]["uiElementCount"] == 1
+
+    request_revision = lens._context_revision
+    lens.refresh_context(request_id="copy-1")
+
+    assert lens._context_revision == request_revision + 1
+    assert lens._refresh_state == {
+        "requestId": "copy-1",
+        "status": "success",
+        "error": "",
+        "contextRevision": lens._context_revision,
+        "pairPromptRevision": lens._context_revision,
+    }
 
 
 def test_raw_pair_feedback_export_refreshes_context_by_default() -> None:

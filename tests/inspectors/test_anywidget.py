@@ -5,7 +5,7 @@ from typing import Any
 import anywidget
 import pytest
 
-import marimo_lens.inspectors._metadata as inspector_metadata
+import marimo_lens._runtime_value_metadata as runtime_metadata
 from marimo_lens.inspectors import AnyWidgetInspector, MarimoComponentInspector
 
 from tests.support.sample_entities import ShadowGridWidget, lens_entity
@@ -46,7 +46,7 @@ def test_unreadable_anywidget_state_does_not_break_summary(
     def raise_state(_widget: anywidget.AnyWidget) -> dict[str, Any]:
         raise RuntimeError("state unavailable")
 
-    monkeypatch.setattr(inspector_metadata, "_anywidget_state", raise_state)
+    monkeypatch.setattr(runtime_metadata, "anywidget_state", raise_state)
     metadata = AnyWidgetInspector().inspect(lens_entity("widget", ShadowGridWidget()))
 
     assert metadata is not None

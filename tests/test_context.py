@@ -183,6 +183,23 @@ def test_collect_notebook_graph_output_refs_are_cycle_safe(
     assert view_cell["outputRefs"] == ["sales"]
 
 
+def test_collect_notebook_graph_does_not_infer_scalar_output_refs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    threshold = 10
+    impedance = 1 + 2j
+    ctx = _runtime_context(
+        globals={"threshold": threshold, "status": "ok", "impedance": impedance}
+    )
+    ctx.graph.cells["cell-view"].output = impedance
+    _install_context(monkeypatch, ctx)
+
+    snapshot = collect_notebook_graph()
+    view_cell = next(cell for cell in snapshot["cells"] if cell["id"] == "cell-view")
+
+    assert view_cell["outputRefs"] == []
+
+
 def test_collect_runtime_context_sniffs_ui_and_traitlets_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

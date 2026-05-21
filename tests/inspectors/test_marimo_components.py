@@ -98,8 +98,8 @@ def test_marimo_data_explorer_is_visual_and_columnar() -> None:
     )
     assert metadata["chart"]["library"] == "marimo-data-explorer"
     assert metadata["selectionPolicy"]["prefer"] == [
+        "chart-part",
         "columnar-grid",
-        "chart-unit",
         "visual-surface",
         "interactive",
         "selector",
@@ -141,6 +141,27 @@ def test_marimo_altair_chart_preserves_vega_fields() -> None:
     ]
 
 
+def test_marimo_composed_altair_chart_preserves_child_fields_and_parts() -> None:
+    import altair as alt
+    import marimo as mo
+
+    base = alt.Chart(sales_frame()).encode(x="region:N", y="revenue:Q")
+    component = mo.ui.altair_chart(base.mark_bar() + base.mark_line())
+    metadata = MarimoComponentInspector().inspect(lens_entity("sales_chart", component))
+
+    assert metadata is not None
+    parts = {(part["kind"], part["label"]) for part in metadata["chart"]["parts"]}
+    assert "mark" not in metadata["chart"]
+    assert ("mark", "bar") in parts
+    assert ("mark", "line") in parts
+    assert ("axis", "x axis") in parts
+    assert ("axis", "y axis") in parts
+    assert [column["name"] for column in metadata["columns"][:2]] == [
+        "region",
+        "revenue",
+    ]
+
+
 @pytest.mark.parametrize(
     ("component_name", "library", "renderer"),
     [
@@ -177,6 +198,44 @@ def test_marimo_chart_component_names_preserve_visual_capability(
         chartPart=True,
         interactive=True,
     )
+
+
+def test_marimo_plotly_component_preserves_figure_parts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo_lens.inspectors.marimo_components as marimo_components
+
+    monkeypatch.setattr(marimo_components, "is_marimo_ui_element", lambda value: True)
+    component = SimpleNamespace(
+        _args=SimpleNamespace(component_name="marimo-plotly", label=None),
+        _component_args={
+            "figure": {
+                "data": [{"type": "bar", "name": "Revenue"}],
+                "layout": {
+                    "xaxis": {"title": {"text": "Quarter"}},
+                    "yaxis": {"title": {"text": "Revenue"}},
+                    "title": {"text": "Sales"},
+                },
+            }
+        },
+        value={},
+    )
+
+    metadata = MarimoComponentInspector().inspect(
+        lens_entity("plotly_chart", component)
+    )
+
+    assert metadata is not None
+    parts = {
+        (part["kind"], part["label"], part.get("detail"))
+        for part in metadata["chart"]["parts"]
+    }
+    assert metadata["chart"]["library"] == "plotly"
+    assert metadata["chart"]["renderer"] == "html"
+    assert ("trace", "Revenue", "bar") in parts
+    assert ("axis", "x axis", "Quarter") in parts
+    assert ("axis", "y axis", "Revenue") in parts
+    assert ("title", "Sales", None) in parts
 
 
 def test_marimo_layout_components_use_layout_kind() -> None:

@@ -6,10 +6,10 @@ from collections.abc import Mapping
 from typing import Any
 
 from .._serialization import safe_value
-from ._capabilities import capabilities, selection_policy
 from ._core import LensEntity
+from ._metadata import inspected_target
 
-_IMAGE_MIMES = {
+_IMAGE_MIMES = (
     "image/avif",
     "image/bmp",
     "image/gif",
@@ -17,20 +17,32 @@ _IMAGE_MIMES = {
     "image/png",
     "image/svg+xml",
     "image/tiff",
-}
-_MEDIA_MIMES = _IMAGE_MIMES | {"audio/mpeg", "audio/wav", "video/mp4", "video/mpeg"}
-_DOCUMENT_MIMES = {"application/pdf", "text/html", "text/latex", "text/markdown"}
-_DATA_MIMES = {
+)
+_MEDIA_MIMES = (*_IMAGE_MIMES, "audio/mpeg", "audio/wav", "video/mp4", "video/mpeg")
+_DOCUMENT_MIMES = ("application/pdf", "text/html", "text/latex", "text/markdown")
+_DATA_MIMES = (
     "application/geo+json",
     "application/json",
     "text/csv",
     "text/tab-separated-values",
-}
-_DIAGNOSTIC_MIMES = {
+)
+_DIAGNOSTIC_MIMES = (
     "application/vnd.marimo+error",
     "application/vnd.marimo+traceback",
     "text/x-traceback",
-}
+)
+_MIME_DESCRIPTORS = (
+    (_DIAGNOSTIC_MIMES, "diagnostic", "diagnostic", "selector"),
+    (_DATA_MIMES, "data", "data", "selector"),
+    (_DOCUMENT_MIMES, "document", "document", "document"),
+    (_MEDIA_MIMES, "media", "image", "media"),
+)
+_HTML_DESCRIPTORS = (
+    (("<img", "<picture"), "media", "image", "media"),
+    (("<audio",), "media", "audio", "media"),
+    (("<video",), "media", "video", "media"),
+    (("<embed", "<iframe", "<object"), "document", "document", "document"),
+)
 
 
 class OutputInspector:
@@ -56,21 +68,19 @@ def _target(name: str, metadata: Mapping[str, Any]) -> dict[str, Any]:
     family = str(metadata["family"])
     surface = str(metadata["surface"])
     payload_key = "media" if kind == "media" else kind
-    return {
-        "kind": kind,
-        "family": family,
-        payload_key: dict(metadata["context"]),
-        "shape": None,
-        "columns": [],
-        "capabilities": capabilities(
-            media=kind == "media",
-            document=kind == "document",
-            data=kind == "data",
-            diagnostic=kind == "diagnostic",
-        ),
-        "selectionPolicy": selection_policy(surface, context=metadata["context"]),
-        "summary": f"{name}: {family}",
-    }
+    return inspected_target(
+        kind=kind,
+        family=family,
+        summary=f"{name}: {family}",
+        capability_flags={
+            "media": kind == "media",
+            "document": kind == "document",
+            "data": kind == "data",
+            "diagnostic": kind == "diagnostic",
+        },
+        surfaces=(surface,),
+        context=metadata["context"],
+    ) | {payload_key: dict(metadata["context"])}
 
 
 def _output_metadata(mime: str, payload: Any) -> dict[str, Any] | None:
@@ -107,36 +117,27 @@ def _output_metadata(mime: str, payload: Any) -> dict[str, Any] | None:
 
 
 def _mime_family(mime: str) -> tuple[str, str, str] | None:
-    if mime in _DIAGNOSTIC_MIMES:
-        return ("diagnostic", "diagnostic", "selector")
-    if mime in _DATA_MIMES:
-        return ("data", "data", "selector")
-    if mime in _DOCUMENT_MIMES:
-        return ("document", "document", "document")
-    if mime in _MEDIA_MIMES:
-        if mime.startswith("audio/"):
-            return ("media", "audio", "media")
-        if mime.startswith("video/"):
-            return ("media", "video", "media")
-        return ("media", "image", "media")
+    for mimes, kind, label, surface in _MIME_DESCRIPTORS:
+        if mime not in mimes:
+            continue
+        if kind == "media" and mime.startswith("audio/"):
+            return (kind, "audio", surface)
+        if kind == "media" and mime.startswith("video/"):
+            return (kind, "video", surface)
+        return (kind, label, surface)
     return None
 
 
 def _html_family(payload: Any) -> tuple[str, str, str] | None:
     text = str(payload).lower()
-    if any(marker in text for marker in ("<img", "<picture")):
-        return ("media", "image", "media")
-    if "<audio" in text:
-        return ("media", "audio", "media")
-    if "<video" in text:
-        return ("media", "video", "media")
-    if any(marker in text for marker in ("<embed", "<iframe", "<object")):
-        return ("document", "document", "document")
+    for markers, kind, label, surface in _HTML_DESCRIPTORS:
+        if any(marker in text for marker in markers):
+            return (kind, label, surface)
     return None
 
 
 def _preferred_mime(bundle: Mapping[str, Any]) -> str | None:
-    for group in (_DIAGNOSTIC_MIMES, _DATA_MIMES, _DOCUMENT_MIMES, _MEDIA_MIMES):
+    for group, *_ in _MIME_DESCRIPTORS:
         for mime in group:
             if mime in bundle:
                 return mime

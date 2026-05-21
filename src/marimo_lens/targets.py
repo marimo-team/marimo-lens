@@ -3,414 +3,122 @@
 from __future__ import annotations
 
 import html
+from functools import partial
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
-from typing import Any, Literal, TypeAlias
+from dataclasses import dataclass
+from typing import Any
 
 from ._marimo_runtime import runtime_context as _runtime_context
+from ._target_contract import (
+    Capabilities,
+    Column,
+    Shape,
+    TargetKind,
+    TargetLike,
+    TargetMetadata,
+    target_dict,
+)
+from ._target_payload import (
+    build_target_payload,
+    css_attr as _css_attr,
+    python_type_name,
+    target_extensions,
+    target_family,
+)
 from .inspectors import EntityRegistry
 from .metadata import (
     _auto_include,
     _caller_namespace,
-    _css_attr,
     _infer_kind,
     _infer_variable_name,
     _is_internal_name,
     _is_lens_widget,
     _is_internal_value,
+    _jsonable,
+    _normalize_targets,
     _summarize_target,
 )
 from .selection import Model as SelectionModel
 from .selection import Policy as SelectionPolicy
 
-TargetKind: TypeAlias = Literal[
-    "anywidget",
-    "data",
-    "dataframe",
-    "diagnostic",
-    "document",
-    "layout",
-    "media",
-    "object",
-    "output",
-    "table",
-    "ui",
-    "visualization",
-]
 
-
-@dataclass(frozen=True)
-class Column:
-    """Column metadata exposed by columnar Lens targets."""
-
-    name: str
-    dtype: str | None = None
-    metadata: Mapping[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        item: dict[str, Any] = {"name": self.name}
-        if self.dtype is not None:
-            item["dtype"] = self.dtype
-        item.update(dict(self.metadata))
-        return item
-
-
-@dataclass(frozen=True)
-class Shape:
-    """Tabular or visual extent exposed by a target."""
-
-    rows: int | None = None
-    columns: int | None = None
-
-    def to_dict(self) -> dict[str, int]:
-        item: dict[str, int] = {}
-        if self.rows is not None:
-            item["rows"] = self.rows
-        if self.columns is not None:
-            item["columns"] = self.columns
-        return item
-
-
-@dataclass(frozen=True)
-class Capabilities:
-    """Behavioral capabilities used by frontend selection plugins."""
-
-    columnar_dom: bool = False
-    columnar_grid: bool = False
-    data: bool = False
-    diagnostic: bool = False
-    document: bool = False
-    interactive: bool = False
-    chart_part: bool = False
-    media: bool = False
-    visual_surface: bool = False
-
-    def to_dict(self) -> dict[str, bool]:
-        return {
-            "columnarDom": self.columnar_dom,
-            "columnarGrid": self.columnar_grid,
-            "data": self.data,
-            "diagnostic": self.diagnostic,
-            "document": self.document,
-            "interactive": self.interactive,
-            "chartPart": self.chart_part,
-            "media": self.media,
-            "visualSurface": self.visual_surface,
-        }
-
-
-@dataclass(frozen=True)
-class TargetMetadata:
-    """Canonical Python target metadata before wire normalization."""
-
-    id: str
-    label: str
-    kind: TargetKind | str
-    variable: str | None = None
-    cell_id: str | None = None
-    display_cell_ids: Sequence[str] = ()
-    related_cell_ids: Sequence[str] = ()
-    defs: Sequence[str] = ()
-    refs: Sequence[str] = ()
-    shape: Shape | Mapping[str, Any] | None = None
-    columns: Sequence[Column | Mapping[str, Any]] = ()
-    chart: Any = None
-    capabilities: Capabilities | Mapping[str, Any] | None = None
-    selection: SelectionPolicy | Mapping[str, Any] | None = None
-    selection_model: SelectionModel | Mapping[str, Any] | None = None
-    summary: str | None = None
-    selectors: Sequence[str] = ()
-    python_type: str | None = None
-    component: str | None = None
-    entity: Mapping[str, Any] | None = None
-    output: Mapping[str, Any] | None = None
-    output_refs: Sequence[str] = ()
-    output_type: str | None = None
-    code_preview: str | None = None
-    extensions: Mapping[str, Any] = field(default_factory=dict)
-
-    def to_dict(self) -> dict[str, Any]:
-        item: dict[str, Any] = {
-            "id": self.id,
-            "label": self.label,
-            "kind": str(self.kind),
-        }
-        _set(item, "variable", self.variable)
-        _set(item, "cellId", self.cell_id)
-        _set_sequence(item, "displayCellIds", self.display_cell_ids)
-        _set_sequence(item, "relatedCellIds", self.related_cell_ids)
-        _set_sequence(item, "defs", self.defs)
-        _set_sequence(item, "refs", self.refs)
-        _set(item, "shape", _to_mapping(self.shape))
-        if self.columns:
-            item["columns"] = [_to_mapping(column) for column in self.columns]
-        _set(item, "chart", _to_mapping(self.chart))
-        _set(item, "capabilities", _to_mapping(self.capabilities))
-        _set(item, "selectionPolicy", _to_mapping(self.selection))
-        _set(item, "selectionModel", _to_mapping(self.selection_model))
-        _set(item, "summary", self.summary)
-        _set_sequence(item, "selectors", self.selectors)
-        _set(item, "pythonType", self.python_type)
-        _set(item, "component", self.component)
-        _set(item, "entity", dict(self.entity) if self.entity is not None else None)
-        _set(item, "output", dict(self.output) if self.output is not None else None)
-        _set_sequence(item, "outputRefs", self.output_refs)
-        _set(item, "outputType", self.output_type)
-        _set(item, "codePreview", self.code_preview)
-        item.update(dict(self.extensions))
-        return item
-
-
-TargetSpec: TypeAlias = TargetMetadata
-TargetLike: TypeAlias = TargetMetadata | Mapping[str, Any]
-
-
-def dataframe(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    columns: Sequence[Column | Mapping[str, Any]] = (),
-    shape: Shape | Mapping[str, Any] | None = None,
-    selection: SelectionPolicy | Mapping[str, Any] | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build a dataframe target spec."""
-
-    return _manual_target(
-        "dataframe",
-        id=id,
-        label=label,
-        selector=selector,
-        columns=columns,
-        shape=shape,
-        selection=selection,
-        **metadata,
-    )
-
-
-def table(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    columns: Sequence[Column | Mapping[str, Any]] = (),
-    shape: Shape | Mapping[str, Any] | None = None,
-    selection: SelectionPolicy | Mapping[str, Any] | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build a table target spec."""
-
-    return _manual_target(
-        "table",
-        id=id,
-        label=label,
-        selector=selector,
-        columns=columns,
-        shape=shape,
-        selection=selection,
-        **metadata,
-    )
-
-
-def visualization(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    chart: Any = None,
-    selection: SelectionPolicy | Mapping[str, Any] | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build a visualization target spec."""
-
-    return _manual_target(
-        "visualization",
-        id=id,
-        label=label,
-        selector=selector,
-        chart=chart,
-        selection=selection,
-        **metadata,
-    )
-
-
-def output(
-    *,
-    id: str,
-    label: str,
-    cell_id: str,
-    selector: str | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build a first-class rendered cell output target spec."""
-
-    return _manual_target(
-        "output",
-        id=id,
-        label=label,
-        selector=selector,
-        cell_id=cell_id,
-        display_cell_ids=metadata.pop("display_cell_ids", (cell_id,)),
-        **metadata,
-    )
-
-
-def media(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build an image/audio/video/PDF style target spec."""
-
-    return _manual_target("media", id=id, label=label, selector=selector, **metadata)
-
-
-def document(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build a document target spec."""
-
-    return _manual_target("document", id=id, label=label, selector=selector, **metadata)
-
-
-def ui(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build a marimo UI target spec."""
-
-    return _manual_target("ui", id=id, label=label, selector=selector, **metadata)
-
-
-def anywidget(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build an anywidget target spec."""
-
-    return _manual_target(
-        "anywidget",
-        id=id,
-        label=label,
-        selector=selector,
-        **metadata,
-    )
-
-
-def data(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build a generic data target spec."""
-
-    return _manual_target("data", id=id, label=label, selector=selector, **metadata)
-
-
-def diagnostic(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build a diagnostic output target spec."""
-
-    return _manual_target(
-        "diagnostic",
-        id=id,
-        label=label,
-        selector=selector,
-        **metadata,
-    )
-
-
-def layout(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build a layout target spec."""
-
-    return _manual_target("layout", id=id, label=label, selector=selector, **metadata)
-
-
-def object(
-    *,
-    id: str,
-    label: str,
-    selector: str | None = None,
-    **metadata: Any,
-) -> TargetMetadata:
-    """Build an object target spec."""
-
-    return _manual_target("object", id=id, label=label, selector=selector, **metadata)
-
-
-def target_dict(target: TargetLike) -> dict[str, Any]:
-    """Convert a typed target spec or internal wire target to a dictionary."""
-
-    if isinstance(target, TargetMetadata):
-        return target.to_dict()
-    return dict(target.items())
-
-
-def _manual_target(
+def create(
     kind: TargetKind | str,
     *,
     id: str,
     label: str,
     selector: str | None = None,
-    **metadata: Any,
+    selectors: Sequence[str] = (),
+    variable: str | None = None,
+    cell_id: str | None = None,
+    display_cell_ids: Sequence[str] = (),
+    related_cell_ids: Sequence[str] = (),
+    defs: Sequence[str] = (),
+    refs: Sequence[str] = (),
+    shape: Shape | Mapping[str, Any] | None = None,
+    columns: Sequence[Column | Mapping[str, Any]] = (),
+    chart: Any = None,
+    capabilities: Capabilities | Mapping[str, Any] | None = None,
+    selection: SelectionPolicy | Mapping[str, Any] | None = None,
+    selection_model: SelectionModel | Mapping[str, Any] | None = None,
+    summary: str | None = None,
+    python_type: str | None = None,
+    component: str | None = None,
+    entity: Mapping[str, Any] | None = None,
+    output: Mapping[str, Any] | None = None,
+    output_refs: Sequence[str] = (),
+    output_type: str | None = None,
+    code_preview: str | None = None,
+    extensions: Mapping[str, Any] | None = None,
 ) -> TargetMetadata:
-    selectors = list(metadata.pop("selectors", ()) or ())
+    """Build a manual target spec for any supported target kind."""
+
+    if kind == "output" and not display_cell_ids:
+        display_cell_ids = (str(cell_id),) if cell_id is not None else ()
+    selector_values = list(selectors or ())
     if selector:
-        selectors.insert(0, selector)
+        selector_values.insert(0, selector)
     return TargetMetadata(
         id=id,
         label=label,
         kind=kind,
-        selectors=tuple(dict.fromkeys(str(value) for value in selectors)),
-        **metadata,
+        variable=variable,
+        cell_id=cell_id,
+        display_cell_ids=display_cell_ids,
+        related_cell_ids=related_cell_ids,
+        defs=defs,
+        refs=refs,
+        shape=shape,
+        columns=columns,
+        chart=chart,
+        capabilities=capabilities,
+        selection=selection,
+        selection_model=selection_model,
+        summary=summary,
+        selectors=tuple(dict.fromkeys(str(value) for value in selector_values)),
+        python_type=python_type,
+        component=component,
+        entity=entity,
+        output=output,
+        output_refs=output_refs,
+        output_type=output_type,
+        code_preview=code_preview,
+        extensions=dict(extensions or {}),
     )
 
 
-def _to_mapping(value: Any) -> Any:
-    if value is None:
-        return None
-    to_dict = getattr(value, "to_dict", None)
-    if callable(to_dict):
-        return to_dict()
-    if isinstance(value, Mapping):
-        return dict(value)
-    return value
-
-
-def _set(item: dict[str, Any], key: str, value: Any) -> None:
-    if value is not None:
-        item[key] = value
-
-
-def _set_sequence(item: dict[str, Any], key: str, value: Sequence[Any]) -> None:
-    if value:
-        item[key] = [str(entry) for entry in value]
+dataframe = partial(create, "dataframe")
+table = partial(create, "table")
+visualization = partial(create, "visualization")
+output = partial(create, "output")
+media = partial(create, "media")
+document = partial(create, "document")
+ui = partial(create, "ui")
+anywidget = partial(create, "anywidget")
+data = partial(create, "data")
+diagnostic = partial(create, "diagnostic")
+layout = partial(create, "layout")
+object = partial(create, "object")
 
 
 def target(
@@ -452,6 +160,7 @@ def collect_targets(
     include: Sequence[str] | None = None,
     exclude: Sequence[str] | None = None,
     graph: Mapping[str, Any] | None = None,
+    cell_outputs: Mapping[str, Any] | None = None,
     entity_registry: EntityRegistry | None = None,
 ) -> list[dict[str, Any]]:
     """Collect JSON-safe target metadata from a namespace.
@@ -486,11 +195,13 @@ def collect_targets(
     targets.extend(
         collect_cell_output_targets(
             graph,
+            include=include,
             exclude=exclude,
+            cell_outputs=cell_outputs,
             entity_registry=entity_registry,
         )
     )
-    return targets
+    return _normalize_targets(targets)
 
 
 def collect_entity_targets(
@@ -552,12 +263,17 @@ class CellOutputEntity:
 def collect_cell_output_targets(
     graph: Mapping[str, Any],
     *,
+    include: Sequence[str] | None = None,
     exclude: Sequence[str] | None = None,
+    cell_outputs: Mapping[str, Any] | None = None,
     entity_registry: EntityRegistry | None = None,
 ) -> list[dict[str, Any]]:
     """Collect first-class targets for rendered marimo cell outputs."""
 
-    raw_outputs = _runtime_cell_outputs()
+    raw_outputs = (
+        _runtime_cell_outputs() if cell_outputs is None else dict(cell_outputs)
+    )
+    included = set(include or ())
     excluded = set(exclude or ())
     targets: list[dict[str, Any]] = []
     for raw_cell in graph.get("cells", []):
@@ -568,7 +284,18 @@ def collect_cell_output_targets(
         if not cell_id:
             continue
         target_id = f"output:{cell_id}"
-        if target_id in excluded or cell_id in excluded:
+        cell_names = _output_cell_names(cell)
+        if include is not None and not (
+            target_id in included
+            or cell_id in included
+            or cell_names.intersection(included)
+        ):
+            continue
+        if (
+            target_id in excluded
+            or cell_id in excluded
+            or cell_names.intersection(excluded)
+        ):
             continue
         value = raw_outputs.get(cell_id, cell.get("output"))
         if not _has_rendered_output(cell, value):
@@ -611,7 +338,9 @@ def _summarize_cell_output_target(
     inspection = (entity_registry or default_entity_registry()).inspect(entity)
     inspected = dict(inspection.metadata) if inspection is not None else {}
     inspected_kind = str(inspected.get("kind") or "object")
-    output_type = str(output.cell.get("outputType") or _python_type(output.value) or "")
+    output_type = str(
+        output.cell.get("outputType") or python_type_name(output.value) or ""
+    )
     label = str(inspected.get("label") or _output_label(output.cell, inspected_kind))
     columns = list(inspected.get("columns") or [])
     chart = inspected.get("chart")
@@ -634,75 +363,50 @@ def _summarize_cell_output_target(
         f'[data-cell-id="{_css_attr(output.cell_id)}"]',
     ]
     selectors.extend(str(selector) for selector in inspected.get("selectors") or [])
-    target = {
-        key: item
-        for key, item in inspected.items()
-        if key
-        not in {
-            "capabilities",
-            "cellId",
-            "chart",
-            "columns",
-            "defs",
-            "displayCellIds",
-            "id",
-            "kind",
-            "label",
-            "pythonType",
-            "refs",
-            "relatedCellIds",
-            "selectors",
-            "shape",
-            "summary",
-            "variable",
-        }
-    }
-    target.update(
-        {
-            "id": f"output:{output.cell_id}",
-            "label": label,
-            "kind": "output",
-            "cellId": output.cell_id,
-            "displayCellIds": [output.cell_id],
-            "relatedCellIds": _related_output_cell_ids(output.cell, output.graph),
-            "defs": list(output.cell.get("defs") or []),
-            "refs": list(output.cell.get("refs") or []),
-            "outputRefs": list(output.cell.get("outputRefs") or []),
-            "outputType": output_type,
-            "codePreview": str(output.cell.get("codePreview") or ""),
-            "shape": inspected.get("shape"),
-            "columns": columns,
-            "chart": chart,
-            "capabilities": capabilities,
-            "selectionPolicy": _output_selection_policy(
-                inspected.get("selectionPolicy"),
-                capabilities,
-            ),
-            "summary": _inspected_output_summary(
+    return _jsonable(
+        build_target_payload(
+            id=f"output:{output.cell_id}",
+            label=label,
+            kind="output",
+            cell_id=output.cell_id,
+            display_cell_ids=(output.cell_id,),
+            related_cell_ids=_related_output_cell_ids(output.cell, output.graph),
+            defs=[str(item) for item in output.cell.get("defs") or []],
+            refs=[str(item) for item in output.cell.get("refs") or []],
+            output_refs=[str(item) for item in output.cell.get("outputRefs") or []],
+            output_type=output_type,
+            code_preview=str(output.cell.get("codePreview") or ""),
+            shape=inspected.get("shape"),
+            columns=columns,
+            chart=chart,
+            capabilities=capabilities,
+            selection_model=_optional_mapping(inspected.get("selectionModel")),
+            selection_policy=_optional_mapping(inspected.get("selectionPolicy")),
+            summary=_inspected_output_summary(
                 output.cell,
                 output_type,
                 inspected,
                 inspected_kind,
                 output.value,
             ),
-            "selectors": list(dict.fromkeys(selectors)),
-            "pythonType": _python_type(output.value) or output_type,
-            "entity": {
+            selectors=selectors,
+            python_type=python_type_name(output.value) or output_type,
+            entity={
                 "inspector": inspection.inspector_id
                 if inspection is not None
                 else "output",
-                "family": inspected.get("family") or inspected_kind,
+                "family": target_family(inspected, inspected_kind),
                 "source": "cell-output",
             },
-            "output": {
+            output={
                 "kind": inspected_kind,
                 "type": output_type,
                 "cellId": output.cell_id,
                 "codePreview": str(output.cell.get("codePreview") or ""),
             },
-        }
+            extensions=target_extensions(inspected),
+        )
     )
-    return target
 
 
 def _runtime_cell_outputs() -> dict[str, Any]:
@@ -733,6 +437,15 @@ def _has_rendered_output(cell: Mapping[str, Any], value: Any) -> bool:
 def _defines_only_internal_names(cell: Mapping[str, Any]) -> bool:
     defs = [str(name) for name in cell.get("defs") or []]
     return bool(defs) and all(_is_internal_name(name) for name in defs)
+
+
+def _output_cell_names(cell: Mapping[str, Any]) -> set[str]:
+    return {
+        str(name)
+        for key in ("defs", "refs", "outputRefs")
+        for name in (cell.get(key) or [])
+        if str(name)
+    }
 
 
 def _related_output_cell_ids(
@@ -784,53 +497,8 @@ def _inspected_output_summary(
     return _output_summary(cell, output_type)
 
 
-def _output_selection_policy(
-    value: Any,
-    capabilities: Mapping[str, bool],
-) -> dict[str, Any]:
-    policy = value if isinstance(value, Mapping) else {}
-    raw_prefer = policy.get("prefer") or []
-    prefer = [str(surface) for surface in raw_prefer if str(surface)]
-    if not prefer:
-        if capabilities.get("columnarGrid"):
-            prefer.append("columnar-grid")
-        if capabilities.get("columnarDom"):
-            prefer.append("columnar-dom")
-        if capabilities.get("chartPart"):
-            prefer.append("chart-unit")
-        if capabilities.get("visualSurface"):
-            prefer.append("visual-surface")
-        if capabilities.get("media"):
-            prefer.append("media")
-        if capabilities.get("document"):
-            prefer.append("document")
-        if capabilities.get("interactive"):
-            prefer.append("interactive")
-    prefer = _with_before_selector(prefer, "display-cell")
-    prefer.append("selector")
-    raw_context = policy.get("context")
-    context = (
-        {str(key): value for key, value in raw_context.items()}
-        if isinstance(raw_context, Mapping)
-        else {}
-    )
-    return {"prefer": list(dict.fromkeys(prefer)), "context": context}
-
-
-def _with_before_selector(prefer: list[str], surface: str) -> list[str]:
-    if surface in prefer:
-        return prefer
-    try:
-        selector_index = prefer.index("selector")
-    except ValueError:
-        return [*prefer, surface]
-    return [*prefer[:selector_index], surface, *prefer[selector_index:]]
-
-
-def _python_type(value: Any) -> str:
-    if value is None:
-        return ""
-    return type(value).__module__ + "." + type(value).__qualname__
+def _optional_mapping(value: Any) -> dict[str, Any] | None:
+    return dict(value) if isinstance(value, Mapping) else None
 
 
 __all__ = [
@@ -841,11 +509,11 @@ __all__ = [
     "TargetKind",
     "TargetLike",
     "TargetMetadata",
-    "TargetSpec",
     "anywidget",
     "collect_cell_output_targets",
     "collect_entity_targets",
     "collect_targets",
+    "create",
     "data",
     "dataframe",
     "diagnostic",

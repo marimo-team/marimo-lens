@@ -10,16 +10,29 @@ import anywidget
 import traitlets
 
 from ._marimo_runtime import (
-    anywidget_state as _anywidget_state,
     marimo_component,
     runtime_context as _runtime_context,
     runtime_globals as _runtime_globals,
 )
+from ._runtime_value_metadata import (
+    control_summary as _control_summary,
+    control_value as _control_value,
+    safe_anywidget_state as _safe_anywidget_state,
+    safe_trait_state as _safe_trait_state,
+)
 from ._serialization import (
-    MAX_VALUE_ITEMS as _MAX_VALUE_ITEMS,
     jsonable as _jsonable,
-    preview as _preview,
     safe_value as _safe_value,
+)
+from ._target_payload import (
+    CAPABILITY_SELECTION_SURFACES,
+    TARGET_KIND_PRIORITY,
+    build_target_payload,
+    css_attr as _css_attr,
+    ordered_unique,
+    python_type_name,
+    target_extensions,
+    target_family,
 )
 from .inspectors import (
     EntityRegistry,
@@ -27,56 +40,21 @@ from .inspectors import (
     default_entity_registry,
     entity_kind,
 )
+from .selection import column as _selection_column
+from .selection import unit as _selection_unit
+from .selection import unsupported_cell as _unsupported_cell
+from ._contract import (
+    CAPABILITY_KEYS as _VALID_CAPABILITY_KEYS,
+    CHART_PART_KINDS as _VALID_CHART_PART_KINDS,
+    SELECTION_GRANULARITIES as _VALID_SELECTION_GRANULARITIES,
+    SELECTION_SURFACES as _VALID_SELECTION_SURFACES,
+    TARGET_CONTRACT_KEYS as _TARGET_CONTRACT_KEYS,
+    TARGET_KINDS as _VALID_TARGET_KINDS,
+)
 from .inspectors._capabilities import target_capabilities as _target_capabilities
 
 _INTERNAL_NAMES = {"mo", "app", "Lens", "target", "lens"}
 _LENS_WIDGET_MARKER = "_marimo_lens_widget"
-_VALID_TARGET_KINDS = {
-    "anywidget",
-    "data",
-    "dataframe",
-    "diagnostic",
-    "document",
-    "layout",
-    "media",
-    "object",
-    "output",
-    "table",
-    "ui",
-    "visualization",
-}
-_VALID_CAPABILITY_KEYS = (
-    "columnarDom",
-    "columnarGrid",
-    "data",
-    "diagnostic",
-    "document",
-    "interactive",
-    "chartPart",
-    "media",
-    "visualSurface",
-)
-_VALID_SELECTION_SURFACES = {
-    "chart-unit",
-    "columnar-dom",
-    "columnar-grid",
-    "display-cell",
-    "document",
-    "interactive",
-    "marked",
-    "media",
-    "selector",
-    "visual-surface",
-}
-_VALID_CHART_PART_KINDS = {
-    "annotation",
-    "axis",
-    "legend",
-    "mark",
-    "plot-area",
-    "title",
-    "trace",
-}
 
 
 def _summarize_ui_element(
@@ -94,11 +72,11 @@ def _summarize_ui_element(
         "name": name,
         "kind": "anywidget" if widget is not None else "ui",
         "component": component_name,
-        "pythonType": type(value).__module__ + "." + type(value).__qualname__,
+        "pythonType": python_type_name(value),
         "cellIds": list(definitions.get(name, [])),
         "elementId": component.element_id,
         "label": label,
-        "value": _control_value(value, component_name, component_args, name, label),
+        "value": _control_value(value, component_name),
         "initialValue": _safe_value(getattr(value, "_initial_value", None)),
         "frontendValue": _safe_value(getattr(value, "_value_frontend", None)),
         "args": _safe_value(component_args),
@@ -131,7 +109,7 @@ def _summarize_anywidget(
         {
             "name": name,
             "kind": "anywidget",
-            "pythonType": type(widget).__module__ + "." + type(widget).__qualname__,
+            "pythonType": python_type_name(widget),
             "cellIds": list(definitions.get(name, [])),
             "modelId": str(getattr(widget, "_model_id", "") or ""),
             "traits": sorted(state.keys()),
@@ -151,109 +129,13 @@ def _summarize_traitlets_object(
         {
             "name": name,
             "kind": "traitlets",
-            "pythonType": type(value).__module__ + "." + type(value).__qualname__,
+            "pythonType": python_type_name(value),
             "cellIds": list(definitions.get(name, [])),
             "traits": sorted(traits.keys()),
             "state": traits,
             "summary": f"{name}: {type(value).__name__} with {len(traits)} traits",
         }
     )
-
-
-def _control_value(
-    value: Any,
-    component_name: str,
-    component_args: Mapping[str, Any],
-    name: str = "",
-    label: str = "",
-) -> Any:
-    _ = (component_args, name, label)
-    if "file" in component_name:
-        return _summarize_file_value(_read_value(value))
-    return _safe_value(_read_value(value))
-
-
-def _read_value(value: Any) -> Any:
-    try:
-        return getattr(value, "value")
-    except Exception as exc:
-        return {"unavailable": f"{type(exc).__name__}: {exc}"}
-
-
-def _summarize_file_value(value: Any) -> Any:
-    if value is None:
-        return None
-    files = value if isinstance(value, list) else [value]
-    result = []
-    for item in files[:_MAX_VALUE_ITEMS]:
-        result.append(
-            {
-                "name": _safe_value(getattr(item, "name", None)),
-                "size": _safe_value(getattr(item, "size", None)),
-                "type": _safe_value(getattr(item, "type", None)),
-            }
-            if not isinstance(item, Mapping)
-            else {
-                "name": _safe_value(item.get("name")),
-                "size": _safe_value(item.get("size")),
-                "type": _safe_value(item.get("type")),
-            }
-        )
-    return result
-
-
-def _safe_anywidget_state(widget: anywidget.AnyWidget) -> dict[str, Any]:
-    try:
-        state = _anywidget_state(widget)
-    except Exception as exc:
-        return {"unavailable": f"{type(exc).__name__}: {exc}"}
-    result: dict[str, Any] = {}
-    for key, value in state.items():
-        if _is_private_or_system_trait(key):
-            continue
-        result[str(key)] = _safe_value(value, key=key)
-        if len(result) >= _MAX_VALUE_ITEMS:
-            break
-    return result
-
-
-def _safe_trait_state(value: traitlets.HasTraits) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key in sorted(value.traits().keys()):
-        if _is_private_or_system_trait(key):
-            continue
-        try:
-            result[key] = _safe_value(getattr(value, key), key=key)
-        except Exception as exc:
-            result[key] = {"unavailable": f"{type(exc).__name__}: {exc}"}
-        if len(result) >= _MAX_VALUE_ITEMS:
-            break
-    return result
-
-
-def _is_private_or_system_trait(name: str) -> bool:
-    return name.startswith("_") or name in {
-        "comm",
-        "layout",
-        "log",
-        "style",
-        "keys",
-        "tabbable",
-        "tooltip",
-    }
-
-
-def _control_summary(
-    name: str,
-    value: Any,
-    component_name: str,
-    component_args: Mapping[str, Any],
-    label: str = "",
-) -> str:
-    current_value = _control_value(value, component_name, component_args, name, label)
-    if isinstance(current_value, Mapping) and "unavailable" in current_value:
-        return f"{name}: {component_name or type(value).__name__} value unavailable"
-    return f"{name}: {component_name or type(value).__name__} = {_preview(repr(current_value), 120)}"
 
 
 def _is_lens_widget(value: Any) -> bool:
@@ -279,13 +161,21 @@ def _normalize_targets(
         if kind not in _VALID_TARGET_KINDS:
             valid = ", ".join(sorted(_VALID_TARGET_KINDS))
             raise ValueError(f"Lens manual target kind must be one of: {valid}")
-        normalized.append(_normalize_target_contract(item))
+        normalized.append(_jsonable(_normalize_target_contract(item)))
     return normalized
 
 
 def _normalize_target_contract(item: dict[str, Any]) -> dict[str, Any]:
+    item = dict(item)
+    unknown = sorted(set(map(str, item.keys())) - set(_TARGET_CONTRACT_KEYS))
+    if unknown:
+        valid = ", ".join(_TARGET_CONTRACT_KEYS)
+        raise ValueError(
+            f"Lens target contains unknown keys: {', '.join(unknown)}. "
+            f"Use extensions for custom metadata. Valid keys: {valid}"
+        )
     kind = str(item["kind"])
-    target_columns = list(item.get("columns") or [])
+    target_columns = _normalize_columns(item.get("columns") or ())
     capabilities = _normalize_capabilities(
         item.get("capabilities"),
         kind=kind,
@@ -301,6 +191,10 @@ def _normalize_target_contract(item: dict[str, Any]) -> dict[str, Any]:
     chart = item.get("chart")
     if chart is not None:
         item["chart"] = _normalize_chart_metadata(chart)
+    if item.get("entity") is not None:
+        item["entity"] = _normalize_entity_metadata(item["entity"], kind=kind)
+    if item.get("output") is not None:
+        item["output"] = _normalize_output_metadata(item["output"], item=item)
     item["selectionModel"] = _normalize_selection_model(
         item.get("selectionModel"),
         kind=kind,
@@ -308,6 +202,67 @@ def _normalize_target_contract(item: dict[str, Any]) -> dict[str, Any]:
         chart=item.get("chart"),
     )
     return item
+
+
+def _normalize_entity_metadata(value: Any, *, kind: str) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        raise ValueError("Lens target entity must be a mapping")
+    inspector = str(value.get("inspector") or "")
+    if not inspector:
+        raise ValueError("Lens target entity requires inspector")
+    entity: dict[str, str] = {
+        "inspector": inspector,
+        "family": str(value.get("family") or kind),
+    }
+    if value.get("source") is not None:
+        entity["source"] = str(value["source"])
+    return entity
+
+
+def _normalize_output_metadata(value: Any, *, item: dict[str, Any]) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        raise ValueError("Lens target output must be a mapping")
+    allowed = {"cellId", "codePreview", "kind", "type"}
+    output = {
+        str(key): str(raw)
+        for key, raw in value.items()
+        if raw is not None and str(key) in allowed
+    }
+    unknown = {
+        str(key): raw
+        for key, raw in value.items()
+        if raw is not None and str(key) not in allowed
+    }
+    if unknown:
+        extensions = item.get("extensions")
+        item["extensions"] = {
+            **(dict(extensions) if isinstance(extensions, Mapping) else {}),
+            "output": _safe_value(unknown),
+        }
+    return output
+
+
+def _normalize_columns(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise ValueError("Lens target columns must be a sequence")
+    columns: list[dict[str, Any]] = []
+    for index, raw_column in enumerate(value):
+        to_dict = getattr(raw_column, "to_dict", None)
+        column = to_dict() if callable(to_dict) else raw_column
+        if not isinstance(column, Mapping):
+            raise ValueError(f"Lens target column {index} must be a mapping")
+        column = dict(column)
+        name = str(column.get("name") or "")
+        if not name:
+            raise ValueError(f"Lens target column {index} requires name")
+        item: dict[str, Any] = {"name": name}
+        if column.get("dtype") is not None:
+            item["dtype"] = str(column["dtype"])
+        metadata = column.get("metadata")
+        if isinstance(metadata, Mapping) and metadata:
+            item["metadata"] = dict(metadata)
+        columns.append(item)
+    return columns
 
 
 def _normalize_capabilities(
@@ -329,7 +284,7 @@ def _normalize_capabilities(
             f"Valid keys: {valid}"
         )
     return {
-        key: bool(value.get(key, defaults.get(key, False)))
+        key: bool(value[key]) if key in value else bool(defaults.get(key, False))
         for key in _VALID_CAPABILITY_KEYS
     }
 
@@ -340,59 +295,72 @@ def _normalize_selection_policy(
     kind: str,
     capabilities: Mapping[str, bool],
 ) -> dict[str, Any]:
-    if value is None:
-        prefer = _default_selection_surfaces(kind, capabilities)
-        context: Mapping[str, Any] = {}
-    else:
-        if not isinstance(value, Mapping):
-            raise ValueError("Lens target selectionPolicy must be a mapping")
-        raw_prefer = value.get("prefer")
-        if raw_prefer is None:
-            prefer = _default_selection_surfaces(kind, capabilities)
-        else:
-            if isinstance(raw_prefer, str) or not isinstance(raw_prefer, Sequence):
-                raise ValueError(
-                    "Lens target selectionPolicy.prefer must be a sequence"
-                )
-            prefer = [str(surface) for surface in raw_prefer if str(surface)]
-        raw_context = value.get("context") or {}
-        if not isinstance(raw_context, Mapping):
-            raise ValueError("Lens target selectionPolicy.context must be a mapping")
-        context = raw_context
-    unknown = sorted(set(prefer) - _VALID_SELECTION_SURFACES)
+    policy = _parse_selection_policy(value, kind=kind, capabilities=capabilities)
+    prefer = _augmented_selection_surfaces(
+        policy["prefer"],
+        kind=kind,
+        capabilities=capabilities,
+    )
+    context = policy["context"]
+    unknown = sorted(set(prefer) - set(_VALID_SELECTION_SURFACES))
     if unknown:
         valid = ", ".join(sorted(_VALID_SELECTION_SURFACES))
         raise ValueError(
             f"Lens target selectionPolicy.prefer contains unknown surfaces: "
             f"{', '.join(unknown)}. Valid surfaces: {valid}"
         )
-    if capabilities.get("interactive") and "interactive" not in prefer:
-        prefer.append("interactive")
+    return {"prefer": ordered_unique(prefer), "context": dict(context)}
+
+
+def _parse_selection_policy(
+    value: Any,
+    *,
+    kind: str,
+    capabilities: Mapping[str, bool],
+) -> dict[str, Any]:
+    if value is None:
+        return {
+            "prefer": _default_selection_surfaces(kind, capabilities),
+            "context": {},
+        }
+    if not isinstance(value, Mapping):
+        raise ValueError("Lens target selectionPolicy must be a mapping")
+    raw_prefer = value.get("prefer")
+    prefer = (
+        _default_selection_surfaces(kind, capabilities)
+        if raw_prefer is None
+        else _string_sequence(raw_prefer, "Lens target selectionPolicy.prefer")
+    )
+    raw_context = value.get("context") or {}
+    if not isinstance(raw_context, Mapping):
+        raise ValueError("Lens target selectionPolicy.context must be a mapping")
+    return {"prefer": prefer, "context": dict(raw_context)}
+
+
+def _augmented_selection_surfaces(
+    prefer: Sequence[str],
+    *,
+    kind: str,
+    capabilities: Mapping[str, bool],
+) -> list[str]:
+    surfaces = list(prefer)
+    if capabilities.get("interactive"):
+        surfaces.append("interactive")
     if kind == "output":
-        prefer = _with_before_selector(prefer, "display-cell")
-    prefer.append("selector")
-    return {"prefer": list(dict.fromkeys(prefer)), "context": dict(context)}
+        surfaces = _with_before_selector(surfaces, "display-cell")
+    surfaces.append("selector")
+    return surfaces
 
 
 def _default_selection_surfaces(
     kind: str,
     capabilities: Mapping[str, bool],
 ) -> list[str]:
-    surfaces: list[str] = []
-    if capabilities.get("columnarGrid"):
-        surfaces.append("columnar-grid")
-    if capabilities.get("columnarDom"):
-        surfaces.append("columnar-dom")
-    if capabilities.get("chartPart"):
-        surfaces.append("chart-unit")
-    if capabilities.get("visualSurface"):
-        surfaces.append("visual-surface")
-    if capabilities.get("media"):
-        surfaces.append("media")
-    if capabilities.get("document"):
-        surfaces.append("document")
-    if capabilities.get("interactive"):
-        surfaces.append("interactive")
+    surfaces = [
+        surface
+        for capability, surface in CAPABILITY_SELECTION_SURFACES
+        if capabilities.get(capability)
+    ]
     if kind == "output":
         surfaces.append("display-cell")
     return surfaces
@@ -418,6 +386,9 @@ def _normalize_selection_model(
     default = _default_selection_model(kind=kind, columns=columns, chart=chart)
     if value is None:
         return default
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        value = to_dict()
     if not isinstance(value, Mapping):
         raise ValueError("Lens target selectionModel must be a mapping")
     raw_units = value.get("units", default["units"])
@@ -435,30 +406,100 @@ def _normalize_selection_model(
 
 
 def _normalize_selection_model_unit(value: Any, index: int) -> dict[str, Any]:
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        value = to_dict()
     if not isinstance(value, Mapping):
         raise ValueError(f"Lens target selectionModel unit {index} must be a mapping")
-    unit = dict(value)
-    kind = str(unit.get("kind") or "")
+    kind = str(value.get("kind") or "")
     if not kind:
         raise ValueError(f"Lens target selectionModel unit {index} requires kind")
-    unit["kind"] = kind
-    unit["id"] = str(unit.get("id") or kind)
-    unit["label"] = str(unit.get("label") or kind)
-    for key in ("requires", "selectors", "fallbackFor"):
-        raw = unit.get(key) or []
-        if isinstance(raw, str) or not isinstance(raw, Sequence):
+    data = _mapping_or_empty(
+        value.get("data"),
+        f"Lens target selectionModel unit {index}.data",
+    )
+    raw_match = value.get("match")
+    match = _mapping_or_empty(
+        raw_match,
+        f"Lens target selectionModel unit {index}.match",
+    )
+    unit = {
+        "kind": kind,
+        "id": str(value.get("id") or kind),
+        "label": str(value.get("label") or kind),
+        "requires": _string_sequence(
+            value.get("requires") or (),
+            f"Lens target selectionModel unit {index}.requires",
+        ),
+        "selectors": _string_sequence(
+            value.get("selectors") or (),
+            f"Lens target selectionModel unit {index}.selectors",
+        ),
+        "fallbackFor": _string_sequence(
+            value.get("fallbackFor") or (),
+            f"Lens target selectionModel unit {index}.fallbackFor",
+        ),
+        "supported": bool(value.get("supported", True)),
+        "match": dict(match),
+        "data": data,
+    }
+    granularity = _selection_granularity(
+        value.get("granularity"),
+        f"Lens target selectionModel unit {index}.granularity",
+    )
+    if granularity is not None:
+        unit["granularity"] = granularity
+    if value.get("parentId"):
+        unit["parentId"] = str(value["parentId"])
+    if raw_match is None:
+        unit["match"] = _inferred_unit_match(unit)
+    priority = value.get("priority")
+    if priority is not None:
+        if not isinstance(priority, int):
             raise ValueError(
-                f"Lens target selectionModel unit {index}.{key} must be a sequence"
+                f"Lens target selectionModel unit {index}.priority must be an int"
             )
-        unit[key] = [str(item) for item in raw if str(item)]
-    unit["supported"] = bool(unit.get("supported", True))
+        unit["priority"] = priority
+    return unit
+
+
+def _string_sequence(value: Any, label: str) -> list[str]:
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise ValueError(f"{label} must be a sequence")
+    return [str(item) for item in value if str(item)]
+
+
+def _mapping_or_empty(value: Any, label: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValueError(f"{label} must be a mapping")
+    return dict(value)
+
+
+def _selection_granularity(value: Any, label: str) -> str | None:
+    if value is None:
+        return None
+    granularity = str(value)
+    if granularity in _VALID_SELECTION_GRANULARITIES:
+        return granularity
+    valid = ", ".join(sorted(_VALID_SELECTION_GRANULARITIES))
+    raise ValueError(f"{label} must be one of: {valid}")
+
+
+def _inferred_unit_match(unit: Mapping[str, Any]) -> dict[str, Any]:
+    """Infer resolver hints from common unit payloads when omitted."""
+
     data = unit.get("data") or {}
     if not isinstance(data, Mapping):
-        raise ValueError(
-            f"Lens target selectionModel unit {index}.data must be a mapping"
-        )
-    unit["data"] = dict(data)
-    return unit
+        return {}
+    match: dict[str, Any] = {}
+    if data.get("column") is not None:
+        match["column"] = data["column"]
+    chart_part = data.get("chartPart")
+    if isinstance(chart_part, Mapping):
+        match.update(_chart_part_match(chart_part))
+    return match
 
 
 def _default_selection_model(
@@ -472,66 +513,34 @@ def _default_selection_model(
         name = str(column.get("name") or "")
         if not name:
             continue
-        data = {"column": name}
         dtype = column.get("dtype")
-        if dtype is not None:
-            data["columnDtype"] = str(dtype)
         units.append(
-            {
-                "kind": "column",
-                "id": f"col:{name}",
-                "label": name,
-                "selectors": [],
-                "fallbackFor": [
-                    "cell",
-                    "summary-stat",
-                    "dtype-label",
-                    "body-cell",
-                    "grid-cell",
-                ],
-                "requires": [],
-                "supported": True,
-                "data": data,
-            }
+            _selection_column(name, dtype=str(dtype) if dtype else None).to_dict()
         )
     if columns:
-        units.append(
-            {
-                "kind": "cell",
-                "id": "cell",
-                "label": "cell",
-                "requires": ["rowId", "column"],
-                "selectors": [],
-                "fallbackFor": [],
-                "supported": False,
-                "data": {},
-            }
-        )
+        units.append(_unsupported_cell().to_dict())
 
-    chart_units = _default_chart_selection_units(chart)
-    units.extend(chart_units)
+    chart_part_units = _default_chart_part_selection_units(chart)
+    units.extend(chart_part_units)
     if not units:
         units.append(
-            {
-                "kind": "target",
-                "id": f"target:{kind}",
-                "label": kind,
-                "requires": [],
-                "selectors": [],
-                "fallbackFor": ["surface"],
-                "supported": True,
-                "data": {},
-            }
+            _selection_unit(
+                "target",
+                id=f"target:{kind}",
+                label=kind,
+                granularity="target",
+                fallback_for=("surface",),
+            ).to_dict()
         )
     return {
         "units": units,
         "defaultFallback": "column"
         if columns
-        else ("mark" if chart_units else "target"),
+        else ("mark" if chart_part_units else "target"),
     }
 
 
-def _default_chart_selection_units(
+def _default_chart_part_selection_units(
     chart: Mapping[str, Any] | None,
 ) -> list[dict[str, Any]]:
     if not isinstance(chart, Mapping):
@@ -541,43 +550,107 @@ def _default_chart_selection_units(
         if not isinstance(part, Mapping):
             continue
         part_kind = str(part.get("kind") or "")
-        label = str(part.get("label") or part_kind or f"chart unit {index + 1}")
+        label = str(part.get("label") or part_kind or f"chart part {index + 1}")
         if not part_kind:
             continue
         units.append(
-            {
-                "kind": part_kind,
-                "id": str(part.get("id") or f"chart:{part_kind}:{index}"),
-                "label": label,
-                "requires": [],
-                "selectors": [str(part["selector"])] if part.get("selector") else [],
-                "fallbackFor": [],
-                "supported": True,
-                "data": {"chartPart": dict(part)},
-            }
+            _selection_unit(
+                part_kind,
+                id=str(part.get("id") or f"chart:{part_kind}:{index}"),
+                label=label,
+                granularity=_chart_part_granularity(part_kind, part),
+                selectors=(str(part["selector"]),) if part.get("selector") else (),
+                match=_chart_part_match(part),
+                data={"chartPart": dict(part)},
+            ).to_dict()
         )
     return units
+
+
+def _chart_part_granularity(
+    part_kind: str,
+    part: Mapping[str, Any],
+) -> str:
+    if part.get("datum"):
+        return "datum"
+    if part_kind in {"mark", "trace"}:
+        return "item"
+    if part_kind in {"axis", "legend"}:
+        return "group"
+    return "surface"
+
+
+def _chart_part_match(part: Mapping[str, Any]) -> dict[str, Any]:
+    match: dict[str, Any] = {"chartKind": str(part.get("kind") or "")}
+    for key in ("channel", "field", "id", "label", "library", "orientation"):
+        value = part.get(key)
+        if value is not None:
+            match[key] = value
+    return match
 
 
 def _normalize_chart_metadata(value: Any) -> dict[str, Any]:
     if not isinstance(value, Mapping):
         raise ValueError("Lens target chart metadata must be a mapping")
-    chart = dict(value)
+    chart = {str(key): item for key, item in value.items() if item is not None}
+    _move_unknown_keys_to_extensions(
+        chart,
+        {
+            "axesCount",
+            "encoding",
+            "extensions",
+            "library",
+            "mark",
+            "parts",
+            "renderer",
+            "traceCount",
+        },
+    )
     parts = chart.get("parts") or []
     if isinstance(parts, str) or not isinstance(parts, Sequence):
         raise ValueError("Lens target chart.parts must be a sequence")
     normalized_parts: list[dict[str, Any]] = []
     for index, raw_part in enumerate(parts):
         if not isinstance(raw_part, Mapping):
-            raise ValueError(f"Lens target chart unit {index} must be a mapping")
-        part = dict(raw_part)
+            raise ValueError(f"Lens target chart part {index} must be a mapping")
+        part = {str(key): item for key, item in raw_part.items() if item is not None}
+        _move_unknown_keys_to_extensions(
+            part,
+            {
+                "channel",
+                "context",
+                "datum",
+                "detail",
+                "extensions",
+                "field",
+                "id",
+                "kind",
+                "label",
+                "library",
+                "orientation",
+                "selector",
+            },
+        )
         kind = str(part.get("kind") or "")
         if kind not in _VALID_CHART_PART_KINDS:
             valid = ", ".join(sorted(_VALID_CHART_PART_KINDS))
-            raise ValueError(f"Lens target chart unit kind must be one of: {valid}")
+            raise ValueError(f"Lens target chart part kind must be one of: {valid}")
+        if not str(part.get("label") or ""):
+            raise ValueError("Lens target chart part requires label")
         normalized_parts.append(part)
     chart["parts"] = normalized_parts
     return chart
+
+
+def _move_unknown_keys_to_extensions(item: dict[str, Any], allowed: set[str]) -> None:
+    unknown = {key: item.pop(key) for key in sorted(set(item) - allowed)}
+    if not unknown:
+        return
+    extensions = item.get("extensions")
+    item["extensions"] = {
+        **(dict(extensions) if isinstance(extensions, Mapping) else {}),
+        **unknown,
+    }
 
 
 def _caller_namespace(skip: int = 2) -> dict[str, Any]:
@@ -645,54 +718,38 @@ def _summarize_target(
     selectors.extend(f'[id="output-{cell_id}"]' for cell_id in display_ids)
     selectors.extend(str(selector) for selector in inspected.get("selectors") or [])
 
-    target = {
-        key: item
-        for key, item in inspected.items()
-        if key
-        not in {
-            "capabilities",
-            "cellId",
-            "chart",
-            "columns",
-            "defs",
-            "displayCellIds",
-            "id",
-            "kind",
-            "label",
-            "pythonType",
-            "refs",
-            "relatedCellIds",
-            "selectors",
-            "shape",
-            "summary",
-            "variable",
-        }
-    }
-    target.update(
-        {
-            "id": target_id,
-            "variable": name,
-            "label": str(inspected.get("label") or name),
-            "kind": kind,
-            "cellId": cell_id,
-            "displayCellIds": display_ids,
-            "relatedCellIds": related_ids,
-            "defs": cell.get("defs", []) if cell else [name],
-            "refs": cell.get("refs", []) if cell else [],
-            "shape": shape,
-            "columns": columns,
-            "chart": chart,
-            "capabilities": capabilities,
-            "summary": inspected.get("summary") or f"{name}: {type(value).__name__}",
-            "selectors": list(dict.fromkeys(selectors)),
-            "pythonType": type(value).__module__ + "." + type(value).__qualname__,
-            "entity": {
+    return _jsonable(
+        build_target_payload(
+            id=target_id,
+            variable=name,
+            label=str(inspected.get("label") or name),
+            kind=kind,
+            cell_id=cell_id,
+            display_cell_ids=display_ids,
+            related_cell_ids=related_ids,
+            defs=cell.get("defs", []) if cell else [name],
+            refs=cell.get("refs", []) if cell else [],
+            shape=shape,
+            columns=columns,
+            chart=chart,
+            capabilities=capabilities,
+            summary=str(inspected.get("summary") or f"{name}: {type(value).__name__}"),
+            selectors=selectors,
+            python_type=python_type_name(value),
+            component=_optional_string(inspected.get("component")),
+            entity={
                 "inspector": inspection.inspector_id,
-                "family": inspected.get("family") or kind,
+                "family": target_family(inspected, kind),
             },
-        }
+            output=_optional_mapping(inspected.get("output")),
+            output_refs=[str(ref) for ref in inspected.get("outputRefs") or []],
+            output_type=_optional_string(inspected.get("outputType")),
+            code_preview=_optional_string(inspected.get("codePreview")),
+            selection_model=_optional_mapping(inspected.get("selectionModel")),
+            selection_policy=_optional_mapping(inspected.get("selectionPolicy")),
+            extensions=target_extensions(inspected),
+        )
     )
-    return _jsonable(target)
 
 
 def _display_cell_ids(
@@ -705,8 +762,18 @@ def _display_cell_ids(
         str(cell["id"])
         for cell in graph.get("cells", [])
         if name in cell.get("outputRefs", [])
+        or _is_single_ref_output_expression(name, cell)
     ]
     return list(dict.fromkeys(ids))
+
+
+def _is_single_ref_output_expression(name: str, cell: Mapping[str, Any]) -> bool:
+    if not bool(cell.get("hasOutputExpression", False)):
+        return False
+    if cell.get("defs"):
+        return False
+    refs = [str(ref) for ref in cell.get("refs") or []]
+    return refs == [name]
 
 
 def _related_cell_ids(
@@ -765,19 +832,7 @@ def _auto_include(
         if kind == "object":
             continue
         defined_in_graph = 0 if name in definitions else 1
-        priority = {
-            "dataframe": 0,
-            "table": 1,
-            "visualization": 2,
-            "data": 3,
-            "document": 4,
-            "media": 5,
-            "layout": 6,
-            "diagnostic": 7,
-            "anywidget": 8,
-            "ui": 9,
-            "object": 10,
-        }.get(kind, 12)
+        priority = TARGET_KIND_PRIORITY.get(kind, 12)
         names.append((defined_in_graph, priority, name))
     return [name for _, _, name in sorted(names)]
 
@@ -834,7 +889,7 @@ def _global_summary(
         {
             "name": name,
             "kind": kind,
-            "pythonType": type(value).__module__ + "." + type(value).__qualname__,
+            "pythonType": python_type_name(value),
             "cellIds": definition_ids,
             "shape": shape,
             "columns": columns[:20],
@@ -846,6 +901,14 @@ def _global_summary(
             },
         }
     )
+
+
+def _optional_mapping(value: Any) -> dict[str, Any] | None:
+    return dict(value) if isinstance(value, Mapping) else None
+
+
+def _optional_string(value: Any) -> str | None:
+    return str(value) if value is not None else None
 
 
 def _is_internal_name(name: str) -> bool:
@@ -864,7 +927,3 @@ def _is_internal_value(name: str, value: Any) -> bool:
 
 def _infer_kind(value: Any) -> str:
     return entity_kind(value)
-
-
-def _css_attr(value: str) -> str:
-    return value.replace("\\", "\\\\").replace('"', '\\"')

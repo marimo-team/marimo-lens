@@ -87,6 +87,12 @@ def test_focus_command_requires_cell_id() -> None:
     assert command["kind"] == "focus-cell"
     assert command["cellId"] == "cell-a"
     assert command["reason"] == "Review edited output"
+    assert command["provenance"] == {
+        "origin": "agent",
+        "source": "marimo-pair",
+        "protocol": "marimo-lens.agent-activity",
+        "version": 1,
+    }
 
     with pytest.raises(ValueError, match="requires a cell id"):
         build_focus_command("")
@@ -143,7 +149,7 @@ def test_lens_agent_activity_records_cell_marks_and_pair_result() -> None:
     assert lens.pair_result["summary"]["cellsEdited"] == 1
 
 
-def test_lens_resolve_annotation_hides_terminal_marker_and_links_activity() -> None:
+def test_lens_resolve_annotation_keeps_canonical_annotation_log() -> None:
     annotation = {
         "id": "ml-123",
         "targetId": "manual:thing",
@@ -170,7 +176,7 @@ def test_lens_resolve_annotation_hides_terminal_marker_and_links_activity() -> N
         note="Updated the cell and reran the chart.",
     )
 
-    assert lens.annotations == []
+    assert lens.annotations == [annotation]
     assert activity["kind"] == "annotation-status"
     assert activity["annotationIds"] == ["ml-123"]
     assert activity["status"] == "addressed"

@@ -3,36 +3,8 @@ from __future__ import annotations
 from marimo_lens.inspectors import ChartInspector, default_entity_registry
 from marimo_lens.targets import collect_targets
 
+from tests.support.graph_fixtures import cell, notebook_graph, sales_graph
 from tests.support.sample_entities import CustomChart, CustomChartAdapter, FrameLike
-
-
-def _graph(*, display_sales: bool = False) -> dict[str, object]:
-    return {
-        "available": True,
-        "cells": [
-            {
-                "id": "cell-data",
-                "defs": ["sales"],
-                "refs": ["pd"],
-                "outputRefs": [],
-                "codePreview": "sales = pd.DataFrame(...)",
-            },
-            {
-                "id": "cell-view",
-                "defs": ["view"],
-                "refs": ["sales"],
-                "outputRefs": ["sales"] if display_sales else [],
-                "outputType": "tests.support.sample_entities.FrameLike"
-                if display_sales
-                else "",
-                "codePreview": "view = mo.ui.table(sales)",
-            },
-        ],
-        "definitions": {"sales": ["cell-data"], "view": ["cell-view"]},
-        "edges": [{"from": "cell-data", "to": "cell-view"}],
-        "globals": [],
-        "controls": {},
-    }
 
 
 def test_collect_targets_honors_include_and_exclude() -> None:
@@ -40,22 +12,49 @@ def test_collect_targets_honors_include_and_exclude() -> None:
         {"sales": FrameLike(), "threshold": 10, "note": "draft"},
         include=["sales", "threshold", "note"],
         exclude=["threshold"],
-        graph=_graph(),
+        graph=sales_graph(),
     )
 
     assert [target["variable"] for target in targets] == ["sales", "note"]
 
 
+def test_collect_targets_filters_output_targets_by_include_and_exclude() -> None:
+    graph = notebook_graph(
+        cells=[
+            cell("cell-sales", refs=("sales",), has_output_expression=True),
+            cell("cell-orders", refs=("orders",), has_output_expression=True),
+        ],
+        definitions={"sales": ["cell-data"], "orders": ["cell-orders-data"]},
+    )
+
+    included = collect_targets(
+        {"sales": FrameLike(), "orders": FrameLike()},
+        include=["sales"],
+        graph=graph,
+    )
+    excluded = collect_targets(
+        {"sales": FrameLike(), "orders": FrameLike()},
+        exclude=["orders"],
+        graph=graph,
+    )
+
+    assert "output:cell-sales" in {target["id"] for target in included}
+    assert "output:cell-orders" not in {target["id"] for target in included}
+    assert "output:cell-orders" not in {target["id"] for target in excluded}
+
+
 def test_target_display_cells_do_not_guess_from_code_previews() -> None:
-    [target] = collect_targets({"sales": FrameLike()}, graph=_graph())
+    [target] = collect_targets({"sales": FrameLike()}, graph=sales_graph())
 
     assert target["cellId"] == "cell-data"
-    assert target["displayCellIds"] == []
+    assert target.get("displayCellIds", []) == []
     assert target["relatedCellIds"] == ["cell-view"]
 
 
 def test_target_display_cells_come_from_runtime_output_refs() -> None:
-    targets = collect_targets({"sales": FrameLike()}, graph=_graph(display_sales=True))
+    targets = collect_targets(
+        {"sales": FrameLike()}, graph=sales_graph(display_sales=True)
+    )
     target = next(target for target in targets if target["id"] == "var:sales")
     output = next(target for target in targets if target["id"] == "output:cell-view")
 
@@ -71,24 +70,17 @@ def test_target_display_cells_come_from_runtime_output_refs() -> None:
 
 
 def test_collect_targets_adds_output_target_for_unnamed_rendered_expression() -> None:
-    graph = {
-        "available": True,
-        "cells": [
-            {
-                "id": "cell-shape",
-                "defs": [],
-                "refs": ["movies"],
-                "outputRefs": [],
-                "outputType": "",
-                "hasOutputExpression": True,
-                "codePreview": "movies.shape",
-            }
+    graph = notebook_graph(
+        cells=[
+            cell(
+                "cell-shape",
+                refs=("movies",),
+                has_output_expression=True,
+                code_preview="movies.shape",
+            )
         ],
-        "definitions": {"movies": ["cell-data"]},
-        "edges": [],
-        "globals": [],
-        "controls": {},
-    }
+        definitions={"movies": ["cell-data"]},
+    )
 
     targets = collect_targets({"movies": FrameLike()}, graph=graph)
     output = next(target for target in targets if target["id"] == "output:cell-shape")
@@ -97,8 +89,8 @@ def test_collect_targets_adds_output_target_for_unnamed_rendered_expression() ->
     assert output["kind"] == "output"
     assert output.get("variable", "") == ""
     assert output["refs"] == ["movies"]
-    assert output["defs"] == []
-    assert output["outputType"] == ""
+    assert output.get("defs", []) == []
+    assert output.get("outputType", "") == ""
     assert output["codePreview"] == "movies.shape"
     assert output["selectors"] == [
         '[id="output-cell-shape"]',
@@ -107,26 +99,46 @@ def test_collect_targets_adds_output_target_for_unnamed_rendered_expression() ->
     ]
 
 
+def test_expression_output_refs_link_single_referenced_variable_display() -> None:
+    graph = notebook_graph(
+        cells=[
+            cell(
+                "cell-data",
+                defs=("movies",),
+                code_preview="movies = pd.DataFrame(...)",
+            ),
+            cell(
+                "cell-view",
+                refs=("movies",),
+                has_output_expression=True,
+                code_preview="movies",
+            ),
+        ],
+        definitions={"movies": ["cell-data"]},
+        edges=[{"from": "cell-data", "to": "cell-view"}],
+    )
+
+    targets = collect_targets({"movies": FrameLike()}, graph=graph)
+    target = next(target for target in targets if target["id"] == "var:movies")
+
+    assert target["displayCellIds"] == ["cell-view"]
+    assert '[id="output-cell-view"]' in target["selectors"]
+
+
 def test_collect_targets_inspects_direct_chart_outputs() -> None:
     chart = CustomChart()
-    graph = {
-        "available": True,
-        "cells": [
-            {
-                "id": "cell-chart",
-                "defs": [],
-                "refs": ["movies"],
-                "output": chart,
-                "outputRefs": [],
-                "outputType": "tests.support.sample_entities.CustomChart",
-                "codePreview": "alt.Chart(movies).mark_bar()",
-            }
+    graph = notebook_graph(
+        cells=[
+            cell(
+                "cell-chart",
+                refs=("movies",),
+                output=chart,
+                output_type="tests.support.sample_entities.CustomChart",
+                code_preview="alt.Chart(movies).mark_bar()",
+            )
         ],
-        "definitions": {"movies": ["cell-data"]},
-        "edges": [],
-        "globals": [],
-        "controls": {},
-    }
+        definitions={"movies": ["cell-data"]},
+    )
     registry = default_entity_registry().with_inspectors(
         [ChartInspector(adapters=[CustomChartAdapter()])]
     )
@@ -147,15 +159,43 @@ def test_collect_targets_inspects_direct_chart_outputs() -> None:
     assert output["chart"]["library"] == "custom"
     assert output["capabilities"]["chartPart"] is True
     assert output["selectionPolicy"]["prefer"] == [
-        "chart-unit",
+        "chart-part",
         "visual-surface",
         "display-cell",
         "selector",
     ]
 
 
+def test_collect_targets_json_sanitizes_direct_output_inspector_metadata() -> None:
+    class ObjectExtensionInspector:
+        id = "object-extension"
+
+        def inspect(self, entity):
+            if entity.name != "output:cell-rich":
+                return None
+            return {
+                "kind": "object",
+                "summary": "rich output",
+                "extensions": {"raw": object()},
+            }
+
+    graph = notebook_graph(
+        cells=[cell("cell-rich", output=object(), output_type="builtins.object")],
+        definitions={},
+    )
+    registry = default_entity_registry().with_inspectors([ObjectExtensionInspector()])
+
+    output = next(
+        target
+        for target in collect_targets({}, graph=graph, entity_registry=registry)
+        if target["id"] == "output:cell-rich"
+    )
+
+    assert output["extensions"]["raw"].startswith("<object object at ")
+
+
 def test_target_related_cells_come_from_refs() -> None:
-    [target] = collect_targets({"sales": FrameLike()}, graph=_graph())
+    [target] = collect_targets({"sales": FrameLike()}, graph=sales_graph())
 
     assert target["relatedCellIds"] == ["cell-view"]
     assert target["refs"] == ["pd"]
@@ -170,7 +210,7 @@ def test_collect_targets_filters_internal_values() -> None:
             "helper": lambda value: value,
         },
         include=["sales", "_private", "mo", "helper"],
-        graph=_graph(),
+        graph=sales_graph(),
     )
 
     assert [target["variable"] for target in targets] == ["sales"]

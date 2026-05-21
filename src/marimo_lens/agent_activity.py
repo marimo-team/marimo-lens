@@ -8,6 +8,12 @@ from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, timezone
 from typing import Any
 
+from ._contract import (
+    AGENT_ACTIVITY_KINDS,
+    AGENT_ANNOTATION_STATUSES,
+    AGENT_CELL_MARK_STATUSES,
+    AGENT_FINISH_STATUSES,
+)
 from ._serialization import jsonable, safe_value
 
 AGENT_ACTIVITY_PROTOCOL = "marimo-lens.agent-activity"
@@ -16,33 +22,16 @@ PAIR_RESULT_PROTOCOL = "marimo-pair.result"
 PAIR_RESULT_VERSION = 1
 DEFAULT_AGENT_LABEL = "marimo-pair"
 
-AGENT_ACTIVITY_KINDS = frozenset(
-    {
-        "agent-started",
-        "agent-finished",
-        "cell-mark",
-        "annotation-status",
-    }
-)
-CELL_MARK_KINDS = frozenset(
-    {
-        "read",
-        "claimed",
-        "edited",
-        "ran",
-        "failed",
-        "needs-review",
-    }
-)
-ANNOTATION_STATUSES = frozenset(
-    {
-        "in_progress",
-        "addressed",
-        "blocked",
-        "needs_human",
-    }
-)
-FINISH_STATUSES = frozenset({"completed", "blocked", "failed"})
+CELL_MARK_KINDS = frozenset(AGENT_CELL_MARK_STATUSES)
+ANNOTATION_STATUSES = frozenset(AGENT_ANNOTATION_STATUSES)
+FINISH_STATUSES = frozenset(AGENT_FINISH_STATUSES)
+_SUMMARY_CELL_STATUSES = {
+    "read": "cellsRead",
+    "edited": "cellsEdited",
+    "ran": "cellsRun",
+}
+_QUESTION_STATUSES = frozenset(("needs-review", "needs_human", "blocked"))
+_WARNING_STATUSES = frozenset(("failed", "blocked"))
 
 
 def new_run_id() -> str:
@@ -155,7 +144,7 @@ def build_focus_command(cell_id: Any, *, reason: Any = None) -> dict[str, Any]:
         "kind": "focus-cell",
         "createdAt": _now(),
         "cellId": cell_ids[0],
-        "provenance": _provenance(),
+        "provenance": _provenance(DEFAULT_AGENT_LABEL),
     }
     if reason is not None:
         command["reason"] = _text(reason)
@@ -226,7 +215,7 @@ def _activity(
         "cellIds": list(cell_ids),
         "annotationIds": list(annotation_ids),
         "status": status,
-        "provenance": _provenance(),
+        "provenance": _provenance(label),
     }
     if note is not None:
         item["note"] = _text(note)
@@ -235,10 +224,10 @@ def _activity(
     return item
 
 
-def _provenance() -> dict[str, Any]:
+def _provenance(label: str) -> dict[str, Any]:
     return {
         "origin": "agent",
-        "source": DEFAULT_AGENT_LABEL,
+        "source": _text(label) or DEFAULT_AGENT_LABEL,
         "protocol": AGENT_ACTIVITY_PROTOCOL,
         "version": AGENT_ACTIVITY_VERSION,
     }
@@ -256,27 +245,21 @@ def _finish_summary(item: Mapping[str, Any]) -> dict[str, int]:
 
 
 def _activity_summary(items: Sequence[Mapping[str, Any]]) -> dict[str, int]:
-    read: set[str] = set()
-    edited: set[str] = set()
-    run: set[str] = set()
+    counters = {name: set() for name in _SUMMARY_CELL_STATUSES.values()}
     addressed: set[str] = set()
     for item in items:
         if item.get("kind") == "cell-mark":
-            cell_ids = _strings(item.get("cellIds", ()))
-            if item.get("status") == "read":
-                read.update(cell_ids)
-            elif item.get("status") == "edited":
-                edited.update(cell_ids)
-            elif item.get("status") == "ran":
-                run.update(cell_ids)
+            counter = _SUMMARY_CELL_STATUSES.get(str(item.get("status") or ""))
+            if counter is not None:
+                counters[counter].update(_strings(item.get("cellIds", ())))
         elif item.get("kind") == "annotation-status" and item.get("status") == (
             "addressed"
         ):
             addressed.update(_strings(item.get("annotationIds", ())))
     return {
-        "cellsRead": len(read),
-        "cellsEdited": len(edited),
-        "cellsRun": len(run),
+        "cellsRead": len(counters["cellsRead"]),
+        "cellsEdited": len(counters["cellsEdited"]),
+        "cellsRun": len(counters["cellsRun"]),
         "annotationsAddressed": len(addressed),
     }
 
@@ -285,7 +268,7 @@ def _open_questions(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     questions: list[dict[str, Any]] = []
     for item in items:
         status = item.get("status")
-        if status not in {"needs-review", "needs_human", "blocked"}:
+        if status not in _QUESTION_STATUSES:
             continue
         questions.append(
             {
@@ -301,7 +284,7 @@ def _open_questions(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
 def _warnings(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
     warnings: list[dict[str, Any]] = []
     for item in items:
-        if item.get("status") not in {"failed", "blocked"}:
+        if item.get("status") not in _WARNING_STATUSES:
             continue
         warnings.append(
             {
@@ -336,6 +319,8 @@ def _strings(values: Iterable[Any] | Any) -> list[str]:
     if values is None:
         return []
     if isinstance(values, str):
+        raw_values = [values]
+    elif isinstance(values, Mapping | bytes | bytearray):
         raw_values = [values]
     elif isinstance(values, Iterable):
         raw_values = list(values)

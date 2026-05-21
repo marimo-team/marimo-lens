@@ -25,6 +25,11 @@ from ._marimo_runtime import (
     runtime_globals as _runtime_globals,
 )
 from ._pipeline import LensContext, LensPipeline
+from ._widget_traits import (
+    apply_context_traits,
+    refresh_state,
+    render_trait_context,
+)
 from . import context as lens_context
 from .inspectors import EntityInspector
 from .metadata import _caller_namespace
@@ -36,8 +41,11 @@ _STATIC = pathlib.Path(__file__).parent / "static"
 def _static_text(filename: str) -> str:
     try:
         return (_STATIC / filename).read_text(encoding="utf-8")
-    except OSError:
-        return ""
+    except OSError as exc:
+        raise RuntimeError(
+            f"Missing marimo-lens static asset {filename!r}. "
+            "Run `pnpm run build` before importing the widget package."
+        ) from exc
 
 
 class Lens(anywidget.AnyWidget):
@@ -72,6 +80,8 @@ class Lens(anywidget.AnyWidget):
     pair_result = traitlets.Dict(default_value={}).tag(sync=True)
     pair_result_prompt = traitlets.Unicode("").tag(sync=True)
     _refresh_request = traitlets.Int(0).tag(sync=True)
+    _refresh_request_id = traitlets.Unicode("").tag(sync=True)
+    _refresh_state = traitlets.Dict(default_value={"status": "idle"}).tag(sync=True)
     _context_revision = traitlets.Int(0).tag(sync=True)
 
     def __init__(
@@ -109,7 +119,7 @@ class Lens(anywidget.AnyWidget):
         self._manual_targets = list(targets or [])
         self._agent_run_id: str | None = None
         self._agent_label = DEFAULT_AGENT_LABEL
-        self._pipeline = LensPipeline().with_overrides(
+        self._pipeline = LensPipeline().with_inspectors(
             inspectors=inspectors,
         )
 
@@ -121,6 +131,7 @@ class Lens(anywidget.AnyWidget):
             exclude=exclude,
             manual_targets=targets,
             notebook=self._source.notebook,
+            cell_outputs=self._source.cell_outputs,
             metadata=self._source.metadata,
         )
         self._lens_context = context
@@ -208,29 +219,48 @@ class Lens(anywidget.AnyWidget):
             return
         self.refresh_context()
 
-    def refresh_context(self) -> dict[str, Any]:
+    @traitlets.observe("_refresh_request_id")
+    def _refresh_id_requested(self, change: traitlets.Bunch) -> None:
+        request_id = str(change.get("new") or "")
+        if not request_id or change.get("old") == change.get("new"):
+            return
+        self.refresh_context(request_id=request_id)
+
+    def refresh_context(self, *, request_id: str | None = None) -> dict[str, Any]:
         """Refresh the notebook graph, targets, and sniffed runtime context."""
 
-        namespace = self._current_namespace()
-        context = self._pipeline.collect(
-            namespace,
-            title=self.title,
-            include=self._include,
-            exclude=self._exclude,
-            manual_targets=self._manual_targets,
-            notebook=self._source.notebook,
-            annotations=self.annotations,
-            metadata=self._source.metadata,
-        )
-        state = context.widget_state()
-        with self.hold_trait_notifications():
-            self._lens_context = context
-            self.notebook = state["notebook"]
-            self.targets = state["targets"]
-            self.markdown = state["markdown"]
-            self.pair_feedback = state["pair_feedback"]
-            self.pair_prompt = state["pair_prompt"]
-            self._context_revision += 1
+        active_request_id = request_id or ""
+        self._set_refresh_state(active_request_id, "running")
+        try:
+            namespace = self._current_namespace()
+            context = self._pipeline.collect(
+                namespace,
+                title=self.title,
+                include=self._include,
+                exclude=self._exclude,
+                manual_targets=self._manual_targets,
+                notebook=self._source.notebook,
+                cell_outputs=self._source.cell_outputs,
+                annotations=self.annotations,
+                metadata=self._source.metadata,
+            )
+            state = context.widget_state()
+            with self.hold_trait_notifications():
+                self._lens_context = context
+                self.notebook = state["notebook"]
+                self.targets = state["targets"]
+                self.markdown = state["markdown"]
+                self.pair_feedback = state["pair_feedback"]
+                self.pair_prompt = state["pair_prompt"]
+                self._context_revision += 1
+            self._set_refresh_state(active_request_id, "success")
+        except Exception as exc:
+            self._set_refresh_state(
+                active_request_id,
+                "error",
+                f"{type(exc).__name__}: {exc}",
+            )
+            raise
         return dict(context.notebook)
 
     def export_markdown(self, *, refresh: bool = True) -> str:
@@ -293,7 +323,7 @@ class Lens(anywidget.AnyWidget):
     ) -> dict[str, Any]:
         """Record that an agent read, claimed, edited, ran, or blocked cells."""
 
-        active_run_id = run_id or self._agent_run_id
+        active_run_id = self._active_agent_run_id(run_id)
         activity = build_cell_mark(
             cell_ids,
             kind=kind,
@@ -315,7 +345,7 @@ class Lens(anywidget.AnyWidget):
         resolved_annotation_id, resolved_annotation = self._require_annotation(
             annotation_id
         )
-        active_run_id = run_id or self._agent_run_id
+        active_run_id = self._active_agent_run_id(run_id)
         activity = build_annotation_status(
             resolved_annotation_id,
             status=status,
@@ -324,8 +354,6 @@ class Lens(anywidget.AnyWidget):
             label=self._agent_label,
         )
         activity["details"] = {"annotation": dict(resolved_annotation)}
-        if status == "addressed":
-            self._remove_annotation(resolved_annotation_id)
         return self._append_agent_activity(activity)
 
     def agent_finished(
@@ -340,7 +368,7 @@ class Lens(anywidget.AnyWidget):
     ) -> dict[str, Any]:
         """Record the final marimo-pair result packet for this Lens."""
 
-        active_run_id = run_id or self._agent_run_id
+        active_run_id = self._active_agent_run_id(run_id)
         activity = build_agent_finished(
             summary=summary,
             run_id=active_run_id,
@@ -394,15 +422,15 @@ class Lens(anywidget.AnyWidget):
         return self._lens_context
 
     def _render_trait_context(self) -> LensContext:
-        context = LensContext(
+        return render_trait_context(
+            pipeline=self._pipeline,
             namespace=self._current_namespace(),
             title=self.title,
-            notebook=dict(self.notebook),
+            notebook=self.notebook,
             targets=list(self.targets),
             annotations=list(self.annotations),
             metadata=dict(self._source.metadata),
         )
-        return self._pipeline.render(context)
 
     def _export_context(self, *, refresh: bool) -> LensContext:
         if refresh:
@@ -411,19 +439,7 @@ class Lens(anywidget.AnyWidget):
         return self._render_trait_context()
 
     def _apply_context(self, context: LensContext) -> None:
-        state = context.widget_state()
-        with self.hold_trait_notifications():
-            self._lens_context = context
-            if self.notebook != state["notebook"]:
-                self.notebook = state["notebook"]
-            if self.targets != state["targets"]:
-                self.targets = state["targets"]
-            if self.markdown != state["markdown"]:
-                self.markdown = state["markdown"]
-            if self.pair_feedback != state["pair_feedback"]:
-                self.pair_feedback = state["pair_feedback"]
-            if self.pair_prompt != state["pair_prompt"]:
-                self.pair_prompt = state["pair_prompt"]
+        apply_context_traits(self, context)
 
     def _append_agent_activity(self, item: Mapping[str, Any]) -> dict[str, Any]:
         activity = dict(item)
@@ -431,6 +447,20 @@ class Lens(anywidget.AnyWidget):
             self.agent_activity = [*list(self.agent_activity or []), activity]
         self._sync_agent_result()
         return activity
+
+    def _active_agent_run_id(self, run_id: str | None) -> str:
+        if run_id:
+            self._agent_run_id = run_id
+            return run_id
+        if self._agent_run_id:
+            return self._agent_run_id
+        active_run_id, activity = build_agent_started(
+            run_id=None,
+            label=self._agent_label,
+        )
+        self._agent_run_id = active_run_id
+        self._append_agent_activity(activity)
+        return active_run_id
 
     def _sync_agent_result(self) -> None:
         result = build_pair_result(
@@ -443,6 +473,22 @@ class Lens(anywidget.AnyWidget):
                 self.pair_result = result
             if self.pair_result_prompt != prompt:
                 self.pair_result_prompt = prompt
+
+    def _set_refresh_state(
+        self,
+        request_id: str,
+        status: str,
+        error: str = "",
+    ) -> None:
+        self.set_trait(
+            "_refresh_state",
+            refresh_state(
+                request_id=request_id,
+                status=status,
+                error=error,
+                context_revision=self._context_revision,
+            ),
+        )
 
     def _require_annotation(self, annotation_id: Any) -> tuple[str, Mapping[str, Any]]:
         normalized = "" if annotation_id is None else str(annotation_id)
@@ -463,18 +509,6 @@ class Lens(anywidget.AnyWidget):
             "Cannot resolve unknown Lens annotation "
             f"{normalized!r}. Known annotation ids: {known}"
         )
-
-    def _remove_annotation(self, annotation_id: str) -> None:
-        annotations = [
-            annotation
-            for annotation in self.annotations or []
-            if not (
-                isinstance(annotation, Mapping)
-                and str(annotation.get("id")) == annotation_id
-            )
-        ]
-        if annotations != list(self.annotations or []):
-            self.annotations = annotations
 
 
 def find_lens(*, required: bool = True) -> Lens | None:

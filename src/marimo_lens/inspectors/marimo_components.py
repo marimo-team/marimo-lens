@@ -7,17 +7,24 @@ from typing import Any
 
 from .._marimo_runtime import is_marimo_ui_element, marimo_component
 from .._serialization import safe_value
-from ._capabilities import capabilities, selection_policy
 from ._core import LensEntity
 from ._metadata import (
     columns,
     control_summary,
     read_value,
     shape,
+    inspected_target,
     tabular_summary,
     visualization_summary,
 )
-from .charts._metadata import chart_part, dedupe_chart_parts, field_label
+from .charts._metadata import (
+    chart_part,
+    chart_spec_fields,
+    chart_spec_parts,
+    dedupe_chart_parts,
+    with_chart_library,
+)
+from .charts.plotly import plotly_chart_metadata_from_spec
 
 
 class MarimoComponentInspector:
@@ -33,21 +40,11 @@ class MarimoComponentInspector:
         component = marimo_component(value)
         name = component.name
         args = component.args
-        if not name or name not in _SEMANTIC_COMPONENTS:
+        handler = _COMPONENT_HANDLERS.get(name)
+        if not name or handler is None:
             return None
 
-        label = component.label
-        if name == "marimo-anywidget":
-            return _anywidget_target(entity, value, name, args, label)
-        if name in _TABULAR_COMPONENTS:
-            return _tabular_target(entity, value, name, args, label)
-        if name == "marimo-data-explorer":
-            return _data_explorer_target(entity, value, name, args, label)
-        if name in _CHART_COMPONENTS:
-            return _chart_target(entity, value, name, args, label)
-        if name in _LAYOUT_COMPONENTS:
-            return _layout_target(entity, value, name, args, label)
-        return None
+        return handler(entity, value, name, args, component.label)
 
 
 _TABULAR_COMPONENTS = frozenset(
@@ -66,6 +63,16 @@ _CHART_COMPONENTS = frozenset(
         "marimo-vega",
     }
 )
+_CHART_COMPONENT_CONFIG: Mapping[str, Mapping[str, str]] = {
+    "marimo-vega": {"library": "vega"},
+    "marimo-plotly": {"library": "plotly"},
+    "marimo-matplotlib": {"library": "matplotlib"},
+    "marimo-mpl-interactive": {
+        "library": "matplotlib",
+        "renderer": "interactive",
+    },
+    "marimo-panel": {"library": "panel", "renderer": "iframe"},
+}
 _LAYOUT_COMPONENTS = frozenset(
     {
         "marimo-accordion",
@@ -75,15 +82,6 @@ _LAYOUT_COMPONENTS = frozenset(
         "marimo-sidebar",
         "marimo-stat",
         "marimo-tabs",
-    }
-)
-_SEMANTIC_COMPONENTS = (
-    _TABULAR_COMPONENTS
-    | _CHART_COMPONENTS
-    | _LAYOUT_COMPONENTS
-    | {
-        "marimo-anywidget",
-        "marimo-data-explorer",
     }
 )
 
@@ -97,23 +95,17 @@ def _anywidget_target(
 ) -> dict[str, Any]:
     value_columns = columns(value)
     value_shape = shape(value)
-    return {
-        "kind": "anywidget",
-        "family": "interactive",
-        "component": name,
-        "componentMetadata": _component_metadata(args),
-        "shape": value_shape,
-        "columns": value_columns,
-        "capabilities": capabilities(
-            columnar_dom=bool(value_columns),
-            interactive=True,
-        ),
-        "selectionPolicy": selection_policy(
-            "columnar-dom" if value_columns else "",
-            "interactive",
-        ),
-        "summary": control_summary(entity.name, value, name, args, label=label),
-    }
+    return inspected_target(
+        kind="anywidget",
+        family="interactive",
+        component=name,
+        component_metadata=_component_metadata(args),
+        shape=value_shape,
+        columns=value_columns,
+        capability_flags={"columnar_dom": bool(value_columns), "interactive": True},
+        surfaces=("columnar-dom" if value_columns else "", "interactive"),
+        summary=control_summary(entity.name, value, name, args, label=label),
+    )
 
 
 def _tabular_target(
@@ -126,21 +118,21 @@ def _tabular_target(
     value_columns = _component_columns(value, args)
     value_shape = _component_shape(value, args, value_columns)
     columnar_surface = _tabular_surface(name)
-    return {
-        "kind": "table" if name == "marimo-table" else "dataframe",
-        "family": "tabular",
-        "component": name,
-        "componentMetadata": _component_metadata(args),
-        "shape": value_shape,
-        "columns": value_columns,
-        "capabilities": capabilities(
-            columnar_dom=columnar_surface == "columnar-dom",
-            columnar_grid=columnar_surface == "columnar-grid",
-            interactive=True,
-        ),
-        "selectionPolicy": selection_policy(columnar_surface, "interactive"),
-        "summary": tabular_summary(entity.name, value, value_shape),
-    }
+    return inspected_target(
+        kind="table" if name == "marimo-table" else "dataframe",
+        family="tabular",
+        component=name,
+        component_metadata=_component_metadata(args),
+        shape=value_shape,
+        columns=value_columns,
+        capability_flags={
+            "columnar_dom": columnar_surface == "columnar-dom",
+            "columnar_grid": columnar_surface == "columnar-grid",
+            "interactive": True,
+        },
+        surfaces=(columnar_surface, "interactive"),
+        summary=tabular_summary(entity.name, value, value_shape),
+    )
 
 
 def _data_explorer_target(
@@ -152,37 +144,38 @@ def _data_explorer_target(
 ) -> dict[str, Any]:
     value_columns = _component_columns(value, args)
     value_shape = _component_shape(value, args, value_columns)
-    return {
-        "kind": "visualization",
-        "family": "data-explorer",
-        "component": name,
-        "componentMetadata": _component_metadata(args),
-        "shape": value_shape,
-        "columns": value_columns,
-        "chart": {
-            "library": "marimo-data-explorer",
-            "renderer": "html",
-            "parts": [
-                {
-                    **chart_part("plot-area", "data explorer"),
-                    "library": "marimo-data-explorer",
-                }
-            ],
+    chart = {
+        "library": "marimo-data-explorer",
+        "renderer": "html",
+        "parts": [
+            {
+                **chart_part("plot-area", "data explorer"),
+                "library": "marimo-data-explorer",
+            }
+        ],
+    }
+    return inspected_target(
+        kind="visualization",
+        family="data-explorer",
+        component=name,
+        component_metadata=_component_metadata(args),
+        shape=value_shape,
+        columns=value_columns,
+        chart=chart,
+        capability_flags={
+            "columnar_grid": bool(value_columns),
+            "visual_surface": True,
+            "chart_part": True,
+            "interactive": True,
         },
-        "capabilities": capabilities(
-            columnar_grid=bool(value_columns),
-            visual_surface=True,
-            chart_part=True,
-            interactive=True,
-        ),
-        "selectionPolicy": selection_policy(
+        surfaces=(
+            "chart-part",
             "columnar-grid" if value_columns else "",
-            "chart-unit",
             "visual-surface",
             "interactive",
         ),
-        "summary": visualization_summary(entity.name, value_columns),
-    }
+        summary=visualization_summary(entity.name, value_columns),
+    )
 
 
 def _chart_target(
@@ -194,28 +187,28 @@ def _chart_target(
 ) -> dict[str, Any]:
     value_columns = _component_columns(value, args)
     chart = _chart_metadata(name, args)
-    return {
-        "kind": "visualization",
-        "family": "chart",
-        "component": name,
-        "componentMetadata": _component_metadata(args),
-        "shape": _component_shape(value, args, value_columns),
-        "columns": value_columns,
-        "chart": chart,
-        "capabilities": capabilities(
-            columnar_dom=bool(value_columns) and name == "marimo-vega",
-            visual_surface=True,
-            chart_part=True,
-            interactive=True,
-        ),
-        "selectionPolicy": selection_policy(
+    return inspected_target(
+        kind="visualization",
+        family="chart",
+        component=name,
+        component_metadata=_component_metadata(args),
+        shape=_component_shape(value, args, value_columns),
+        columns=value_columns,
+        chart=chart,
+        capability_flags={
+            "columnar_dom": bool(value_columns) and name == "marimo-vega",
+            "visual_surface": True,
+            "chart_part": True,
+            "interactive": True,
+        },
+        surfaces=(
             "columnar-dom" if value_columns and name == "marimo-vega" else "",
-            "chart-unit",
+            "chart-part",
             "visual-surface",
             "interactive",
         ),
-        "summary": visualization_summary(entity.name, value_columns),
-    }
+        summary=visualization_summary(entity.name, value_columns),
+    )
 
 
 def _layout_target(
@@ -225,17 +218,25 @@ def _layout_target(
     args: Mapping[str, Any],
     label: str,
 ) -> dict[str, Any]:
-    return {
-        "kind": "layout",
-        "family": "layout",
-        "component": name,
-        "componentMetadata": _component_metadata(args),
-        "shape": shape(value),
-        "columns": [],
-        "capabilities": capabilities(interactive=True),
-        "selectionPolicy": selection_policy("interactive"),
-        "summary": control_summary(entity.name, value, name, args, label=label),
-    }
+    return inspected_target(
+        kind="layout",
+        family="layout",
+        component=name,
+        component_metadata=_component_metadata(args),
+        shape=shape(value),
+        capability_flags={"interactive": True},
+        surfaces=("interactive",),
+        summary=control_summary(entity.name, value, name, args, label=label),
+    )
+
+
+_COMPONENT_HANDLERS = {
+    "marimo-anywidget": _anywidget_target,
+    "marimo-data-explorer": _data_explorer_target,
+    **{name: _tabular_target for name in _TABULAR_COMPONENTS},
+    **{name: _chart_target for name in _CHART_COMPONENTS},
+    **{name: _layout_target for name in _LAYOUT_COMPONENTS},
+}
 
 
 def _component_columns(value: Any, args: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -332,40 +333,36 @@ def _int_arg(args: Mapping[str, Any], key: str) -> int | None:
 
 
 def _chart_metadata(name: str, args: Mapping[str, Any]) -> dict[str, Any]:
-    if name == "marimo-vega":
+    config = _CHART_COMPONENT_CONFIG[name]
+    if config["library"] == "vega":
         return _vega_chart_metadata(args.get("spec"))
-    if name == "marimo-plotly":
-        return _basic_chart_metadata("plotly", args)
-    if name == "marimo-matplotlib":
-        return _basic_chart_metadata("matplotlib", args)
-    if name == "marimo-mpl-interactive":
-        return _basic_chart_metadata("matplotlib", args, renderer="interactive")
-    if name == "marimo-panel":
-        return _basic_chart_metadata("panel", args, renderer="iframe")
-    return _basic_chart_metadata("visual", args)
+    if config["library"] == "plotly" and isinstance(args.get("figure"), Mapping):
+        metadata = plotly_chart_metadata_from_spec(
+            args["figure"],
+            renderer=str(config.get("renderer") or "html"),
+        )
+        metadata["extensions"] = _component_metadata(args)
+        return metadata
+    return _basic_chart_metadata(
+        str(config["library"]),
+        args,
+        renderer=str(config.get("renderer") or "html"),
+    )
 
 
 def _vega_chart_metadata(spec: Any) -> dict[str, Any]:
     if not isinstance(spec, Mapping):
         return _basic_chart_metadata("vega", {})
     encoding = spec.get("encoding", {})
-    parts = [chart_part("mark", _mark_label(spec.get("mark")))]
-    if isinstance(encoding, Mapping):
-        for channel, channel_spec in encoding.items():
-            channel_name = str(channel)
-            field = field_label(channel_spec)
-            if channel_name in {"x", "x2", "y", "y2"}:
-                parts.append(chart_part("axis", f"{channel_name[0]} axis", field))
-            elif channel_name in {"color", "fill", "shape", "size", "stroke"}:
-                parts.append(chart_part("legend", f"{channel_name} legend", field))
-            elif field:
-                parts.append(chart_part("annotation", channel_name, field))
-    return {
+    parts = chart_spec_parts(spec)
+    metadata: dict[str, Any] = {
         "library": "vega",
-        "mark": safe_value(spec.get("mark")),
         "encoding": safe_value(encoding),
-        "parts": [{**part, "library": "vega"} for part in dedupe_chart_parts(parts)],
+        "parts": with_chart_library("vega", dedupe_chart_parts(parts)),
     }
+    if spec.get("mark") is not None:
+        metadata["mark"] = safe_value(spec.get("mark"))
+    return metadata
 
 
 def _basic_chart_metadata(
@@ -383,26 +380,7 @@ def _basic_chart_metadata(
 
 
 def _columns_from_chart_spec(spec: Any) -> list[dict[str, Any]]:
-    if not isinstance(spec, Mapping):
-        return []
-    encoding = spec.get("encoding", {})
-    if not isinstance(encoding, Mapping):
-        return []
-    fields: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for channel_spec in encoding.values():
-        field = field_label(channel_spec)
-        if not field or field in seen:
-            continue
-        seen.add(field)
-        fields.append({"name": field, "dtype": None})
-    return fields
-
-
-def _mark_label(mark: Any) -> str:
-    if isinstance(mark, Mapping):
-        return str(mark.get("type") or "mark")
-    return str(mark or "mark")
+    return chart_spec_fields(spec)
 
 
 def _component_metadata(args: Mapping[str, Any]) -> dict[str, Any]:

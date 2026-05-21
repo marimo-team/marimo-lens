@@ -6,6 +6,7 @@ import ast
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from numbers import Number
 from typing import Any
 from urllib.parse import parse_qsl
 
@@ -23,6 +24,7 @@ from ._serialization import (
     safe_argv as _safe_argv,
     safe_value as _safe_value,
 )
+from ._target_payload import python_type_name
 from .inspectors import EntityRegistry
 from .metadata import (
     _is_internal_name,
@@ -45,6 +47,7 @@ class Source:
 
     namespace: Mapping[str, Any] | None = None
     notebook: Mapping[str, Any] | None = None
+    cell_outputs: Mapping[str, Any] | None = None
     auto_collect: bool = True
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
@@ -55,6 +58,7 @@ class Snapshot:
 
     namespace: Mapping[str, Any] = field(default_factory=dict)
     notebook: Mapping[str, Any] = field(default_factory=dict)
+    cell_outputs: Mapping[str, Any] = field(default_factory=dict)
     metadata: Mapping[str, Any] = field(default_factory=dict)
 
 
@@ -85,6 +89,7 @@ def mapping(
     namespace: Mapping[str, Any],
     *,
     notebook: Mapping[str, Any] | None = None,
+    cell_outputs: Mapping[str, Any] | None = None,
     metadata: Mapping[str, Any] | None = None,
 ) -> Source:
     """Collect from an explicit namespace without falling back to runtime globals."""
@@ -92,6 +97,7 @@ def mapping(
     return Source(
         namespace=namespace,
         notebook=notebook,
+        cell_outputs=dict(cell_outputs or {}),
         auto_collect=False,
         metadata=dict(metadata or {}),
     )
@@ -103,6 +109,7 @@ def snapshot(value: Snapshot) -> Source:
     return Source(
         namespace=value.namespace,
         notebook=value.notebook,
+        cell_outputs=value.cell_outputs,
         auto_collect=False,
         metadata=value.metadata,
     )
@@ -237,9 +244,7 @@ def collect_runtime_context(
             errors.append(
                 {
                     "name": str(name),
-                    "pythonType": type(value).__module__
-                    + "."
-                    + type(value).__qualname__,
+                    "pythonType": python_type_name(value),
                     "error": f"{type(exc).__name__}: {exc}",
                 }
             )
@@ -318,20 +323,26 @@ def _normalize_query_params(value: Any) -> dict[str, Any]:
     try:
         return {str(key): item_value for key, item_value in dict(value).items()}
     except (TypeError, ValueError):
-        return {"type": type(value).__module__ + "." + type(value).__qualname__}
+        return {"type": python_type_name(value)}
 
 
 def _output_ref_names(output: Any, namespace: Mapping[str, Any]) -> list[str]:
     refs: list[str] = []
-    if output is None:
+    if output is None or _is_scalar_identity_value(output):
         return refs
     for raw_name, value in namespace.items():
         name = str(raw_name)
         if _is_internal_name(name) or _is_lens_widget(value):
             continue
+        if _is_scalar_identity_value(value):
+            continue
         if _contains_identity(output, value, seen=set()):
             refs.append(name)
     return sorted(refs)
+
+
+def _is_scalar_identity_value(value: Any) -> bool:
+    return value is None or isinstance(value, (str, bytes, bytearray, bool, Number))
 
 
 def _contains_identity(
@@ -362,7 +373,7 @@ def _contains_identity(
 
 
 def _python_type(value: Any) -> str:
-    return type(value).__module__ + "." + type(value).__qualname__
+    return python_type_name(value)
 
 
 def _query_pairs_to_dict(pairs: Sequence[tuple[str, str]]) -> dict[str, Any]:
