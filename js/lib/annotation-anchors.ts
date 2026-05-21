@@ -1,11 +1,13 @@
-import { cellElement, isUsableRegion } from "@/lib/cell-regions";
-import { semanticAnchorElement, semanticHighlightRect } from "@/selection/semantic-selection";
 import type {
   LensAnnotation,
   LensAnnotationAnchor,
   LensAnchorPathStep,
   ResolvedHover,
 } from "@/types";
+
+import { cellElement, isUsableRegion } from "@/lib/cell-regions";
+import { cssEscape, cssString } from "@/lib/css-selectors";
+import { semanticAnchorElement, semanticHighlightRect } from "@/selection/semantic-selection";
 
 type MarkerPosition = {
   left: number;
@@ -50,13 +52,9 @@ export function createAnnotationAnchor(hover: ResolvedHover): LensAnnotationAnch
   };
 }
 
-export function markerPosition(annotation: LensAnnotation): MarkerPosition {
+export function markerPosition(annotation: LensAnnotation): MarkerPosition | null {
   const anchor = annotation.anchor;
-  if (anchor) {
-    const live = markerPositionFromAnchor(annotation, anchor);
-    if (live) return live;
-  }
-  return legacyMarkerPosition(annotation);
+  return anchor ? markerPositionFromAnchor(annotation, anchor) : null;
 }
 
 function markerPositionFromAnchor(
@@ -102,16 +100,6 @@ function rootElementForAnnotation(
 ): Element | null {
   const cellId = anchor.rootCellId ?? annotation.displayCellId ?? annotation.cellId ?? null;
   return cellId ? cellElement(cellId) : null;
-}
-
-function legacyMarkerPosition(annotation: {
-  documentX: number;
-  documentY: number;
-}): MarkerPosition {
-  return {
-    left: annotation.documentX - window.scrollX,
-    top: annotation.documentY - window.scrollY,
-  };
 }
 
 function selectorPathFromRoot(root: Element, element: Element): LensAnchorPathStep[] | undefined {
@@ -222,12 +210,4 @@ function stableClassName(className: unknown): string {
 function clampRatio(value: number): number {
   if (!Number.isFinite(value)) return 0.5;
   return Math.max(0, Math.min(1, value));
-}
-
-function cssEscape(value: string): string {
-  return globalThis.CSS?.escape?.(value) ?? value.replace(/["\\#.:,[\]>+~*=\s]/g, "\\$&");
-}
-
-function cssString(value: string): string {
-  return value.replace(/["\\]/g, "\\$&");
 }

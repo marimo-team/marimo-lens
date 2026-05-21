@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
+
+import type { LensAnnotation, ResolvedHover } from "@/types";
+
 import { createAnnotationAnchor, markerPosition } from "@/lib/annotation-anchors";
 import { surfaceSemanticSelection } from "@/selection/semantic-selection";
-import type { LensAnnotation, ResolvedHover } from "@/types";
 
 describe("annotation anchors", () => {
   afterEach(() => {
@@ -65,7 +67,7 @@ describe("annotation anchors", () => {
     });
   });
 
-  test("keeps legacy coordinate annotations working", () => {
+  test("does not position annotations without structured anchors", () => {
     vi.spyOn(window, "scrollX", "get").mockReturnValue(12);
     vi.spyOn(window, "scrollY", "get").mockReturnValue(30);
 
@@ -75,7 +77,7 @@ describe("annotation anchors", () => {
         documentX: 112,
         documentY: 230,
       }),
-    ).toEqual({ left: 100, top: 200 });
+    ).toBeNull();
   });
 });
 

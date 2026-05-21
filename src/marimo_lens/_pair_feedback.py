@@ -2,11 +2,29 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from itertools import islice
 from typing import Any
+
+from ._contract import (
+    CHART_PART_KINDS,
+    FEEDBACK_INTENTS,
+    FEEDBACK_SEVERITIES,
+    SELECTION_GRANULARITIES,
+)
+from ._serialization import (
+    MAX_VALUE_DEPTH,
+    MAX_VALUE_ITEMS,
+    context_policy,
+    describe_value,
+    safe_value,
+)
+from .metadata import _normalize_targets
 
 PAIR_FEEDBACK_PROTOCOL = "marimo-pair.feedback"
 PAIR_FEEDBACK_VERSION = 1
+PAIR_GRAPH_VALUE_DEPTH = MAX_VALUE_DEPTH + 4
 
 _PAIR_ACTIONS = {
     "fix": "inspect the target cells, edit the smallest full cell bodies, and run the edited cells",
@@ -14,7 +32,128 @@ _PAIR_ACTIONS = {
     "explain": "inspect the target cells and explain the current behavior from the live graph",
     "approve": "preserve the target behavior; treat this as positive guidance while changing related cells",
 }
-_SEVERITY_RANK = {"blocking": 0, "important": 1, "suggestion": 2}
+_SEVERITY_RANK = {severity: index for index, severity in enumerate(FEEDBACK_SEVERITIES)}
+_VALID_INTENTS = frozenset(FEEDBACK_INTENTS)
+_VALID_SEVERITIES = frozenset(FEEDBACK_SEVERITIES)
+_SUGGESTED_FOCUS_BY_INTENT = {
+    "question": "answer from inspected live notebook state before changing code",
+    "approve": "preserve this behavior while editing adjacent cells",
+}
+_SUGGESTED_FOCUS_BY_SEVERITY = {
+    "blocking": "resolve before continuing with downstream notebook work",
+}
+
+
+@dataclass(frozen=True)
+class AnnotationContext:
+    """Normalized annotation subtarget evidence reused by renderers and packets."""
+
+    id: str
+    semantic: Mapping[str, Any]
+    column: Any
+    column_dtype: Any
+    chart_part: Any
+    dom_evidence: Mapping[str, Any]
+
+
+def _annotation_context_view(
+    annotation: Mapping[str, Any],
+    *,
+    annotation_id: str,
+) -> AnnotationContext:
+    semantic = _normalized_semantic_selection(annotation, annotation_id=annotation_id)
+    semantic_data = semantic.get("data") if isinstance(semantic, Mapping) else {}
+    column = annotation.get("column") or (
+        semantic_data.get("column") if isinstance(semantic_data, Mapping) else ""
+    )
+    column_dtype = annotation.get("columnDtype") or (
+        semantic_data.get("columnDtype") if isinstance(semantic_data, Mapping) else ""
+    )
+    return AnnotationContext(
+        id=annotation_id,
+        semantic=semantic,
+        column=column,
+        column_dtype=column_dtype,
+        chart_part=_normalized_chart_part(
+            _chart_part(annotation, semantic),
+            annotation_id=annotation_id,
+        ),
+        dom_evidence=_dom_evidence(annotation),
+    )
+
+
+@dataclass(frozen=True)
+class PairAnnotation:
+    """Machine-readable feedback for one Lens annotation."""
+
+    id: str
+    index: int
+    created_at: str
+    severity: str
+    intent: str
+    request: str
+    target: Mapping[str, Any]
+    target_snapshot: Mapping[str, Any]
+    cells: Mapping[str, Any]
+    evidence: Mapping[str, Any]
+    marimo_pair: Mapping[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "index": self.index,
+            "createdAt": self.created_at,
+            "severity": self.severity,
+            "intent": self.intent,
+            "request": self.request,
+            "target": dict(self.target),
+            "targetSnapshot": dict(self.target_snapshot),
+            "cells": dict(self.cells),
+            "evidence": dict(self.evidence),
+            "marimoPair": dict(self.marimo_pair),
+        }
+
+
+@dataclass(frozen=True)
+class PairFeedbackPacket:
+    """Versioned marimo-pair feedback packet."""
+
+    generated_at: str
+    source: Mapping[str, Any]
+    notebook: Mapping[str, Any]
+    targets: Sequence[Mapping[str, Any]]
+    target_index: Mapping[str, Any]
+    display_provenance: Sequence[Mapping[str, Any]]
+    context_policy: Mapping[str, Any]
+    summary: Mapping[str, Any]
+    groups: Sequence[Mapping[str, Any]]
+    instructions: Sequence[str]
+    annotations: Sequence[Mapping[str, Any]]
+    markdown: str
+    extensions: Mapping[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        payload = {
+            "protocol": PAIR_FEEDBACK_PROTOCOL,
+            "version": PAIR_FEEDBACK_VERSION,
+            "generatedAt": self.generated_at,
+            "source": dict(self.source),
+            "notebook": dict(self.notebook),
+            "targets": [dict(target) for target in self.targets],
+            "targetIndex": dict(self.target_index),
+            "displayProvenance": [
+                dict(provenance) for provenance in self.display_provenance
+            ],
+            "contextPolicy": dict(self.context_policy),
+            "summary": dict(self.summary),
+            "groups": [dict(group) for group in self.groups],
+            "instructions": list(self.instructions),
+            "annotations": [dict(annotation) for annotation in self.annotations],
+            "markdown": self.markdown,
+        }
+        if self.extensions:
+            payload["extensions"] = dict(self.extensions)
+        return payload
 
 
 def render_markdown(
@@ -26,6 +165,8 @@ def render_markdown(
     filename = str((notebook or {}).get("filename") or "marimo notebook")
     lines = [f"## marimo lens feedback: {filename}", ""]
     for index, annotation in enumerate(annotations, start=1):
+        annotation_id = str(annotation.get("id") or f"annotation-{index}")
+        context = _annotation_context_view(annotation, annotation_id=annotation_id)
         target_name = str(
             annotation.get("variable")
             or annotation.get("targetLabel")
@@ -36,24 +177,13 @@ def render_markdown(
         lines.append(f"- Severity: `{annotation.get('severity') or 'important'}`")
         if annotation.get("kind"):
             lines.append(f"- Kind: `{annotation['kind']}`")
-        semantic = _semantic_selection(annotation)
-        semantic_data = semantic.get("data") if isinstance(semantic, Mapping) else {}
-        column = annotation.get("column") or (
-            semantic_data.get("column") if isinstance(semantic_data, Mapping) else ""
-        )
-        column_dtype = annotation.get("columnDtype") or (
-            semantic_data.get("columnDtype")
-            if isinstance(semantic_data, Mapping)
-            else ""
-        )
-        if column:
-            dtype = f" ({column_dtype})" if column_dtype else ""
-            lines.append(f"- Column: `{column}`{dtype}")
-        chart_part = _chart_part(annotation, semantic)
-        if isinstance(chart_part, Mapping):
-            part_kind = chart_part.get("kind") or "part"
-            part_label = chart_part.get("label") or "unknown"
-            library = chart_part.get("library") or "chart"
+        if context.column:
+            dtype = f" ({context.column_dtype})" if context.column_dtype else ""
+            lines.append(f"- Column: `{context.column}`{dtype}")
+        if isinstance(context.chart_part, Mapping):
+            part_kind = context.chart_part.get("kind") or "part"
+            part_label = context.chart_part.get("label") or "unknown"
+            library = context.chart_part.get("library") or "chart"
             lines.append(f"- Chart part: `{library}:{part_kind}` {part_label}")
         if annotation.get("cellId"):
             lines.append(f"- Defining cell: `{annotation['cellId']}`")
@@ -63,11 +193,11 @@ def render_markdown(
             lines.append(f"- Selected output cell: `{annotation['displayCellId']}`")
         if annotation.get("elementPath"):
             lines.append(f"- DOM: `{annotation['elementPath']}`")
-        if semantic:
+        if context.semantic:
             lines.append(
                 "- Selection: "
-                f"`{semantic.get('kind') or 'target'}` "
-                f"{semantic.get('label') or ''}".strip()
+                f"`{context.semantic.get('kind') or 'target'}` "
+                f"{context.semantic.get('label') or ''}".strip()
             )
         lines.append(f"- Feedback: {annotation.get('comment', '')}")
         lines.append("")
@@ -84,35 +214,37 @@ def build_pair_feedback(
     metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     graph = dict(notebook or {})
-    target_lookup = _target_lookup(targets)
+    normalized_targets = _normalize_targets(targets)
+    target_lookup = _target_lookup(normalized_targets)
     items = [
         _pair_annotation(index, annotation, graph, target_lookup)
         for index, annotation in enumerate(annotations, start=1)
     ]
-    payload = {
-        "protocol": PAIR_FEEDBACK_PROTOCOL,
-        "version": PAIR_FEEDBACK_VERSION,
-        "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "source": {
+    target_catalog = _target_catalog(normalized_targets)
+    return PairFeedbackPacket(
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        source={
             "package": "marimo-lens",
             "title": title,
         },
-        "notebook": _pair_notebook(graph),
-        "summary": _pair_summary(items, graph),
-        "groups": _pair_groups(items),
-        "instructions": [
+        notebook=_pair_notebook(graph),
+        targets=target_catalog,
+        target_index=_target_index(target_catalog),
+        display_provenance=_display_provenance(items),
+        context_policy=context_policy(),
+        summary=_pair_summary(items, graph),
+        groups=_pair_groups(items),
+        instructions=[
             "Re-discover and inspect the live marimo session before editing; this packet is feedback, not the source of truth.",
             "Use `async with marimo._code_mode.get_context() as ctx:` and call ctx methods synchronously inside the context manager.",
             "Read current cell code from marimo._code_mode ctx.cells because disk may lag the running notebook.",
             "Apply notebook changes with ctx.edit_cell(..., code=<full cell body>) and ctx.run_cell(...); never patch the notebook file directly.",
             "Preserve unrelated cells and use the provided cell ids, variables, refs, and DOM evidence to minimize the edit surface.",
         ],
-        "annotations": items,
-        "markdown": markdown,
-    }
-    if metadata:
-        payload["extensions"] = dict(metadata)
-    return payload
+        annotations=items,
+        markdown=markdown,
+        extensions=safe_value(dict(metadata)) if metadata else None,
+    ).to_dict()
 
 
 def render_pair_prompt(payload: Mapping[str, Any]) -> str:
@@ -170,13 +302,59 @@ def _pair_notebook(graph: Mapping[str, Any]) -> dict[str, Any]:
         "filename": graph.get("filename") or "",
         "currentCellId": graph.get("currentCellId") or "",
         "reason": graph.get("reason") or "",
-        "runtime": graph.get("runtime") or {},
-        "cells": graph.get("cells") or [],
-        "definitions": graph.get("definitions") or {},
-        "edges": graph.get("edges") or [],
-        "globals": graph.get("globals") or [],
-        "controls": graph.get("controls") or {},
+        "runtime": _pair_graph_value(graph.get("runtime") or {}),
+        "cells": _pair_graph_value(_graph_cells(graph)),
+        "definitions": _pair_graph_value(graph.get("definitions") or {}),
+        "edges": _pair_graph_value(graph.get("edges") or []),
+        "globals": _pair_graph_value(graph.get("globals") or []),
+        "controls": _pair_graph_value(graph.get("controls") or {}),
     }
+
+
+def _graph_cells(graph: Mapping[str, Any]) -> list[Any]:
+    cells = graph.get("cells")
+    if isinstance(cells, Sequence) and not isinstance(cells, (str, bytes, bytearray)):
+        return list(cells)
+    return []
+
+
+def _pair_graph_value(
+    value: Any,
+    *,
+    depth: int = 0,
+    seen: set[int] | None = None,
+) -> Any:
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return safe_value(value)
+    if depth >= PAIR_GRAPH_VALUE_DEPTH:
+        return safe_value(value, depth=depth)
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return safe_value(value)
+    seen_ids = seen or set()
+    value_id = id(value)
+    if value_id in seen_ids:
+        return describe_value(value)
+    next_seen = {value_id, *seen_ids}
+    if isinstance(value, Mapping):
+        items = list(value.items())
+        return {
+            str(key): _pair_graph_value(item, depth=depth + 1, seen=next_seen)
+            for key, item in items[:MAX_VALUE_ITEMS]
+        }
+    if isinstance(value, Sequence):
+        items = list(value)
+        return [
+            _pair_graph_value(item, depth=depth + 1, seen=next_seen)
+            for item in items[:MAX_VALUE_ITEMS]
+        ]
+    if isinstance(value, Iterable):
+        return [
+            _pair_graph_value(item, depth=depth + 1, seen=next_seen)
+            for item in islice(value, MAX_VALUE_ITEMS)
+        ]
+    return safe_value(value, depth=depth)
 
 
 def _target_lookup(
@@ -190,124 +368,484 @@ def _target_lookup(
     return lookup
 
 
+def _target_catalog(targets: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    return [dict(target) for target in targets]
+
+
+def _target_index(targets: Sequence[Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
+    index: dict[str, dict[str, Any]] = {}
+    for target in targets:
+        target_id = str(target.get("id") or "")
+        if not target_id:
+            continue
+        index[target_id] = {
+            "id": target_id,
+            "label": target.get("label") or "",
+            "variable": target.get("variable") or "",
+            "kind": target.get("kind") or "object",
+            "cellId": target.get("cellId") or "",
+            "displayCellIds": list(target.get("displayCellIds") or []),
+            "relatedCellIds": list(target.get("relatedCellIds") or []),
+            "defs": list(target.get("defs") or []),
+            "refs": list(target.get("refs") or []),
+        }
+    return index
+
+
+def _display_provenance(items: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    provenance: list[dict[str, Any]] = []
+    for item in items:
+        target = item.get("target", {})
+        cells = item.get("cells", {})
+        evidence = item.get("evidence", {})
+        provenance.append(
+            {
+                "annotationId": item.get("id") or "",
+                "targetId": target.get("id") or "",
+                "targetStatus": target.get("status") or "current",
+                "variable": target.get("variable") or "",
+                "definitionCell": cells.get("definition") or "",
+                "displayCell": cells.get("display") or "",
+                "outputCell": cells.get("output") or "",
+                "relatedCellIds": list(cells.get("related") or []),
+                "selectionEvidence": evidence.get("semanticSelection") or None,
+                "domEvidence": {
+                    "element": evidence.get("element") or "",
+                    "elementPath": evidence.get("elementPath") or "",
+                    "documentPoint": evidence.get("documentPoint") or {},
+                    "boundingBox": evidence.get("boundingBox") or {},
+                },
+            }
+        )
+    return provenance
+
+
 def _pair_annotation(
     index: int,
     annotation: Mapping[str, Any],
     graph: Mapping[str, Any],
     targets: Mapping[str, Mapping[str, Any]],
 ) -> dict[str, Any]:
-    target = _annotation_target(annotation, targets)
+    target, target_status = _annotation_target(annotation, targets)
     variable = target.get("variable") or annotation.get("variable")
-    is_output_target = target.get("kind") == "output"
-    definition_cell = (
-        annotation.get("cellId")
-        or target.get("cellId")
-        or _first_definition_cell(variable, graph)
-    )
-    display_cell = annotation.get("displayCellId") or _first_display_cell(
+    cells = _annotation_cells(
+        annotation,
         target,
-        definition_cell,
+        target_status=target_status,
+        variable=variable,
+        graph=graph,
     )
-    output_cell = _selected_output_cell(annotation, target, display_cell)
-    edit_focus = definition_cell or output_cell
-    if is_output_target and output_cell and not display_cell:
+    annotation_id = str(annotation.get("id") or f"annotation-{index}")
+    severity = _required_choice(
+        annotation.get("severity"),
+        valid=_VALID_SEVERITIES,
+        default="important",
+        field="severity",
+        annotation_id=annotation_id,
+    )
+    intent = _required_choice(
+        annotation.get("intent"),
+        valid=_VALID_INTENTS,
+        default="fix",
+        field="intent",
+        annotation_id=annotation_id,
+    )
+    context = _annotation_context_view(annotation, annotation_id=annotation_id)
+    target_snapshot = dict(target)
+    return PairAnnotation(
+        id=annotation_id,
+        index=index,
+        created_at=str(annotation.get("createdAt") or ""),
+        severity=severity,
+        intent=intent,
+        request=str(annotation.get("comment") or ""),
+        target=_annotation_target_payload(
+            target,
+            target_status=target_status,
+            variable=variable,
+            column=context.column,
+            column_dtype=context.column_dtype,
+            chart_part=context.chart_part,
+            semantic=context.semantic,
+        ),
+        target_snapshot=target_snapshot,
+        cells=cells,
+        evidence=_annotation_evidence(
+            annotation, context.dom_evidence, context.semantic
+        ),
+        marimo_pair=_marimo_pair_instruction(
+            cells,
+            intent=intent,
+            severity=severity,
+            target_status=target_status,
+        ),
+    ).to_dict()
+
+
+def _annotation_cells(
+    annotation: Mapping[str, Any],
+    target: Mapping[str, Any],
+    *,
+    target_status: str,
+    variable: Any,
+    graph: Mapping[str, Any],
+) -> dict[str, Any]:
+    has_editable_target = target_status == "current"
+    definition_cell = (
+        (
+            _validated_target_cell(target.get("cellId"), graph)
+            if has_editable_target
+            else None
+        )
+        or (_first_definition_cell(variable, graph) if has_editable_target else None)
+        or (
+            _validated_annotation_cell(annotation, "cellId", target, graph)
+            if has_editable_target
+            else None
+        )
+    )
+    display_cell = (
+        _first_display_cell(target, definition_cell, graph)
+        if has_editable_target
+        else None
+    ) or (
+        _validated_annotation_cell(annotation, "displayCellId", target, graph)
+        if has_editable_target
+        else None
+    )
+    output_cell = _selected_output_cell(
+        annotation if has_editable_target else {},
+        target if has_editable_target else {},
+        display_cell,
+        graph,
+    )
+    if target.get("kind") == "output" and output_cell and not display_cell:
         display_cell = output_cell
+    edit_focus = definition_cell or output_cell
     downstream = _downstream_cells(edit_focus, graph)
+    target_related = (
+        [
+            *_validated_target_cells(target.get("displayCellIds") or [], graph),
+            *_validated_target_cells(target.get("relatedCellIds") or [], graph),
+        ]
+        if has_editable_target
+        else []
+    )
     related_cells = _unique_strings(
         [
             definition_cell,
             display_cell,
             output_cell,
             edit_focus,
-            *list(target.get("displayCellIds") or []),
-            *list(target.get("relatedCellIds") or []),
+            *target_related,
             *downstream,
         ]
     )
-    severity = str(annotation.get("severity") or "important")
-    intent = str(annotation.get("intent") or "fix")
-    semantic = _semantic_selection(annotation)
-    semantic_data = semantic.get("data") if isinstance(semantic, Mapping) else {}
-    column = annotation.get("column") or (
-        semantic_data.get("column") if isinstance(semantic_data, Mapping) else ""
-    )
-    column_dtype = annotation.get("columnDtype") or (
-        semantic_data.get("columnDtype") if isinstance(semantic_data, Mapping) else ""
-    )
     return {
-        "id": annotation.get("id") or f"annotation-{index}",
-        "index": index,
-        "createdAt": annotation.get("createdAt") or "",
-        "severity": severity,
-        "intent": intent,
-        "request": annotation.get("comment") or "",
-        "target": {
-            "id": target.get("id") or "",
-            "label": target.get("label") or variable or "",
-            "variable": variable or "",
-            "kind": target.get("kind") or "object",
-            "column": column or "",
-            "columnDtype": column_dtype or "",
-            "chartPart": _chart_part(annotation, semantic),
-            "semanticSelection": semantic or None,
-            "pythonType": target.get("pythonType") or "",
-            "summary": target.get("summary") or "",
-            "shape": target.get("shape"),
-            "defs": target.get("defs") or [],
-            "refs": target.get("refs") or [],
-            "output": target.get("output") or {},
-            "outputType": target.get("outputType") or "",
-            "codePreview": target.get("codePreview") or "",
+        "definition": definition_cell or "",
+        "display": display_cell or "",
+        "output": output_cell or "",
+        "editFocus": edit_focus or "",
+        "related": related_cells,
+        "downstream": downstream,
+        "previews": _cell_previews(related_cells, graph),
+    }
+
+
+def _annotation_target_payload(
+    target: Mapping[str, Any],
+    *,
+    target_status: str,
+    variable: Any,
+    column: Any,
+    column_dtype: Any,
+    chart_part: Any,
+    semantic: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "id": target.get("id") or "",
+        "label": target.get("label") or variable or "",
+        "variable": variable or "",
+        "kind": target.get("kind") or "object",
+        "status": target_status,
+        "column": column or "",
+        "columnDtype": column_dtype or "",
+        "chartPart": chart_part,
+        "semanticSelection": semantic or None,
+        "pythonType": target.get("pythonType") or "",
+        "summary": target.get("summary") or "",
+        "shape": target.get("shape"),
+        "defs": target.get("defs") or [],
+        "refs": target.get("refs") or [],
+        "output": target.get("output") or {},
+        "outputType": target.get("outputType") or "",
+        "codePreview": target.get("codePreview") or "",
+    }
+
+
+def _annotation_evidence(
+    annotation: Mapping[str, Any],
+    dom_evidence: Mapping[str, Any],
+    semantic: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "element": dom_evidence["element"],
+        "elementPath": dom_evidence["elementPath"],
+        "semanticSelection": semantic or None,
+        "documentPoint": dom_evidence["documentPoint"],
+        "boundingBox": dom_evidence["boundingBox"],
+        "context": _annotation_context(annotation),
+    }
+
+
+def _marimo_pair_instruction(
+    cells: Mapping[str, Any],
+    *,
+    intent: str,
+    severity: str,
+    target_status: str,
+) -> dict[str, Any]:
+    has_editable_target = target_status == "current"
+    edit_focus = cells.get("editFocus")
+    definition_cell = cells.get("definition")
+    output_cell = cells.get("output")
+    return {
+        "action": intent,
+        "requiresClarification": intent == "question",
+        "editBoundary": {
+            "mode": "marimo-code-mode",
+            "cellIds": _unique_strings([edit_focus, definition_cell, output_cell])
+            if has_editable_target
+            else [],
+            "smallestSafeSurface": "full-cell-body",
         },
-        "cells": {
-            "definition": definition_cell or "",
-            "display": display_cell or "",
-            "output": output_cell or "",
-            "editFocus": edit_focus or "",
-            "related": related_cells,
-            "downstream": downstream,
-            "previews": _cell_previews(related_cells, graph),
+        "readBeforeEdit": list(cells.get("related") or [])
+        if has_editable_target
+        else [],
+        "runAfterEdit": _unique_strings([edit_focus]) if has_editable_target else [],
+        "reportingProtocol": {
+            "start": "lens.agent_started(label='marimo-pair')",
+            "markRead": "lens.mark_cells(cell_ids, kind='read')",
+            "markClaimed": "lens.mark_cells(cell_ids, kind='claimed')",
+            "markEdited": "lens.mark_cells(cell_ids, kind='edited')",
+            "markRan": "lens.mark_cells(cell_ids, kind='ran')",
+            "markFailed": "lens.mark_cells(cell_ids, kind='failed', note='...')",
+            "markNeedsReview": "lens.mark_cells(cell_ids, kind='needs-review', note='...')",
+            "resolveAddressed": "lens.resolve_annotation(annotation_id, status='addressed', note='...')",
+            "resolveBlocked": "lens.resolve_annotation(annotation_id, status='blocked', note='...')",
+            "resolveNeedsHuman": "lens.resolve_annotation(annotation_id, status='needs_human', note='...')",
+            "finish": "lens.agent_finished(summary=..., cells_read=[...], cells_edited=[...], cells_run=[...])",
         },
-        "evidence": {
-            "element": annotation.get("element") or "",
-            "elementPath": annotation.get("elementPath") or "",
-            "semanticSelection": semantic or None,
-            "documentPoint": {
-                "x": annotation.get("documentX"),
-                "y": annotation.get("documentY"),
-            },
-            "boundingBox": annotation.get("boundingBox") or {},
-            "context": annotation.get("context") or {},
-        },
-        "marimoPair": {
-            "recommendedAction": _PAIR_ACTIONS.get(intent, _PAIR_ACTIONS["fix"]),
-            "needsClarification": intent == "question",
-            "suggestedFocus": _suggested_focus(intent, severity),
-            "editGuardrail": "Use marimo._code_mode ctx.edit_cell with the full replacement cell body, then run the edited cell.",
-        },
+        "recommendedAction": _recommended_action(intent, target_status),
+        "needsClarification": intent == "question",
+        "suggestedFocus": _suggested_focus(intent, severity),
+        "editGuardrail": (
+            "Use marimo._code_mode ctx.edit_cell with the full replacement cell body, then run the edited cell."
+            if has_editable_target
+            else "Do not edit from this stale Lens annotation alone; first re-identify a current live target."
+        ),
     }
 
 
 def _annotation_target(
     annotation: Mapping[str, Any],
     targets: Mapping[str, Mapping[str, Any]],
-) -> Mapping[str, Any]:
+) -> tuple[Mapping[str, Any], str]:
     target_id = annotation.get("targetId")
     if not target_id:
         raise ValueError("Lens annotations require targetId")
     target = targets.get(str(target_id))
-    if target is None:
-        raise ValueError(
-            f"Lens annotation target is not in the current target set: {target_id}"
+    if target is not None:
+        return target, "current"
+    snapshot = annotation.get("targetSnapshot")
+    if isinstance(snapshot, Mapping):
+        snapshot_target = dict(snapshot)
+        snapshot_target["id"] = str(target_id)
+        snapshot_target.setdefault(
+            "label",
+            annotation.get("targetLabel") or annotation.get("variable") or target_id,
         )
-    return target
+        snapshot_target.setdefault("kind", annotation.get("kind") or "object")
+        try:
+            return _normalize_targets([snapshot_target])[0], "snapshot"
+        except ValueError as exc:
+            return _missing_target(
+                annotation,
+                str(target_id),
+                reason=f"invalid targetSnapshot: {exc}",
+            ), "invalid-snapshot"
+    return _missing_target(
+        annotation,
+        str(target_id),
+        reason="target is absent and annotation has no validated targetSnapshot",
+    ), "missing"
+
+
+def _missing_target(
+    annotation: Mapping[str, Any],
+    target_id: str,
+    *,
+    reason: str,
+) -> Mapping[str, Any]:
+    return {
+        "id": target_id,
+        "label": annotation.get("targetLabel")
+        or annotation.get("variable")
+        or target_id,
+        "variable": annotation.get("variable") or "",
+        "kind": "diagnostic",
+        "cellId": "",
+        "displayCellIds": [],
+        "relatedCellIds": [],
+        "defs": [],
+        "refs": [],
+        "summary": reason,
+        "extensions": {
+            "missingTarget": True,
+            "requestedKind": annotation.get("kind") or "",
+        },
+    }
 
 
 def _semantic_selection(annotation: Mapping[str, Any]) -> Mapping[str, Any]:
-    semantic = annotation.get("semanticSelection") or (
-        (annotation.get("context") or {}).get("semanticSelection")
-    )
+    semantic = annotation.get("semanticSelection")
     return semantic if isinstance(semantic, Mapping) else {}
+
+
+def _normalized_semantic_selection(
+    annotation: Mapping[str, Any],
+    *,
+    annotation_id: str,
+) -> Mapping[str, Any]:
+    semantic = _semantic_selection(annotation)
+    if not semantic:
+        return {}
+    granularity = semantic.get("granularity")
+    if granularity is not None and str(granularity) not in SELECTION_GRANULARITIES:
+        valid = ", ".join(SELECTION_GRANULARITIES)
+        raise ValueError(
+            f"Lens annotation {annotation_id} has unknown selection granularity: "
+            f"{granularity}. Valid values: {valid}"
+        )
+    semantic_copy = dict(semantic)
+    data = semantic_copy.get("data")
+    if isinstance(data, Mapping) and isinstance(data.get("chartPart"), Mapping):
+        data_copy = dict(data)
+        data_copy["chartPart"] = _normalized_chart_part(
+            data["chartPart"],
+            annotation_id=annotation_id,
+        )
+        semantic_copy["data"] = data_copy
+    return safe_value(semantic_copy)
+
+
+def _normalized_chart_part(value: Any, *, annotation_id: str) -> Any:
+    if not isinstance(value, Mapping):
+        return value
+    part_kind = value.get("kind")
+    if not str(part_kind or "").strip():
+        raise ValueError(f"Lens annotation {annotation_id} chart part requires kind")
+    if str(part_kind) not in CHART_PART_KINDS:
+        valid = ", ".join(CHART_PART_KINDS)
+        raise ValueError(
+            f"Lens annotation {annotation_id} has unknown chart part kind: "
+            f"{part_kind}. Valid values: {valid}"
+        )
+    label = value.get("label")
+    if not str(label or "").strip():
+        raise ValueError(f"Lens annotation {annotation_id} chart part requires label")
+    part = {str(key): item for key, item in value.items() if item is not None}
+    allowed = {
+        "channel",
+        "context",
+        "datum",
+        "detail",
+        "extensions",
+        "field",
+        "id",
+        "kind",
+        "label",
+        "library",
+        "orientation",
+        "selector",
+    }
+    unknown = {key: part.pop(key) for key in sorted(set(part) - allowed)}
+    if unknown:
+        extensions = part.get("extensions")
+        part["extensions"] = {
+            **(dict(extensions) if isinstance(extensions, Mapping) else {}),
+            **unknown,
+        }
+    return safe_value(part)
+
+
+def _required_choice(
+    value: Any,
+    *,
+    valid: frozenset[str],
+    default: str,
+    field: str,
+    annotation_id: str,
+) -> str:
+    if value is None or value == "":
+        return default
+    text = str(value)
+    if text not in valid:
+        valid_values = ", ".join(sorted(valid))
+        raise ValueError(
+            f"Lens annotation {annotation_id} has unknown {field}: {text}. "
+            f"Valid values: {valid_values}"
+        )
+    return text
+
+
+def _recommended_action(intent: str, target_status: str) -> str:
+    if target_status != "current":
+        return (
+            "Do not edit from this stale Lens annotation alone. Re-discover the "
+            "live notebook target first; the original target is missing or its "
+            "snapshot failed validation."
+        )
+    return _PAIR_ACTIONS.get(intent, _PAIR_ACTIONS["fix"])
+
+
+def _dom_evidence(annotation: Mapping[str, Any]) -> dict[str, Any]:
+    raw = annotation.get("domEvidence")
+    evidence = raw if isinstance(raw, Mapping) else {}
+    document_point = evidence.get("documentPoint")
+    if not isinstance(document_point, Mapping):
+        document_point = {
+            "x": annotation.get("documentX") or 0,
+            "y": annotation.get("documentY") or 0,
+        }
+    bounding_box = evidence.get("boundingBox")
+    if not isinstance(bounding_box, Mapping):
+        bounding_box = annotation.get("boundingBox") or {
+            "x": 0,
+            "y": 0,
+            "width": 0,
+            "height": 0,
+        }
+    return {
+        "element": str(evidence.get("element") or annotation.get("element") or ""),
+        "elementPath": str(
+            evidence.get("elementPath") or annotation.get("elementPath") or ""
+        ),
+        "documentPoint": safe_value(dict(document_point)),
+        "boundingBox": safe_value(dict(bounding_box)),
+    }
+
+
+def _annotation_context(annotation: Mapping[str, Any]) -> dict[str, Any]:
+    raw = annotation.get("context")
+    if not isinstance(raw, Mapping):
+        return {}
+    selection_context = raw.get("selectionContext")
+    return (
+        {"selectionContext": safe_value(dict(selection_context))}
+        if isinstance(selection_context, Mapping)
+        else {}
+    )
 
 
 def _chart_part(
@@ -316,12 +854,9 @@ def _chart_part(
 ) -> Any:
     if annotation.get("chartPart"):
         return annotation.get("chartPart")
-    context_chart_part = (annotation.get("context") or {}).get("chartPart")
-    if context_chart_part:
-        return context_chart_part
     data = (semantic or _semantic_selection(annotation)).get("data") or {}
     if isinstance(data, Mapping):
-        return data.get("chartPart") or data.get("chartUnit")
+        return data.get("chartPart")
     return None
 
 
@@ -332,17 +867,22 @@ def _first_definition_cell(
     if not variable:
         return None
     cells = graph.get("definitions", {}).get(str(variable), [])
-    ordered_cells = list(cells)
-    return str(ordered_cells[0]) if ordered_cells else None
+    for cell_id in cells:
+        cell_text = _validated_target_cell(cell_id, graph)
+        if cell_text:
+            return cell_text
+    return None
 
 
 def _first_display_cell(
     target: Mapping[str, Any],
     definition_cell: Any,
+    graph: Mapping[str, Any],
 ) -> str | None:
     for cell_id in target.get("displayCellIds") or []:
-        if str(cell_id) != str(definition_cell):
-            return str(cell_id)
+        cell_text = _validated_target_cell(cell_id, graph)
+        if cell_text and cell_text != str(definition_cell):
+            return cell_text
     return None
 
 
@@ -350,23 +890,75 @@ def _selected_output_cell(
     annotation: Mapping[str, Any],
     target: Mapping[str, Any],
     display_cell: Any,
+    graph: Mapping[str, Any],
 ) -> str | None:
-    if annotation.get("displayCellId"):
-        return str(annotation["displayCellId"])
     for cell_id in target.get("displayCellIds") or []:
-        return str(cell_id)
+        cell_text = _validated_target_cell(cell_id, graph)
+        if cell_text:
+            return cell_text
     if display_cell:
         return str(display_cell)
-    if target.get("kind") == "output" and target.get("cellId"):
-        return str(target["cellId"])
-    return None
+    if target.get("kind") == "output":
+        return _validated_target_cell(target.get("cellId"), graph)
+    return _validated_annotation_cell(annotation, "displayCellId", target, graph)
+
+
+def _validated_annotation_cell(
+    annotation: Mapping[str, Any],
+    key: str,
+    target: Mapping[str, Any],
+    graph: Mapping[str, Any],
+) -> str | None:
+    cell_id = annotation.get(key)
+    if not cell_id:
+        return None
+    cell_text = _validated_target_cell(cell_id, graph)
+    if not cell_text:
+        return None
+    if key == "displayCellId":
+        target_display_ids = set(
+            _validated_target_cells(target.get("displayCellIds") or [], graph)
+        )
+        if target_display_ids and cell_text not in target_display_ids:
+            return None
+    target_cell_id = _validated_target_cell(target.get("cellId"), graph)
+    if key == "cellId" and target_cell_id and cell_text != target_cell_id:
+        return None
+    return cell_text
+
+
+def _validated_target_cells(
+    cell_ids: Iterable[Any],
+    graph: Mapping[str, Any],
+) -> list[str]:
+    return _unique_strings(
+        _validated_target_cell(cell_id, graph) for cell_id in cell_ids
+    )
+
+
+def _validated_target_cell(cell_id: Any, graph: Mapping[str, Any]) -> str | None:
+    if not cell_id:
+        return None
+    cell_text = str(cell_id)
+    graph_cell_ids = _graph_cell_ids(graph)
+    if not graph_cell_ids or cell_text not in graph_cell_ids:
+        return None
+    return cell_text
+
+
+def _graph_cell_ids(graph: Mapping[str, Any]) -> set[str]:
+    ids: set[str] = set()
+    for cell in _graph_cells(graph):
+        if isinstance(cell, Mapping) and cell.get("id"):
+            ids.add(str(cell["id"]))
+    return ids
 
 
 def _downstream_cells(cell_id: Any, graph: Mapping[str, Any]) -> list[str]:
     if not cell_id:
         return []
     return _unique_strings(
-        edge.get("to")
+        _validated_target_cell(edge.get("to"), graph)
         for edge in graph.get("edges", [])
         if str(edge.get("from")) == str(cell_id)
     )
@@ -470,13 +1062,11 @@ def _highest_severity(values: Iterable[str]) -> str:
 
 
 def _suggested_focus(intent: str, severity: str) -> str:
-    if severity == "blocking":
-        return "resolve before continuing with downstream notebook work"
-    if intent == "question":
-        return "answer from inspected live notebook state before changing code"
-    if intent == "approve":
-        return "preserve this behavior while editing adjacent cells"
-    return "make the smallest notebook change that satisfies the feedback"
+    return (
+        _SUGGESTED_FOCUS_BY_SEVERITY.get(severity)
+        or _SUGGESTED_FOCUS_BY_INTENT.get(intent)
+        or "make the smallest notebook change that satisfies the feedback"
+    )
 
 
 def _unique_strings(values: Iterable[Any]) -> list[str]:

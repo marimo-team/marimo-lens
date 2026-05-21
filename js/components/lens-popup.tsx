@@ -1,12 +1,48 @@
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
-import { IconX } from "@/components/icons";
+import { X } from "lucide-react";
+import { useEffect, useId, useRef, type FormEvent } from "react";
+
+import type { LensAnnotation, PopupState } from "@/types";
+
 import { LensTooltip } from "@/components/lens-tooltip";
 import { SelectionIdentity } from "@/components/selection-identity";
-import { createAnnotationAnchor } from "@/lib/annotation-anchors";
+import { createFeedbackDraft } from "@/feedback/create-feedback-draft";
 import { formatShape, popupStyle } from "@/lib/overlay-layout";
-import { semanticHighlightRect, serializeSemanticSelection } from "@/selection/semantic-selection";
+import { useLensUiStore } from "@/store";
 import { FEEDBACK_INTENTS, FEEDBACK_SEVERITIES } from "@/types";
-import type { LensAnnotation, PopupState } from "@/types";
+
+const INTENT_META: Record<LensAnnotation["intent"], { label: string; tooltip: string }> = {
+  approve: {
+    label: "Approve",
+    tooltip: "Mark this as useful or correct.",
+  },
+  explain: {
+    label: "Explain",
+    tooltip: "Ask marimo-pair to explain what is happening here.",
+  },
+  fix: {
+    label: "Change",
+    tooltip: "Ask marimo-pair to change this.",
+  },
+  question: {
+    label: "Question",
+    tooltip: "Ask marimo-pair to investigate this.",
+  },
+};
+
+const SEVERITY_META: Record<LensAnnotation["severity"], { label: string; tooltip: string }> = {
+  blocking: {
+    label: "Blocking",
+    tooltip: "This blocks the notebook goal.",
+  },
+  important: {
+    label: "Important",
+    tooltip: "This should be handled in the next pass.",
+  },
+  suggestion: {
+    label: "Suggestion",
+    tooltip: "This is useful context, but not urgent.",
+  },
+};
 
 type LensPopupProps = {
   popup: PopupState;
@@ -15,12 +51,16 @@ type LensPopupProps = {
 };
 
 export function LensPopup({ popup, onSubmit, onCancel }: LensPopupProps) {
-  const [comment, setComment] = useState("");
-  const [intent, setIntent] = useState<LensAnnotation["intent"]>("fix");
-  const [severity, setSeverity] = useState<LensAnnotation["severity"]>("important");
+  const { comment, intent, severity } = useLensUiStore((state) => state.popupDraft);
+  const updatePopupDraft = useLensUiStore((state) => state.updatePopupDraft);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const titleId = useId();
-  const { target, column, displayCellId } = popup.hover;
+  const { target, displayCellId } = popup.hover;
+  const targetShape = formatShape(target);
+  const canSubmit = Boolean(comment.trim());
+  const submitTooltip = canSubmit
+    ? "Save this note on the selected notebook output."
+    : "Write a note before saving.";
 
   useEffect(() => {
     const timer = window.setTimeout(() => textareaRef.current?.focus(), 40);
@@ -30,42 +70,7 @@ export function LensPopup({ popup, onSubmit, onCancel }: LensPopupProps) {
   const submit = () => {
     const trimmed = comment.trim();
     if (!trimmed) return;
-    const semanticSelection = serializeSemanticSelection(popup.hover.semanticSelection);
-    const rect = semanticHighlightRect(popup.hover.semanticSelection.highlight) ?? popup.hover.rect;
-    onSubmit({
-      targetId: target.id,
-      targetLabel: target.label,
-      variable: target.variable,
-      kind: target.kind,
-      column: column?.name,
-      columnDtype: column?.dtype,
-      chartPart: popup.hover.chartPart ?? null,
-      cellId: target.cellId,
-      displayCellId,
-      comment: trimmed,
-      intent,
-      severity,
-      element: popup.hover.elementName,
-      elementPath: popup.hover.elementPath,
-      documentX: rect.left + rect.width / 2 + window.scrollX,
-      documentY: rect.top + rect.height / 2 + window.scrollY,
-      boundingBox: {
-        x: rect.left,
-        y: rect.top,
-        width: rect.width,
-        height: rect.height,
-      },
-      anchor: createAnnotationAnchor(popup.hover),
-      semanticSelection,
-      context: {
-        summary: target.summary,
-        defs: target.defs ?? [],
-        refs: target.refs ?? [],
-        shape: target.shape ?? null,
-        pythonType: target.pythonType,
-        semanticSelection,
-      },
-    });
+    onSubmit(createFeedbackDraft({ popup, comment: trimmed, intent, severity }));
   };
   const submitForm = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -101,7 +106,7 @@ export function LensPopup({ popup, onSubmit, onCancel }: LensPopupProps) {
               aria-label="Close"
               data-marimo-lens-tooltip="Close"
             >
-              <IconX size={14} />
+              <X size={14} strokeWidth={1.8} />
             </button>
           </LensTooltip>
         </div>
@@ -109,15 +114,17 @@ export function LensPopup({ popup, onSubmit, onCancel }: LensPopupProps) {
         <div className="ml-provenance">
           <span>defined in {target.cellId || "unknown cell"}</span>
           {displayCellId ? <span>shown in {displayCellId}</span> : null}
-          {formatShape(target) ? <span>{formatShape(target)}</span> : null}
+          {targetShape ? <span>{targetShape}</span> : null}
         </div>
 
         <textarea
           ref={textareaRef}
           className="ml-textarea"
           aria-label="Feedback comment"
+          name="feedback"
+          autoComplete="off"
           value={comment}
-          onChange={(event) => setComment(event.target.value)}
+          onChange={(event) => updatePopupDraft({ comment: event.target.value })}
           onKeyDown={(event) => {
             event.stopPropagation();
             if (event.key === "Enter" && !event.shiftKey) {
@@ -126,68 +133,57 @@ export function LensPopup({ popup, onSubmit, onCancel }: LensPopupProps) {
             }
             if (event.key === "Escape") onCancel();
           }}
-          placeholder="What should the agent fix, check, or explain here?"
+          placeholder="Describe the change, question, or issue…"
         />
 
-        <div className="ml-chip-row" aria-label="Feedback intent">
+        <fieldset className="ml-chip-row">
+          <legend className="ml-sr-only">Feedback intent</legend>
           {FEEDBACK_INTENTS.map((item) => (
-            <LensTooltip key={item} content={intentTooltip(item)}>
+            <LensTooltip key={item} content={INTENT_META[item].tooltip}>
               <button
                 className={item === intent ? "ml-chip ml-chip--selected" : "ml-chip"}
-                onClick={() => setIntent(item)}
+                onClick={() => updatePopupDraft({ intent: item })}
                 type="button"
                 aria-pressed={item === intent}
-                data-marimo-lens-tooltip={`Intent: ${item}`}
+                data-marimo-lens-tooltip={`Intent: ${INTENT_META[item].label}`}
               >
-                {item}
+                {INTENT_META[item].label}
               </button>
             </LensTooltip>
           ))}
-        </div>
+        </fieldset>
 
         <div className="ml-popup__footer">
-          <div className="ml-chip-row" aria-label="Severity">
+          <fieldset className="ml-chip-row">
+            <legend className="ml-sr-only">Severity</legend>
             {FEEDBACK_SEVERITIES.map((item) => (
-              <LensTooltip key={item} content={severityTooltip(item)}>
+              <LensTooltip key={item} content={SEVERITY_META[item].tooltip}>
                 <button
                   className={
                     item === severity ? "ml-dot-chip ml-dot-chip--selected" : "ml-dot-chip"
                   }
-                  onClick={() => setSeverity(item)}
+                  onClick={() => updatePopupDraft({ severity: item })}
                   type="button"
                   aria-pressed={item === severity}
-                  data-marimo-lens-tooltip={`Severity: ${item}`}
+                  data-marimo-lens-tooltip={`Severity: ${SEVERITY_META[item].label}`}
                 >
-                  {item}
+                  {SEVERITY_META[item].label}
                 </button>
               </LensTooltip>
             ))}
-          </div>
-          <LensTooltip content="Save this note on the selected notebook output.">
+          </fieldset>
+          <LensTooltip content={submitTooltip}>
             <button
               className="ml-submit"
-              disabled={!comment.trim()}
+              disabled={!canSubmit}
               type="submit"
-              data-marimo-lens-tooltip="Add feedback"
+              data-marimo-lens-tooltip="Add note"
             >
-              Add
+              Add note
             </button>
           </LensTooltip>
         </div>
       </form>
     </dialog>
   );
-}
-
-function intentTooltip(intent: LensAnnotation["intent"]): string {
-  if (intent === "fix") return "Ask marimo-pair to change this.";
-  if (intent === "question") return "Ask marimo-pair to investigate this.";
-  if (intent === "explain") return "Ask marimo-pair to explain what is happening here.";
-  return "Mark this as useful or correct.";
-}
-
-function severityTooltip(severity: LensAnnotation["severity"]): string {
-  if (severity === "blocking") return "This blocks the notebook goal.";
-  if (severity === "important") return "This should be handled in the next pass.";
-  return "This is useful context, but not urgent.";
 }
