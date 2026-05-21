@@ -41,12 +41,31 @@ describe("resolveColumnWindow", () => {
         requestedStartIndex: 1,
       }),
     ).toEqual({
-      endIndex: 3,
+      endIndex: 2,
       hasNext: true,
       hasPrevious: true,
       overflowing: true,
       startIndex: 1,
     });
+  });
+
+  test("reserves room for the remaining column cue", () => {
+    expect(
+      resolveColumnWindow({
+        availableWidth: 210,
+        chipWidths: [80, 60, 90, 70],
+        remainingLabelWidth: 0,
+        requestedStartIndex: 1,
+      }).endIndex,
+    ).toBe(3);
+
+    expect(
+      resolveColumnWindow({
+        availableWidth: 210,
+        chipWidths: [80, 60, 90, 70],
+        requestedStartIndex: 1,
+      }).endIndex,
+    ).toBe(2);
   });
 
   test("keeps one full column visible when a name is wider than the viewport", () => {

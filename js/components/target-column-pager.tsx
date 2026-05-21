@@ -15,6 +15,7 @@ import type { LensColumn } from "@/types";
 const CHIP_GAP_PX = 4;
 const NAV_BUTTON_WIDTH_PX = 16;
 const NAV_GAP_PX = 4;
+const REMAINING_LABEL_WIDTH_PX = 24;
 
 type TargetColumnPagerProps = {
   columns: LensColumn[];
@@ -25,6 +26,11 @@ type TargetColumnPagerProps = {
 type ColumnPagerLayout = {
   availableWidth: number;
   chipWidths: number[];
+};
+
+type KeyedColumn = {
+  column: LensColumn;
+  key: string;
 };
 
 type ColumnStep = "previous" | "next";
@@ -46,6 +52,7 @@ export type ColumnWindowInput = {
   chipWidths: number[];
   navButtonWidth?: number;
   navGap?: number;
+  remainingLabelWidth?: number;
   requestedStartIndex: number;
 };
 
@@ -62,15 +69,38 @@ export const TargetColumnPager = memo(function TargetColumnPager({
   onSelect,
   targetLabel,
 }: TargetColumnPagerProps) {
-  const visibleColumns = useMemo(() => {
-    return columns.filter((column) => column.name.trim().length > 0);
+  const keyedColumns = useMemo(() => {
+    return keyColumns(columns.filter((column) => column.name.trim().length > 0));
   }, [columns]);
+  const columnKey = useMemo(
+    () => keyedColumns.map((column) => column.key).join("\u0000"),
+    [keyedColumns],
+  );
+
+  if (keyedColumns.length === 0) return null;
+
+  return (
+    <TargetColumnPagerWindow
+      key={columnKey}
+      keyedColumns={keyedColumns}
+      onSelect={onSelect}
+      targetLabel={targetLabel}
+    />
+  );
+});
+
+const TargetColumnPagerWindow = memo(function TargetColumnPagerWindow({
+  keyedColumns,
+  onSelect,
+  targetLabel,
+}: {
+  keyedColumns: KeyedColumn[];
+  onSelect: () => void;
+  targetLabel: string;
+}) {
   const [startIndex, setStartIndex] = useState(0);
   const [step, setStep] = useState<ColumnStep>("next");
-  const { layout, measureRef, rootRef } = useColumnPagerLayout(visibleColumns);
-  const columnKey = useMemo(() => {
-    return visibleColumns.map((column) => column.name).join("\u0000");
-  }, [visibleColumns]);
+  const { layout, measureRef, rootRef } = useColumnPagerLayout(keyedColumns);
   const window = useMemo(() => {
     return resolveColumnWindow({
       availableWidth: layout.availableWidth,
@@ -78,11 +108,8 @@ export const TargetColumnPager = memo(function TargetColumnPager({
       requestedStartIndex: startIndex,
     });
   }, [layout.availableWidth, layout.chipWidths, startIndex]);
-  const pageColumns = visibleColumns.slice(window.startIndex, window.endIndex);
-
-  useEffect(() => {
-    setStartIndex(0);
-  }, [columnKey]);
+  const pageColumns = keyedColumns.slice(window.startIndex, window.endIndex);
+  const remainingColumns = keyedColumns.length - window.endIndex;
 
   useEffect(() => {
     if (startIndex !== window.startIndex) {
@@ -95,13 +122,11 @@ export const TargetColumnPager = memo(function TargetColumnPager({
       setStep(nextStep);
       setStartIndex((current) => {
         const nextIndex = nextStep === "next" ? current + 1 : current - 1;
-        return clamp(nextIndex, 0, Math.max(visibleColumns.length - 1, 0));
+        return clamp(nextIndex, 0, Math.max(keyedColumns.length - 1, 0));
       });
     },
-    [visibleColumns.length],
+    [keyedColumns.length],
   );
-
-  if (visibleColumns.length === 0) return null;
 
   return (
     <span
@@ -128,8 +153,8 @@ export const TargetColumnPager = memo(function TargetColumnPager({
           className="ml-target-column-pager__track"
           data-step={step}
         >
-          {pageColumns.map((column, index) => (
-            <ColumnChip key={`${column.name}:${window.startIndex + index}`} column={column} />
+          {pageColumns.map((item) => (
+            <ColumnChip key={item.key} column={item.column} />
           ))}
         </span>
       </button>
@@ -137,13 +162,14 @@ export const TargetColumnPager = memo(function TargetColumnPager({
         <ColumnStepButton
           step="next"
           disabled={!window.hasNext}
+          remainingColumns={remainingColumns}
           targetLabel={targetLabel}
           onStep={handleStep}
         />
       ) : null}
       <span className="ml-target-column-pager__measure" ref={measureRef} aria-hidden="true">
-        {visibleColumns.map((column, index) => (
-          <ColumnChip key={`${column.name}:${index}`} column={column} />
+        {keyedColumns.map((item) => (
+          <ColumnChip key={item.key} column={item.column} />
         ))}
       </span>
     </span>
@@ -153,30 +179,44 @@ export const TargetColumnPager = memo(function TargetColumnPager({
 function ColumnStepButton({
   disabled,
   onStep,
+  remainingColumns,
   step,
   targetLabel,
 }: {
   disabled: boolean;
   onStep: (step: ColumnStep) => void;
+  remainingColumns?: number;
   step: ColumnStep;
   targetLabel: string;
 }) {
   const { Icon, label: labelForStep } = COLUMN_STEP_PRESENTATION[step];
   const label = labelForStep(targetLabel);
+  const showRemaining = step === "next" && typeof remainingColumns === "number";
   return (
-    <button
-      type="button"
-      className="ml-target-column-pager__step"
-      aria-label={label}
-      disabled={disabled}
-      onClick={(event) => {
-        event.stopPropagation();
-        onStep(step);
-      }}
-      title={label}
-    >
-      <Icon size={12} strokeWidth={2} />
-    </button>
+    <span className="ml-target-column-pager__step-wrap">
+      {showRemaining ? (
+        <span
+          className="ml-target-column-pager__remaining"
+          aria-label={`${remainingColumns} columns left`}
+          title={`${remainingColumns} columns left`}
+        >
+          +{remainingColumns}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        className="ml-target-column-pager__step"
+        aria-label={label}
+        disabled={disabled}
+        onClick={(event) => {
+          event.stopPropagation();
+          onStep(step);
+        }}
+        title={label}
+      >
+        <Icon size={12} strokeWidth={2} />
+      </button>
+    </span>
   );
 }
 
@@ -192,7 +232,7 @@ const ColumnChip = memo(function ColumnChip({ column }: { column: LensColumn }) 
   );
 });
 
-function useColumnPagerLayout(columns: LensColumn[]): {
+function useColumnPagerLayout(columns: KeyedColumn[]): {
   layout: ColumnPagerLayout;
   measureRef: RefObject<HTMLSpanElement | null>;
   rootRef: RefObject<HTMLSpanElement | null>;
@@ -243,6 +283,7 @@ export function resolveColumnWindow({
   chipWidths,
   navButtonWidth = NAV_BUTTON_WIDTH_PX,
   navGap = NAV_GAP_PX,
+  remainingLabelWidth = REMAINING_LABEL_WIDTH_PX,
   requestedStartIndex,
 }: ColumnWindowInput): ColumnWindow {
   const itemCount = chipWidths.length;
@@ -270,7 +311,10 @@ export function resolveColumnWindow({
     };
   }
 
-  const viewportWidth = Math.max(0, availableWidth - navButtonWidth * 2 - navGap * 2);
+  const viewportWidth = Math.max(
+    0,
+    availableWidth - navButtonWidth * 2 - navGap * 2 - remainingLabelWidth,
+  );
   let endIndex = startIndex;
   let usedWidth = 0;
 
@@ -300,6 +344,18 @@ function clamp(value: number, minimum: number, maximum: number): number {
 }
 
 function numberArraysEqual(left: number[], right: number[]): boolean {
-  if (left.length !== right.length) return false;
-  return left.every((value, index) => value === right[index]);
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function keyColumns(columns: LensColumn[]): KeyedColumn[] {
+  const counts = new Map<string, number>();
+  return columns.map((column) => {
+    const base = [column.name, column.dtype ?? ""].join("\u0000");
+    const occurrence = counts.get(base) ?? 0;
+    counts.set(base, occurrence + 1);
+    return {
+      column,
+      key: `${base}\u0000${occurrence}`,
+    };
+  });
 }
