@@ -9,6 +9,8 @@ import { identifyElement } from "@/lib/element-identification";
 import { elementsAtPointCrossingShadow } from "@/lib/shadow-dom";
 import { defaultSelectionPlugins } from "@/selection/plugins/default-selection-plugins";
 import {
+  canResolveSelectionFrom,
+  isNotebookChromeElement,
   outputCellIdFor,
   preferredSelectionRank,
   selectionScopeFor,
@@ -38,6 +40,7 @@ export function resolveElementSelection(
   targets: LensTarget[],
   point?: ViewportPoint,
 ): ResolvedHover | null {
+  if (!canResolveSelectionFrom(element)) return null;
   const scope = selectionScopeFor(element, targets);
   const context: SelectionContext = { ...scope, element, point };
   const candidates: SelectionCandidate[] = [];
@@ -58,7 +61,9 @@ export function resolvePointSelection(
   point: ViewportPoint,
   targets: LensTarget[],
 ): ResolvedHover | null {
-  for (const element of elementsAtPointCrossingShadow(point)) {
+  const elements = elementsAtPointCrossingShadow(point);
+  if (isNotebookChromeElement(elements[0] ?? null)) return null;
+  for (const element of elements) {
     const resolved = resolveElementSelection(element, targets, point);
     if (resolved) return resolved;
   }
@@ -78,6 +83,25 @@ export function targetElementForSelection(
   for (const plugin of orderedSelectionPlugins) {
     const element = plugin.previewElement?.({ ...scope, target }) ?? null;
     if (element) return element;
+  }
+  return null;
+}
+
+export function resolveTargetPreview(
+  target: LensTarget,
+  targets: LensTarget[],
+): ResolvedHover | null {
+  const scope = {
+    allTargets: targets,
+    targets,
+    displayCellId: null,
+    displayTargets: [],
+  };
+  for (const plugin of orderedSelectionPlugins) {
+    const element = plugin.previewElement?.({ ...scope, target }) ?? null;
+    if (!element) continue;
+    const resolved = hoverForTargetSelection(target, element, targets);
+    if (resolved) return resolved;
   }
   return null;
 }

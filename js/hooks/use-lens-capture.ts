@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import type { LensTarget, ResolvedHover } from "@/types";
+import type { LensTarget } from "@/types";
 
 import { eventTargetElement, isLensInterfaceEvent } from "@/selection/dom-events";
 import { resolveElementSelection, resolvePointSelection } from "@/selection/selection-registry";
@@ -10,11 +10,9 @@ export function useLensCapture(targets: LensTarget[]) {
   const armed = useLensUiStore((state) => state.armed);
   const dragging = useLensUiStore((state) => state.dragging);
   const popup = useLensUiStore((state) => state.popup);
-  const hover = useLensUiStore((state) => state.hover);
   const setHover = useLensUiStore((state) => state.setHover);
   const setPopup = useLensUiStore((state) => state.setPopup);
   const stopCapture = useLensUiStore((state) => state.stopCapture);
-  const hoverRef = useRef<ResolvedHover | null>(null);
   const lastHoverProbeRef = useRef<{
     element: Element | null;
     x: number;
@@ -28,10 +26,6 @@ export function useLensCapture(targets: LensTarget[]) {
       document.documentElement.removeAttribute("data-marimo-lens-capture");
     };
   }, [armed]);
-
-  useEffect(() => {
-    hoverRef.current = hover;
-  }, [hover]);
 
   useEffect(() => {
     if (!armed || popup || dragging) return;
@@ -81,8 +75,7 @@ export function useLensCapture(targets: LensTarget[]) {
       const point = { x: event.clientX, y: event.clientY };
       const resolved =
         (element ? resolveElementSelection(element, targets, point) : null) ??
-        resolvePointSelection(point, targets) ??
-        hoverRef.current;
+        resolvePointSelection(point, targets);
       if (!resolved) return;
       event.preventDefault();
       event.stopPropagation();

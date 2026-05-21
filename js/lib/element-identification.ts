@@ -2,19 +2,57 @@ import { ancestryCrossingShadow, closestCrossingShadow } from "@/lib/shadow-dom"
 
 const HASHED_CLASS_RE = /[A-Z0-9]{6,}/;
 
+type ElementNameContext = {
+  aria: string | null;
+  element: Element;
+  tag: string;
+  text: string | undefined;
+  title: string | null;
+};
+
+type ElementNameRule = {
+  matches: (context: ElementNameContext) => boolean;
+  name: (context: ElementNameContext) => string;
+};
+
+const ELEMENT_NAME_RULES: ElementNameRule[] = [
+  {
+    matches: ({ aria }) => Boolean(aria),
+    name: ({ aria, tag }) => `${tag} [${aria?.slice(0, 48)}]`,
+  },
+  {
+    matches: ({ title }) => Boolean(title),
+    name: ({ tag, title }) => `${tag} [${title?.slice(0, 48)}]`,
+  },
+  {
+    matches: ({ text }) => Boolean(text && text.length <= 48),
+    name: ({ tag, text }) => `${tag} "${text}"`,
+  },
+  {
+    matches: ({ element, tag }) => tag === "svg" || Boolean(closestCrossingShadow(element, "svg")),
+    name: () => "visual mark",
+  },
+  {
+    matches: ({ tag }) => tag === "canvas",
+    name: () => "canvas",
+  },
+  {
+    matches: ({ element, tag }) => tag === "th" || element.getAttribute("role") === "columnheader",
+    name: () => "table column",
+  },
+  {
+    matches: ({ element, tag }) => tag === "td" || element.getAttribute("role") === "gridcell",
+    name: () => "table cell",
+  },
+];
+
 export function identifyElement(element: Element): { name: string; path: string } {
   const tag = element.tagName.toLowerCase();
   const aria = element.getAttribute("aria-label");
   const title = element.getAttribute("title");
   const text = element.textContent?.trim().replace(/\s+/g, " ");
-  let name = tag;
-  if (aria) name = `${tag} [${aria.slice(0, 48)}]`;
-  else if (title) name = `${tag} [${title.slice(0, 48)}]`;
-  else if (text && text.length <= 48) name = `${tag} "${text}"`;
-  else if (tag === "svg" || closestCrossingShadow(element, "svg")) name = "visual mark";
-  else if (tag === "canvas") name = "canvas";
-  else if (tag === "th" || element.getAttribute("role") === "columnheader") name = "table column";
-  else if (tag === "td" || element.getAttribute("role") === "gridcell") name = "table cell";
+  const context = { aria, element, tag, text, title };
+  const name = ELEMENT_NAME_RULES.find((rule) => rule.matches(context))?.name(context) ?? tag;
 
   const parts: string[] = [];
   for (const current of ancestryCrossingShadow(element).slice(0, 7).reverse()) {

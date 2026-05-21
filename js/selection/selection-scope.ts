@@ -3,6 +3,54 @@ import type { LensTarget, SelectionSurface } from "@/types";
 
 import { closestCrossingShadow } from "@/lib/shadow-dom";
 
+const NOTEBOOK_SELECTION_SURFACE_SELECTOR = [
+  ".output-area",
+  ".output.block",
+  ".cm-editor",
+  ".js-plotly-plot",
+  ".plotly",
+  ".vega-embed",
+  "[data-testid='cell-editor']",
+  "[data-testid='cell-output']",
+  "[id^='output-']",
+  "[role='grid']",
+  "audio",
+  "canvas",
+  "iframe",
+  "img",
+  "marimo-data-editor",
+  "marimo-dataframe",
+  "marimo-matplotlib",
+  "marimo-table",
+  "object",
+  "picture",
+  "svg",
+  "table",
+  "video",
+].join(",");
+
+const MARIMO_CHROME_SELECTOR = [
+  "[data-marimo-lens-ui]",
+  "[data-testid='cell-status']",
+  "[data-testid='notebook-actions-dropdown']",
+  ".cell-status-icon",
+  ".elapsed-time.hover-action",
+  ".hover-action",
+  ".hover-actions",
+  ".hover-actions-parent > [class*='absolute'] button",
+].join(",");
+
+const MARIMO_CHROME_LABELS = [
+  "cell actions",
+  "collapse output",
+  "delete cell",
+  "expand output",
+  "hide code",
+  "move cell",
+  "run cell",
+  "show code",
+];
+
 export function outputCellIdFor(element: Element | null): string | null {
   let current: Element | null = element;
   while (current) {
@@ -17,6 +65,35 @@ export function outputCellIdFor(element: Element | null): string | null {
     current = root instanceof ShadowRoot ? root.host : null;
   }
   return null;
+}
+
+export function canResolveSelectionFrom(element: Element): boolean {
+  if (isNotebookChromeElement(element)) return false;
+  return Boolean(selectableNotebookSurfaceFor(element));
+}
+
+export function isNotebookChromeElement(element: Element | null): boolean {
+  if (!element) return false;
+  if (closestCrossingShadow(element, MARIMO_CHROME_SELECTOR)) return true;
+  const labelled = closestCrossingShadow(element, "button,[role='button'],[aria-label],[title]");
+  if (!labelled) return false;
+  if (!closestCrossingShadow(labelled, ".marimo-cell,[data-cell-id],[id^='cell-']")) {
+    return false;
+  }
+  const text = normalizedChromeText(labelled);
+  return MARIMO_CHROME_LABELS.some((label) => text.includes(label));
+}
+
+function selectableNotebookSurfaceFor(element: Element): Element | null {
+  return closestCrossingShadow(element, NOTEBOOK_SELECTION_SURFACE_SELECTOR);
+}
+
+function normalizedChromeText(element: Element): string {
+  return [element.getAttribute("aria-label"), element.getAttribute("title"), element.textContent]
+    .join(" ")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function scopedOutputCellIdFor(element: Element | null, targets: LensTarget[]): string | null {

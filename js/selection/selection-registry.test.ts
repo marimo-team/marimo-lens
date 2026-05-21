@@ -5,9 +5,11 @@ import type { LensTarget } from "@/types";
 import {
   resolveElementSelection,
   resolvePointSelection,
+  resolveTargetPreview,
   targetElementForSelection,
 } from "@/selection/selection-registry";
 import {
+  chartTarget,
   dataframeTarget,
   filteredSalesTarget,
   setRect,
@@ -413,9 +415,11 @@ describe("resolveElementSelection", () => {
   test("scopes marimo cells by raw data-cell-id from cell-* host ids", () => {
     document.body.innerHTML = `
       <section id="cell-cell-data" data-cell-id="cell-data" data-cell-name="view">
+        <div id="output-cell-data">
           <table>
             <tbody><tr><td data-column="revenue">142</td></tr></tbody>
           </table>
+        </div>
       </section>
     `;
     const cell = document.querySelector("td")!;
@@ -442,9 +446,11 @@ describe("resolveElementSelection", () => {
   test("normalizes cell-* ids without leaking the DOM prefix", () => {
     document.body.innerHTML = `
       <section id="cell-view" data-cell-name="view">
-        <table>
-          <tbody><tr><td data-column="revenue">142</td></tr></tbody>
-        </table>
+        <div id="output-view">
+          <table>
+            <tbody><tr><td data-column="revenue">142</td></tr></tbody>
+          </table>
+        </div>
       </section>
     `;
     const cell = document.querySelector("td")!;
@@ -501,6 +507,78 @@ describe("resolveElementSelection", () => {
     });
   });
 
+  test("ignores marimo chrome controls inside a displayed cell", () => {
+    document.body.innerHTML = `
+      <section id="cell-vblA" class="marimo-cell" data-cell-id="vblA" data-cell-name="_">
+        <div id="output-vblA" class="output-area">
+          <div class="output block">
+            <svg aria-label="Barley yield chart"></svg>
+          </div>
+          <button class="hover-action" aria-label="Expand output">Expand output</button>
+        </div>
+      </section>
+    `;
+    const output = document.getElementById("output-vblA")!;
+    const chart = document.querySelector("svg")!;
+    const chrome = document.querySelector("button")!;
+    setRect(output, { height: 240, width: 560, x: 20, y: 30 });
+    setRect(chart, { height: 180, width: 360, x: 40, y: 56 });
+    setRect(chrome, { height: 28, width: 120, x: 220, y: 40 });
+    const target: LensTarget = {
+      ...chartTarget,
+      id: "output:vblA",
+      variable: undefined,
+      label: "Chart output from cell vblA",
+      kind: "output",
+      cellId: "vblA",
+      displayCellIds: ["vblA"],
+      selectors: ['[id="output-vblA"]'],
+      selectionPolicy: { prefer: ["visual-surface", "display-cell", "selector"] },
+    };
+    const originalElementsFromPoint = document.elementsFromPoint;
+    document.elementsFromPoint = () => [chrome, output, chart];
+
+    try {
+      expect(resolveElementSelection(chrome, [target], { x: 240, y: 48 })).toBeNull();
+      expect(resolvePointSelection({ x: 240, y: 48 }, [target])).toBeNull();
+    } finally {
+      document.elementsFromPoint = originalElementsFromPoint;
+    }
+  });
+
+  test("still selects real output content inside a displayed cell", () => {
+    document.body.innerHTML = `
+      <section id="cell-vblA" class="marimo-cell" data-cell-id="vblA" data-cell-name="_">
+        <div id="output-vblA" class="output-area">
+          <div class="output block">
+            <svg aria-label="Barley yield chart"></svg>
+          </div>
+        </div>
+      </section>
+    `;
+    const output = document.getElementById("output-vblA")!;
+    const chart = document.querySelector("svg")!;
+    setRect(output, { height: 240, width: 560, x: 20, y: 30 });
+    setRect(chart, { height: 180, width: 360, x: 40, y: 56 });
+    const target: LensTarget = {
+      ...chartTarget,
+      id: "output:vblA",
+      variable: undefined,
+      label: "Chart output from cell vblA",
+      kind: "output",
+      cellId: "vblA",
+      displayCellIds: ["vblA"],
+      selectors: ['[id="output-vblA"]'],
+      selectionPolicy: { prefer: ["visual-surface", "display-cell", "selector"] },
+    };
+
+    const resolved = resolveElementSelection(chart, [target], { x: 120, y: 120 });
+
+    expect(resolved?.target.id).toBe("output:vblA");
+    expect(resolved?.selection?.adapter).toBe("visual-surface");
+    expect(resolved?.displayCellId).toBe("vblA");
+  });
+
   test("previews same-cell outputs when displayCellIds are absent", () => {
     document.body.innerHTML = `
       <section id="output-cell-data">
@@ -519,6 +597,31 @@ describe("resolveElementSelection", () => {
     };
 
     expect(targetElementForSelection(target, [target])).toBe(output);
+  });
+
+  test("falls back to the rendered cell when the first target preview is not usable", () => {
+    document.body.innerHTML = `
+      <div id="empty-selector"></div>
+      <section id="output-cell-data">
+        <table>
+          <tbody><tr><td>142</td></tr></tbody>
+        </table>
+      </section>
+    `;
+    const output = document.getElementById("output-cell-data")!;
+    setRect(output, { height: 80, width: 420, x: 20, y: 30 });
+
+    const target: LensTarget = {
+      ...dataframeTarget,
+      cellId: "cell-data",
+      displayCellIds: [],
+      selectors: ["#empty-selector"],
+    };
+
+    expect(targetElementForSelection(target, [target])).toBe(
+      document.getElementById("empty-selector"),
+    );
+    expect(resolveTargetPreview(target, [target])?.element).toBe(output);
   });
 
   test("skips table-internal data-cell-id values before notebook cells", () => {
