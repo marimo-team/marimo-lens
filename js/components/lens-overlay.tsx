@@ -1,5 +1,8 @@
+import { X } from "lucide-react";
 import { useEffect, useState, type CSSProperties } from "react";
-import { IconX } from "@/components/icons";
+
+import type { AgentActivity, LensAnnotation, NotebookGraph, ResolvedHover } from "@/types";
+
 import { LensPopup } from "@/components/lens-popup";
 import { SelectionIdentity } from "@/components/selection-identity";
 import {
@@ -16,11 +19,11 @@ import {
   visibleAnnotations,
 } from "@/lib/agent-activity";
 import { markerPosition } from "@/lib/annotation-anchors";
+import { clamp } from "@/lib/dom-geometry";
 import { lineageForTarget, type LineageSummary } from "@/lib/lineage";
-import { clamp } from "@/lib/overlay-layout";
+import { plural } from "@/lib/text-format";
 import { semanticHighlightRect } from "@/selection/semantic-selection";
 import { useLensUiStore } from "@/store";
-import type { AgentActivity, LensAnnotation, NotebookGraph, ResolvedHover } from "@/types";
 
 type LensOverlayProps = {
   annotations: LensAnnotation[];
@@ -126,18 +129,19 @@ function AgentActivityToast({
   message: AgentActivityMessage | null;
   regions: AgentActivityRegion[];
 }) {
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => new Set());
+  const dismissedIds = useLensUiStore((state) => state.dismissedAgentMessageIds);
+  const dismissAgentMessage = useLensUiStore((state) => state.dismissAgentMessage);
   const messageId = message?.id;
 
   useEffect(() => {
     if (!messageId) return undefined;
     const timeout = window.setTimeout(() => {
-      setDismissedIds((current) => new Set(current).add(messageId));
+      dismissAgentMessage(messageId);
     }, AGENT_ACTIVITY_VISIBILITY_MS);
     return () => window.clearTimeout(timeout);
-  }, [messageId]);
+  }, [dismissAgentMessage, messageId]);
 
-  if (!message || dismissedIds.has(message.id)) return null;
+  if (!message || dismissedIds.includes(message.id)) return null;
 
   return (
     <output
@@ -154,10 +158,10 @@ function AgentActivityToast({
         className="ml-agent-message__dismiss"
         type="button"
         aria-label="Dismiss marimo-pair message"
-        onClick={() => setDismissedIds((current) => new Set(current).add(message.id))}
+        onClick={() => dismissAgentMessage(message.id)}
         data-marimo-lens-ui
       >
-        <IconX size={12} />
+        <X size={12} strokeWidth={1.8} />
       </button>
     </output>
   );
@@ -187,11 +191,17 @@ function agentMessageStyle(
 }
 
 function HoverCard({ hover, lineage }: { hover: ResolvedHover; lineage: LineageSummary }) {
+  const width = Math.min(620, Math.max(0, window.innerWidth - 36));
+  const halfWidth = width / 2;
   return (
     <div
       className="ml-hover-card"
       style={{
-        left: clamp(hover.rect.left + hover.rect.width / 2, 120, window.innerWidth - 120),
+        left: clamp(
+          hover.rect.left + hover.rect.width / 2,
+          18 + halfWidth,
+          Math.max(18 + halfWidth, window.innerWidth - 18 - halfWidth),
+        ),
         top: Math.max(18, hover.rect.top - 34),
       }}
       data-marimo-lens-ui
@@ -262,10 +272,6 @@ function LineageCue({ lineage }: { lineage: LineageSummary }) {
   );
 }
 
-function plural(label: string, count: number): string {
-  return count === 1 ? label : `${label}s`;
-}
-
 function AnnotationMarkers({
   annotations,
   agentActivity,
@@ -279,6 +285,7 @@ function AnnotationMarkers({
     <>
       {activeAnnotations.map((annotation, index) => {
         const pos = markerPosition(annotation);
+        if (!pos) return null;
         const receipt = annotationStatuses.get(annotation.id);
         return (
           <button

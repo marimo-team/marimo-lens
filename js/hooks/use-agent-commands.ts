@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
-import { cellElement } from "@/lib/cell-regions";
+
 import type { AgentCommand } from "@/types";
+
+import { cellElement } from "@/lib/cell-regions";
 
 export function useAgentCommands(commands: AgentCommand[]) {
   const handled = useRef(new Set<string>());

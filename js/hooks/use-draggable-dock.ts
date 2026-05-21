@@ -1,32 +1,37 @@
+import { useDrag } from "@use-gesture/react";
 import {
   useCallback,
   useEffect,
   useRef,
   type CSSProperties,
-  type HTMLAttributes,
   type KeyboardEvent,
+  type HTMLAttributes,
   type RefObject,
 } from "react";
-import { useDrag } from "@use-gesture/react";
-import { useLensUiStore } from "@/store";
+
 import type { DockPosition } from "@/types";
 
+import { clamp } from "@/lib/dom-geometry";
+import { useLensUiStore } from "@/store";
+
 const VIEWPORT_GUTTER = 12;
+const RIGHT_ALIGNED_OPEN_FOOTPRINT = 340;
 const KEYBOARD_STEP = 24;
 const KEYBOARD_LARGE_STEP = 96;
 const DRAG_CLICK_SUPPRESSION_MS = 160;
 const DRAG_CLICK_THRESHOLD = 4;
 
-type LauncherDragProps = HTMLAttributes<HTMLButtonElement>;
+type DockDragProps = HTMLAttributes<HTMLDivElement>;
 
 export function useDraggableDock(): {
   dockRef: RefObject<HTMLDivElement | null>;
   dockStyle: CSSProperties | undefined;
-  launcherDragProps: LauncherDragProps;
+  dockDragProps: DockDragProps;
   consumeDragClick: () => boolean;
 } {
   const dockRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
+  const didDragRef = useRef(false);
   const dockPosition = useLensUiStore((state) => state.dockPosition);
   const setDragging = useLensUiStore((state) => state.setDragging);
   const setDockPosition = useLensUiStore((state) => state.setDockPosition);
@@ -87,20 +92,27 @@ export function useDraggableDock(): {
 
   const bindDrag = useDrag(
     ({ first, last, movement, offset }) => {
-      if (first) setDragging(true);
+      if (first) didDragRef.current = false;
+      const wasDrag =
+        Math.abs(movement[0]) > DRAG_CLICK_THRESHOLD ||
+        Math.abs(movement[1]) > DRAG_CLICK_THRESHOLD;
       const position = { x: offset[0], y: offset[1] };
-      setDockPosition(position, { persist: last });
+      if (wasDrag) {
+        if (!didDragRef.current) {
+          didDragRef.current = true;
+          setDragging(true);
+        }
+        setDockPosition(position, { persist: last });
+      }
       if (last) {
-        setDragging(false);
-        const wasDrag =
-          Math.abs(movement[0]) > DRAG_CLICK_THRESHOLD ||
-          Math.abs(movement[1]) > DRAG_CLICK_THRESHOLD;
-        if (wasDrag) {
+        if (didDragRef.current) {
+          setDragging(false);
           suppressClickRef.current = true;
           window.setTimeout(() => {
             suppressClickRef.current = false;
           }, DRAG_CLICK_SUPPRESSION_MS);
         }
+        didDragRef.current = false;
       }
     },
     {
@@ -126,7 +138,7 @@ export function useDraggableDock(): {
   }, []);
 
   const onKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLButtonElement>) => {
+    (event: KeyboardEvent<HTMLDivElement>) => {
       const step = event.shiftKey ? KEYBOARD_LARGE_STEP : KEYBOARD_STEP;
       const moves: Record<string, [number, number]> = {
         ArrowDown: [0, step],
@@ -155,7 +167,7 @@ export function useDraggableDock(): {
   return {
     dockRef,
     dockStyle,
-    launcherDragProps: {
+    dockDragProps: {
       ...bindDrag(),
       onDoubleClick: resetDockPosition,
       onKeyDown,
@@ -165,10 +177,16 @@ export function useDraggableDock(): {
 }
 
 function boundsForRect(rect: DOMRect) {
+  const footprintWidth = Math.max(
+    rect.width,
+    Math.min(RIGHT_ALIGNED_OPEN_FOOTPRINT, window.innerWidth - VIEWPORT_GUTTER * 2),
+  );
+  const left = VIEWPORT_GUTTER + Math.max(0, footprintWidth - rect.width);
+  const right = Math.max(left, window.innerWidth - rect.width - VIEWPORT_GUTTER);
   return {
-    left: VIEWPORT_GUTTER,
+    left,
     top: VIEWPORT_GUTTER,
-    right: Math.max(VIEWPORT_GUTTER, window.innerWidth - rect.width - VIEWPORT_GUTTER),
+    right,
     bottom: Math.max(VIEWPORT_GUTTER, window.innerHeight - rect.height - VIEWPORT_GUTTER),
   };
 }
@@ -179,8 +197,4 @@ function clampPosition(position: DockPosition, rect: DOMRect): DockPosition {
     x: clamp(position.x, bounds.left, bounds.right),
     y: clamp(position.y, bounds.top, bounds.bottom),
   };
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }

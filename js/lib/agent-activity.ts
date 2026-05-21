@@ -1,5 +1,7 @@
 import type { AgentActivity, AgentCellMarkKind } from "@/types";
 
+import { plural } from "@/lib/text-format";
+
 export const AGENT_ACTIVITY_VISIBILITY_MS = 10_000;
 
 export type AgentCellMark = {
@@ -62,6 +64,98 @@ const DURABLE_MARK_PRIORITY = new Map<AgentCellMarkKind, number>([
   ["claimed", 20],
   ["read", 10],
 ]);
+
+const ANNOTATION_STATUS_LABELS: Record<AnnotationStatus["status"], string> = {
+  addressed: "addressed",
+  blocked: "blocked",
+  in_progress: "in progress",
+  needs_human: "needs human",
+};
+
+type ActivityMessagePresentation = {
+  title: string;
+  body: string;
+  tone: AgentMessageTone;
+};
+
+const AGENT_STARTED_MESSAGE: ActivityMessagePresentation = {
+  title: "Getting oriented",
+  body: "marimo-pair is reading the notebook before changing anything.",
+  tone: "working",
+};
+
+const AGENT_FINISHED_MESSAGES = {
+  completed: {
+    title: "marimo-pair finished",
+    body: "marimo-pair is done here. The notebook receipts will fade shortly.",
+    tone: "success",
+  },
+  incomplete: {
+    title: "Needs a look",
+    body: "marimo-pair stopped before finishing and left the next step visible.",
+    tone: "attention",
+  },
+} satisfies Record<string, ActivityMessagePresentation>;
+
+const CELL_ACTIVITY_PRESENTATION: Record<AgentCellMarkKind, ActivityMessagePresentation> = {
+  claimed: {
+    title: "Editing here",
+    body: "marimo-pair is focusing its next change on this cell.",
+    tone: "working",
+  },
+  edited: {
+    title: "Cell changed",
+    body: "marimo-pair updated this part of the notebook.",
+    tone: "success",
+  },
+  failed: {
+    title: "Needs a look",
+    body: "marimo-pair hit a problem and left this as a message instead of a lasting overlay.",
+    tone: "attention",
+  },
+  "needs-review": {
+    title: "Needs your review",
+    body: "marimo-pair needs a human decision before continuing.",
+    tone: "attention",
+  },
+  ran: {
+    title: "Checking the result",
+    body: "marimo-pair is running the notebook path that depends on this cell.",
+    tone: "working",
+  },
+  read: {
+    title: "Looking at this output",
+    body: "marimo-pair is checking which cells shape this result.",
+    tone: "neutral",
+  },
+};
+
+const CELL_MARK_LABELS: Record<AgentCellMarkKind, string> = {
+  claimed: "working",
+  edited: "changed",
+  failed: "paused",
+  "needs-review": "needs review",
+  ran: "checked",
+  read: "looked here",
+};
+
+const CELL_MARK_TITLES: Record<AgentCellMarkKind, string> = {
+  claimed: "Editing this cell",
+  edited: "Changed this cell",
+  failed: "Needs your review",
+  "needs-review": "Needs your review",
+  ran: "Checking the result",
+  read: "Looking here",
+};
+
+const CELL_MARK_MESSAGES: Record<AgentCellMarkKind, string> = {
+  claimed: "marimo-pair is focusing its next edit here.",
+  edited: "marimo-pair changed this cell.",
+  failed: "marimo-pair needs a human decision before continuing.",
+  "needs-review": "marimo-pair needs a human decision before continuing.",
+  ran: "marimo-pair is running the notebook path that depends on it.",
+  read: "marimo-pair is checking how this output is made.",
+};
 
 type AgentCellState = {
   durable?: AgentCellMark;
@@ -186,9 +280,7 @@ export function annotationStatusById(activity: AgentActivity[]): Map<string, Ann
 }
 
 export function annotationStatusLabel(status: AnnotationStatus["status"]): string {
-  if (status === "in_progress") return "in progress";
-  if (status === "needs_human") return "needs human";
-  return status;
+  return ANNOTATION_STATUS_LABELS[status];
 }
 
 export function agentCellMarkLabel(mark: Pick<AgentCellMark, "kind" | "activityKind">): string {
@@ -196,11 +288,7 @@ export function agentCellMarkLabel(mark: Pick<AgentCellMark, "kind" | "activityK
 }
 
 export function agentCellActivityTitle(mark: Pick<AgentCellMark, "activityKind">): string {
-  if (mark.activityKind === "read") return "Looking here";
-  if (mark.activityKind === "claimed") return "Editing this cell";
-  if (mark.activityKind === "edited") return "Changed this cell";
-  if (mark.activityKind === "ran") return "Checking the result";
-  return "Needs your review";
+  return CELL_MARK_TITLES[mark.activityKind];
 }
 
 export function agentCellActivityMessage(
@@ -208,12 +296,7 @@ export function agentCellActivityMessage(
 ): string {
   if (mark.activityNote) return mark.activityNote;
   if (mark.note) return mark.note;
-  if (mark.activityKind === "read") return "marimo-pair is checking how this output is made.";
-  if (mark.activityKind === "claimed") return "marimo-pair is focusing its next edit here.";
-  if (mark.activityKind === "edited") return "marimo-pair changed this cell.";
-  if (mark.activityKind === "ran")
-    return "marimo-pair is running the notebook path that depends on it.";
-  return "marimo-pair needs a human decision before continuing.";
+  return CELL_MARK_MESSAGES[mark.activityKind];
 }
 
 export function visibleAnnotations<T extends { id: string }>(
@@ -277,147 +360,71 @@ function latestClaimedFocus(
 
 function messageForActivity(item: AgentActivity): AgentActivityMessage | null {
   if (item.kind === "agent-started") {
-    return {
-      id: item.id,
-      activityId: item.id,
-      title: "Getting oriented",
-      body: "marimo-pair is reading the notebook before changing anything.",
-      tone: "working",
-      createdAt: item.createdAt,
-    };
+    return activityMessage(item, AGENT_STARTED_MESSAGE);
   }
 
   if (item.kind === "agent-finished") {
-    const status = item.status;
-    return {
-      id: item.id,
-      activityId: item.id,
-      title: status === "completed" ? "marimo-pair finished" : "Needs a look",
-      body:
-        status === "completed"
-          ? "marimo-pair is done here. The notebook receipts will fade shortly."
-          : "marimo-pair stopped before finishing and left the next step visible.",
-      tone: status === "completed" ? "success" : "attention",
-      cellId: item.cellIds?.[0],
-      createdAt: item.createdAt,
-    };
+    const presentation =
+      item.status === "completed"
+        ? AGENT_FINISHED_MESSAGES.completed
+        : AGENT_FINISHED_MESSAGES.incomplete;
+    return activityMessage(item, presentation, item.cellIds?.[0]);
   }
 
   if (item.kind === "annotation-status") {
-    const count = item.annotationIds?.length ?? 0;
-    const label = count > 1 ? `${count} feedback notes` : "your feedback";
-    if (item.status === "addressed") {
-      return {
-        id: item.id,
-        activityId: item.id,
-        title: "Feedback addressed",
-        body: `marimo-pair marked ${label} as handled.`,
-        tone: "success",
-        createdAt: item.createdAt,
-      };
-    }
-    if (item.status === "needs_human" || item.status === "blocked") {
-      return {
-        id: item.id,
-        activityId: item.id,
-        title: "Needs your review",
-        body: "marimo-pair needs a human decision before it can continue.",
-        tone: "attention",
-        createdAt: item.createdAt,
-      };
-    }
-    return {
-      id: item.id,
-      activityId: item.id,
-      title: "Working on your feedback",
-      body: `marimo-pair is addressing ${label}.`,
-      tone: "working",
-      createdAt: item.createdAt,
-    };
+    return activityMessage(item, annotationMessagePresentation(item));
   }
 
   if (item.kind !== "cell-mark" || !isAgentCellMarkKind(item.status)) return null;
 
   const cellId = item.cellIds?.find((value) => Boolean(value));
-  if (item.status === "read") {
-    return activityMessage(
-      item,
-      "Looking at this output",
-      "marimo-pair is checking which cells shape this result.",
-      "neutral",
-      cellId,
-    );
-  }
-  if (item.status === "claimed") {
-    return activityMessage(
-      item,
-      "Editing here",
-      "marimo-pair is focusing its next change on this cell.",
-      "working",
-      cellId,
-    );
-  }
-  if (item.status === "edited") {
-    return activityMessage(
-      item,
-      "Cell changed",
-      "marimo-pair updated this part of the notebook.",
-      "success",
-      cellId,
-    );
-  }
-  if (item.status === "ran") {
-    return activityMessage(
-      item,
-      "Checking the result",
-      "marimo-pair is running the notebook path that depends on this cell.",
-      "working",
-      cellId,
-    );
-  }
-  if (item.status === "failed") {
-    return activityMessage(
-      item,
-      "Needs a look",
-      "marimo-pair hit a problem and left this as a message instead of a lasting overlay.",
-      "attention",
-      cellId,
-    );
-  }
-  return activityMessage(
-    item,
-    "Needs your review",
-    "marimo-pair needs a human decision before continuing.",
-    "attention",
-    cellId,
-  );
+  return activityMessage(item, CELL_ACTIVITY_PRESENTATION[item.status], cellId);
 }
 
 function activityMessage(
   item: AgentActivity,
-  title: string,
-  body: string,
-  tone: AgentMessageTone,
+  presentation: ActivityMessagePresentation,
   cellId?: string,
 ): AgentActivityMessage {
   return {
     id: item.id,
     activityId: item.id,
-    title,
-    body,
-    tone,
+    title: presentation.title,
+    body: presentation.body,
+    tone: presentation.tone,
     cellId,
     createdAt: item.createdAt,
   };
 }
 
 function agentCellMarkKindLabel(kind: AgentCellMarkKind): string {
-  if (kind === "read") return "looked here";
-  if (kind === "claimed") return "working";
-  if (kind === "edited") return "changed";
-  if (kind === "ran") return "checked";
-  if (kind === "failed") return "paused";
-  return "needs review";
+  return CELL_MARK_LABELS[kind];
+}
+
+function annotationMessagePresentation(
+  item: Extract<AgentActivity, { kind: "annotation-status" }>,
+) {
+  const count = item.annotationIds?.length ?? 0;
+  const label = count > 1 ? `${count} feedback notes` : "your feedback";
+  if (item.status === "addressed") {
+    return {
+      title: "Feedback addressed",
+      body: `marimo-pair marked ${label} as handled.`,
+      tone: "success",
+    } satisfies ActivityMessagePresentation;
+  }
+  if (item.status === "needs_human" || item.status === "blocked") {
+    return {
+      title: "Needs your review",
+      body: "marimo-pair needs a human decision before it can continue.",
+      tone: "attention",
+    } satisfies ActivityMessagePresentation;
+  }
+  return {
+    title: "Working on your feedback",
+    body: `marimo-pair is addressing ${label}.`,
+    tone: "working",
+  } satisfies ActivityMessagePresentation;
 }
 
 function isAnnotationStatus(value: unknown): value is AnnotationStatus["status"] {
@@ -457,8 +464,4 @@ function latestAgentLabel(activity: AgentActivity[]): string | null {
     if (label) return label;
   }
   return null;
-}
-
-function plural(label: string, count: number): string {
-  return count === 1 ? label : `${label}s`;
 }

@@ -1,8 +1,10 @@
 import { useEffect, useRef } from "react";
+
+import type { LensTarget, ResolvedHover } from "@/types";
+
 import { eventTargetElement, isLensInterfaceEvent } from "@/selection/dom-events";
 import { resolveElementSelection, resolvePointSelection } from "@/selection/selection-registry";
 import { useLensUiStore } from "@/store";
-import type { LensTarget, ResolvedHover } from "@/types";
 
 export function useLensCapture(targets: LensTarget[]) {
   const armed = useLensUiStore((state) => state.armed);
@@ -18,6 +20,14 @@ export function useLensCapture(targets: LensTarget[]) {
     x: number;
     y: number;
   } | null>(null);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return undefined;
+    document.documentElement.toggleAttribute("data-marimo-lens-capture", armed);
+    return () => {
+      document.documentElement.removeAttribute("data-marimo-lens-capture");
+    };
+  }, [armed]);
 
   useEffect(() => {
     hoverRef.current = hover;

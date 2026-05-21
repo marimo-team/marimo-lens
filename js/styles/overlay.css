@@ -29,6 +29,13 @@
   box-shadow: 0 0 0 1px var(--ml-highlight-muted-ring);
 }
 
+html[data-marimo-lens-capture] iframe[data-marimo-document],
+html[data-marimo-lens-capture] [data-marimo-document] iframe,
+html[data-marimo-lens-capture] object[data-marimo-document],
+html[data-marimo-lens-capture] embed[data-marimo-document] {
+  pointer-events: none;
+}
+
 .ml-lineage-region {
   z-index: var(--ml-z-lineage);
   border: 0;

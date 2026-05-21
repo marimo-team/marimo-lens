@@ -8,8 +8,11 @@
   border-radius: var(--ml-radius-2xl);
   padding: var(--ml-space-11) var(--ml-space-13) var(--ml-space-13);
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: var(--ml-popup-bg);
   box-shadow: var(--ml-popup-shadow);
+  color: var(--ml-text);
+  color-scheme: var(--ml-color-scheme);
   backdrop-filter: blur(14px);
   transform: translateX(-50%);
   pointer-events: auto;
@@ -89,7 +92,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--ml-space-5);
+  min-width: 0;
   margin-top: var(--ml-space-7);
+  border: 0;
+  padding: 0;
 }
 
 .ml-chip,

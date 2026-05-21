@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+
+import type { AgentActivity } from "@/types";
+
 import {
   agentActivityVisualExpiry,
   agentCellMarks,
@@ -6,7 +9,6 @@ import {
 } from "@/lib/agent-activity";
 import { cellElement, isUsableRegion, paddedRect } from "@/lib/cell-regions";
 import { scrollableAncestors } from "@/lib/scroll-ancestors";
-import type { AgentActivity } from "@/types";
 
 export type AgentActivityRegion = AgentCellMark & {
   key: string;

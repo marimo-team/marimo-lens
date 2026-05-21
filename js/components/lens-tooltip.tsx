@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { clamp } from "@/lib/dom-geometry";
+
 type LensTooltipProps = {
-  content: string;
+  content: ReactNode;
   children: ReactNode;
 };
 
@@ -84,6 +86,7 @@ export function LensTooltip({ content, children }: LensTooltipProps) {
       className="ml-tooltip-anchor"
       onBlur={hide}
       onFocus={show}
+      onPointerDown={hide}
       onPointerEnter={show}
       onPointerLeave={hide}
     >
@@ -105,8 +108,4 @@ export function LensTooltip({ content, children }: LensTooltipProps) {
         : null}
     </span>
   );
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
 }

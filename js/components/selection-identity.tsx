@@ -1,3 +1,5 @@
+import type { LucideIcon } from "lucide-react";
+
 import {
   BarChart3,
   Box,
@@ -6,6 +8,7 @@ import {
   Columns3,
   FileText,
   GitBranch,
+  Grid3X3,
   Image,
   LayoutDashboard,
   MousePointer2,
@@ -15,8 +18,52 @@ import {
   TriangleAlert,
   Variable,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
+
 import type { LensTarget, ResolvedHover } from "@/types";
+
+import { cellLabel, compact, shapeText, targetKindLabel, targetName } from "@/lib/target-labels";
+
+const TARGET_ICONS: Partial<Record<LensTarget["kind"], LucideIcon>> = {
+  anywidget: SlidersHorizontal,
+  data: Columns3,
+  dataframe: Table2,
+  diagnostic: TriangleAlert,
+  document: FileText,
+  layout: LayoutDashboard,
+  media: Image,
+  output: Box,
+  table: Table2,
+  ui: SlidersHorizontal,
+  visualization: BarChart3,
+};
+
+const CHART_PART_ICONS: Partial<
+  Record<NonNullable<ResolvedHover["chartPart"]>["kind"], LucideIcon>
+> = {
+  annotation: MousePointer2,
+  axis: GitBranch,
+  facet: Grid3X3,
+  legend: Tags,
+  mark: ChartColumn,
+  "plot-area": Box,
+  title: MousePointer2,
+  trace: ChartColumn,
+};
+
+const CHART_PART_LABELS: Partial<Record<NonNullable<ResolvedHover["chartPart"]>["kind"], string>> =
+  {
+    facet: "facet",
+    "plot-area": "area",
+    trace: "trace",
+  };
+
+const SEMANTIC_SELECTION_LABELS: Record<string, string> = {
+  channel: "Chart channel",
+  "dtype-label": "Column type",
+  encoding: "Chart encoding",
+  facet: "Chart facet",
+  "summary-stat": "Column summary",
+};
 
 type SelectionIdentityProps = {
   hover: ResolvedHover;
@@ -85,7 +132,7 @@ function selectionIdentity(hover: ResolvedHover) {
       secondary: compact([
         `Column in ${targetName(target)}`,
         column.dtype ? `${column.dtype} values` : null,
-        formatShapeText(target, { columns: false }),
+        shapeText(target, { columns: false }),
       ]),
     };
   }
@@ -109,94 +156,22 @@ function selectionIdentity(hover: ResolvedHover) {
   return {
     icon: targetIcon(target.kind),
     primary: targetName(target),
-    secondary: compact([targetKindLabel(target), formatShapeText(target), target.component]),
+    secondary: compact([targetKindLabel(target), shapeText(target), target.component]),
   };
 }
 
 function targetIcon(kind: LensTarget["kind"]): LucideIcon {
-  if (kind === "data") return Columns3;
-  if (kind === "dataframe" || kind === "table") return Table2;
-  if (kind === "diagnostic") return TriangleAlert;
-  if (kind === "document") return FileText;
-  if (kind === "layout") return LayoutDashboard;
-  if (kind === "media") return Image;
-  if (kind === "output") return Box;
-  if (kind === "visualization") return BarChart3;
-  if (kind === "ui" || kind === "anywidget") return SlidersHorizontal;
-  return Variable;
+  return TARGET_ICONS[kind] ?? Variable;
 }
 
 function chartPartIcon(kind: NonNullable<ResolvedHover["chartPart"]>["kind"]): LucideIcon {
-  if (kind === "axis") return GitBranch;
-  if (kind === "legend") return Tags;
-  if (kind === "mark" || kind === "trace") return ChartColumn;
-  if (kind === "plot-area") return Box;
-  if (kind === "title" || kind === "annotation") return MousePointer2;
-  return CircleDot;
-}
-
-function compact(items: Array<string | number | null | undefined | false>): string {
-  const parts: string[] = [];
-  for (const item of items) {
-    const text = String(item ?? "").trim();
-    if (text) parts.push(text);
-  }
-  return parts.join(" · ");
-}
-
-function targetName(target: LensTarget): string {
-  return target.variable || target.label;
-}
-
-function targetKindLabel(target: LensTarget): string {
-  if (target.kind === "dataframe" || target.kind === "table") return "Data table";
-  if (target.kind === "visualization") return "Chart output";
-  if (target.kind === "anywidget") return "Interactive widget";
-  if (target.kind === "ui") return "Notebook control";
-  if (target.kind === "media") return "Media output";
-  if (target.kind === "document") return "Document output";
-  if (target.kind === "data") return "Data output";
-  if (target.kind === "diagnostic") return "Diagnostic output";
-  if (target.kind === "layout") return "Layout output";
-  if (target.kind === "output") return outputKindLabel(target);
-  return "Notebook value";
-}
-
-function outputKindLabel(target: LensTarget): string {
-  const outputKind = target.output?.kind;
-  if (outputKind === "visualization") return "Chart output";
-  if (outputKind === "dataframe" || outputKind === "table") return "Table output";
-  if (outputKind === "document") return "Document output";
-  if (outputKind === "media") return "Media output";
-  if (target.outputType?.toLowerCase().includes("markdown")) return "Markdown output";
-  return "Cell output";
-}
-
-function cellLabel(target: LensTarget): string {
-  return target.cellId ? `Cell ${target.cellId}` : "";
+  return CHART_PART_ICONS[kind] ?? CircleDot;
 }
 
 function chartPartKindLabel(kind: NonNullable<ResolvedHover["chartPart"]>["kind"]): string {
-  if (kind === "plot-area") return "area";
-  if (kind === "trace") return "trace";
-  return kind;
+  return CHART_PART_LABELS[kind] ?? kind;
 }
 
 function semanticSelectionKindLabel(kind: string): string {
-  if (kind === "dtype-label") return "Column type";
-  if (kind === "summary-stat") return "Column summary";
-  if (kind === "encoding") return "Chart encoding";
-  if (kind === "facet") return "Chart facet";
-  if (kind === "channel") return "Chart channel";
-  return kind.replace(/-/g, " ");
-}
-
-function formatShapeText(target: LensTarget, options: { columns?: boolean } = {}): string {
-  const rows = target.shape?.rows;
-  const columns = target.shape?.columns;
-  if (typeof rows !== "number") return "";
-  if (options.columns === false || typeof columns !== "number") {
-    return `${rows.toLocaleString()} rows`;
-  }
-  return `${rows.toLocaleString()} rows, ${columns.toLocaleString()} columns`;
+  return SEMANTIC_SELECTION_LABELS[kind] ?? kind.replace(/-/g, " ");
 }

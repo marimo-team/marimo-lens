@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vitest";
-import { lineageForTarget } from "@/lib/lineage";
+
 import type { LensTarget, NotebookGraph } from "@/types";
+
+import { lineageForTarget } from "@/lib/lineage";
 
 const graph: NotebookGraph = {
   available: true,

@@ -1,97 +1,27 @@
-import type { ReactNode } from "react";
-
 type IconProps = {
   size?: number;
   className?: string;
 };
 
-function IconSvg({ size = 16, className, children }: IconProps & { children: ReactNode }) {
+const MARIMO_ICON_MARK_PATH =
+  "M268.395 214.7C180.975 356.55 -46.4648 256.46 11.2652 94.4898C13.8252 87.3398 20.6452 73.5298 25.9852 68.2798C28.2152 66.0898 32.0852 64.5798 34.5052 62.4198C35.6952 61.3598 42.7152 53.2298 41.6852 52.1798L35.0552 54.1198L61.6052 30.0298L60.1952 26.1698C130.335 -30.2602 256.985 18.7698 277.225 104.63C285.795 140.37 285.295 181.68 268.395 214.69V214.7ZM203.265 39.9998C197.005 34.5198 188.495 30.4498 180.585 27.8398L203.265 39.9998ZM93.1452 63.8098L86.1552 62.7198C33.7152 91.6798 42.7652 162.02 71.4452 205.29C95.1652 244.62 143.995 242.18 184.465 241.16C280.595 219.73 262.725 101.98 199.865 53.0698C164.565 26.4498 109.875 23.8498 72.6952 48.0598C65.8752 60.4098 64.6152 58.9298 54.6752 66.0098C38.6352 83.5398 29.7452 107.71 28.4152 131.31L31.2752 117.85L35.5352 116.3C38.7052 94.9698 52.9852 65.4298 74.5852 58.8098C76.2152 58.8498 84.3852 61.4098 84.8452 61.0398C82.9152 57.2798 86.6052 54.8298 89.5852 53.2998L89.2752 50.5298C92.4652 52.1098 94.0752 50.5998 97.2052 50.0298C100.135 52.7498 99.5652 56.2598 99.0552 59.7898C97.1952 62.2998 93.1752 60.0998 93.1352 63.8098H93.1452ZM58.8452 211.53L47.8652 190.7C44.3652 184.89 43.9052 176.81 40.0452 171.69C41.3852 186.52 46.0152 202.74 58.8452 211.53ZM117.495 253.03C107.325 251.43 98.8052 245.02 89.2852 241.96C95.5852 246.55 110.155 255.87 117.495 253.03ZM182.235 259.67L159.555 265.75C167.315 266.75 175.205 262.65 182.235 259.67Z";
+
+const MARIMO_ICON_DETAIL_PATH =
+  "M203.265 39.9998L180.585 27.8398C188.495 30.4498 197.015 34.5298 203.265 39.9998Z";
+
+export function IconLensMark({ size = 16, className }: IconProps) {
   return (
     <svg
       aria-hidden="true"
-      className={className}
+      className={className ? `ml-lens-mark ${className}` : "ml-lens-mark"}
       width={size}
       height={size}
-      viewBox="0 0 24 24"
+      viewBox="0 0 284 284"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+      xmlns="http://www.w3.org/2000/svg"
     >
-      {children}
+      <path d={MARIMO_ICON_MARK_PATH} fill="currentColor" />
+      <path d={MARIMO_ICON_DETAIL_PATH} fill="currentColor" />
     </svg>
-  );
-}
-
-export function IconSparkle(props: IconProps) {
-  return (
-    <IconSvg {...props}>
-      <path d="M12 3.5l1.7 4.8 4.8 1.7-4.8 1.7-1.7 4.8-1.7-4.8-4.8-1.7 4.8-1.7L12 3.5Z" />
-      <path d="M18 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z" />
-    </IconSvg>
-  );
-}
-
-export function IconCrosshair(props: IconProps) {
-  return (
-    <IconSvg {...props}>
-      <circle cx="12" cy="12" r="7" />
-      <path d="M12 3v3" />
-      <path d="M12 18v3" />
-      <path d="M3 12h3" />
-      <path d="M18 12h3" />
-      <circle cx="12" cy="12" r="1.5" />
-    </IconSvg>
-  );
-}
-
-export function IconCopy(props: IconProps) {
-  return (
-    <IconSvg {...props}>
-      <rect x="8" y="8" width="10" height="10" rx="2" />
-      <path d="M6 14H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v1" />
-    </IconSvg>
-  );
-}
-
-export function IconCheck(props: IconProps) {
-  return (
-    <IconSvg {...props}>
-      <path d="M5 12.5l4.2 4L19 7" />
-    </IconSvg>
-  );
-}
-
-export function IconScan(props: IconProps) {
-  return (
-    <IconSvg {...props}>
-      <path d="M7 3H5a2 2 0 0 0-2 2v2" />
-      <path d="M17 3h2a2 2 0 0 1 2 2v2" />
-      <path d="M21 17v2a2 2 0 0 1-2 2h-2" />
-      <path d="M7 21H5a2 2 0 0 1-2-2v-2" />
-      <path d="M7 12h10" />
-    </IconSvg>
-  );
-}
-
-export function IconTrash(props: IconProps) {
-  return (
-    <IconSvg {...props}>
-      <path d="M4 7h16" />
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-      <path d="M6 7l1 14h10l1-14" />
-      <path d="M9 7V4h6v3" />
-    </IconSvg>
-  );
-}
-
-export function IconX(props: IconProps) {
-  return (
-    <IconSvg {...props}>
-      <path d="M6 6l12 12" />
-      <path d="M18 6L6 18" />
-    </IconSvg>
   );
 }

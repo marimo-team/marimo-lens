@@ -1,19 +1,17 @@
 @media (max-width: 520px) {
   .ml-dock {
-    top: max(12px, env(safe-area-inset-top));
+    bottom: max(12px, env(safe-area-inset-bottom));
     right: 12px;
   }
 
-  .ml-dock[data-open="true"] {
-    width: calc(100vw - 24px);
-    flex-wrap: wrap;
-    justify-content: flex-end;
+  .ml-inspector-panel {
+    width: min(340px, calc(100vw - 24px));
+    max-height: min(420px, calc(100vh - 92px));
   }
 
-  .ml-dock[data-open="true"] .ml-panel {
-    order: -1;
-    width: 100%;
-    max-width: none;
+  .ml-toolbar-controls,
+  .ml-toolbar[data-open="true"]::before {
+    width: min(var(--ml-toolbar-expanded), calc(100vw - 24px));
   }
 }
 

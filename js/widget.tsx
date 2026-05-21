@@ -1,6 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { createRender } from "@anywidget/react";
+import {
+  Component,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
+
 import { LensDock } from "@/components/lens-dock";
 import { LensOverlay } from "@/components/lens-overlay";
 import { useAgentCommands } from "@/hooks/use-agent-commands";
@@ -12,10 +20,35 @@ import "@/widget.css";
 
 function MarimoLens() {
   return (
-    <LensUiStoreProvider>
-      <MarimoLensContent />
-    </LensUiStoreProvider>
+    <LensErrorBoundary>
+      <LensUiStoreProvider>
+        <MarimoLensContent />
+      </LensUiStoreProvider>
+    </LensErrorBoundary>
   );
+}
+
+class LensErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state: { error: Error | null } = { error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("marimo-lens render failed", error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="marimo_lens" data-marimo-lens-error>
+          marimo-lens render failed: {this.state.error.message}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 function MarimoLensContent() {
@@ -34,11 +67,12 @@ function MarimoLensContent() {
         annotations={model.annotations}
         agentActivity={model.agentActivity}
         markdown={model.markdown}
+        pairFeedback={model.pairFeedback}
         pair_prompt={model.pair_prompt}
         contextRevision={model.contextRevision}
+        refreshState={model.refreshState}
         onScan={model.refreshContext}
         onClear={model.clearAnnotations}
-        onRemove={model.removeAnnotation}
       />
       <LensOverlay
         annotations={model.annotations}
@@ -55,7 +89,7 @@ function useLensGlobalStyles(css: string) {
     if (typeof document === "undefined") return undefined;
     const existing = document.getElementById("marimo-lens-global-styles");
     if (existing) {
-      if (css) existing.textContent = css;
+      existing.textContent = css;
       return undefined;
     }
 

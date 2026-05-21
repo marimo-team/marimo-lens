@@ -1,37 +1,46 @@
-import { useCallback, useMemo } from "react";
 import { useModelState } from "@anywidget/react";
-import { normalizeLensTargets } from "@/selection/lens-targets";
-import {
-  EMPTY_GRAPH,
-  type AgentActivity,
-  type AgentCommand,
-  type LensAnnotation,
-  type LensTarget,
-  type NotebookGraph,
-  type PairResult,
-} from "@/types";
+import { useCallback, useMemo } from "react";
 
-const EMPTY_ANNOTATIONS: LensAnnotation[] = [];
-const EMPTY_AGENT_ACTIVITY: AgentActivity[] = [];
-const EMPTY_AGENT_COMMANDS: AgentCommand[] = [];
+import type { LensAnnotation } from "@/types";
+
+import {
+  normalizeAgentActivity,
+  normalizeAgentCommands,
+  normalizeLensAnnotations,
+  normalizeLensTargets,
+  normalizeNotebookGraph,
+  normalizePairFeedback,
+  normalizeRefreshState,
+} from "@/contracts";
 
 export function useLensModel() {
   const [title] = useModelState<string>("title");
-  const [targets] = useModelState<LensTarget[]>("targets");
-  const [notebook] = useModelState<NotebookGraph>("notebook");
+  const [targets] = useModelState<unknown>("targets");
+  const [notebook] = useModelState<unknown>("notebook");
   const [annotations, setAnnotations] = useModelState<LensAnnotation[]>("annotations");
   const [markdown] = useModelState<string>("markdown");
+  const [pairFeedback] = useModelState<unknown>("pair_feedback");
   const [pair_prompt] = useModelState<string>("pair_prompt");
-  const [agentActivity] = useModelState<AgentActivity[]>("agent_activity");
-  const [agentCommands] = useModelState<AgentCommand[]>("agent_commands");
-  const [pairResult] = useModelState<PairResult>("pair_result");
-  const [pairResultPrompt] = useModelState<string>("pair_result_prompt");
+  const [agentActivity] = useModelState<unknown>("agent_activity");
+  const [agentCommands] = useModelState<unknown>("agent_commands");
   const [lensCss] = useModelState<string>("_lens_css");
   const [, setRefreshRequest] = useModelState<number>("_refresh_request");
+  const [, setRefreshRequestId] = useModelState<string>("_refresh_request_id");
+  const [refreshState] = useModelState<unknown>("_refresh_state");
   const [contextRevision] = useModelState<number>("_context_revision");
   const normalizedTargets = useMemo(() => normalizeLensTargets(targets), [targets]);
-  const graph = notebook ?? EMPTY_GRAPH;
-  const currentAnnotations = annotations ?? EMPTY_ANNOTATIONS;
+  const graph = useMemo(() => normalizeNotebookGraph(notebook), [notebook]);
+  const currentAnnotations = useMemo(() => normalizeLensAnnotations(annotations), [annotations]);
+  const normalizedAgentActivity = useMemo(
+    () => normalizeAgentActivity(agentActivity),
+    [agentActivity],
+  );
+  const normalizedAgentCommands = useMemo(
+    () => normalizeAgentCommands(agentCommands),
+    [agentCommands],
+  );
+  const normalizedPairFeedback = useMemo(() => normalizePairFeedback(pairFeedback), [pairFeedback]);
+  const normalizedRefreshState = useMemo(() => normalizeRefreshState(refreshState), [refreshState]);
 
   const addAnnotation = useCallback(
     (draft: Omit<LensAnnotation, "id" | "createdAt">) => {
@@ -40,16 +49,7 @@ export function useLensModel() {
         id: `ml-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
         createdAt: new Date().toISOString(),
       };
-      setAnnotations((current) => [...(current ?? EMPTY_ANNOTATIONS), annotation]);
-    },
-    [setAnnotations],
-  );
-
-  const removeAnnotation = useCallback(
-    (id: string) => {
-      setAnnotations((current) =>
-        (current ?? EMPTY_ANNOTATIONS).filter((annotation) => annotation.id !== id),
-      );
+      setAnnotations((current) => [...normalizeLensAnnotations(current), annotation]);
     },
     [setAnnotations],
   );
@@ -57,9 +57,16 @@ export function useLensModel() {
   const clearAnnotations = useCallback(() => {
     setAnnotations([]);
   }, [setAnnotations]);
-  const refreshContext = useCallback(() => {
-    setRefreshRequest((current) => (current ?? 0) + 1);
-  }, [setRefreshRequest]);
+  const refreshContext = useCallback(
+    (requestId?: string) => {
+      if (requestId) {
+        setRefreshRequestId(requestId);
+        return;
+      }
+      setRefreshRequest((current) => (current ?? 0) + 1);
+    },
+    [setRefreshRequest, setRefreshRequestId],
+  );
 
   return {
     title,
@@ -67,16 +74,15 @@ export function useLensModel() {
     graph,
     annotations: currentAnnotations,
     markdown: markdown ?? "",
+    pairFeedback: normalizedPairFeedback,
     pair_prompt: pair_prompt ?? "",
-    agentActivity: agentActivity ?? EMPTY_AGENT_ACTIVITY,
-    agentCommands: agentCommands ?? EMPTY_AGENT_COMMANDS,
-    pairResult: pairResult ?? {},
-    pairResultPrompt: pairResultPrompt ?? "",
+    agentActivity: normalizedAgentActivity,
+    agentCommands: normalizedAgentCommands,
     lensCss: lensCss ?? "",
     contextRevision: contextRevision ?? 0,
+    refreshState: normalizedRefreshState,
     refreshContext,
     addAnnotation,
-    removeAnnotation,
     clearAnnotations,
   };
 }

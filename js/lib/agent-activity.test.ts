@@ -1,4 +1,7 @@
 import { describe, expect, test } from "vitest";
+
+import type { AgentActivity } from "@/types";
+
 import {
   AGENT_ACTIVITY_VISIBILITY_MS,
   agentActivityVisualExpiry,
@@ -8,12 +11,18 @@ import {
   latestAgentActivityMessage,
   visibleAnnotations,
 } from "@/lib/agent-activity";
-import type { AgentActivity } from "@/types";
 
 const baseActor = {
   type: "agent" as const,
   label: "marimo-pair",
   runId: "run-1",
+};
+
+const baseProvenance = {
+  origin: "agent" as const,
+  source: "marimo-pair",
+  protocol: "marimo-lens.agent-activity",
+  version: 1,
 };
 
 describe("agent activity helpers", () => {
@@ -23,6 +32,7 @@ describe("agent activity helpers", () => {
         id: "act-1",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:00:00Z",
         cellIds: ["cell-a"],
         status: "read",
@@ -31,6 +41,7 @@ describe("agent activity helpers", () => {
         id: "act-2",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:01:00Z",
         cellIds: ["cell-a", "cell-b"],
         status: "edited",
@@ -40,6 +51,7 @@ describe("agent activity helpers", () => {
         id: "act-3",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:02:00Z",
         cellIds: ["cell-a"],
         status: "ran",
@@ -81,6 +93,7 @@ describe("agent activity helpers", () => {
         id: "act-1",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:00:00Z",
         cellIds: ["cell-a"],
         status: "claimed",
@@ -89,6 +102,7 @@ describe("agent activity helpers", () => {
         id: "act-2",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:01:00Z",
         cellIds: ["cell-b", "cell-c"],
         status: "claimed",
@@ -108,6 +122,7 @@ describe("agent activity helpers", () => {
           id: "act-3",
           kind: "cell-mark",
           actor: baseActor,
+          provenance: baseProvenance,
           createdAt: "2026-05-20T12:02:00Z",
           cellIds: ["cell-b"],
           status: "ran",
@@ -122,6 +137,7 @@ describe("agent activity helpers", () => {
         id: "act-1",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:00:00Z",
         cellIds: ["cell-a"],
         status: "edited",
@@ -130,6 +146,7 @@ describe("agent activity helpers", () => {
         id: "act-2",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:01:00Z",
         cellIds: ["cell-a"],
         status: "failed",
@@ -150,6 +167,7 @@ describe("agent activity helpers", () => {
         id: "act-1",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:00:00Z",
         cellIds: ["cell-a"],
         status: "edited",
@@ -158,8 +176,10 @@ describe("agent activity helpers", () => {
         id: "act-2",
         kind: "agent-finished",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:00:05Z",
         cellIds: ["cell-a"],
+        annotationIds: [],
         status: "completed",
       },
     ];
@@ -176,6 +196,7 @@ describe("agent activity helpers", () => {
         id: "act-1",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:00:00Z",
         cellIds: ["cell-a", "cell-b"],
         status: "edited",
@@ -184,6 +205,7 @@ describe("agent activity helpers", () => {
         id: "act-2",
         kind: "cell-mark",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:01:00Z",
         cellIds: ["cell-b", "cell-c"],
         status: "ran",
@@ -192,6 +214,7 @@ describe("agent activity helpers", () => {
         id: "act-3",
         kind: "annotation-status",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:02:00Z",
         annotationIds: ["ml-1"],
         status: "addressed",
@@ -209,6 +232,7 @@ describe("agent activity helpers", () => {
         id: "act-1",
         kind: "annotation-status",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:00:00Z",
         annotationIds: ["ml-1"],
         status: "in_progress",
@@ -217,6 +241,7 @@ describe("agent activity helpers", () => {
         id: "act-2",
         kind: "annotation-status",
         actor: baseActor,
+        provenance: baseProvenance,
         createdAt: "2026-05-20T12:01:00Z",
         annotationIds: ["ml-1"],
         status: "addressed",

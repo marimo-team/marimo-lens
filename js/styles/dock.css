@@ -1,10 +1,7 @@
 .ml-dock {
   z-index: var(--ml-z-dock);
-  top: max(78px, calc(env(safe-area-inset-top) + 74px));
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 16px));
   right: 18px;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--ml-space-8);
   pointer-events: none;
   filter: var(--ml-dock-filter);
   animation: mlToolbarEnter var(--ml-duration-toolbar) var(--ml-ease-out) both;
@@ -16,6 +13,7 @@
 .ml-dock[data-positioned="true"] {
   top: auto;
   right: auto;
+  bottom: auto;
 }
 
 .ml-dock[data-dragging="true"] {
@@ -23,71 +21,121 @@
   user-select: none;
 }
 
-.ml-dock[data-popup-open="true"] .ml-panel {
-  display: none;
-}
-
-.ml-dock > .ml-tooltip-anchor {
-  flex: 0 0 var(--ml-dock-height);
-  width: var(--ml-dock-height);
-}
-
-.ml-launcher {
-  display: grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: var(--ml-dock-height);
-  height: var(--ml-dock-height);
-  border: 1px solid var(--ml-line);
+.ml-toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: var(--ml-toolbar-collapsed);
+  height: var(--ml-toolbar-height);
+  border: 0;
   border-radius: var(--ml-radius-pill);
-  padding: 0;
-  background: var(--ml-toolbar-sheen), var(--ml-bg);
-  box-shadow: var(--ml-shadow);
-  color: var(--ml-text);
-  cursor: grab;
+  overflow: visible;
+  background: transparent;
+  color: var(--ml-toolbar-ink);
   pointer-events: auto;
   touch-action: none;
+  transform-origin: right center;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    filter var(--ml-duration-base) ease,
+    transform var(--ml-duration-toolbar) var(--ml-ease-toolbar);
+}
+
+.ml-toolbar::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--ml-toolbar-collapsed);
+  height: var(--ml-toolbar-height);
+  border: 1px solid var(--ml-toolbar-border);
+  border-radius: var(--ml-radius-pill);
+  background: var(--ml-toolbar-bg);
+  box-shadow: var(--ml-toolbar-shadow);
+  content: "";
   transition:
     width var(--ml-duration-toolbar) var(--ml-ease-toolbar),
-    transform var(--ml-duration-toolbar) var(--ml-ease-toolbar),
-    background-color var(--ml-duration-base) ease,
-    border-color var(--ml-duration-base) ease,
-    border-radius var(--ml-duration-toolbar) var(--ml-ease-toolbar);
+    box-shadow var(--ml-duration-base) ease,
+    background-color var(--ml-duration-base) ease;
 }
 
-.ml-launcher:hover {
-  transform: var(--ml-transform-lift);
-  border-color: var(--ml-accent-border-strong);
+.ml-toolbar[data-open="true"]::before {
+  width: min(var(--ml-toolbar-expanded), calc(100vw - 24px));
 }
 
-.ml-launcher:active {
-  transform: var(--ml-transform-press);
-}
-
-.ml-dock[data-dragging="true"] .ml-launcher {
+.ml-toolbar[data-dragging="true"] {
   cursor: grabbing;
   transform: var(--ml-transform-press);
 }
 
-.ml-launcher__spark {
+.ml-toolbar-toggle {
+  position: absolute;
+  inset: var(--ml-toolbar-padding);
+  z-index: 1;
   display: grid;
   place-items: center;
-  width: 24px;
-  height: 24px;
+  border: 0;
   border-radius: var(--ml-radius-pill);
-  background: var(--ml-accent);
-  box-shadow: 0 0 0 5px var(--ml-accent-ring-soft);
-  color: var(--ml-accent-ink);
-  animation: mlPulse 1.8s ease-in-out infinite;
+  padding: 0;
+  background: transparent;
+  color: var(--ml-lens-mark-fill);
+  cursor: grab;
+  font: inherit;
+  letter-spacing: 0;
+  opacity: 1;
   transition:
+    opacity 120ms ease,
     transform var(--ml-duration-toolbar) var(--ml-ease-toolbar),
-    box-shadow var(--ml-duration-toolbar) var(--ml-ease-toolbar);
+    background-color var(--ml-duration-base) ease,
+    color var(--ml-duration-base) ease;
 }
 
-.ml-launcher:hover .ml-launcher__spark {
-  transform: scale(1.04);
+.ml-toolbar-toggle:hover {
+  background: var(--ml-toolbar-hover);
+  color: var(--ml-lens-mark-fill);
 }
 
-.ml-launcher--open {
-  border-color: var(--ml-accent-border-strong);
+.ml-lens-mark {
+  display: block;
+  flex: none;
+}
+
+.ml-toolbar-toggle:active {
+  transform: var(--ml-transform-icon-press);
+}
+
+.ml-toolbar[data-open="true"] .ml-toolbar-toggle {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.72);
+}
+
+.ml-toolbar-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  width: min(var(--ml-toolbar-expanded), calc(100vw - 24px));
+  height: var(--ml-toolbar-height);
+  padding: var(--ml-toolbar-padding);
+  opacity: 0;
+  filter: blur(8px);
+  pointer-events: none;
+  transform: scale(0.64);
+  transform-origin: center;
+  transition:
+    opacity 180ms ease,
+    filter var(--ml-duration-toolbar) var(--ml-ease-toolbar),
+    transform var(--ml-duration-toolbar) var(--ml-ease-toolbar),
+    visibility 180ms ease;
+  visibility: hidden;
+}
+
+.ml-toolbar[data-open="true"] .ml-toolbar-controls {
+  opacity: 1;
+  filter: blur(0);
+  pointer-events: auto;
+  transform: scale(1);
+  visibility: visible;
 }

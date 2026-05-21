@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { cellElement, isUsableRegion, paddedRect } from "@/lib/cell-regions";
+
 import type { LineageSummary } from "@/lib/lineage";
+
+import { cellElement, isUsableRegion, paddedRect } from "@/lib/cell-regions";
 
 type LineageRole = "downstream" | "focus" | "upstream";
 
