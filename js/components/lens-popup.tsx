@@ -73,7 +73,7 @@ export function LensPopup({ popup, onSubmit, onCancel }: LensPopupProps) {
             }
             if (event.key === "Escape") onCancel();
           }}
-          placeholder="What should change?"
+          placeholder="Ask a question or request a change..."
         />
 
         <div className="ml-popup__footer">
