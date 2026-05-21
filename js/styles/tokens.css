@@ -48,7 +48,7 @@
   --ml-control-lg: 32px;
   --ml-toolbar-height: 48px;
   --ml-toolbar-collapsed: 48px;
-  --ml-toolbar-expanded: 278px;
+  --ml-toolbar-expanded: 366px;
   --ml-toolbar-button: 36px;
   --ml-toolbar-padding: 6px;
   --ml-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
@@ -102,7 +102,9 @@
   /* Brand and semantic accents */
   --ml-accent: #367968;
   --ml-accent-ink: #ffffff;
-  --ml-lens-mark-fill: #397262;
+  --ml-feedback-accent: var(--ml-accent);
+  --ml-feedback-accent-ink: var(--ml-accent-ink);
+  --ml-lens-mark-fill: var(--ml-target-dot-columnar);
   --ml-blue: #0880ea;
   --ml-amber: #f4b84a;
   --ml-red: #ff6b73;
@@ -138,8 +140,8 @@
   --ml-lineage-rail: color-mix(in srgb, var(--ml-muted) 38%, transparent);
   --ml-lineage-node: color-mix(in srgb, var(--ml-muted) 50%, transparent);
   --ml-lineage-node-active: color-mix(in srgb, var(--ml-blue) 76%, var(--ml-muted));
-  --ml-marker-bg: var(--ml-amber);
-  --ml-marker-ink: #181108;
+  --ml-marker-bg: var(--ml-feedback-accent);
+  --ml-marker-ink: var(--ml-feedback-accent-ink);
   --ml-marker-border: rgba(255, 255, 255, 0.78);
   --ml-agent-read: #8da1b5;
   --ml-agent-claimed: #7f93ff;
@@ -149,21 +151,9 @@
   --ml-agent-needs-review: var(--ml-amber);
 
   /* Popup form tokens */
-  --ml-provenance-border: rgba(15, 23, 42, 0.08);
-  --ml-provenance-bg: rgba(15, 23, 42, 0.03);
-  --ml-provenance-text: rgba(15, 23, 42, 0.5);
   --ml-textarea-border: rgba(15, 23, 42, 0.12);
   --ml-textarea-bg: rgba(15, 23, 42, 0.03);
   --ml-textarea-focus-bg: rgba(15, 23, 42, 0.045);
-  --ml-chip-border: rgba(15, 23, 42, 0.1);
-  --ml-chip-text: rgba(15, 23, 42, 0.5);
-  --ml-chip-hover-bg: rgba(15, 23, 42, 0.055);
-  --ml-chip-hover-text: rgba(15, 23, 42, 0.78);
-  --ml-chip-selected-bg: color-mix(in srgb, var(--ml-accent) 18%, transparent);
-  --ml-chip-selected-border: color-mix(in srgb, var(--ml-accent) 58%, rgba(15, 23, 42, 0.12));
-  --ml-popup-icon-text: rgba(15, 23, 42, 0.5);
-  --ml-popup-icon-hover-bg: rgba(15, 23, 42, 0.06);
-  --ml-popup-icon-hover-text: rgba(15, 23, 42, 0.78);
 
   /* Elevation */
   --ml-shadow: 0 22px 60px rgba(28, 38, 48, 0.16), 0 2px 10px rgba(28, 38, 48, 0.12);
@@ -343,6 +333,8 @@
 .ml-lineage-region,
 .ml-hover-card,
 .ml-marker,
+.ml-marker-editor,
+.ml-marker-tooltip,
 .ml-scrim {
   position: fixed;
   font-family: inherit;
@@ -351,9 +343,8 @@
 
 .ml-action-button,
 .ml-icon-button,
-.ml-submit,
-.ml-chip,
-.ml-dot-chip {
+.ml-theme-toggle,
+.ml-submit {
   font: inherit;
   letter-spacing: 0;
 }
@@ -361,11 +352,10 @@
 .ml-toolbar-toggle:focus-visible,
 .ml-action-button:focus-visible,
 .ml-icon-button:focus-visible,
+.ml-theme-toggle:focus-visible,
 .ml-agent-message__dismiss:focus-visible,
 .ml-target-row:focus-visible,
 .ml-marker:focus-visible,
-.ml-chip:focus-visible,
-.ml-dot-chip:focus-visible,
 .ml-submit:focus-visible {
   outline: 2px solid var(--ml-focus-ring);
   outline-offset: var(--ml-space-1);
@@ -418,24 +408,13 @@
   --ml-tooltip-text: rgba(255, 255, 255, 0.82);
   --ml-placeholder: rgba(0, 0, 0, 0.4);
   --ml-scrim-bg: rgba(255, 255, 255, 0.12);
-  --ml-lens-mark-fill: #397262;
+  --ml-lens-mark-fill: var(--ml-target-dot-columnar);
   --ml-scrollbar-thumb: rgba(21, 25, 29, 0.24);
   --ml-lineage-bg: rgba(0, 0, 0, 0.035);
   --ml-marker-border: rgba(255, 255, 255, 0.78);
-  --ml-provenance-border: rgba(0, 0, 0, 0.08);
-  --ml-provenance-bg: rgba(0, 0, 0, 0.03);
-  --ml-provenance-text: rgba(21, 25, 29, 0.5);
   --ml-textarea-border: rgba(0, 0, 0, 0.12);
   --ml-textarea-bg: rgba(0, 0, 0, 0.03);
   --ml-textarea-focus-bg: rgba(0, 0, 0, 0.045);
-  --ml-chip-border: rgba(0, 0, 0, 0.1);
-  --ml-chip-text: rgba(21, 25, 29, 0.5);
-  --ml-chip-hover-bg: rgba(0, 0, 0, 0.055);
-  --ml-chip-hover-text: rgba(21, 25, 29, 0.78);
-  --ml-chip-selected-border: color-mix(in srgb, var(--ml-accent) 58%, rgba(0, 0, 0, 0.12));
-  --ml-popup-icon-text: rgba(21, 25, 29, 0.5);
-  --ml-popup-icon-hover-bg: rgba(0, 0, 0, 0.06);
-  --ml-popup-icon-hover-text: rgba(21, 25, 29, 0.78);
   --ml-shadow: 0 22px 60px rgba(28, 38, 48, 0.16), 0 2px 10px rgba(28, 38, 48, 0.12);
   --ml-shadow-compact: 0 14px 34px rgba(28, 38, 48, 0.12);
   --ml-shadow-highlight: 0 12px 34px rgba(28, 38, 48, 0.13);
@@ -476,24 +455,13 @@
   --ml-tooltip-text: rgba(255, 255, 255, 0.78);
   --ml-placeholder: rgba(255, 255, 255, 0.35);
   --ml-scrim-bg: rgba(4, 8, 10, 0.08);
-  --ml-lens-mark-fill: #cccccc;
+  --ml-lens-mark-fill: var(--ml-target-dot-columnar);
   --ml-scrollbar-thumb: rgba(255, 255, 255, 0.2);
   --ml-lineage-bg: rgba(255, 255, 255, 0.045);
   --ml-marker-border: rgba(255, 255, 255, 0.35);
-  --ml-provenance-border: rgba(255, 255, 255, 0.1);
-  --ml-provenance-bg: var(--ml-control-bg);
-  --ml-provenance-text: rgba(255, 255, 255, 0.52);
   --ml-textarea-border: rgba(255, 255, 255, 0.15);
   --ml-textarea-bg: rgba(255, 255, 255, 0.05);
   --ml-textarea-focus-bg: rgba(255, 255, 255, 0.065);
-  --ml-chip-border: rgba(255, 255, 255, 0.12);
-  --ml-chip-text: rgba(255, 255, 255, 0.54);
-  --ml-chip-hover-bg: rgba(255, 255, 255, 0.07);
-  --ml-chip-hover-text: rgba(255, 255, 255, 0.82);
-  --ml-chip-selected-border: color-mix(in srgb, var(--ml-accent) 60%, rgba(255, 255, 255, 0.18));
-  --ml-popup-icon-text: rgba(255, 255, 255, 0.45);
-  --ml-popup-icon-hover-bg: rgba(255, 255, 255, 0.08);
-  --ml-popup-icon-hover-text: rgba(255, 255, 255, 0.78);
   --ml-shadow: 0 22px 60px rgba(0, 0, 0, 0.28), 0 2px 10px rgba(0, 0, 0, 0.22);
   --ml-shadow-compact: 0 14px 34px rgba(0, 0, 0, 0.18);
   --ml-shadow-highlight: 0 12px 34px rgba(0, 0, 0, 0.16);

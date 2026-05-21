@@ -3,6 +3,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 
 import type { AgentActivity, LensAnnotation, NotebookGraph, ResolvedHover } from "@/types";
 
+import { AnnotationMarkers } from "@/components/annotation-markers";
 import { LensPopup } from "@/components/lens-popup";
 import { SelectionIdentity } from "@/components/selection-identity";
 import {
@@ -14,11 +15,8 @@ import {
   AGENT_ACTIVITY_VISIBILITY_MS,
   type AgentActivityMessage,
   agentCellMarkLabel,
-  annotationStatusById,
   latestAgentActivityMessage,
-  visibleAnnotations,
 } from "@/lib/agent-activity";
-import { markerPosition } from "@/lib/annotation-anchors";
 import { clamp } from "@/lib/dom-geometry";
 import { lineageForTarget, type LineageSummary } from "@/lib/lineage";
 import { plural } from "@/lib/text-format";
@@ -30,6 +28,8 @@ type LensOverlayProps = {
   agentActivity: AgentActivity[];
   graph: NotebookGraph;
   onAddAnnotation: (draft: Omit<LensAnnotation, "id" | "createdAt">) => void;
+  onUpdateAnnotation: (id: string, patch: Partial<Pick<LensAnnotation, "comment">>) => void;
+  onDeleteAnnotation: (id: string) => void;
 };
 
 export function LensOverlay({
@@ -37,17 +37,24 @@ export function LensOverlay({
   agentActivity,
   graph,
   onAddAnnotation,
+  onUpdateAnnotation,
+  onDeleteAnnotation,
 }: LensOverlayProps) {
   const armed = useLensUiStore((state) => state.armed);
   const hover = useLensUiStore((state) => state.hover);
+  const markersVisible = useLensUiStore((state) => state.markersVisible);
+  const selectedHover = useLensUiStore((state) => state.selectedHover);
   const popup = useLensUiStore((state) => state.popup);
   const resetInteraction = useLensUiStore((state) => state.resetInteraction);
   useViewportRevision();
-  const measuredHoverRect = hover ? semanticHighlightRect(hover.semanticSelection.highlight) : null;
+  const activeHover = hover ?? selectedHover;
+  const measuredHoverRect = activeHover
+    ? semanticHighlightRect(activeHover.semanticSelection.highlight)
+    : null;
   const currentHover =
-    hover && measuredHoverRect
-      ? ({ ...hover, rect: measuredHoverRect } satisfies ResolvedHover)
-      : hover;
+    activeHover && measuredHoverRect
+      ? ({ ...activeHover, rect: measuredHoverRect } satisfies ResolvedHover)
+      : activeHover;
   const lineage = currentHover
     ? lineageForTarget(currentHover.target, graph, currentHover.displayCellId)
     : null;
@@ -77,7 +84,14 @@ export function LensOverlay({
         <HoverCard hover={currentHover} lineage={lineage} />
       ) : null}
       <AgentActivityRegions activity={agentActivity} />
-      <AnnotationMarkers annotations={annotations} agentActivity={agentActivity} />
+      {markersVisible ? (
+        <AnnotationMarkers
+          annotations={annotations}
+          agentActivity={agentActivity}
+          onUpdateAnnotation={onUpdateAnnotation}
+          onDeleteAnnotation={onDeleteAnnotation}
+        />
+      ) : null}
       {popup ? (
         <LensPopup
           popup={popup}
@@ -269,41 +283,6 @@ function LineageCue({ lineage }: { lineage: LineageSummary }) {
         {downstreamLabel}
       </span>
     </span>
-  );
-}
-
-function AnnotationMarkers({
-  annotations,
-  agentActivity,
-}: {
-  annotations: LensAnnotation[];
-  agentActivity: AgentActivity[];
-}) {
-  const annotationStatuses = annotationStatusById(agentActivity);
-  const activeAnnotations = visibleAnnotations(annotations, agentActivity);
-  return (
-    <>
-      {activeAnnotations.map((annotation, index) => {
-        const pos = markerPosition(annotation);
-        if (!pos) return null;
-        const receipt = annotationStatuses.get(annotation.id);
-        return (
-          <button
-            key={annotation.id}
-            className="ml-marker"
-            style={{ left: pos.left, top: pos.top }}
-            title={receipt?.note || annotation.comment}
-            type="button"
-            aria-label={`Lens feedback ${index + 1}: ${annotation.variable || annotation.targetLabel || "target"}${receipt ? `, ${receipt.status}` : ""}`}
-            data-agent-status={receipt?.status}
-            data-marimo-lens-tooltip="Feedback marker"
-            data-marimo-lens-ui
-          >
-            {index + 1}
-          </button>
-        );
-      })}
-    </>
   );
 }
 

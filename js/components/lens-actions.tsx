@@ -2,6 +2,9 @@ import {
   Check,
   ClipboardCopy,
   Crosshair,
+  Eye,
+  EyeOff,
+  ListTree,
   ScanLine,
   Settings,
   Trash2,
@@ -18,12 +21,16 @@ type LensActionsProps = {
   copying: boolean;
   copyError: string;
   interactive?: boolean;
+  inventoryOpen: boolean;
+  markersVisible: boolean;
   noteCount: number;
   settingsOpen: boolean;
   onCopy: () => void;
   onScan: () => void;
   onClear: () => void;
   onClose: () => void;
+  onToggleInventory: () => void;
+  onToggleMarkersVisible: () => void;
   onToggleSettings: () => void;
   onToggleCapture: () => void;
 };
@@ -34,17 +41,22 @@ export function LensActions({
   copying,
   copyError,
   interactive = true,
+  inventoryOpen,
+  markersVisible,
   noteCount,
   settingsOpen,
   onCopy,
   onScan,
   onClear,
   onClose,
+  onToggleInventory,
+  onToggleMarkersVisible,
   onToggleSettings,
   onToggleCapture,
 }: LensActionsProps) {
   const hasNotes = noteCount > 0;
   const copyUnavailable = copying || !hasNotes;
+  const MarkerVisibilityIcon = markersVisible ? Eye : EyeOff;
   const captureTooltip = armed
     ? "Choose the notebook output your feedback belongs to."
     : "Select a result and leave a concrete request for marimo-pair.";
@@ -59,6 +71,30 @@ export function LensActions({
   const exitDescriptionId = useId();
   const CopyIcon = copyPresentation.Icon;
   const secondaryActions: ActionSpec[] = [
+    {
+      Icon: ListTree,
+      ariaExpanded: inventoryOpen,
+      ariaLabel: inventoryOpen ? "Close target inventory" : "Open target inventory",
+      ariaPressed: inventoryOpen,
+      description: "Show or hide the Lens target inventory.",
+      label: "Targets",
+      onClick: onToggleInventory,
+      tooltip: "Target inventory",
+    },
+    {
+      Icon: MarkerVisibilityIcon,
+      ariaDisabled: !hasNotes,
+      ariaLabel: markersVisible ? "Hide feedback markers" : "Show feedback markers",
+      ariaPressed: markersVisible,
+      description: hasNotes
+        ? "Show or hide saved feedback markers."
+        : "Add feedback before toggling markers.",
+      label: "Markers",
+      onClick: onToggleMarkersVisible,
+      prevent: !hasNotes,
+      shortcut: "H",
+      tooltip: markersVisible ? "Hide markers" : "Show markers",
+    },
     {
       Icon: ScanLine,
       ariaLabel: "Refresh context",
@@ -176,6 +212,55 @@ type ActionSpec = {
   tooltip: string;
 };
 
+type CopyActionInput = {
+  copied: boolean;
+  copyError: string;
+  copying: boolean;
+  hasNotes: boolean;
+};
+
+type CopyActionPresentation = {
+  Icon: LucideIcon;
+  ariaLabel: string;
+  state?: string;
+  tooltip: string;
+};
+
+type CopyActionPresentationRule = {
+  matches: (input: CopyActionInput) => boolean;
+  presentation: (input: CopyActionInput) => CopyActionPresentation;
+};
+
+const COPY_ACTION_PRESENTATION_RULES: CopyActionPresentationRule[] = [
+  {
+    matches: ({ copying }) => copying,
+    presentation: () => ({
+      Icon: ScanLine,
+      ariaLabel: "Refreshing context",
+      state: "busy",
+      tooltip: "Updating the notebook snapshot before copying.",
+    }),
+  },
+  {
+    matches: ({ copied }) => copied,
+    presentation: () => ({
+      Icon: Check,
+      ariaLabel: "Copied feedback",
+      state: "success",
+      tooltip: "The marimo-pair prompt is on the clipboard.",
+    }),
+  },
+  {
+    matches: ({ copyError, hasNotes }) => Boolean(copyError && hasNotes),
+    presentation: ({ copyError }) => ({
+      Icon: X,
+      ariaLabel: "Copy failed",
+      state: "error",
+      tooltip: copyError,
+    }),
+  },
+];
+
 function ActionButton({ action, interactive }: { action: ActionSpec; interactive: boolean }) {
   const Icon = action.Icon;
   const descriptionId = useId();
@@ -204,6 +289,7 @@ function ActionButton({ action, interactive }: { action: ActionSpec; interactive
         aria-disabled={action.ariaDisabled ? "true" : undefined}
         aria-expanded={action.ariaExpanded}
         aria-pressed={action.ariaPressed}
+        data-active={action.ariaPressed ? "true" : undefined}
         data-danger={action.danger ? "true" : undefined}
         data-marimo-lens-tooltip={action.tooltip}
         tabIndex={interactive ? undefined : -1}
@@ -224,43 +310,17 @@ function copyActionPresentation({
   copyError,
   copying,
   hasNotes,
-}: {
-  copied: boolean;
-  copyError: string;
-  copying: boolean;
-  hasNotes: boolean;
-}): {
-  Icon: LucideIcon;
-  ariaLabel: string;
-  state?: string;
-  tooltip: string;
-} {
-  if (copying) {
-    return {
-      Icon: ScanLine,
-      ariaLabel: "Refreshing context",
-      state: "busy",
-      tooltip: "Updating the notebook snapshot before copying.",
-    };
-  }
-  if (copied) {
-    return {
-      Icon: Check,
-      ariaLabel: "Copied feedback",
-      state: "success",
-      tooltip: "The marimo-pair prompt is on the clipboard.",
-    };
-  }
-  if (copyError && hasNotes) {
-    return { Icon: X, ariaLabel: "Copy failed", state: "error", tooltip: copyError };
-  }
-  return {
-    Icon: ClipboardCopy,
-    ariaLabel: "Copy feedback",
-    tooltip: hasNotes
-      ? "Copy the saved feedback and fresh notebook context for marimo-pair."
-      : "Add feedback before copying the agent prompt.",
-  };
+}: CopyActionInput): CopyActionPresentation {
+  const input = { copied, copyError, copying, hasNotes };
+  return (
+    COPY_ACTION_PRESENTATION_RULES.find((rule) => rule.matches(input))?.presentation(input) ?? {
+      Icon: ClipboardCopy,
+      ariaLabel: "Copy feedback",
+      tooltip: hasNotes
+        ? "Copy the saved feedback and fresh notebook context for marimo-pair."
+        : "Add feedback before copying the agent prompt.",
+    }
+  );
 }
 
 function ActionHint({

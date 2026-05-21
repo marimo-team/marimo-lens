@@ -14,6 +14,8 @@ type LensToolbarProps = {
   copying: boolean;
   copyError: string;
   dragging: boolean;
+  inventoryOpen: boolean;
+  markersVisible: boolean;
   noteCount: number;
   settingsOpen: boolean;
   dragProps: ReturnType<typeof useDraggableDock>["dockDragProps"];
@@ -22,6 +24,8 @@ type LensToolbarProps = {
   onCopy: () => void;
   onScan: () => void;
   onClear: () => void;
+  onToggleInventory: () => void;
+  onToggleMarkersVisible: () => void;
   onToggleSettings: () => void;
   consumeDragClick: () => boolean;
 };
@@ -34,6 +38,8 @@ export function LensToolbar({
   copying,
   copyError,
   dragging,
+  inventoryOpen,
+  markersVisible,
   noteCount,
   settingsOpen,
   dragProps,
@@ -42,6 +48,8 @@ export function LensToolbar({
   onCopy,
   onScan,
   onClear,
+  onToggleInventory,
+  onToggleMarkersVisible,
   onToggleSettings,
   consumeDragClick,
 }: LensToolbarProps) {
@@ -93,12 +101,16 @@ export function LensToolbar({
           copying={copying}
           copyError={copyError}
           interactive={open}
+          inventoryOpen={inventoryOpen}
+          markersVisible={markersVisible}
           noteCount={noteCount}
           settingsOpen={settingsOpen}
           onCopy={onCopy}
           onScan={onScan}
           onClear={onClear}
           onClose={onToggleOpen}
+          onToggleInventory={onToggleInventory}
+          onToggleMarkersVisible={onToggleMarkersVisible}
           onToggleSettings={onToggleSettings}
           onToggleCapture={onToggleCapture}
         />

@@ -1,9 +1,28 @@
-import { useMemo, useState } from "react";
+import {
+  Box,
+  Braces,
+  ChartColumn,
+  Search,
+  SlidersHorizontal,
+  Table2,
+  TriangleAlert,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-import type { AgentActivity, LensAnnotation, LensTarget, NotebookGraph } from "@/types";
+import type {
+  AgentActivity,
+  LensAnnotation,
+  LensTarget,
+  LensTargetKind,
+  NotebookGraph,
+} from "@/types";
 
+import { TargetColumnPager } from "@/components/target-column-pager";
 import { agentActivitySummary, visibleAnnotations } from "@/lib/agent-activity";
-import { compactTargetKindLabel, shapeText, targetName } from "@/lib/target-labels";
+import { compact, compactTargetKindLabel, shapeText, targetName } from "@/lib/target-labels";
+import { orderedTargets } from "@/lib/target-order";
 import { formatCount } from "@/lib/text-format";
 
 type LensInspectorPanelProps = {
@@ -13,8 +32,10 @@ type LensInspectorPanelProps = {
   graph: NotebookGraph;
   annotations: LensAnnotation[];
   agentActivity: AgentActivity[];
+  selectedTargetId: string | null;
   onTargetEnter: (target: LensTarget) => void;
   onTargetLeave: () => void;
+  onTargetSelect: (target: LensTarget) => void;
 };
 
 export function LensInspectorPanel({
@@ -24,20 +45,30 @@ export function LensInspectorPanel({
   graph,
   annotations,
   agentActivity,
+  selectedTargetId,
   onTargetEnter,
   onTargetLeave,
+  onTargetSelect,
 }: LensInspectorPanelProps) {
   const [query, setQuery] = useState("");
-  const normalizedQuery = query.trim().toLowerCase();
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchId = useId();
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const normalizedQuery = searchOpen ? query.trim().toLowerCase() : "";
   const rows = useMemo(() => {
-    const ordered = orderedTargets(targets);
+    const ordered = orderedTargets(targets, graph);
     if (!normalizedQuery) return ordered;
     return ordered.filter((target) => targetMatchesQuery(target, normalizedQuery));
-  }, [normalizedQuery, targets]);
+  }, [graph, normalizedQuery, targets]);
   const controlCount =
     (graph.controls?.summary?.uiElementCount ?? 0) + (graph.controls?.summary?.widgetCount ?? 0);
   const noteCount = visibleAnnotations(annotations, agentActivity).length;
   const summary = agentActivitySummary(agentActivity);
+  const SearchIcon = searchOpen ? X : Search;
+
+  useEffect(() => {
+    if (searchOpen) searchInputRef.current?.focus();
+  }, [searchOpen]);
 
   return (
     <section
@@ -49,28 +80,59 @@ export function LensInspectorPanel({
     >
       <div className="ml-inspector-panel__header">
         <div className="ml-inspector-panel__title">{title || "marimo lens"}</div>
-        <div className="ml-inspector-panel__meta">
-          {formatCount(targets.length, "target")}
-          <span aria-hidden="true" />
-          {formatCount(controlCount, "control")}
-          {noteCount > 0 ? (
-            <>
-              <span aria-hidden="true" />
-              {formatCount(noteCount, "note")}
-            </>
-          ) : null}
+        <div className="ml-inspector-panel__header-actions">
+          <div className="ml-inspector-panel__meta">
+            {formatCount(targets.length, "target")}
+            <span aria-hidden="true" />
+            {formatCount(controlCount, "control")}
+            {noteCount > 0 ? (
+              <>
+                <span aria-hidden="true" />
+                {formatCount(noteCount, "note")}
+              </>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="ml-inspector-panel__search-toggle"
+            aria-label={searchOpen ? "Close target search" : "Open target search"}
+            aria-controls={searchId}
+            aria-expanded={searchOpen}
+            aria-pressed={searchOpen}
+            data-active={searchOpen ? "true" : "false"}
+            title={searchOpen ? "Close search" : "Search targets"}
+            onClick={() => {
+              if (searchOpen) setQuery("");
+              setSearchOpen(!searchOpen);
+            }}
+          >
+            <SearchIcon size={15} strokeWidth={2} />
+          </button>
         </div>
       </div>
 
       {summary ? <div className="ml-inspector-panel__summary">{summary.text}</div> : null}
 
-      <label className="ml-target-search">
+      <label
+        id={searchId}
+        className="ml-target-search"
+        data-open={searchOpen ? "true" : "false"}
+        inert={!searchOpen}
+      >
         <span className="ml-sr-only">Filter Lens targets</span>
         <input
+          ref={searchInputRef}
           type="search"
           aria-label="Filter Lens targets"
+          disabled={!searchOpen}
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
+          onKeyDown={(event) => {
+            if (event.key !== "Escape") return;
+            event.preventDefault();
+            setQuery("");
+            setSearchOpen(false);
+          }}
           placeholder="Filter targets"
         />
       </label>
@@ -81,8 +143,10 @@ export function LensInspectorPanel({
             <li key={target.id}>
               <TargetRow
                 target={target}
+                selected={target.id === selectedTargetId}
                 onTargetEnter={onTargetEnter}
                 onTargetLeave={onTargetLeave}
+                onTargetSelect={onTargetSelect}
               />
             </li>
           ))
@@ -104,51 +168,99 @@ export function LensInspectorPanel({
 
 type TargetRowProps = {
   target: LensTarget;
+  selected: boolean;
   onTargetEnter: (target: LensTarget) => void;
   onTargetLeave: () => void;
+  onTargetSelect: (target: LensTarget) => void;
 };
 
-function TargetRow({ target, onTargetEnter, onTargetLeave }: TargetRowProps) {
-  const columnNames = (target.columns ?? []).map((column) => column.name);
+function TargetRow({
+  target,
+  selected,
+  onTargetEnter,
+  onTargetLeave,
+  onTargetSelect,
+}: TargetRowProps) {
+  const columns = target.columns ?? [];
+  const label = targetName(target);
   return (
-    <button
-      type="button"
+    <div
       className="ml-target-row"
+      data-selected={selected ? "true" : "false"}
       onFocus={() => onTargetEnter(target)}
-      onBlur={onTargetLeave}
+      onBlur={(event) => {
+        if (
+          event.relatedTarget instanceof Node &&
+          event.currentTarget.contains(event.relatedTarget)
+        ) {
+          return;
+        }
+        onTargetLeave();
+      }}
       onPointerEnter={() => onTargetEnter(target)}
       onPointerLeave={onTargetLeave}
-      aria-label={targetAriaLabel(target)}
     >
-      <span className="ml-target-row__dot" data-kind={target.kind} aria-hidden="true" />
-      <span className="ml-target-row__body">
-        <span className="ml-target-row__top">
-          <span className="ml-target-row__name" translate="no">
-            {targetName(target)}
+      <button
+        type="button"
+        className="ml-target-row__select"
+        aria-label={targetAriaLabel(target)}
+        aria-pressed={selected}
+        onClick={() => onTargetSelect(target)}
+      >
+        <TargetSemanticIcon kind={target.kind} />
+        <span className="ml-target-row__body">
+          <span className="ml-target-row__top">
+            <span className="ml-target-row__name" translate="no">
+              {label}
+            </span>
           </span>
-          <span className="ml-target-row__kind">{compactTargetKindLabel(target)}</span>
+          <span className="ml-target-row__meta">{targetMeta(target)}</span>
         </span>
-        <span className="ml-target-row__meta">{targetMeta(target)}</span>
-        {columnNames.length > 0 ? (
-          <span className="ml-target-row__columns" aria-hidden="true">
-            {columnNames.map((name) => (
-              <span key={name} translate="no">
-                {name}
-              </span>
-            ))}
-          </span>
-        ) : null}
-      </span>
-    </button>
+      </button>
+      {columns.length > 0 ? (
+        <TargetColumnPager
+          columns={columns}
+          targetLabel={label}
+          onSelect={() => onTargetSelect(target)}
+        />
+      ) : null}
+    </div>
   );
 }
 
-function orderedTargets(targets: LensTarget[]): LensTarget[] {
-  return [...targets].sort((left, right) => {
-    const priority = targetPriority(left) - targetPriority(right);
-    if (priority !== 0) return priority;
-    return targetName(left).localeCompare(targetName(right));
-  });
+function TargetSemanticIcon({ kind }: { kind: LensTargetKind }) {
+  const { Icon, tone } = targetKindIcon(kind);
+  return (
+    <span className="ml-target-row__icon" data-tone={tone} aria-hidden="true">
+      <Icon size={14} strokeWidth={2} />
+    </span>
+  );
+}
+
+type TargetIconTone = "columnar" | "control" | "generic" | "visual" | "warning";
+
+type TargetIconPresentation = {
+  Icon: LucideIcon;
+  tone: TargetIconTone;
+};
+
+const TARGET_KIND_PRESENTATION = {
+  anywidget: { Icon: SlidersHorizontal, tone: "control" },
+  data: { Icon: Table2, tone: "columnar" },
+  dataframe: { Icon: Table2, tone: "columnar" },
+  diagnostic: { Icon: TriangleAlert, tone: "warning" },
+  document: { Icon: Box, tone: "generic" },
+  layout: { Icon: Box, tone: "generic" },
+  media: { Icon: Box, tone: "generic" },
+  object: { Icon: Braces, tone: "generic" },
+  output: { Icon: Box, tone: "generic" },
+  table: { Icon: Table2, tone: "columnar" },
+  ui: { Icon: SlidersHorizontal, tone: "control" },
+  visualization: { Icon: ChartColumn, tone: "visual" },
+} satisfies Record<LensTargetKind, TargetIconPresentation>;
+
+function targetKindIcon(kind: LensTargetKind): TargetIconPresentation {
+  return TARGET_KIND_PRESENTATION[kind];
 }
 
 function targetMatchesQuery(target: LensTarget, query: string): boolean {
@@ -166,22 +278,17 @@ function targetMatchesQuery(target: LensTarget, query: string): boolean {
   return haystack.includes(query);
 }
 
-function targetPriority(target: LensTarget): number {
-  if (target.kind === "dataframe" || target.kind === "table" || target.kind === "data") return 0;
-  if (target.kind === "visualization" || target.capabilities?.chartPart) return 1;
-  if (target.kind === "ui" || target.kind === "anywidget") return 2;
-  if (target.kind === "output") return 4;
-  return 3;
-}
-
 function targetAriaLabel(target: LensTarget): string {
   return `Preview ${targetName(target)}, ${compactTargetKindLabel(target)}, ${targetMeta(target)}`;
 }
 
 function targetMeta(target: LensTarget): string {
-  const parts = [
+  return compactTargetMeta(target) || "notebook value";
+}
+
+function compactTargetMeta(target: LensTarget): string {
+  return compact([
     shapeText(target, { compact: true }),
     target.cellId ? `cell ${target.cellId}` : null,
-  ].filter(Boolean);
-  return parts.join(" · ") || "notebook value";
+  ]);
 }

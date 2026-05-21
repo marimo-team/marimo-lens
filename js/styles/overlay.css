@@ -479,3 +479,250 @@ html[data-marimo-lens-capture] embed[data-marimo-document] {
   background: var(--ml-agent-needs-review);
   color: #201507;
 }
+
+.ml-marker-tooltip {
+  z-index: var(--ml-z-popup);
+  display: flex;
+  align-items: center;
+  gap: var(--ml-space-8);
+  width: min(300px, calc(100vw - 28px));
+  border-radius: var(--ml-radius-xl);
+  padding: var(--ml-space-7) var(--ml-space-8) var(--ml-space-7) var(--ml-space-10);
+  background: #1a1a1a;
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.26),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  color: #fff;
+  pointer-events: auto;
+  animation: mlMarkerPopoverIn var(--ml-duration-fast) var(--ml-ease-out);
+}
+
+.ml-marker-tooltip__copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--ml-space-2);
+}
+
+.ml-marker-tooltip__summary,
+.ml-marker-tooltip__note {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ml-marker-tooltip__summary {
+  color: rgba(255, 255, 255, 0.55);
+  font-size: var(--ml-font-md);
+  font-style: italic;
+  line-height: var(--ml-line-normal);
+}
+
+.ml-marker-tooltip__note {
+  color: rgba(255, 255, 255, 0.94);
+  font-size: var(--ml-font-lg);
+  font-weight: 470;
+  line-height: var(--ml-line-normal);
+}
+
+.ml-marker-tooltip__edit {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--ml-radius-pill);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  transition:
+    background-color var(--ml-duration-base) ease,
+    color var(--ml-duration-base) ease,
+    transform var(--ml-duration-fast) ease;
+}
+
+.ml-marker-tooltip__edit:hover {
+  transform: var(--ml-transform-lift);
+  background: var(--ml-feedback-accent);
+  color: var(--ml-feedback-accent-ink);
+}
+
+.ml-marker-editor {
+  z-index: var(--ml-z-popup);
+  transform: translateX(-50%);
+  display: grid;
+  gap: var(--ml-space-7);
+  width: 326px;
+  max-width: calc(100vw - 28px);
+  max-height: calc(100vh - 28px);
+  border-radius: var(--ml-radius-2xl);
+  padding: var(--ml-space-10) var(--ml-space-12) var(--ml-space-11);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #1a1a1a;
+  box-shadow:
+    0 16px 38px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+  color: #fff;
+  pointer-events: auto;
+  will-change: transform, opacity;
+  animation: mlMarkerPopoverIn var(--ml-duration-enter) var(--ml-ease-pop);
+}
+
+.ml-marker-editor--shake {
+  animation: mlMarkerEditShake 250ms ease-out;
+}
+
+.ml-marker-editor__summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ml-space-5);
+  min-width: 0;
+  color: rgba(255, 255, 255, 0.58);
+  cursor: pointer;
+  font-size: var(--ml-font-lg);
+  line-height: var(--ml-line-normal);
+  text-align: left;
+}
+
+.ml-marker-editor__summary span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ml-marker-editor__details {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--ml-duration-toolbar) var(--ml-ease-accordion);
+}
+
+.ml-marker-editor__details[data-open="true"] {
+  grid-template-rows: 1fr;
+}
+
+.ml-marker-editor__details-inner {
+  display: grid;
+  gap: var(--ml-space-5);
+  min-height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.ml-marker-editor__detail {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--ml-space-7);
+  border-radius: var(--ml-radius-md);
+  padding: var(--ml-space-5) var(--ml-space-7);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: var(--ml-font-md);
+  line-height: var(--ml-line-normal);
+}
+
+.ml-marker-editor__detail dt {
+  color: rgba(255, 255, 255, 0.42);
+  font-weight: 560;
+}
+
+.ml-marker-editor__detail dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.ml-marker-editor__textarea {
+  width: 100%;
+  min-height: 72px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--ml-radius-md);
+  padding: var(--ml-space-8) var(--ml-space-9);
+  resize: vertical;
+  background: rgba(255, 255, 255, 0.055);
+  color: #fff;
+  font: inherit;
+  font-size: var(--ml-font-lg);
+  line-height: var(--ml-line-relaxed);
+  outline: none;
+  transition:
+    border-color var(--ml-duration-base) ease,
+    background-color var(--ml-duration-base) ease;
+}
+
+.ml-marker-editor__textarea:focus {
+  border-color: var(--ml-feedback-accent);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.ml-marker-editor__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ml-space-6);
+  min-width: 0;
+}
+
+.ml-marker-editor__delete,
+.ml-marker-editor__cancel,
+.ml-marker-editor__save {
+  cursor: pointer;
+  transition:
+    background-color var(--ml-duration-base) ease,
+    color var(--ml-duration-base) ease,
+    opacity var(--ml-duration-base) ease,
+    transform var(--ml-duration-fast) ease;
+}
+
+.ml-marker-editor__delete {
+  display: grid;
+  place-items: center;
+  flex: none;
+  margin-right: auto;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--ml-radius-pill);
+  color: rgba(255, 255, 255, 0.42);
+}
+
+.ml-marker-editor__delete:hover {
+  background: color-mix(in srgb, var(--ml-red) 20%, transparent);
+  color: var(--ml-red);
+}
+
+.ml-marker-editor__cancel,
+.ml-marker-editor__save {
+  flex: none;
+  height: 30px;
+  border-radius: var(--ml-radius-pill);
+  padding: 0 var(--ml-space-12);
+  font-size: var(--ml-font-md);
+  font-weight: 620;
+}
+
+.ml-marker-editor__cancel {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.ml-marker-editor__cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ml-marker-editor__save {
+  background: var(--ml-feedback-accent);
+  color: var(--ml-feedback-accent-ink);
+}
+
+.ml-marker-editor__save:hover:not(:disabled) {
+  transform: var(--ml-transform-lift);
+  background: color-mix(in srgb, var(--ml-feedback-accent) 88%, white);
+}
+
+.ml-marker-editor__save:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}

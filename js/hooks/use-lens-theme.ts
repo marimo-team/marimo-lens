@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 
-type LensTheme = "dark" | "light";
+import type { LensTheme } from "@/types";
+
+import { useLensUiStore } from "@/store";
 
 type MarimoMountConfig = {
   appConfig?: {
@@ -33,10 +35,16 @@ const THEME_ATTRIBUTES = [
 ] as const;
 
 export function useLensTheme(): LensTheme {
-  const [theme, setTheme] = useState<LensTheme>(() => detectLensTheme());
+  const selectedTheme = useLensUiStore((state) => state.theme);
+  const [detectedTheme, setDetectedTheme] = useState<LensTheme>(() => detectLensTheme());
 
   useEffect(() => {
-    const update = () => setTheme(detectLensTheme());
+    const update = () => {
+      setDetectedTheme((currentTheme) => {
+        const nextTheme = detectLensTheme();
+        return currentTheme === nextTheme ? currentTheme : nextTheme;
+      });
+    };
     const media = typeof window.matchMedia === "function" ? window.matchMedia(DARK_QUERY) : null;
     media?.addEventListener("change", update);
 
@@ -60,7 +68,7 @@ export function useLensTheme(): LensTheme {
     };
   }, []);
 
-  return theme;
+  return selectedTheme ?? detectedTheme;
 }
 
 function detectLensTheme(): LensTheme {

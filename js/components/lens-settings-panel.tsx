@@ -1,4 +1,4 @@
-import { CircleHelp } from "lucide-react";
+import { CircleHelp, Moon, Sun } from "lucide-react";
 import { useId } from "react";
 
 import { LensTooltip } from "@/components/lens-tooltip";
@@ -7,6 +7,7 @@ import {
   OUTPUT_DETAIL_OPTIONS,
   type OutputDetailLevel,
 } from "@/feedback/output-detail";
+import { useLensTheme } from "@/hooks/use-lens-theme";
 import { useLensUiStore } from "@/store";
 
 type LensSettingsPanelProps = {
@@ -16,10 +17,14 @@ type LensSettingsPanelProps = {
 export function LensSettingsPanel({ state }: LensSettingsPanelProps) {
   const outputDetail = useLensUiStore((store) => store.outputDetail);
   const setOutputDetail = useLensUiStore((store) => store.setOutputDetail);
+  const setTheme = useLensUiStore((store) => store.setTheme);
+  const theme = useLensTheme();
   const outputHelpId = useId();
   const activeOption =
     OUTPUT_DETAIL_OPTIONS.find((option) => option.value === outputDetail) ??
     OUTPUT_DETAIL_OPTIONS[1];
+  const nextTheme = theme === "dark" ? "light" : "dark";
+  const themeLabel = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
 
   return (
     <section
@@ -35,6 +40,22 @@ export function LensSettingsPanel({ state }: LensSettingsPanelProps) {
           <h2 className="ml-settings-panel__title">Settings</h2>
           <p className="ml-settings-panel__meta">Copy detail</p>
         </div>
+        <button
+          className="ml-theme-toggle"
+          type="button"
+          title={themeLabel}
+          aria-label={themeLabel}
+          aria-pressed={theme === "dark" ? "true" : "false"}
+          onClick={() => setTheme(nextTheme)}
+        >
+          <span className="ml-theme-toggle__icon" key={theme} aria-hidden="true">
+            {theme === "dark" ? (
+              <Sun size={16} strokeWidth={1.9} />
+            ) : (
+              <Moon size={16} strokeWidth={1.9} />
+            )}
+          </span>
+        </button>
       </header>
 
       <div className="ml-settings-panel__divider" />
@@ -65,8 +86,6 @@ export function LensSettingsPanel({ state }: LensSettingsPanelProps) {
           </span>
         </button>
       </div>
-
-      <div className="ml-settings-panel__divider" />
 
       <div className="ml-settings-levels" aria-label="Output detail">
         {OUTPUT_DETAIL_OPTIONS.map((option) => (

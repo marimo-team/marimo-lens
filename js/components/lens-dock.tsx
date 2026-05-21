@@ -17,7 +17,7 @@ import { useCopyFeedback } from "@/hooks/use-copy-feedback";
 import { useDraggableDock } from "@/hooks/use-draggable-dock";
 import { visibleAnnotations } from "@/lib/agent-activity";
 import { isEditableKeyboardEvent } from "@/lib/editable-event";
-import { hoverForTargetSelection, targetElementForSelection } from "@/selection/selection-registry";
+import { resolveTargetPreview } from "@/selection/selection-registry";
 import { useLensUiStore } from "@/store";
 
 const INSPECTOR_EXIT_MS = 220;
@@ -58,28 +58,49 @@ export function LensDock({
   const copyStatus = useLensUiStore((state) => state.copyStatus);
   const copyError = useLensUiStore((state) => state.copyError);
   const dragging = useLensUiStore((state) => state.dragging);
+  const inventoryOpen = useLensUiStore((state) => state.inventoryOpen);
+  const markersVisible = useLensUiStore((state) => state.markersVisible);
   const settingsOpen = useLensUiStore((state) => state.settingsOpen);
   const outputDetail = useLensUiStore((state) => state.outputDetail);
+  const selectedTargetId = useLensUiStore((state) => state.selectedHover?.target.id ?? null);
   const popupOpen = useLensUiStore((state) => state.popup !== null);
   const toggleOpen = useLensUiStore((state) => state.toggleOpen);
+  const toggleInventory = useLensUiStore((state) => state.toggleInventory);
+  const toggleMarkersVisible = useLensUiStore((state) => state.toggleMarkersVisible);
   const toggleSettings = useLensUiStore((state) => state.toggleSettings);
+  const setInventoryOpen = useLensUiStore((state) => state.setInventoryOpen);
   const setSettingsOpen = useLensUiStore((state) => state.setSettingsOpen);
   const startCapture = useLensUiStore((state) => state.startCapture);
   const stopCapture = useLensUiStore((state) => state.stopCapture);
   const setHover = useLensUiStore((state) => state.setHover);
+  const setSelectedHover = useLensUiStore((state) => state.setSelectedHover);
   const { consumeDragClick, dockDragProps, dockRef, dockStyle } = useDraggableDock();
   const feedbackText = renderPairPromptForDetail(pairFeedback, outputDetail, pair_prompt, markdown);
   const noteCount = visibleAnnotations(annotations, agentActivity).length;
   const toolbarOpen = open && !popupOpen;
-  const inspectorPresent = useInspectorPresence(toolbarOpen && !settingsOpen);
+  const inspectorPresent = useInspectorPresence(inventoryOpen && toolbarOpen);
   const settingsPresent = useSettingsPresence(settingsOpen && toolbarOpen);
+
+  const targetPreview = useCallback(
+    (target: LensTarget) => {
+      return resolveTargetPreview(target, targets);
+    },
+    [targets],
+  );
 
   const showTargetPreview = useCallback(
     (target: LensTarget) => {
-      const element = targetElementForSelection(target, targets);
-      setHover(element ? hoverForTargetSelection(target, element, targets) : null);
+      setHover(targetPreview(target));
     },
-    [setHover, targets],
+    [setHover, targetPreview],
+  );
+
+  const selectTargetPreview = useCallback(
+    (target: LensTarget) => {
+      const resolved = targetPreview(target);
+      if (resolved) setSelectedHover(resolved);
+    },
+    [setSelectedHover, targetPreview],
   );
 
   const copyPairFeedback = useCopyFeedback({
@@ -103,6 +124,11 @@ export function LensDock({
         setSettingsOpen(false);
         return;
       }
+      if (inventoryOpen) {
+        event.preventDefault();
+        setInventoryOpen(false);
+        return;
+      }
       if (armed) {
         event.preventDefault();
         stopCapture();
@@ -123,7 +149,9 @@ export function LensDock({
     const command = shortcutCommand(key, {
       canCopy: noteCount > 0 && copyStatus !== "pending",
       canClear: noteCount > 0,
+      canToggleMarkers: noteCount > 0,
       copyPairFeedback,
+      toggleMarkersVisible,
       onClear,
       onScan,
     });
@@ -156,13 +184,15 @@ export function LensDock({
       {inspectorPresent ? (
         <LensInspectorPanel
           title={title}
-          state={toolbarOpen && !settingsOpen ? "open" : "closing"}
+          state={inventoryOpen && toolbarOpen ? "open" : "closing"}
           targets={targets}
           graph={graph}
           annotations={annotations}
           agentActivity={agentActivity}
           onTargetEnter={showTargetPreview}
           onTargetLeave={() => setHover(null)}
+          onTargetSelect={selectTargetPreview}
+          selectedTargetId={selectedTargetId}
         />
       ) : null}
       {settingsPresent ? (
@@ -176,6 +206,8 @@ export function LensDock({
         copying={copyStatus === "pending"}
         copyError={copyError}
         dragging={dragging}
+        inventoryOpen={inventoryOpen}
+        markersVisible={markersVisible}
         noteCount={noteCount}
         settingsOpen={settingsOpen}
         dragProps={dockDragProps}
@@ -183,6 +215,8 @@ export function LensDock({
         onCopy={copyPairFeedback}
         onScan={() => onScan()}
         onClear={onClear}
+        onToggleInventory={toggleInventory}
+        onToggleMarkersVisible={toggleMarkersVisible}
         onToggleSettings={toggleSettings}
         onToggleOpen={toggleOpen}
         onToggleCapture={() => {
@@ -233,13 +267,16 @@ function shortcutCommand(
   actions: {
     canClear: boolean;
     canCopy: boolean;
+    canToggleMarkers: boolean;
     copyPairFeedback: () => void;
+    toggleMarkersVisible: () => void;
     onClear: () => void;
     onScan: () => void;
   },
 ): (() => void) | null {
   const commands: Record<string, (() => void) | null> = {
     c: actions.canCopy ? actions.copyPairFeedback : null,
+    h: actions.canToggleMarkers ? actions.toggleMarkersVisible : null,
     r: actions.onScan,
     x: actions.canClear ? actions.onClear : null,
   };

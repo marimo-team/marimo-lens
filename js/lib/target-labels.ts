@@ -3,18 +3,24 @@ import type { LensTarget } from "@/types";
 const TARGET_KIND_LABELS: Partial<Record<LensTarget["kind"], string>> = {
   anywidget: "Interactive widget",
   data: "Data output",
+  dataframe: "Data table",
   diagnostic: "Diagnostic output",
   document: "Document output",
   layout: "Layout output",
   media: "Media output",
+  table: "Data table",
   ui: "Notebook control",
+  visualization: "Chart output",
 };
 
 const COMPACT_TARGET_KIND_LABELS: Partial<Record<LensTarget["kind"], string>> = {
   anywidget: "widget",
+  dataframe: "table",
   document: "document",
   media: "media",
+  table: "table",
   ui: "control",
+  visualization: "chart",
 };
 
 const OUTPUT_KIND_LABELS: Record<string, string> = {
@@ -30,28 +36,24 @@ export function targetName(target: LensTarget): string {
 }
 
 export function compact(items: Array<string | number | null | undefined | false>): string {
-  const parts: string[] = [];
-  for (const item of items) {
-    const text = String(item ?? "").trim();
-    if (text) parts.push(text);
-  }
-  return parts.join(" · ");
+  return items
+    .map((item) => String(item ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
 }
 
 export function targetKindLabel(target: LensTarget): string {
   if (target.kind === "output") return outputKindLabel(target);
-  if (target.kind === "dataframe" || target.kind === "table") return "Data table";
-  if (target.kind === "visualization" || target.capabilities?.chartPart) return "Chart output";
-  const label = TARGET_KIND_LABELS[target.kind];
-  if (label) return label;
-  return "Notebook value";
+  return target.capabilities?.chartPart
+    ? "Chart output"
+    : (TARGET_KIND_LABELS[target.kind] ?? "Notebook value");
 }
 
 export function compactTargetKindLabel(target: LensTarget): string {
-  if (target.kind === "dataframe" || target.kind === "table") return "table";
-  if (target.kind === "visualization" || target.capabilities?.chartPart) return "chart";
   if (target.kind === "output") return target.output?.kind ?? "output";
-  return COMPACT_TARGET_KIND_LABELS[target.kind] ?? target.kind;
+  return target.capabilities?.chartPart
+    ? "chart"
+    : (COMPACT_TARGET_KIND_LABELS[target.kind] ?? target.kind);
 }
 
 export function outputKindLabel(target: LensTarget): string {

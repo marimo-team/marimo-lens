@@ -54,6 +54,26 @@ export function useLensModel() {
     [setAnnotations],
   );
 
+  const updateAnnotation = useCallback(
+    (id: string, patch: Partial<Pick<LensAnnotation, "comment">>) => {
+      setAnnotations((current) =>
+        normalizeLensAnnotations(current).map((annotation) =>
+          annotation.id === id ? { ...annotation, ...patch } : annotation,
+        ),
+      );
+    },
+    [setAnnotations],
+  );
+
+  const deleteAnnotation = useCallback(
+    (id: string) => {
+      setAnnotations((current) =>
+        normalizeLensAnnotations(current).filter((annotation) => annotation.id !== id),
+      );
+    },
+    [setAnnotations],
+  );
+
   const clearAnnotations = useCallback(() => {
     setAnnotations([]);
   }, [setAnnotations]);
@@ -83,6 +103,8 @@ export function useLensModel() {
     refreshState: normalizedRefreshState,
     refreshContext,
     addAnnotation,
+    updateAnnotation,
+    deleteAnnotation,
     clearAnnotations,
   };
 }

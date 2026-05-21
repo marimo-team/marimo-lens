@@ -79,6 +79,8 @@ function MarimoLensContent() {
         agentActivity={model.agentActivity}
         graph={model.graph}
         onAddAnnotation={model.addAnnotation}
+        onUpdateAnnotation={model.updateAnnotation}
+        onDeleteAnnotation={model.deleteAnnotation}
       />
     </LensPortal>
   );
