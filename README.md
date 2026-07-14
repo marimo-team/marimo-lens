@@ -1,9 +1,10 @@
 # marimo-lens
 
-`marimo-lens` collects precise feedback from a live marimo notebook. Select a
-rendered table, chart, widget, cell output, or DOM region, write a note, and copy
-a packet that identifies the notebook cells and runtime state an agent should
-edit.
+`marimo-lens` lets a notebook user point at a rendered output, keep that
+selection as a cell-backed reference, and hand compact context to an agent.
+A click selects a point. A drag selects a region. The selection is available
+as soon as the pointer is released. Notes and marked PNGs enrich the reference
+when they are available.
 
 ```python
 import marimo as mo
@@ -13,17 +14,67 @@ lens = mo.ui.anywidget(Lens())
 lens
 ```
 
-`Lens()` scans the active marimo runtime, dataflow graph, globals, display
-cells, UI controls, anywidgets, traitlets state, and visible notebook targets.
-The project assumes trusted notebooks, local machines, and agent sessions.
+Press **Select**, then click or drag inside an output. Lens creates `S1` and
+returns to its resting state. Add a note from the selection list when the
+receiver needs an explicit instruction.
+
+Read one current context snapshot from Python:
+
+```python
+context = lens.context()
+
+context.current      # most recently created, focused, or edited selection
+context.references   # compact live output-cell references
+context.text         # standalone text with bounded DAG context
+
+for image in context.images:
+    send_to_vision_model(
+        data=image.data,
+        media_type=image.media_type,
+    )
+```
+
+`context()` refreshes the marimo DAG, source context, and relevant controls on
+every call. `context.text` remains complete when the user writes no note and
+when the receiving model accepts text input only. Successful and retained
+outdated captures appear in `context.images` in selection order.
+
+Display one `Lens` instance in a live notebook. Selection commands use the
+running kernel, so static exports can render the widget state but cannot create
+or mutate selections.
+
+## Context contract
+
+`LensContext` exposes four related views of one selection revision:
+
+| Surface      | Contract                                                               | Consumer                                    |
+| ------------ | ---------------------------------------------------------------------- | ------------------------------------------- |
+| `current`    | The current selection reference, or `None`                             | “Use my current selection” flows            |
+| `references` | JSON-safe selections with output cell IDs and image status             | marimo-pair or another live kernel resolver |
+| `text`       | Standalone text with notes, DOM hints, source, DAG edges, and controls | Text-only models and clipboard workflows    |
+| `images`     | Successful marked PNG captures                                         | Models that accept image input              |
+
+The references object uses `marimo-lens.context` version 1. It carries
+selection metadata, `currentSelectionId`, and stable output cell IDs. A live
+consumer resolves each `outputCellId` through marimo's current cell collection
+and dataflow graph.
+
+marimo-pair can evaluate `lens.context()` in the same kernel and resolve those
+cell IDs directly. Lens has no Pair dependency or Pair-specific API. Pair can
+send the compact references it needs and keep notebook edits, scratchpad state,
+and agent lifecycle on its side of the boundary.
+
+`context.text` materializes the selected cells and their bounded upstream
+closure. It includes source, definitions, references, direct parent IDs, and
+relevant current control values. Images add capture-time visual detail.
+
+Cross-origin images and external iframes can block browser capture. Lens keeps
+the selection, output cell ID, geometry, DOM hint, and text context when a
+snapshot fails.
 
 ## Install
 
-Use Node 22.18 or newer and the pnpm version declared in the root
-`package.json`.
-
-Install the Python and JavaScript workspaces from a checkout, then build the
-widget assets:
+Use Node 22.18 or newer and the pnpm version declared in `package.json`.
 
 ```sh
 uv sync --locked --all-packages --all-groups
@@ -31,60 +82,13 @@ pnpm install --frozen-lockfile
 pnpm build
 ```
 
-Run the workbench against controls, dataframes, charts, SVG, and nested
-anywidgets:
+Run the browser workbench:
 
 ```sh
-uv run --all-packages --group workbench marimo edit workbench/demo.py
+env -u MARIMO_LENS_VITE_DEV_SERVER \
+  uv run --locked --all-packages --all-groups \
+  marimo run workbench/demo.py --port 28889 --headless
 ```
-
-## Feedback
-
-Lens exports the same feedback in two forms:
-
-```python
-feedback = lens.pair_feedback
-prompt = lens.pair_prompt
-```
-
-The packet contains selected and related cells, defs, refs, chart parts, table
-columns, widget controls, DOM evidence, current UI values, trait state, graph
-state, and suggested edit boundaries. Copying feedback refreshes Python context
-before reading the packet.
-
-Refresh the Lens dock after adding a marimo cell so target discovery sees the
-updated graph.
-
-## Targeting
-
-Built-in selection covers Lens markers, marimo output cells, semantic tables
-and grids, Altair or Vega, Plotly, Matplotlib, generic SVG charts, canvas and
-visual surfaces, media, documents, interactive controls, and open shadow roots.
-
-Use these extension points for domain-specific targets:
-
-- `include`, `exclude`, `targets`, and `target(...)` narrow or anchor targets.
-- `EntityInspector` describes custom Python objects.
-- `ChartInspector`, `chart_adapter(...)`, and `chart_part(...)` describe custom
-  chart libraries.
-
-## Agent receipts
-
-Agents can report work through the same widget:
-
-```python
-from marimo_lens import find_lens
-
-lens = find_lens(required=False)
-if lens is not None:
-    run_id = lens.agent_started(label="marimo-pair")
-    lens.mark_cells(["cell-a"], kind="edited", run_id=run_id)
-    lens.resolve_annotation("ml-123", status="addressed", run_id=run_id)
-    lens.agent_finished("Updated the chart filter.", run_id=run_id)
-```
-
-Read the result through `lens.export_pair_result()` or
-`lens.export_pair_result_prompt()`.
 
 ## Development
 
@@ -102,15 +106,14 @@ MARIMO_LENS_VITE_DEV_SERVER=http://127.0.0.1:5173 \
   marimo run workbench/demo.py --port 28889 --headless
 ```
 
-Run the complete local gate before review:
+Run the local gate before review:
 
 ```sh
 make check
 ```
 
 See [Architecture](development_docs/architecture.md) for package ownership and
-[Development](development_docs/development.md) for watch mode, packaging, and
-browser checks.
+[Development](development_docs/development.md) for build and browser workflows.
 
 ## Acknowledgements
 
