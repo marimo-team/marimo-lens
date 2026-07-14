@@ -2,18 +2,7 @@
 
 from __future__ import annotations
 
-from . import charts, context, inspectors, pair, selection, targets
-from .targets import target
-from .widget import Lens, find_lens
+from .context import LensContext, SelectionImage
+from .widget import Lens
 
-__all__ = [
-    "Lens",
-    "charts",
-    "context",
-    "find_lens",
-    "inspectors",
-    "pair",
-    "selection",
-    "target",
-    "targets",
-]
+__all__ = ["Lens", "LensContext", "SelectionImage"]

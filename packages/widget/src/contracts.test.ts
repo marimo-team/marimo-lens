@@ -1,148 +1,165 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import type { LensChartPart, LensTarget, LensTargetKind } from "@/types";
+import {
+  ActivateSelectionCommandSchema,
+  DeleteSelectionCommandSchema,
+  LensStateSchema,
+  PutSelectionCommandSchema,
+  SelectionSchema,
+  parseContract,
+} from "@/contracts";
+import { selectionFixture } from "@/test-fixtures";
 
-import { normalizeLensTargets, normalizePairFeedback } from "@/contracts";
-import { pairFeedback } from "@/feedback/pair-feedback-fixtures";
-
-describe("normalizeLensTargets", () => {
-  test("accepts coarse output target kinds", () => {
-    const kinds: LensTargetKind[] = ["media", "document", "data", "layout", "diagnostic", "output"];
-    const targets: LensTarget[] = kinds.map((kind) => ({
-      id: `${kind}:demo`,
-      label: kind,
-      kind,
-    }));
-
-    expect(normalizeLensTargets(targets).map((target) => target.kind)).toEqual(kinds);
-  });
-
-  test("rejects unknown target contract keys", () => {
-    expect(() =>
-      normalizeLensTargets([
-        {
-          id: "var:sales",
-          label: "sales",
-          kind: "dataframe",
-          capabilities: { sortable: true } as unknown as LensTarget["capabilities"],
-        },
-      ]),
-    ).toThrow(/unknown capability/);
-
-    expect(() =>
-      normalizeLensTargets([
-        {
-          id: "var:sales",
-          label: "sales",
-          kind: "dataframe",
-          selectionPolicy: {
-            prefer: ["magic"] as unknown as NonNullable<LensTarget["selectionPolicy"]>["prefer"],
-          },
-        },
-      ]),
-    ).toThrow(/unknown selection surface/);
-
-    expect(() =>
-      normalizeLensTargets([
-        {
-          id: "var:chart",
-          label: "chart",
-          kind: "visualization",
-          chart: {
-            library: "custom",
-            parts: [
-              {
-                library: "custom",
-                kind: "tooltip",
-                label: "tooltip",
-              } as unknown as LensChartPart,
-            ],
-          },
-        },
-      ]),
-    ).toThrow(/unknown chart part kind/);
-
-    expect(() =>
-      normalizeLensTargets([
-        {
-          id: "var:sales",
-          label: "sales",
-          kind: "dataframe",
-          selectionModel: {
-            units: [{ id: "broken" }],
-          } as unknown as LensTarget["selectionModel"],
-        },
-      ]),
-    ).toThrow(/Expected "kind"/);
-  });
-
-  test("accepts semantic selection model units", () => {
-    const [target] = normalizeLensTargets([
+describe("selection contracts", () => {
+  test("accepts empty notes and every snapshot lifecycle state", () => {
+    const metadata = {
+      id: "image:selection-1",
+      mediaType: "image/png" as const,
+      width: 800,
+      height: 600,
+      sha256: "a".repeat(64),
+      capturedAt: "2026-07-14T10:01:00Z",
+    };
+    for (const snapshot of [
+      { status: "pending" as const },
+      { status: "available" as const, ...metadata },
       {
-        id: "var:sales",
-        label: "sales",
-        kind: "dataframe",
-        selectionModel: {
-          defaultFallback: "column",
-          units: [
-            {
-              kind: "column",
-              id: "col:revenue",
-              label: "revenue",
-              fallbackFor: ["cell", "summary-stat", "dtype-label"],
-            },
-            {
-              kind: "cell",
-              supported: false,
-              requires: ["rowId", "column"],
-            },
-          ],
+        status: "failed" as const,
+        capturedAt: metadata.capturedAt,
+        error: "Canvas blocked",
+      },
+      { status: "outdated" as const, ...metadata },
+    ]) {
+      expect(
+        parseContract(SelectionSchema, selectionFixture({ note: "", snapshot }), "selection"),
+      ).toMatchObject({ label: "S1", note: "", snapshot });
+    }
+  });
+
+  test("accepts one current selection in canonical state", () => {
+    expect(
+      parseContract(
+        LensStateSchema,
+        {
+          revision: 3,
+          nextLabel: "S2",
+          currentSelectionId: "selection-1",
+          selections: [selectionFixture()],
         },
-      },
-    ]);
-
-    expect(target.selectionModel?.defaultFallback).toBe("column");
-    expect(target.selectionModel?.units[0]).toMatchObject({
-      kind: "column",
-      id: "col:revenue",
+        "state",
+      ),
+    ).toMatchObject({
+      revision: 3,
+      nextLabel: "S2",
+      currentSelectionId: "selection-1",
     });
   });
-});
 
-describe("normalizePairFeedback", () => {
-  test("treats the empty synced default as unavailable", () => {
-    expect(normalizePairFeedback({})).toBeNull();
+  test("rejects malformed labels, duplicate identity, and an unknown current selection", () => {
+    expect(() =>
+      parseContract(
+        SelectionSchema,
+        { ...selectionFixture(), label: "selection-one" },
+        "selection",
+      ),
+    ).toThrow();
+    expect(() =>
+      parseContract(
+        LensStateSchema,
+        {
+          revision: 3,
+          nextLabel: "S2",
+          currentSelectionId: "missing",
+          selections: [selectionFixture(), selectionFixture()],
+        },
+        "state",
+      ),
+    ).toThrow();
   });
 
-  test("validates typed annotation payloads", () => {
-    const payload = normalizePairFeedback(pairFeedback());
-
-    expect(payload?.annotations[0].target.status).toBe("current");
+  test("requires positive rectangles contained by the output", () => {
+    expect(() =>
+      parseContract(
+        SelectionSchema,
+        selectionFixture({
+          anchor: { kind: "rect", x: 0.8, y: 0.2, width: 0.3, height: 0.2 },
+        }),
+        "selection",
+      ),
+    ).toThrow("Selection rectangle extends beyond its output cell");
   });
 
-  test("accepts Python-emitted notebook cell outputs", () => {
-    const payload = normalizePairFeedback({
-      ...pairFeedback(),
-      notebook: {
-        available: true,
-        cells: [
-          {
-            id: "cell-output",
-            defs: [],
-            refs: ["sales"],
-            outputRefs: ["sales"],
-            output: { type: "DataFrame", repr: "..." },
-            codePreview: "sales",
-          },
-        ],
-        definitions: {},
-        edges: [],
-      },
+  test("requires expected revisions on every mutation", () => {
+    expect(() =>
+      parseContract(
+        PutSelectionCommandSchema,
+        {
+          protocol: "marimo-lens.command",
+          version: 1,
+          requestId: "request-1",
+          type: "selection.put",
+          payload: { selection: selectionFixture(), imageAction: "replace" },
+        },
+        "command",
+      ),
+    ).toThrow();
+    expect(() =>
+      parseContract(
+        ActivateSelectionCommandSchema,
+        {
+          protocol: "marimo-lens.command",
+          version: 1,
+          requestId: "request-1",
+          type: "selection.activate",
+          payload: { selectionId: "selection-1" },
+        },
+        "command",
+      ),
+    ).toThrow();
+    expect(() =>
+      parseContract(
+        DeleteSelectionCommandSchema,
+        {
+          protocol: "marimo-lens.command",
+          version: 1,
+          requestId: "request-1",
+          type: "selection.delete",
+          payload: { selectionId: "selection-1" },
+        },
+        "command",
+      ),
+    ).toThrow();
+  });
+
+  test("keeps image actions aligned with snapshot status", () => {
+    const command = (selection: ReturnType<typeof selectionFixture>, imageAction: string) => ({
+      protocol: "marimo-lens.command",
+      version: 1,
+      requestId: "request-1",
+      type: "selection.put",
+      payload: { selection, imageAction, expectedRevision: 0 },
     });
 
-    expect(payload?.notebook?.cells?.[0].output).toEqual({
-      type: "DataFrame",
-      repr: "...",
-    });
+    expect(() =>
+      parseContract(PutSelectionCommandSchema, command(selectionFixture(), "clear"), "command"),
+    ).toThrow("Snapshot status does not match imageAction");
+    expect(() =>
+      parseContract(
+        PutSelectionCommandSchema,
+        command(selectionFixture({ snapshot: { status: "pending" } }), "replace"),
+        "command",
+      ),
+    ).toThrow("Snapshot status does not match imageAction");
+
+    expect(
+      parseContract(
+        PutSelectionCommandSchema,
+        command(selectionFixture({ snapshot: { status: "pending" } }), "clear"),
+        "command",
+      ),
+    ).toMatchObject({ payload: { imageAction: "clear" } });
+    expect(
+      parseContract(PutSelectionCommandSchema, command(selectionFixture(), "replace"), "command"),
+    ).toMatchObject({ payload: { imageAction: "replace" } });
   });
 });

@@ -24,6 +24,9 @@ catalogs:
     es-module-lexer:
       specifier: ^2.3.1
       version: 2.3.1
+    html-to-image:
+      specifier: 1.11.13
+      version: 1.11.13
     jsdom:
       specifier: 29.1.1
       version: 29.1.1
@@ -45,12 +48,12 @@ catalogs:
     vite-plus:
       specifier: 0.2.4
       version: 0.2.4
-    zustand:
-      specifier: 5.0.14
-      version: 5.0.14
 
 overrides:
   vite: npm:@voidzero-dev/vite-plus-core@0.2.4
+
+patchedDependencies:
+  html-to-image@1.11.13: 7a4ccae035ffcc94d25c71d97bb06fe740b0749e38c19c934ecacfdfe1480264
 
 importers:
 
@@ -121,6 +124,9 @@ importers:
       '@anywidget/types':
         specifier: 'catalog:'
         version: 0.4.0
+      html-to-image:
+        specifier: 'catalog:'
+        version: 1.11.13(patch_hash=7a4ccae035ffcc94d25c71d97bb06fe740b0749e38c19c934ecacfdfe1480264)
       lucide-react:
         specifier: 'catalog:'
         version: 1.24.0(react@19.2.7)
@@ -133,9 +139,6 @@ importers:
       valibot:
         specifier: 'catalog:'
         version: 1.4.2(typescript@6.0.3)
-      zustand:
-        specifier: 'catalog:'
-        version: 5.0.14(@types/react@19.2.17)(react@19.2.7)
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -808,6 +811,9 @@ packages:
     resolution: {integrity: sha512-CV9TW3Y3f8/wT0BRFc1/KAVQ3TUHiXmaAb6VW9vtiMFf7SLoMd1PdAc4W3KFOFETBJUb90KatHqlsZMWV+R9Gg==}
     engines: {node: ^20.19.0 || ^22.12.0 || >=24.0.0}
 
+  html-to-image@1.11.13:
+    resolution: {integrity: sha512-cuOPoI7WApyhBElTTb9oqsawRvZ0rHhaHwghRLlTuffoD1B2aDemlCruLeZrUIIdvG7gs9xeELEPm6PhuASqrg==}
+
   is-potential-custom-element-name@1.0.1:
     resolution: {integrity: sha512-bCYeRA2rVibKZd+s2625gGnGF/t7DSqDs4dP7CrLA1m7jKWz6pps0LpYLJN8Q64HtmPKJ1hrN3nzPNKFEKOUiQ==}
 
@@ -1182,24 +1188,6 @@ packages:
 
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
-
-  zustand@5.0.14:
-    resolution: {integrity: sha512-/8tAspM5LMPr28b3fwLYrtdj77ECpfZviaP75CMTnwO8ISyaE4GDIG/9rDDYq/cH9D2Xw2A2RXglLInmVBQB/g==}
-    engines: {node: '>=12.20.0'}
-    peerDependencies:
-      '@types/react': '>=18.0.0'
-      immer: '>=9.0.6'
-      react: '>=18.0.0'
-      use-sync-external-store: '>=1.2.0'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-      immer:
-        optional: true
-      react:
-        optional: true
-      use-sync-external-store:
-        optional: true
 
 snapshots:
 
@@ -1625,6 +1613,8 @@ snapshots:
     transitivePeerDependencies:
       - '@noble/hashes'
 
+  html-to-image@1.11.13(patch_hash=7a4ccae035ffcc94d25c71d97bb06fe740b0749e38c19c934ecacfdfe1480264): {}
+
   is-potential-custom-element-name@1.0.1: {}
 
   js-tokens@4.0.0: {}
@@ -1993,8 +1983,3 @@ snapshots:
   xml-name-validator@5.0.0: {}
 
   xmlchars@2.2.0: {}
-
-  zustand@5.0.14(@types/react@19.2.17)(react@19.2.7):
-    optionalDependencies:
-      '@types/react': 19.2.17
-      react: 19.2.7

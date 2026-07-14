@@ -2,549 +2,479 @@
 
 from __future__ import annotations
 
-import json
+import copy
 import pathlib
-from collections.abc import Iterable, Mapping, Sequence
-from typing import Any
+import threading
+from collections.abc import Mapping, Sequence
+from contextlib import suppress
+from typing import Any, cast
 
 import traitlets
 
 from ._anywidget_bundle import Bundle, BundledWidget
-from .agent_activity import (
-    DEFAULT_AGENT_LABEL,
-    build_agent_finished,
-    build_agent_started,
-    build_annotation_status,
-    build_cell_mark,
-    build_focus_command,
-    build_pair_result,
-    render_pair_result_prompt,
+from ._context import build_context, validate_selection_budget
+from ._images import ImageError, ImageStore
+from ._protocol import (
+    MAX_SELECTIONS,
+    Command,
+    ProtocolError,
+    error_response,
+    parse_command,
+    request_id_from,
+    success_response,
 )
-from ._marimo_runtime import (
-    runtime_context as _runtime_context,
-    runtime_globals as _runtime_globals,
-)
-from ._pipeline import LensContext, LensPipeline
-from ._widget_traits import (
-    apply_context_traits,
-    refresh_state,
-    render_trait_context,
-)
-from . import context as lens_context
-from .inspectors import EntityInspector
-from .metadata import _caller_namespace
-from .targets import TargetLike
+from ._runtime import collect_runtime_snapshot
+from .context import LensContext
 
 _BUNDLE = Bundle(
     static_dir=pathlib.Path(__file__).parent / "static",
     dev_server_env="MARIMO_LENS_VITE_DEV_SERVER",
 )
 
+_IMMUTABLE_SELECTION_FIELDS = ("label", "outputCellId", "createdAt")
+
 
 class Lens(BundledWidget):
-    """A marimo-aware feedback lens exposed as an anywidget.
-
-    The widget has two parts:
-
-    - Python collects notebook/dataflow provenance and typed targets.
-    - JavaScript owns the document-level inspection UI and writes feedback back
-      through synced traitlets.
-
-    Pass custom ``EntityInspector`` instances for domain-specific target
-    metadata. The collection/rendering pipeline stays internal so the public
-    widget API stays small while Lens is still young.
-    """
+    """Collect cell-grounded selections from rendered marimo outputs."""
 
     _marimo_lens_widget = True
     bundle = _BUNDLE
 
     _lens_css = traitlets.Unicode("").tag(sync=True)
+    _state = traitlets.Dict(
+        default_value={
+            "revision": 0,
+            "nextLabel": "S1",
+            "currentSelectionId": None,
+            "selections": [],
+        }
+    ).tag(sync=True)
 
-    title = traitlets.Unicode("marimo lens").tag(sync=True)
-    targets = traitlets.List(default_value=[]).tag(sync=True)
-    notebook = traitlets.Dict(default_value={}).tag(sync=True)
-    annotations = traitlets.List(default_value=[]).tag(sync=True)
-    markdown = traitlets.Unicode("").tag(sync=True)
-    pair_feedback = traitlets.Dict(default_value={}).tag(sync=True)
-    pair_prompt = traitlets.Unicode("").tag(sync=True)
-    agent_activity = traitlets.List(default_value=[]).tag(sync=True)
-    agent_commands = traitlets.List(default_value=[]).tag(sync=True)
-    pair_result = traitlets.Dict(default_value={}).tag(sync=True)
-    pair_result_prompt = traitlets.Unicode("").tag(sync=True)
-    _refresh_request = traitlets.Int(0).tag(sync=True)
-    _refresh_request_id = traitlets.Unicode("").tag(sync=True)
-    _refresh_state = traitlets.Dict(default_value={"status": "idle"}).tag(sync=True)
-    _context_revision = traitlets.Int(0).tag(sync=True)
-
-    def __init__(
-        self,
-        *,
-        title: str = "marimo lens",
-        include: Sequence[str] | None = None,
-        exclude: Sequence[str] | None = None,
-        targets: Sequence[TargetLike] | None = None,
-        inspectors: Sequence[EntityInspector] | None = None,
-        source: lens_context.Source | None = None,
-    ) -> None:
-        """Create a Lens widget.
-
-        Args:
-            title: Human-readable widget title used in exported feedback.
-            include: Optional variable names to collect. Defaults to the whole
-                useful dataflow graph, ordered by dataframe, table,
-                visualization, object, then interactive values.
-            exclude: Variable names to omit after include/default discovery.
-            targets: Typed manual target specs from ``marimo_lens.targets``.
-                Use this for DOM anchors or domain objects that do not exist as
-                Python variables.
-            inspectors: Object inspectors to prepend to the active registry.
-                This is the normal extension point for custom dataframe,
-                widget, or domain-object support.
-            source: Explicit collection source. Defaults to the active marimo
-                runtime. Tests and replay tools should pass
-                ``marimo_lens.context.mapping(...)`` or ``from_snapshot(...)``.
-        """
-
-        self._source = source or lens_context.runtime()
-        self._include = include
-        self._exclude = exclude
-        self._manual_targets = list(targets or [])
-        self._agent_run_id: str | None = None
-        self._agent_label = DEFAULT_AGENT_LABEL
-        self._pipeline = LensPipeline().with_inspectors(
-            inspectors=inspectors,
-        )
-
-        namespace = self._namespace_from_source(include_caller=True)
-        context = self._pipeline.collect(
-            namespace,
-            title=title,
-            include=include,
-            exclude=exclude,
-            manual_targets=targets,
-            notebook=self._source.notebook,
-            cell_outputs=self._source.cell_outputs,
-            metadata=self._source.metadata,
-        )
-        self._lens_context = context
-
-        super().__init__(**context.widget_state())
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._lens_closed = False
+        self._revision = 0
+        self._next_label = 1
+        self._current_selection_id: str | None = None
+        self._activation_order: list[str] = []
+        self._selections: list[dict[str, Any]] = []
+        self._images = ImageStore()
+        super().__init__(_state=self._state_payload())
         self._lens_css = self._css
-        self._sync_agent_result()
+        # BundledWidget owns bundle module messages. Lens adds an independent
+        # callback on the same comm after the bundle callback is registered.
+        self.on_msg(self._handle_lens_message)
 
-    @classmethod
-    def from_snapshot(
-        cls,
-        snapshot: lens_context.Snapshot,
-        *,
-        title: str = "marimo lens",
-        include: Sequence[str] | None = None,
-        exclude: Sequence[str] | None = None,
-        targets: Sequence[TargetLike] | None = None,
-        inspectors: Sequence[EntityInspector] | None = None,
-    ) -> Lens:
-        """Create a Lens from an offline notebook snapshot."""
-
-        return cls(
-            title=title,
-            include=include,
-            exclude=exclude,
-            targets=targets,
-            inspectors=inspectors,
-            source=lens_context.snapshot(snapshot),
-        )
-
-    @classmethod
-    def restore(
-        cls,
-        *,
-        state: lens_context.State,
-        title: str | None = None,
-        include: Sequence[str] | None = None,
-        exclude: Sequence[str] | None = None,
-        targets: Sequence[TargetLike] | None = None,
-        inspectors: Sequence[EntityInspector] | None = None,
-        source: lens_context.Source | None = None,
-    ) -> Lens:
-        """Create a Lens and restore annotations plus agent receipts."""
-
-        if source is None:
-            if state.source is not None:
-                source = state.source
-            elif state.snapshot is not None:
-                source = lens_context.snapshot(state.snapshot)
-        lens = cls(
-            title=title or state.title or "marimo lens",
-            include=include,
-            exclude=exclude,
-            targets=state.targets if targets is None else targets,
-            inspectors=inspectors,
-            source=source,
-        )
-        with lens.hold_trait_notifications():
-            if state.annotations:
-                lens.annotations = [
-                    dict(annotation) for annotation in state.annotations
-                ]
-            if state.agent_activity:
-                lens.agent_activity = [
-                    dict(activity) for activity in state.agent_activity
-                ]
-            if state.agent_commands:
-                lens.agent_commands = [
-                    dict(command) for command in state.agent_commands
-                ]
-        lens._apply_context(lens._render_trait_context())
-        lens._sync_agent_result()
-        return lens
-
-    @traitlets.observe("annotations", "targets", "notebook", "title")
-    def _sync_exports(self, _change: traitlets.Bunch) -> None:
-        self._apply_context(self._render_trait_context())
-
-    @traitlets.observe("agent_activity")
-    def _sync_agent_exports(self, _change: traitlets.Bunch) -> None:
-        self._sync_agent_result()
-
-    @traitlets.observe("_refresh_request")
-    def _refresh_requested(self, change: traitlets.Bunch) -> None:
-        if change.get("old") == change.get("new"):
-            return
-        self.refresh_context()
-
-    @traitlets.observe("_refresh_request_id")
-    def _refresh_id_requested(self, change: traitlets.Bunch) -> None:
-        request_id = str(change.get("new") or "")
-        if not request_id or change.get("old") == change.get("new"):
-            return
-        self.refresh_context(request_id=request_id)
-
-    def refresh_context(self, *, request_id: str | None = None) -> dict[str, Any]:
-        """Refresh the notebook graph, targets, and sniffed runtime context."""
-
-        active_request_id = request_id or ""
-        self._set_refresh_state(active_request_id, "running")
-        try:
-            namespace = self._current_namespace()
-            context = self._pipeline.collect(
-                namespace,
-                title=self.title,
-                include=self._include,
-                exclude=self._exclude,
-                manual_targets=self._manual_targets,
-                notebook=self._source.notebook,
-                cell_outputs=self._source.cell_outputs,
-                annotations=self.annotations,
-                metadata=self._source.metadata,
-            )
-            state = context.widget_state()
-            with self.hold_trait_notifications():
-                self._lens_context = context
-                self.notebook = state["notebook"]
-                self.targets = state["targets"]
-                self.markdown = state["markdown"]
-                self.pair_feedback = state["pair_feedback"]
-                self.pair_prompt = state["pair_prompt"]
-                self._context_revision += 1
-            self._set_refresh_state(active_request_id, "success")
-        except Exception as exc:
-            self._set_refresh_state(
-                active_request_id,
-                "error",
-                f"{type(exc).__name__}: {exc}",
-            )
-            raise
-        return dict(context.notebook)
-
-    def export_markdown(self, *, refresh: bool = True) -> str:
-        """Return the latest reviewer-ready markdown feedback."""
-
-        if not refresh and self.markdown:
-            return self.markdown
-        context = self._export_context(refresh=refresh)
-        return context.markdown or ""
-
-    def export_pair_feedback(self, *, refresh: bool = True) -> dict[str, Any]:
-        """Return a JSON-safe marimo-pair feedback packet."""
-
-        if not refresh and self.pair_feedback:
-            return dict(self.pair_feedback)
-        context = self._export_context(refresh=refresh)
-        return dict(context.pair_feedback or {})
-
-    def export_pair_prompt(self, *, refresh: bool = True) -> str:
-        """Return paste-ready feedback for a marimo-pair agent."""
-
-        if not refresh and self.pair_prompt:
-            return self.pair_prompt
-        context = self._export_context(refresh=refresh)
-        return context.pair_prompt or ""
-
-    def export_pair_json(
-        self,
-        *,
-        indent: int | None = 2,
-        refresh: bool = True,
-    ) -> str:
-        """Return the marimo-pair feedback packet as JSON."""
-
-        return json.dumps(
-            self.export_pair_feedback(refresh=refresh),
-            indent=indent,
-            sort_keys=True,
-        )
-
-    def agent_started(
-        self,
-        run_id: str | None = None,
-        label: str = DEFAULT_AGENT_LABEL,
-    ) -> str:
-        """Record that an agent run has started and return its run id."""
-
-        active_run_id, activity = build_agent_started(run_id=run_id, label=label)
-        self._agent_run_id = active_run_id
-        self._agent_label = label
-        self._append_agent_activity(activity)
-        return active_run_id
-
-    def mark_cells(
-        self,
-        cell_ids: Iterable[Any] | Any,
-        kind: str = "read",
-        note: Any = None,
-        run_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Record that an agent read, claimed, edited, ran, or blocked cells."""
-
-        active_run_id = self._active_agent_run_id(run_id)
-        activity = build_cell_mark(
-            cell_ids,
-            kind=kind,
-            note=note,
-            run_id=active_run_id,
-            label=self._agent_label,
-        )
-        return self._append_agent_activity(activity)
-
-    def resolve_annotation(
-        self,
-        annotation_id: Any,
-        status: str = "addressed",
-        note: Any = None,
-        run_id: str | None = None,
-    ) -> dict[str, Any]:
-        """Link an agent status receipt to a human Lens annotation."""
-
-        resolved_annotation_id, resolved_annotation = self._require_annotation(
-            annotation_id
-        )
-        active_run_id = self._active_agent_run_id(run_id)
-        activity = build_annotation_status(
-            resolved_annotation_id,
-            status=status,
-            note=note,
-            run_id=active_run_id,
-            label=self._agent_label,
-        )
-        activity["details"] = {"annotation": dict(resolved_annotation)}
-        return self._append_agent_activity(activity)
-
-    def agent_finished(
-        self,
-        summary: str,
-        run_id: str | None = None,
-        status: str = "completed",
-        cells_read: Iterable[Any] = (),
-        cells_edited: Iterable[Any] = (),
-        cells_run: Iterable[Any] = (),
-        annotations_addressed: Iterable[Any] = (),
-    ) -> dict[str, Any]:
-        """Record the final marimo-pair result packet for this Lens."""
-
-        active_run_id = self._active_agent_run_id(run_id)
-        activity = build_agent_finished(
-            summary=summary,
-            run_id=active_run_id,
-            status=status,
-            label=self._agent_label,
-            cells_read=cells_read,
-            cells_edited=cells_edited,
-            cells_run=cells_run,
-            annotations_addressed=annotations_addressed,
-        )
-        self._agent_run_id = None
-        return self._append_agent_activity(activity)
-
-    def focus_cell(self, cell_id: Any, reason: Any = None) -> dict[str, Any]:
-        """Queue a lightweight frontend command to focus a notebook cell."""
-
-        command = build_focus_command(cell_id, reason=reason)
-        with self.hold_trait_notifications():
-            self.agent_commands = [*list(self.agent_commands or []), command]
-        return command
-
-    def export_pair_result(self) -> dict[str, Any]:
-        """Return the machine-readable marimo-pair result packet."""
-
-        self._sync_agent_result()
-        return dict(self.pair_result)
-
-    def export_pair_result_prompt(self) -> str:
-        """Return a reviewer-readable marimo-pair result packet."""
-
-        self._sync_agent_result()
-        return self.pair_result_prompt
-
-    def _current_namespace(self) -> Mapping[str, Any]:
-        return self._namespace_from_source(include_caller=False)
-
-    def _namespace_from_source(self, *, include_caller: bool) -> Mapping[str, Any]:
-        if self._source.namespace is not None:
-            return self._source.namespace
-        if not self._source.auto_collect:
-            return {}
-        if include_caller:
-            return _caller_namespace(skip=3)
-        ctx, _reason = _runtime_context()
-        return _runtime_globals(ctx)
-
-    @property
     def context(self) -> LensContext:
-        """Return the latest Python-side Lens context."""
+        """Return detached selection context from the current marimo runtime."""
 
-        return self._lens_context
-
-    def _render_trait_context(self) -> LensContext:
-        return render_trait_context(
-            pipeline=self._pipeline,
-            namespace=self._current_namespace(),
-            title=self.title,
-            notebook=self.notebook,
-            targets=list(self.targets),
-            annotations=list(self.annotations),
-            metadata=dict(self._source.metadata),
-        )
-
-    def _export_context(self, *, refresh: bool) -> LensContext:
-        if refresh:
-            self.refresh_context()
-            return self._lens_context
-        return self._render_trait_context()
-
-    def _apply_context(self, context: LensContext) -> None:
-        apply_context_traits(self, context)
-
-    def _append_agent_activity(self, item: Mapping[str, Any]) -> dict[str, Any]:
-        activity = dict(item)
-        with self.hold_trait_notifications():
-            self.agent_activity = [*list(self.agent_activity or []), activity]
-        self._sync_agent_result()
-        return activity
-
-    def _active_agent_run_id(self, run_id: str | None) -> str:
-        if run_id:
-            self._agent_run_id = run_id
-            return run_id
-        if self._agent_run_id:
-            return self._agent_run_id
-        active_run_id, activity = build_agent_started(
-            run_id=None,
-            label=self._agent_label,
-        )
-        self._agent_run_id = active_run_id
-        self._append_agent_activity(activity)
-        return active_run_id
-
-    def _sync_agent_result(self) -> None:
-        result = build_pair_result(
-            [dict(item) for item in self.agent_activity or []],
-            agent_label=self._agent_label,
-        )
-        prompt = render_pair_result_prompt(result)
-        with self.hold_trait_notifications():
-            if self.pair_result != result:
-                self.pair_result = result
-            if self.pair_result_prompt != prompt:
-                self.pair_result_prompt = prompt
-
-    def _set_refresh_state(
-        self,
-        request_id: str,
-        status: str,
-        error: str = "",
-    ) -> None:
-        self.set_trait(
-            "_refresh_state",
-            refresh_state(
-                request_id=request_id,
-                status=status,
-                error=error,
-                context_revision=self._context_revision,
-            ),
-        )
-
-    def _require_annotation(self, annotation_id: Any) -> tuple[str, Mapping[str, Any]]:
-        normalized = "" if annotation_id is None else str(annotation_id)
-        if not normalized:
-            raise ValueError("Lens annotation resolution requires an annotation id")
-        annotations = [
-            annotation
-            for annotation in self.annotations or []
-            if isinstance(annotation, Mapping) and annotation.get("id") is not None
-        ]
-        for annotation in annotations:
-            if str(annotation.get("id")) == normalized:
-                return normalized, annotation
-
-        known_ids = {str(annotation.get("id")) for annotation in annotations}
-        known = ", ".join(sorted(known_ids)) or "none"
-        raise ValueError(
-            "Cannot resolve unknown Lens annotation "
-            f"{normalized!r}. Known annotation ids: {known}"
-        )
-
-
-def find_lens(*, required: bool = True) -> Lens | None:
-    """Return the active Lens from marimo runtime globals."""
-
-    ctx, reason = _runtime_context()
-    namespace = _runtime_globals(ctx)
-    lenses = [
-        (str(name), lens)
-        for name, value in namespace.items()
-        if (lens := _lens_from_value(value)) is not None
-    ]
-    if not lenses:
-        if required:
-            detail = f": {reason}" if reason else ""
-            raise RuntimeError(
-                f"No marimo Lens instance found in runtime globals{detail}"
+        with self._lock:
+            if self._lens_closed:
+                raise RuntimeError("Lens is closed.")
+            selections = copy.deepcopy(self._selections)
+            images = self._images.snapshot(
+                [str(selection["id"]) for selection in selections]
             )
-        return None
+            revision = self._revision
+            current_selection_id = self._current_selection_id
+        runtime = collect_runtime_snapshot()
+        references, text = build_context(
+            runtime,
+            selections,
+            revision=revision,
+            current_selection_id=current_selection_id,
+        )
+        return LensContext(
+            references=references,
+            text=text,
+            images=images,
+        )
 
-    named_lenses = [value for name, value in lenses if name == "lens"]
-    if len(named_lenses) == 1:
-        return named_lenses[0]
-    if len(lenses) == 1:
-        return lenses[0][1]
+    def close(self) -> None:
+        """Close the widget and release its in-memory PNG captures."""
 
-    if not required:
-        return None
+        with self._lock:
+            if self._lens_closed:
+                return
+            self._lens_closed = True
+            self._images.clear()
+        super().close()
 
-    names = ", ".join(name for name, _value in lenses)
-    raise RuntimeError(
-        "Multiple marimo Lens instances found "
-        f"({names}). Assign the intended widget to a global named `lens`."
-    )
+    @traitlets.observe("_state")
+    def _keep_state_authoritative(self, change: traitlets.Bunch) -> None:
+        if not hasattr(self, "_lock"):
+            return
+        with self._lock:
+            canonical = self._state_payload()
+            if change.get("new") != canonical:
+                self.set_trait("_state", canonical)
+
+    def _handle_lens_message(
+        self,
+        _widget: object,
+        content: object,
+        buffers: Sequence[bytes | bytearray | memoryview],
+    ) -> None:
+        try:
+            command = parse_command(content, buffers)
+        except ProtocolError as error:
+            self.send(
+                error_response(
+                    request_id=request_id_from(content),
+                    revision=self._revision,
+                    code=error.code,
+                    message=str(error),
+                )
+            )
+            return
+        if command is None:
+            return
+
+        try:
+            response = self._execute(command, buffers)
+        except (ProtocolError, ImageError) as error:
+            response = error_response(
+                request_id=command.request_id,
+                revision=self._revision,
+                code=error.code,
+                message=str(error),
+            )
+        except Exception as error:
+            response = error_response(
+                request_id=command.request_id,
+                revision=self._revision,
+                code="internal_error",
+                message=f"{type(error).__name__}: {error}",
+            )
+        self.send(response)
+
+    def _execute(
+        self,
+        command: Command,
+        buffers: Sequence[bytes | bytearray | memoryview],
+    ) -> dict[str, Any]:
+        if command.type == "context.export":
+            context = self.context()
+            return success_response(
+                request_id=command.request_id,
+                revision=cast(int, context.references["revision"]),
+                payload={"text": context.text},
+            )
+
+        with self._lock:
+            if self._lens_closed:
+                raise ProtocolError("lens_closed", "Lens is closed.")
+            expected_revision = command.payload["expectedRevision"]
+            if expected_revision != self._revision:
+                raise ProtocolError(
+                    "revision_conflict",
+                    "Lens selections changed before this command was applied.",
+                )
+            if command.type == "selection.put":
+                selection = self._put_selection(command.payload, buffers)
+                payload: Mapping[str, Any] = {"selection": selection}
+            elif command.type == "selection.activate":
+                selection_id = str(command.payload["selectionId"])
+                self._activate_selection(selection_id)
+                payload = {"selectionId": selection_id}
+            elif command.type == "selection.delete":
+                selection_id = str(command.payload["selectionId"])
+                self._delete_selection(selection_id)
+                payload = {"selectionId": selection_id}
+            elif command.type == "selections.clear":
+                self._clear_selections()
+                payload = {}
+            else:
+                raise ProtocolError(
+                    "unsupported_command",
+                    "Lens command type is not supported.",
+                )
+
+            return success_response(
+                request_id=command.request_id,
+                revision=self._revision,
+                payload=payload,
+            )
+
+    def _put_selection(
+        self,
+        payload: Mapping[str, Any],
+        buffers: Sequence[bytes | bytearray | memoryview],
+    ) -> dict[str, Any]:
+        selection = copy.deepcopy(dict(payload["selection"]))
+        selection_id = str(selection["id"])
+        image_action = str(payload["imageAction"])
+        existing_index = next(
+            (
+                index
+                for index, item in enumerate(self._selections)
+                if item["id"] == selection_id
+            ),
+            None,
+        )
+        existing = (
+            self._selections[existing_index] if existing_index is not None else None
+        )
+
+        if existing is None and len(self._selections) >= MAX_SELECTIONS:
+            raise ProtocolError(
+                "selection_limit_reached",
+                f"Lens supports up to {MAX_SELECTIONS} selections.",
+            )
+        if existing is None and selection["label"] != f"S{self._next_label}":
+            raise ProtocolError(
+                "selection_label_conflict",
+                f"The next Lens selection label is S{self._next_label}.",
+            )
+        if existing is not None:
+            for field in _IMMUTABLE_SELECTION_FIELDS:
+                if selection[field] != existing[field]:
+                    raise ProtocolError(
+                        "selection_identity_changed",
+                        f"Selection {field} cannot change after creation.",
+                    )
+        elif image_action == "preserve":
+            raise ProtocolError(
+                "selection_not_found",
+                "A new selection cannot preserve an image.",
+            )
+
+        outdated_transition = False
+        if existing is not None and image_action == "preserve":
+            outdated_transition = self._validate_preserved_snapshot(
+                selection_id,
+                existing["snapshot"],
+                selection["snapshot"],
+            )
+            if not outdated_transition and any(
+                selection.get(field) != existing.get(field)
+                for field in ("anchor", "domHint")
+            ):
+                raise ProtocolError(
+                    "selection_capture_changed",
+                    "Changing selection geometry must mark its retained snapshot outdated.",
+                )
+
+        if image_action == "replace":
+            snapshot_metadata = selection["snapshot"]
+            prepared_image = self._images.prepare(
+                selection_id,
+                snapshot_metadata,
+                buffers[0],
+            )
+        else:
+            prepared_image = None
+
+        next_selections = copy.deepcopy(self._selections)
+        if existing_index is None:
+            next_selections.append(selection)
+        else:
+            next_selections[existing_index] = selection
+
+        should_activate = existing is None or (
+            existing is not None and self._selection_edit_activates(existing, selection)
+        )
+        next_current_selection_id = self._current_selection_id
+        next_activation_order = list(self._activation_order)
+        if should_activate:
+            next_current_selection_id, next_activation_order = self._activated_state(
+                selection_id,
+                next_activation_order,
+            )
+
+        previous_image = self._images.get(selection_id)
+        if prepared_image is not None:
+            self._images.replace(prepared_image)
+        elif image_action == "clear":
+            self._images.remove(selection_id)
+        elif outdated_transition:
+            self._images.mark_outdated(selection_id)
+        try:
+            self._commit_selections(
+                next_selections,
+                current_selection_id=next_current_selection_id,
+                activation_order=next_activation_order,
+                advance_label=existing is None,
+            )
+        except Exception:
+            self._restore_image(selection_id, previous_image)
+            raise
+        return copy.deepcopy(selection)
+
+    def _validate_preserved_snapshot(
+        self,
+        selection_id: str,
+        existing: Mapping[str, Any],
+        incoming: Mapping[str, Any],
+    ) -> bool:
+        if incoming == existing and incoming.get("status") != "outdated":
+            return False
+        existing_status = existing.get("status")
+        if existing_status not in {"available", "outdated"}:
+            raise ProtocolError(
+                "selection_capture_changed",
+                "A pending or failed snapshot cannot be marked outdated.",
+            )
+        if incoming.get("status") != "outdated":
+            raise ProtocolError(
+                "selection_capture_changed",
+                "Preserving an image cannot replace its snapshot metadata.",
+            )
+        expected = dict(existing)
+        expected["status"] = "outdated"
+        if incoming != expected or self._images.get(selection_id) is None:
+            raise ProtocolError(
+                "selection_capture_changed",
+                "An outdated snapshot must retain its original image metadata and bytes.",
+            )
+        return True
+
+    @staticmethod
+    def _selection_edit_activates(
+        existing: Mapping[str, Any],
+        selection: Mapping[str, Any],
+    ) -> bool:
+        return any(
+            existing.get(field) != selection.get(field)
+            for field in ("note", "anchor", "domHint")
+        )
+
+    def _activate_selection(self, selection_id: str) -> None:
+        if not any(item["id"] == selection_id for item in self._selections):
+            raise ProtocolError(
+                "selection_not_found",
+                "Cannot activate an unknown Lens selection.",
+            )
+        current_selection_id, activation_order = self._activated_state(
+            selection_id,
+            list(self._activation_order),
+        )
+        self._commit_selections(
+            copy.deepcopy(self._selections),
+            current_selection_id=current_selection_id,
+            activation_order=activation_order,
+        )
+
+    def _delete_selection(self, selection_id: str) -> None:
+        if not any(item["id"] == selection_id for item in self._selections):
+            raise ProtocolError(
+                "selection_not_found",
+                "Cannot delete an unknown Lens selection.",
+            )
+        previous_image = self._images.get(selection_id)
+        next_selections = [
+            item for item in self._selections if item["id"] != selection_id
+        ]
+        next_activation_order = [
+            item for item in self._activation_order if item != selection_id
+        ]
+        next_current_selection_id = self._current_selection_id
+        if next_current_selection_id == selection_id:
+            next_current_selection_id = (
+                next_activation_order[-1] if next_activation_order else None
+            )
+        self._images.remove(selection_id)
+        try:
+            self._commit_selections(
+                next_selections,
+                current_selection_id=next_current_selection_id,
+                activation_order=next_activation_order,
+            )
+        except Exception:
+            self._restore_image(selection_id, previous_image)
+            raise
+
+    def _clear_selections(self) -> None:
+        previous_images = self._images.snapshot(
+            [str(selection["id"]) for selection in self._selections]
+        )
+        self._images.clear()
+        try:
+            self._commit_selections(
+                [],
+                current_selection_id=None,
+                activation_order=[],
+            )
+        except Exception:
+            for image in previous_images:
+                self._images.replace(image)
+            raise
+
+    def _commit_selections(
+        self,
+        selections: list[dict[str, Any]],
+        *,
+        current_selection_id: str | None,
+        activation_order: list[str],
+        advance_label: bool = False,
+    ) -> None:
+        try:
+            validate_selection_budget(selections)
+        except ValueError as error:
+            raise ProtocolError("selection_context_limit", str(error)) from error
+
+        selection_ids = [str(selection["id"]) for selection in selections]
+        selection_id_set = set(selection_ids)
+        if len(selection_ids) != len(selection_id_set):
+            raise RuntimeError("Selection ids must be unique.")
+        if (
+            current_selection_id is not None
+            and current_selection_id not in selection_id_set
+        ):
+            raise RuntimeError("The current selection must exist in Lens state.")
+        if (
+            len(activation_order) != len(set(activation_order))
+            or set(activation_order) != selection_id_set
+        ):
+            raise RuntimeError(
+                "Selection activation order must cover Lens state exactly."
+            )
+
+        previous_selections = self._selections
+        previous_revision = self._revision
+        previous_next_label = self._next_label
+        previous_current_selection_id = self._current_selection_id
+        previous_activation_order = self._activation_order
+        self._selections = copy.deepcopy(selections)
+        self._revision += 1
+        if advance_label:
+            self._next_label += 1
+        self._current_selection_id = current_selection_id
+        self._activation_order = list(activation_order)
+        try:
+            self.set_trait("_state", self._state_payload())
+        except Exception:
+            self._selections = previous_selections
+            self._revision = previous_revision
+            self._next_label = previous_next_label
+            self._current_selection_id = previous_current_selection_id
+            self._activation_order = previous_activation_order
+            with suppress(Exception):
+                self.set_trait("_state", self._state_payload())
+            raise
+
+    @staticmethod
+    def _activated_state(
+        selection_id: str,
+        activation_order: list[str],
+    ) -> tuple[str, list[str]]:
+        return selection_id, [
+            item for item in activation_order if item != selection_id
+        ] + [selection_id]
+
+    def _restore_image(self, selection_id: str, image: Any) -> None:
+        if image is None:
+            self._images.remove(selection_id)
+        else:
+            self._images.replace(image)
+
+    def _state_payload(self) -> dict[str, Any]:
+        return {
+            "revision": self._revision,
+            "nextLabel": f"S{self._next_label}",
+            "currentSelectionId": self._current_selection_id,
+            "selections": copy.deepcopy(self._selections),
+        }
 
 
-def _lens_from_value(value: Any) -> Lens | None:
-    if getattr(value, "_marimo_lens_widget", False):
-        return value
-    widget = getattr(value, "widget", None)
-    if getattr(widget, "_marimo_lens_widget", False):
-        return widget
-    return None
-
-
-__all__ = ["Lens", "find_lens"]
+__all__ = ["Lens"]

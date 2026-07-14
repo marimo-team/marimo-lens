@@ -1,297 +1,176 @@
-import { useCallback, useEffect, useEffectEvent, useState } from "react";
+import { Check, Focus, MousePointer2, Trash2 } from "lucide-react";
+import { useLayoutEffect, useRef } from "react";
 
-import type {
-  AgentActivity,
-  LensAnnotation,
-  LensTarget,
-  NotebookGraph,
-  PairFeedback,
-  RefreshState,
-} from "@/types";
+import type { Selection } from "@/contracts";
 
-import { LensInspectorPanel } from "@/components/lens-inspector-panel";
-import { LensSettingsPanel } from "@/components/lens-settings-panel";
-import { LensToolbar } from "@/components/lens-toolbar";
-import { renderPairPromptForDetail } from "@/feedback/output-detail";
-import { useCopyFeedback } from "@/hooks/use-copy-feedback";
-import { useDraggableDock } from "@/hooks/use-draggable-dock";
-import { visibleAnnotations } from "@/lib/agent-activity";
-import { isEditableKeyboardEvent } from "@/lib/editable-event";
-import { resolveTargetPreview } from "@/selection/selection-registry";
-import { useLensUiStore } from "@/store";
+import { SelectionList, type ContextExportView } from "@/components/selection-list";
 
-const INSPECTOR_EXIT_MS = 220;
-const SETTINGS_EXIT_MS = 160;
+export type SelectionReceipt = { selection: Selection } | null;
 
 type LensDockProps = {
-  title?: string;
-  targets: LensTarget[];
-  graph: NotebookGraph;
-  annotations: LensAnnotation[];
-  agentActivity: AgentActivity[];
-  markdown: string;
-  pairFeedback: PairFeedback | null;
-  pair_prompt: string;
-  contextRevision: number;
-  refreshState: RefreshState;
-  onScan: (requestId?: string) => void;
-  onClear: () => void;
+  selections: Selection[];
+  currentSelectionId: string | null;
+  armed: boolean;
+  listOpen: boolean;
+  menuOpen: boolean;
+  exportState: ContextExportView;
+  capturingSelectionIds: ReadonlySet<string>;
+  busySelectionIds: ReadonlySet<string>;
+  interactionLocked: boolean;
+  selectionReceipt?: SelectionReceipt;
+  onToggleArmed: () => void;
+  onToggleList: () => void;
+  onToggleMenu: () => void;
+  onCopyContext: () => void;
+  onClearSelections: () => void;
+  onActivateSelection: (selection: Selection) => void;
+  onEditNote: (selection: Selection) => void;
+  onDeleteSelection: (selection: Selection) => void;
 };
 
 export function LensDock({
-  title,
-  targets,
-  graph,
-  annotations,
-  agentActivity,
-  markdown,
-  pairFeedback,
-  pair_prompt,
-  contextRevision,
-  refreshState,
-  onScan,
-  onClear,
+  selections,
+  currentSelectionId,
+  armed,
+  listOpen,
+  menuOpen,
+  exportState,
+  capturingSelectionIds,
+  busySelectionIds,
+  interactionLocked,
+  selectionReceipt = null,
+  onToggleArmed,
+  onToggleList,
+  onToggleMenu,
+  onCopyContext,
+  onClearSelections,
+  onActivateSelection,
+  onEditNote,
+  onDeleteSelection,
 }: LensDockProps) {
-  const open = useLensUiStore((state) => state.open);
-  const armed = useLensUiStore((state) => state.armed);
-  const copied = useLensUiStore((state) => state.copied);
-  const copyStatus = useLensUiStore((state) => state.copyStatus);
-  const copyError = useLensUiStore((state) => state.copyError);
-  const dragging = useLensUiStore((state) => state.dragging);
-  const inventoryOpen = useLensUiStore((state) => state.inventoryOpen);
-  const markersVisible = useLensUiStore((state) => state.markersVisible);
-  const settingsOpen = useLensUiStore((state) => state.settingsOpen);
-  const outputDetail = useLensUiStore((state) => state.outputDetail);
-  const selectedTargetId = useLensUiStore((state) => state.selectedHover?.target.id ?? null);
-  const popupOpen = useLensUiStore((state) => state.popup !== null);
-  const toggleOpen = useLensUiStore((state) => state.toggleOpen);
-  const toggleInventory = useLensUiStore((state) => state.toggleInventory);
-  const toggleMarkersVisible = useLensUiStore((state) => state.toggleMarkersVisible);
-  const toggleSettings = useLensUiStore((state) => state.toggleSettings);
-  const setInventoryOpen = useLensUiStore((state) => state.setInventoryOpen);
-  const setSettingsOpen = useLensUiStore((state) => state.setSettingsOpen);
-  const startCapture = useLensUiStore((state) => state.startCapture);
-  const stopCapture = useLensUiStore((state) => state.stopCapture);
-  const setHover = useLensUiStore((state) => state.setHover);
-  const setSelectedHover = useLensUiStore((state) => state.setSelectedHover);
-  const toolbarOpen = open && !popupOpen;
-  const { consumeDragClick, dockDragProps, dockRef, dockStyle } = useDraggableDock(toolbarOpen);
-  const feedbackText = renderPairPromptForDetail(pairFeedback, outputDetail, pair_prompt, markdown);
-  const noteCount = visibleAnnotations(annotations, agentActivity).length;
-  const inspectorPresent = useInspectorPresence(inventoryOpen && toolbarOpen);
-  const settingsPresent = useSettingsPresence(settingsOpen && toolbarOpen);
+  const dockRef = useRef<HTMLElement>(null);
+  const listTriggerRef = useRef<HTMLButtonElement>(null);
+  const hasSelections = selections.length > 0;
 
-  const targetPreview = useCallback(
-    (target: LensTarget) => {
-      return resolveTargetPreview(target, targets);
-    },
-    [targets],
-  );
+  useLayoutEffect(() => {
+    const selector = listOpen
+      ? "[data-marimo-lens-selection-list] button:not(:disabled)"
+      : menuOpen
+        ? "[data-marimo-lens-menu] button:not(:disabled)"
+        : null;
+    if (selector) dockRef.current?.querySelector<HTMLElement>(selector)?.focus();
+  }, [listOpen, menuOpen]);
 
-  const showTargetPreview = useCallback(
-    (target: LensTarget) => {
-      setHover(targetPreview(target));
-    },
-    [setHover, targetPreview],
-  );
+  const closeList = () => {
+    onToggleList();
+    window.requestAnimationFrame(() => listTriggerRef.current?.focus());
+  };
 
-  const selectTargetPreview = useCallback(
-    (target: LensTarget) => {
-      const resolved = targetPreview(target);
-      if (resolved) setSelectedHover(resolved);
-    },
-    [setSelectedHover, targetPreview],
-  );
-
-  const copyPairFeedback = useCopyFeedback({
-    contextRevision,
-    feedbackText,
-    onScan,
-    refreshState,
-  });
-
-  const handleShortcut = useEffectEvent((event: KeyboardEvent) => {
-    if (event.metaKey || event.ctrlKey || event.altKey) {
-      return;
-    }
-
-    const key = event.key.toLowerCase();
-
-    if (key === "escape") {
-      if (isTextEntryKeyboardEvent(event)) return;
-      if (settingsOpen) {
-        event.preventDefault();
-        setSettingsOpen(false);
-        return;
-      }
-      if (inventoryOpen) {
-        event.preventDefault();
-        setInventoryOpen(false);
-        return;
-      }
-      if (armed) {
-        event.preventDefault();
-        stopCapture();
-        setHover(null);
-        return;
-      }
-      if (toolbarOpen) {
-        event.preventDefault();
-        toggleOpen();
-      }
-      return;
-    }
-
-    if (isEditableKeyboardEvent(event)) return;
-
-    if (!toolbarOpen || popupOpen || settingsOpen) return;
-
-    const command = shortcutCommand(key, {
-      canCopy: noteCount > 0 && copyStatus !== "pending",
-      canClear: noteCount > 0,
-      canToggleMarkers: noteCount > 0,
-      copyPairFeedback,
-      toggleMarkersVisible,
-      onClear,
-      onScan,
-    });
-    if (command) {
-      event.preventDefault();
-      command();
-    }
-  });
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      handleShortcut(event);
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  const beginSelecting = () => {
+    if (listOpen) onToggleList();
+    onToggleArmed();
+  };
 
   return (
-    <div
+    <aside
       ref={dockRef}
       className="ml-dock"
-      style={dockStyle}
+      data-marimo-lens-dock
       data-marimo-lens-ui
-      data-open={open ? "true" : "false"}
-      data-dragging={dragging ? "true" : "false"}
-      data-positioned={dockStyle ? "true" : "false"}
-      data-popup-open={popupOpen ? "true" : "false"}
+      aria-label="Marimo Lens"
     >
-      {inspectorPresent ? (
-        <LensInspectorPanel
-          title={title}
-          state={inventoryOpen && toolbarOpen ? "open" : "closing"}
-          targets={targets}
-          graph={graph}
-          annotations={annotations}
-          agentActivity={agentActivity}
-          onTargetEnter={showTargetPreview}
-          onTargetLeave={() => setHover(null)}
-          onTargetSelect={selectTargetPreview}
-          selectedTargetId={selectedTargetId}
+      {listOpen ? (
+        <SelectionList
+          selections={selections}
+          currentSelectionId={currentSelectionId}
+          capturingSelectionIds={capturingSelectionIds}
+          busySelectionIds={busySelectionIds}
+          exportState={exportState}
+          onClose={closeList}
+          onSelectMore={beginSelecting}
+          onCopyContext={onCopyContext}
+          onOpenMenu={onToggleMenu}
+          onActivate={onActivateSelection}
+          onEditNote={onEditNote}
+          onDelete={onDeleteSelection}
         />
       ) : null}
-      {settingsPresent ? (
-        <LensSettingsPanel state={settingsOpen && toolbarOpen ? "open" : "closing"} />
+
+      {menuOpen ? (
+        <div
+          id="marimo-lens-menu"
+          className="ml-menu"
+          data-marimo-lens-menu
+          data-marimo-lens-ui
+          role="menu"
+          aria-label="Selection actions"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!hasSelections || busySelectionIds.size > 0 || interactionLocked}
+            onClick={onClearSelections}
+          >
+            <Trash2 size={14} aria-hidden="true" /> Clear selections
+          </button>
+        </div>
       ) : null}
-      <LensToolbar
-        title={title}
-        open={toolbarOpen}
-        armed={armed}
-        copied={copied}
-        copying={copyStatus === "pending"}
-        copyError={copyError}
-        dragging={dragging}
-        inventoryOpen={inventoryOpen}
-        markersVisible={markersVisible}
-        noteCount={noteCount}
-        settingsOpen={settingsOpen}
-        dragProps={dockDragProps}
-        consumeDragClick={consumeDragClick}
-        onCopy={copyPairFeedback}
-        onScan={() => onScan()}
-        onClear={onClear}
-        onToggleInventory={toggleInventory}
-        onToggleMarkersVisible={toggleMarkersVisible}
-        onToggleSettings={toggleSettings}
-        onToggleOpen={toggleOpen}
-        onToggleCapture={() => {
-          if (armed) {
-            stopCapture();
-            setHover(null);
-          } else {
-            startCapture();
-          }
-        }}
-      />
-    </div>
+
+      {selectionReceipt && !listOpen && !armed ? (
+        <div className="ml-selection-receipt" data-marimo-lens-selection-receipt>
+          <output aria-live="polite" aria-atomic="true">
+            <Check size={14} aria-hidden="true" /> {selectionReceipt.selection.label} selected
+          </output>
+          <button type="button" onClick={() => onEditNote(selectionReceipt.selection)}>
+            Add note
+          </button>
+        </div>
+      ) : null}
+
+      <div
+        className="ml-puck"
+        data-empty={hasSelections ? "false" : "true"}
+        data-armed={armed ? "true" : "false"}
+      >
+        <button
+          className="ml-puck__select"
+          type="button"
+          aria-pressed={armed}
+          data-ml-select
+          disabled={interactionLocked}
+          onClick={onToggleArmed}
+          aria-label={armed ? "Cancel selection mode" : hasSelections ? "Select more" : "Select"}
+        >
+          {armed ? (
+            <MousePointer2 className="ml-puck__armed-icon" size={15} aria-hidden="true" />
+          ) : hasSelections ? (
+            <Focus size={15} aria-hidden="true" />
+          ) : (
+            <MousePointer2 className="ml-puck__empty-icon" size={15} aria-hidden="true" />
+          )}
+          <span className="ml-puck__label">
+            {armed ? "Click or drag" : hasSelections ? "Select more" : "Select"}
+          </span>
+          {armed ? <kbd>ESC</kbd> : null}
+        </button>
+
+        {hasSelections && !armed ? (
+          <button
+            ref={listTriggerRef}
+            className="ml-puck__count"
+            type="button"
+            data-ml-list
+            data-ml-menu
+            disabled={interactionLocked}
+            onClick={onToggleList}
+            aria-expanded={listOpen}
+            aria-controls="marimo-lens-selection-list"
+            aria-label={`Open ${selections.length} ${selections.length === 1 ? "selection" : "selections"}`}
+          >
+            <span>{selections.length}</span>
+          </button>
+        ) : null}
+      </div>
+    </aside>
   );
-}
-
-function useInspectorPresence(open: boolean): boolean {
-  const [present, setPresent] = useState(open);
-
-  useEffect(() => {
-    if (open) {
-      setPresent(true);
-      return undefined;
-    }
-    const timer = window.setTimeout(() => setPresent(false), INSPECTOR_EXIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [open]);
-
-  return present;
-}
-
-function useSettingsPresence(open: boolean): boolean {
-  const [present, setPresent] = useState(open);
-
-  useEffect(() => {
-    if (open) {
-      setPresent(true);
-      return undefined;
-    }
-    const timer = window.setTimeout(() => setPresent(false), SETTINGS_EXIT_MS);
-    return () => window.clearTimeout(timer);
-  }, [open]);
-
-  return present;
-}
-
-function shortcutCommand(
-  key: string,
-  actions: {
-    canClear: boolean;
-    canCopy: boolean;
-    canToggleMarkers: boolean;
-    copyPairFeedback: () => void;
-    toggleMarkersVisible: () => void;
-    onClear: () => void;
-    onScan: () => void;
-  },
-): (() => void) | null {
-  const commands: Record<string, (() => void) | null> = {
-    c: actions.canCopy ? actions.copyPairFeedback : null,
-    h: actions.canToggleMarkers ? actions.toggleMarkersVisible : null,
-    r: actions.onScan,
-    x: actions.canClear ? actions.onClear : null,
-  };
-  return commands[key] ?? null;
-}
-
-function isTextEntryKeyboardEvent(event: KeyboardEvent): boolean {
-  const path = event.composedPath();
-  return path.some((target) => {
-    if (!(target instanceof HTMLElement)) return false;
-    if (target.isContentEditable) return true;
-    const tag = target.tagName.toLowerCase();
-    if (tag === "textarea" || tag === "select") return true;
-    if (tag !== "input") return false;
-    const type = target.getAttribute("type")?.toLowerCase() ?? "text";
-    return !["button", "checkbox", "radio", "range", "reset", "submit"].includes(type);
-  });
 }
