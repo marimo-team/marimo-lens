@@ -1,12 +1,9 @@
 # marimo-lens
 
-Agent-ready feedback for live marimo notebooks.
-
-`marimo-lens` is an anywidget overlay for collecting precise notebook feedback:
-click a rendered table, chart, widget, cell output, or DOM region; write the note;
-copy a packet that an agent can use to make the edit in the right marimo cells.
-
-Add it to your marimo notebook with:
+`marimo-lens` collects precise feedback from a live marimo notebook. Select a
+rendered table, chart, widget, cell output, or DOM region, write a note, and copy
+a packet that identifies the notebook cells and runtime state an agent should
+edit.
 
 ```python
 import marimo as mo
@@ -16,26 +13,29 @@ lens = mo.ui.anywidget(Lens())
 lens
 ```
 
-To see Lens against many output types, run the workbench:
-
-```sh
-uv run marimo edit workbench/demo.py
-```
-
-`Lens()` scans the active marimo runtime, dataflow graph, globals, display cells,
-UI controls, anywidgets, traitlets state, and visible notebook targets. It is
-designed for trusted notebooks on trusted local machines; collected context is
-not redacted.
+`Lens()` scans the active marimo runtime, dataflow graph, globals, display
+cells, UI controls, anywidgets, traitlets state, and visible notebook targets.
+The project assumes trusted notebooks, local machines, and agent sessions.
 
 ## Install
 
-Install from a checkout:
+Use Node 22.18 or newer and the pnpm version declared in the root
+`package.json`.
+
+Install the Python and JavaScript workspaces from a checkout, then build the
+widget assets:
 
 ```sh
-uv sync --dev
-uv pip install -e .
-pnpm install
-pnpm run build
+uv sync --locked --all-packages --all-groups
+pnpm install --frozen-lockfile
+pnpm build
+```
+
+Run the workbench against controls, dataframes, charts, SVG, and nested
+anywidgets:
+
+```sh
+uv run --all-packages --group workbench marimo edit workbench/demo.py
 ```
 
 ## Feedback
@@ -43,43 +43,34 @@ pnpm run build
 Lens exports the same feedback in two forms:
 
 ```python
-feedback = lens.pair_feedback  # JSON-safe packet
-prompt = lens.pair_prompt  # paste-ready marimo-pair prompt
+feedback = lens.pair_feedback
+prompt = lens.pair_prompt
 ```
 
-The packet includes:
+The packet contains selected and related cells, defs, refs, chart parts, table
+columns, widget controls, DOM evidence, current UI values, trait state, graph
+state, and suggested edit boundaries. Copying feedback refreshes Python context
+before reading the packet.
 
-- selected target cells, related cells, defs, and refs
-- selected chart parts, table columns, widget controls, or DOM evidence
-- current marimo UI values, anywidget traits, and graph state
-- suggested edit boundaries for a marimo-pair agent
-
-Copying feedback asks Python for a fresh context scan first, so the packet tracks
-current controls, widget state, and graph lineage.
-
-If you add a new marimo cell after mounting Lens, press the refresh/rescan
-button in the Lens dock so Lens rescans the notebook graph before you capture
-feedback.
+Refresh the Lens dock after adding a marimo cell so target discovery sees the
+updated graph.
 
 ## Targeting
 
-Built-in selection covers explicit Lens markers, marimo output cells, semantic
-tables and grids, Altair/Vega, Plotly, Matplotlib, generic SVG charts, visual
-surfaces, media, documents, interactive controls, and open shadow roots.
+Built-in selection covers Lens markers, marimo output cells, semantic tables
+and grids, Altair or Vega, Plotly, Matplotlib, generic SVG charts, canvas and
+visual surfaces, media, documents, interactive controls, and open shadow roots.
 
-Use the public extension points when the defaults need domain knowledge:
+Use these extension points for domain-specific targets:
 
-- `include`, `exclude`, `targets`, and `target(...)` for narrowing or anchoring
-  targets
-- `EntityInspector` for custom Python objects
-- `ChartInspector`, `chart_adapter(...)`, and `chart_part(...)` for custom chart
-  libraries
+- `include`, `exclude`, `targets`, and `target(...)` narrow or anchor targets.
+- `EntityInspector` describes custom Python objects.
+- `ChartInspector`, `chart_adapter(...)`, and `chart_part(...)` describe custom
+  chart libraries.
 
-The collection pipeline is internal. Keep integrations on the public API above.
+## Agent receipts
 
-## Agent Receipts
-
-Agents can report work back through the same widget:
+Agents can report work through the same widget:
 
 ```python
 from marimo_lens import find_lens
@@ -92,33 +83,34 @@ if lens is not None:
     lens.agent_finished("Updated the chart filter.", run_id=run_id)
 ```
 
-Use `lens.export_pair_result()` or `lens.export_pair_result_prompt()` to retrieve
-the machine-readable result packet.
+Read the result through `lens.export_pair_result()` or
+`lens.export_pair_result_prompt()`.
 
 ## Development
 
-```sh
-uv sync --dev
-pnpm install
-uv run marimo run workbench/demo.py --port 28889 --headless
-pnpm run dev
-```
-
-Run the full local gate before handing off changes:
+Start the Vite server:
 
 ```sh
-uv run ruff format
-uv run ruff check
-uv run ty check
-uv run pytest
-pnpm run fmt
-pnpm run qa
-pnpm dlx react-doctor@latest . --verbose --diff
+pnpm dev
 ```
 
-`pnpm run qa` formats/checks the frontend, runs TypeScript and Vitest, rebuilds
-the bundled widget assets. Use `pnpm run qa:package` for the slower wheel and
-sdist artifact check.
+Run the workbench in another shell:
+
+```sh
+MARIMO_LENS_VITE_DEV_SERVER=http://127.0.0.1:5173 \
+  uv run --all-packages --group workbench \
+  marimo run workbench/demo.py --port 28889 --headless
+```
+
+Run the complete local gate before review:
+
+```sh
+make check
+```
+
+See [Architecture](development_docs/architecture.md) for package ownership and
+[Development](development_docs/development.md) for watch mode, packaging, and
+browser checks.
 
 ## Acknowledgements
 

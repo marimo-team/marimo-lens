@@ -1,5 +1,33 @@
 packages:
-  - "."
+  - packages/*
+
+catalogMode: prefer
+
+catalog:
+  "@anywidget/react": ^0.2.2
+  "@anywidget/types": ^0.4.0
+  "@types/node": ^22.20.1
+  "@types/react": ^19.2.17
+  "@types/react-dom": ^19.2.3
+  es-module-lexer: ^2.3.1
+  jsdom: 29.1.1
+  lucide-react: 1.24.0
+  react: ^19.2.7
+  react-dom: ^19.2.7
+  typescript: ^6.0.3
+  valibot: 1.4.2
+  vite: npm:@voidzero-dev/vite-plus-core@0.2.4
+  vite-plus: 0.2.4
+  zustand: 5.0.14
+
+overrides:
+  vite: "catalog:"
+
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
 
 allowBuilds:
   esbuild: true

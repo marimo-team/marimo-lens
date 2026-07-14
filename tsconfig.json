@@ -1,13 +1,14 @@
 {
-  "include": ["js"],
+  "include": ["vite.config.ts", "packages/**/*.ts", "packages/**/*.tsx"],
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client"],
     "skipLibCheck": true,
     "moduleResolution": "bundler",
     "paths": {
-      "@/*": ["./js/*"]
+      "@/*": ["./packages/widget/src/*"]
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
@@ -17,6 +18,7 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true
   }
 }

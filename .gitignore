@@ -1,6 +1,7 @@
 node_modules
 .venv
 dist
+packages/*/dist
 .DS_Store
 .pytest_cache
 .ruff_cache
@@ -9,4 +10,4 @@ dist
 __pycache__
 .ipynb_checkpoints
 
-src/marimo_lens/static
+packages/marimo-lens/src/marimo_lens/static
