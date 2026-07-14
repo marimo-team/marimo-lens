@@ -1,10 +1,9 @@
 # marimo-lens
 
-`marimo-lens` is a marimo-aware anywidget for collecting precise notebook
-feedback. Python discovers notebook state and lineage. The React widget selects
-visible targets and records annotations. The exported packet gives an agent the
-target cells, defs, refs, control values, widget state, and DOM evidence needed
-to edit the notebook.
+`marimo-lens` records point and region selections on rendered marimo outputs.
+The browser resolves the owning output cell and captures optional marked PNG
+evidence. Python returns compact live references and bounded standalone text
+context.
 
 ## Commands
 
@@ -25,7 +24,7 @@ Use Node 22.18 or newer and the pnpm version declared in the root manifest.
 | Full local gate          | `make check`                                                                          | every command above passes       |
 
 Run `pnpm build` before Python tests. `Lens` loads the generated anywidget
-manifest when a model is created.
+manifest when its model is created.
 
 ## Workspace ownership
 
@@ -35,7 +34,7 @@ packages/anywidget-bundle
                      |
                      v
 packages/marimo-lens <---- packages/widget
-Python API and wheel       React UI and selection
+Python API and wheel       output selection UI and PNG capture
           |
           v
       workbench
@@ -43,21 +42,22 @@ Python API and wheel       React UI and selection
 
 - `packages/anywidget-bundle/` owns app-agnostic anywidget bundling. It emits
   the bootstrap, app module, chunks, stylesheet, and `anywidget.json`. It also
-  owns browser module loading, custom-message transport, and development HMR.
-- `packages/widget/` owns the React application, Zustand workflow state,
-  selection plugins, chart-part adapters, model synchronization, and styles.
-- `packages/marimo-lens/` owns the publishable Python distribution. Its Python
-  code collects marimo runtime context and serves bundle modules. Its Vite
-  config is the composition root that combines the widget and bundle plugin.
-- `workbench/` is the browser acceptance fixture. Keep demo-specific values and
-  presentation out of the reusable packages.
-- `development_docs/` contains contributor contracts. The root `README.md` and
-  package README contain user workflows.
+  owns browser module loading, custom-message transport for bundle resources,
+  and development HMR.
+- `packages/widget/` owns output-cell interaction, normalized anchors, bounded
+  DOM hints, asynchronous PNG capture, protocol requests, reducer state, and
+  Quiet Puck presentation.
+- `packages/marimo-lens/` owns the publishable Python distribution. Python
+  validates selection commands, stores PNG bytes, reads the marimo runtime,
+  resolves provenance, and returns `LensContext`.
+- `workbench/` owns browser acceptance fixtures across output technologies.
+- `development_docs/` contains contributor contracts. The root and package
+  READMEs contain user workflows.
 
 Cross-package TypeScript imports use package names. The Python composition
 package depends on `@marimo-lens/widget` and
-`@marimo-lens/anywidget-bundle`. The widget and bundle packages remain
-independent. Keep product selection logic out of the generic bundle package.
+`@marimo-lens/anywidget-bundle`. Keep selection and capture logic out of the
+generic bundle package.
 
 The root `package.json`, `pnpm-workspace.yaml`, `vite.config.ts`, and
 `tsconfig.json` own JavaScript orchestration and shared policy. Package
@@ -69,45 +69,190 @@ Read [Architecture](development_docs/architecture.md) before changing an
 ownership boundary. Use [Development](development_docs/development.md) for
 setup, watch mode, packaging, and browser checks.
 
-## Runtime contracts
+## Product invariants
 
-### Python collection
+- A rendered output cell is the semantic notebook unit.
+- A point or rectangle is an attention hint inside that output.
+- Pointer release creates a selection immediately. A note is optional.
+- Selection mode is one-shot and returns to rest after each gesture.
+- A selection contains a stable id, stable `S<n>` label, optional note, output
+  cell id, normalized anchor, bounded DOM hint, and image state.
+- Deleting or clearing selections leaves allocated labels unused.
+- Creation, focus, and note editing make a selection current.
+- Deleting the current selection selects the most recently active remaining
+  selection.
+- Snapshot capture runs after selection creation. Capture failure never blocks
+  the cell-backed reference.
+- Editing a note preserves its image.
+- Moving or resizing a selection captures a replacement image.
+- The marimo DAG is the source of truth for cell lineage.
+- `Lens.context()` refreshes runtime provenance for each call.
+- PNG bytes stay outside trait state, JSON references, local storage, and text
+  prompts.
+- `LensContext.references` contains selections and live output cell references.
+- `LensContext.text` is complete text context for a text-only consumer.
+- `LensContext.images` contains optional successful PNG captures.
+- References and text budgets are independent.
+- Control relevance follows referenced variable names.
+- Runtime caller identity is not exported.
+- Production selection follows one renderer-neutral output-root path.
+- One displayed Lens instance owns one notebook's selection state.
 
-`Lens()` is the primary API. It scans the active marimo runtime, dataflow graph,
-globals, display cells, controls, anywidgets, traitlets state, and visible
-targets. The supported extension surface is `include`, `exclude`, `targets`,
-`target`, `ml.context`, `ml.targets`, `ml.inspectors`, `ml.charts`,
-`ml.selection`, and `ml.pair`.
+## Public Python API
 
-The marimo DAG is the lineage source of truth. Preserve real cell ids, defs,
-refs, display provenance, and related cell ids. Python chart integrations use
-`ml.charts.adapter(...)` and `ml.charts.Inspector(adapters=[...])` through
-`Lens(inspectors=[...])`.
+The top-level package exports `Lens`, `LensContext`, and `SelectionImage`.
 
-### Browser selection
+```python
+import marimo as mo
+from marimo_lens import Lens
 
-Selection is plugin-like. New behavior belongs in a focused adapter or parser
-with explicit `selectionEvidence`. Use the shadow DOM utilities for open shadow
-roots. Chart targeting tries library adapters before generic SVG, canvas, and
-visual fallbacks.
+lens = mo.ui.anywidget(Lens())
+lens
 
-Shared workflow state belongs in Zustand. Component state is reserved for
-input state local to one component. Effects connect React to model listeners,
-DOM listeners, timers, browser APIs, and teardown. Derived values stay in
-rendering code or `useMemo`.
+context = lens.context()
+context.current
+context.references
+context.text
+context.images
+```
 
-Use `@/` imports inside `packages/widget`. Keep CSS tokens and local class names
-under `packages/widget/src/styles`. Use lucide icons for controls that have a
-matching icon.
+`lens.context()` returns one detached snapshot. `current` is the current
+selection reference or `None`. `references` is a compact live contract. `text`
+is a standalone contract. `images` contains successful and retained outdated
+captures in selection order and may be empty. `Lens()` accepts no public
+configuration.
 
-### Feedback
+Python modules have focused ownership:
 
-`lens.pair_feedback` is the machine-readable packet.
-`lens.pair_prompt` is the paste-ready form. Copying feedback refreshes the
-Python context so current controls, traits, globals, and graph state reach the
-packet. Collected context is trusted notebook data and stays intact.
+- `context.py` owns public result types.
+- `widget.py` owns AnyWidget lifecycle and composition.
+- `_runtime.py` reads the active marimo runtime.
+- `_provenance.py` resolves bounded DAG context.
+- `_context.py` builds references and text.
+- `_images.py` validates and stores PNG bytes.
+- `_protocol.py` validates commands and responses.
 
-### Bundle resources
+## Browser protocol
+
+The private `_state` trait has this shape:
+
+```json
+{
+  "revision": 0,
+  "nextLabel": "S1",
+  "currentSelectionId": null,
+  "selections": []
+}
+```
+
+Commands use `marimo-lens.command` version 1 and always include `requestId`,
+`type`, and an object `payload`. Supported command types are
+`selection.put`, `selection.activate`, `selection.delete`, `selections.clear`,
+and `context.export`.
+
+Version 1 has one selection-first schema. Keep one parser and one response
+shape across Python and TypeScript.
+
+Responses use `marimo-lens.response` version 1 and always include `requestId`,
+`ok`, `revision`, and an object `payload`. Failed responses include an `error`
+object with `code` and `message`.
+
+Every mutation carries `expectedRevision`. `selection.put` also uses
+`imageAction` with `preserve`, `replace`, or `clear`. Reject stale revisions
+before processing image bytes. `replace` sends exactly one PNG binary buffer.
+The remaining actions send zero buffers. Keep command correlation and bundle
+resource messages independent on the shared custom-message channel.
+
+Python owns monotonic label allocation through `_state.nextLabel`. Advance it
+after a successful new selection and keep it across delete and clear.
+
+## Browser interaction
+
+The Quiet Puck is fixed at the bottom-right on desktop and bottom-center on
+narrow viewports. Its primary controls are **Select**, the selection count,
+**Select more**, **Copy context**, and **Clear selections**.
+
+The empty state uses a compact labeled **Select** control. The resting state
+uses one split control with **Select** and the selection count. The count opens
+the review sheet. The armed state expands to **Click or drag** with an **ESC**
+affordance. Pending and receipt states reuse the same anchor and change density
+in place.
+
+Clicking creates a point. Dragging creates a rectangle. Use pointer capture for
+the gesture. Resolve the output through `event.composedPath()` and the canonical
+`output-<cell-id>` root. Keyboard users move between output cells and press
+Enter to create a centered point. Escape cancels the active layer.
+
+The review sheet lists selections, shows which selection is current, and offers
+**Add note** or **Edit note**, snapshot status, **Select more**, **Copy
+context**, removal, and clear actions. A marker or list-row focus activates the
+selection. The note editor never gates selection creation.
+
+Use a small reducer for idle, armed, dragging, note-editing, and receipt states.
+Keep input text local to the note editor. Effects connect React to model
+messages, DOM listeners, timers, browser APIs, and teardown.
+
+Use marimo theme tokens and the design vocabulary from `marimo/DESIGN.md`:
+
+- PT Sans for controls and labels
+- Fira Mono for stable IDs and compact status text
+- `#0880EA` as the primary selection color
+- slate borders and quiet white or dark surfaces
+- red for destructive or error states
+- borders before shadows
+- no decorative gradients
+
+Use 150 to 200 ms ease-out transitions for transform and opacity. Pointer
+tracking is immediate. Press feedback scales controls to `0.97`. Honor reduced
+motion and coarse-pointer media queries. Gate hover styles behind fine-pointer
+media queries. Use lucide icons when a matching icon exists.
+
+## Image capture
+
+Capture the full canonical output with the pinned `html-to-image` path and the
+upstream marimo patch. Exclude every `[data-marimo-lens-ui]` node. Burn the
+stable selection label and geometry into the returned PNG.
+
+For oversized output, compose a scaled overview and a high-resolution crop in
+one final image. Enforce 2048 pixels per edge, 4 megapixels, 8 MiB per image,
+and 64 MiB per Lens image store.
+
+Image status is `pending`, `available`, `failed`, or `outdated`.
+Retain a prior successful PNG when its metadata becomes outdated and expose
+that state through `SelectionImage.outdated`.
+
+## Context export
+
+`LensContext.references` uses `marimo-lens.context` version 1. Its top-level
+fields are `protocol`, `version`, `revision`, `generatedAt`, `notebook`,
+`currentSelectionId`, and `selections`. Each selection carries its note, output
+cell ID, normalized anchor, bounded DOM hint, status-only snapshot record, and cell
+status. Selection state has a 40,000-byte aggregate limit. Serialized references
+have a 45,000-byte limit.
+
+`LensContext.text` materializes context from the same runtime snapshot. It
+contains selections, current relevant controls, and up to 64 cells in
+topological order with source, definitions, references, and direct parent IDs.
+Source shares a 24,000-character budget. It reports up to 16 omitted cell IDs.
+Up to 16 controls share an 8,000-character compact JSON budget and a 512-node
+collection budget. Each serialized control string and control cell ID list is
+bounded. Selection notes are bounded to 4,000 UTF-16 code units. DOM text hints
+are bounded to 240 UTF-16 code units. Complete text is bounded to 64,000
+characters.
+
+Text rendering preserves every selection and relevant cell reference, then
+truncates notes, DOM evidence, control details, cell metadata, and source within
+explicit section budgets.
+
+`LensContext.images` contains one value for each successful or retained
+outdated capture. Join images to selections through
+`SelectionImage.selection_id`.
+
+marimo-pair evaluates `lens.context()` in the live kernel and resolves each
+`outputCellId` through marimo's cell collection and graph. Pair-specific
+scratchpad and edit operations remain outside this package.
+
+## Bundle resources
 
 The generated manifest is the browser resource contract. `index.js` is the
 self-contained anywidget bootstrap. `chunks/app.js` and every other manifest
@@ -126,32 +271,47 @@ must use the assets carried by that archive.
 
 ## Test design
 
-- Test Python behavior through the public `marimo_lens` API, trait values,
-  feedback packets, bundle messages, and built artifacts.
-- Test TypeScript behavior through widget state, selection results, bundle
-  lifecycle, module transport, Vite output, and DOM behavior.
-- Keep each test focused on one supported contract. Avoid assertions on CSS
-  literals, private helper trivia, fixture class names, or generated formatting.
-- Verify visual spacing, overlays, hover behavior, responsive layout, and
-  canvas targeting in a browser.
-- Keep comments for lifecycle ordering, invariants, serialization boundaries,
-  generated artifacts, external runtime behavior, and bailout reasons.
+- Test Python behavior through public imports, `Lens.context()`, command
+  responses, references values, image bytes, and built artifacts.
+- Assert that references remain source-free and text remains complete with
+  empty notes and no images.
+- Check live Pair interoperability by resolving output cell IDs against the
+  active marimo cell collection and DAG.
+- Test TypeScript behavior through reducer state, output-root resolution,
+  normalized geometry, immediate creation, background PNG composition,
+  protocol requests, and DOM behavior.
+- Test each lifecycle transition and failure path through the boundary a
+  consumer observes.
+- Verify layout, overlays, focus, pointer behavior, responsive placement, and
+  marked pixels in a browser.
 
 ## Browser validation
 
-Run the workbench:
+Run a fresh production-mode workbench:
 
 ```sh
-uv run --all-packages --group workbench marimo run workbench/demo.py --port 28889 --headless
+env -u MARIMO_LENS_VITE_DEV_SERVER \
+  uv run --locked --all-packages --all-groups \
+  marimo run workbench/demo.py --port 28889 --headless
 ```
 
-Use `agent-browser --session marimo-lens` for UI work. Check the dock, popover,
-hover card, lineage regions, dataframe columns, Altair or Vega, Plotly,
-Matplotlib, generic SVG, canvas coordinates, open shadow roots, feedback
-capture, and refreshed pair packets. Inspect console and page errors. Close the
-browser session and stop local servers after validation.
+Use `agent-browser --session marimo-lens-e2e`. Exercise point and region
+selections across text, table, Altair or Vega, Plotly, Matplotlib, generic SVG,
+canvas, nested layouts, open shadow roots, scrollable content, and an external
+iframe failure. Verify immediate commit, one-shot mode, note editing, current
+selection, moving, resizing, deletion, clear, keyboard operation, output
+reruns, context copying, light and dark themes, narrow viewports, and reduced
+motion. Inspect console and page errors. Close the browser session and stop the
+server after validation.
 
-For frontend changes, run `pnpm check`, `pnpm test`, `pnpm build`,
-`pnpm dlx react-doctor@latest . --verbose --scope changed`, and the relevant browser
-flow. For Python changes, run Ruff, ty, Pyrefly, and pytest. Cross-boundary
-changes require the full `make check` gate and browser validation.
+For the Pair boundary, start the notebook with `marimo edit --headless
+--no-token`, create selections through the browser, then evaluate
+`lens.context()` through marimo-pair. Resolve every output cell and its
+ancestors from the live kernel. Assert that references contain no source,
+control state, or PNG bytes. Verify text with image input omitted and repeat
+with a failed capture. Record compact references bytes and text characters.
+
+Frontend changes require `pnpm check`, `pnpm test`, `pnpm build`,
+`pnpm dlx react-doctor@latest . --verbose --scope changed`, and the browser
+flow. Python changes require Ruff, ty, Pyrefly, and pytest. Cross-boundary
+changes require `make check`, package archive validation, and browser evidence.

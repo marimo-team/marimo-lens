@@ -1,9 +1,7 @@
 # Development
 
-Use Node 22.18 or newer and the Corepack-managed pnpm version declared in the
-root `package.json`.
-
-Install the uv and pnpm workspaces:
+Use Node 22.18 or newer and the Corepack-managed pnpm version declared in
+`package.json`.
 
 ```sh
 uv sync --locked --all-packages --all-groups
@@ -24,7 +22,7 @@ Start Vite in one shell:
 pnpm dev
 ```
 
-Start the workbench in another shell and point `Lens` at the Vite server:
+Start the workbench in another shell:
 
 ```sh
 MARIMO_LENS_VITE_DEV_SERVER=http://127.0.0.1:5173 \
@@ -32,9 +30,9 @@ MARIMO_LENS_VITE_DEV_SERVER=http://127.0.0.1:5173 \
   marimo run workbench/demo.py --port 28889 --headless
 ```
 
-Use the URL printed by Vite if it selects another port. Development CSS is
-injected by Vite. Production CSS comes from the generated bundle and is also
-synchronized for the Lens portal mounted under `document.body`.
+Development CSS is injected by Vite. Production CSS comes from the generated
+resource graph and is synchronized for the portal mounted under
+`document.body`.
 
 ## Checks
 
@@ -50,12 +48,19 @@ Use package commands while iterating:
 pnpm --filter @marimo-lens/anywidget-bundle test
 pnpm --filter @marimo-lens/widget test
 pnpm --filter @marimo-lens/python build
-uv run --locked --all-packages --all-groups pytest -q packages/marimo-lens/tests
+uv run --locked --all-packages --all-groups \
+  pytest -q packages/marimo-lens/tests
+```
+
+Frontend changes also require:
+
+```sh
+pnpm dlx react-doctor@latest . --verbose --scope changed
 ```
 
 ## Packaging
 
-Build the browser assets before the Python distributions:
+Build browser assets before Python distributions:
 
 ```sh
 pnpm --filter @marimo-lens/python build
@@ -68,15 +73,93 @@ Validate the archive boundary:
 uvx twine check dist/marimo_lens-*.whl dist/marimo_lens-*.tar.gz
 uv build --wheel dist/marimo_lens-*.tar.gz --out-dir dist/from-sdist
 uv run --no-project --with dist/from-sdist/marimo_lens-*.whl \
-  python -c "import marimo_lens"
+  python -c "from marimo_lens import Lens, LensContext, SelectionImage; Lens()"
 ```
 
-The sdist build uses its packaged browser assets. Hatch reports every required
+The sdist build uses its packaged browser assets. Hatch reports each required
 manifest artifact when the graph is incomplete.
 
 ## Browser checks
 
-Open the workbench with `agent-browser --session marimo-lens`. Exercise the
-changed interaction, inspect the DOM and console, and capture a screenshot for
-visual changes. Use element coordinates for canvas targets. Close the session
-and stop both servers when the check is complete.
+Start a fresh production-mode server:
+
+```sh
+env -u MARIMO_LENS_VITE_DEV_SERVER \
+  uv run --locked --all-packages --all-groups \
+  marimo run workbench/demo.py --port 28889 --headless
+```
+
+Use one isolated browser session:
+
+```sh
+agent-browser --session marimo-lens-e2e open http://127.0.0.1:28889
+agent-browser --session marimo-lens-e2e snapshot -i
+```
+
+Exercise these contracts:
+
+- Empty, resting, focused, selecting, pending, and receipt puck states
+- Point selection on text, table, SVG, canvas, chart, and widget outputs
+- Region selection on a nested layout
+- Immediate commit on pointer release with an empty note
+- One-shot return to the resting puck
+- Stable `S<n>` label in the captured image
+- Optional note add and edit with image preservation
+- Anchor move and resize with replacement capture
+- Selection activation, delete, clear, and current-selection fallback
+- Output rerun with marker reconnection, fresh text context, and retained capture-time images
+- **Copy context** with refreshed Python provenance
+- Keyboard selection and Escape cancellation
+- Narrow viewport and coarse-pointer placement
+- Light, dark, and reduced-motion settings
+- Explicit snapshot failure for an external iframe
+
+Inspect console and page errors after the flow. Capture desktop and narrow
+viewport screenshots. Close the session and stop the server:
+
+```sh
+agent-browser --session marimo-lens-e2e close
+```
+
+## Live Pair check
+
+Start a fresh edit-mode server so marimo-pair can use the same kernel as the
+browser:
+
+```sh
+env -u MARIMO_LENS_VITE_DEV_SERVER \
+  uv run --locked --all-packages --all-groups \
+  marimo edit workbench/demo.py \
+  --host 127.0.0.1 --port 28889 --headless --no-token
+```
+
+Open that server with `agent-browser`, create one successful selection and one
+external iframe selection, then evaluate `lens.context()` through marimo-pair's
+scratchpad execution path. The scratchpad may use `marimo._code_mode` to inspect
+the live cell collection. Project code and notebook cells must use public
+marimo APIs.
+
+For every selection, verify that `outputCellId` resolves through
+`ctx.cells[outputCellId]`. Compare `ctx.graph.ancestors(outputCellId)` with the
+selected cell plus the bounded, topologically ordered ancestor subset rendered
+in `context.text`.
+
+Assert these contracts:
+
+- References have `protocol`, `version`, `revision`, `generatedAt`, `notebook`,
+  `currentSelectionId`, and `selections` as their complete top-level shape.
+- `currentSelectionId` identifies the most recently created, focused, or edited
+  selection.
+- References contain no cell source, control state, PNG bytes, or scratchpad
+  caller identity.
+- Text contains each output cell reference, selected source, upstream source,
+  DAG edges, and relevant current control values when notes and images are
+  absent.
+- A failed image capture still produces complete references and text.
+- `LensContext.images` contains successful captures in selection order.
+- Selection state stays at or below 40,000 bytes, references at or below 45,000
+  bytes, and text at or below 64,000 characters.
+
+Record compact references bytes and text characters. The workbench
+single-selection references object must remain below 2 KiB. Close the browser
+and stop the edit server after the check.
