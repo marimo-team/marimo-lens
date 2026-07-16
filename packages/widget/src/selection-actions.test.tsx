@@ -1,4 +1,4 @@
-import { act, useLayoutEffect, useReducer } from "react";
+import { act, StrictMode, useLayoutEffect, useReducer } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -81,6 +81,21 @@ describe("selection mutations", () => {
       snapshot: { status: "failed" },
     });
     expect(protocol.putSelection.mock.calls[1]?.[1]).toBe("clear");
+  });
+
+  test("commits a selection when development mode replays effects", async () => {
+    const output = visibleOutput();
+    vi.mocked(captureSelectionSnapshot).mockResolvedValue(failedCapture());
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    mount(stateRef, protocol.client, true);
+
+    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    await flush();
+
+    expect(protocol.putSelection).toHaveBeenCalledTimes(2);
+    expect(stateRef.current.selections).toHaveLength(1);
+    expect(stateRef.current.currentSelectionId).toBe("selection-fixed");
   });
 
   test("activates an older selection and saves an empty optional note", async () => {
@@ -203,7 +218,11 @@ describe("selection mutations", () => {
   });
 });
 
-function mount(stateRef: { current: LensState }, protocol: LensProtocolClient): void {
+function mount(
+  stateRef: { current: LensState },
+  protocol: LensProtocolClient,
+  strict = false,
+): void {
   vi.stubGlobal("crypto", { randomUUID: () => "selection-fixed" });
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
     callback(0);
@@ -212,7 +231,8 @@ function mount(stateRef: { current: LensState }, protocol: LensProtocolClient): 
   const container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  act(() => root?.render(<Harness stateRef={stateRef} protocol={protocol} />));
+  const harness = <Harness stateRef={stateRef} protocol={protocol} />;
+  act(() => root?.render(strict ? <StrictMode>{harness}</StrictMode> : harness));
 }
 
 function Harness({
@@ -227,7 +247,6 @@ function Harness({
     stateRef,
     dispatch,
     protocol,
-    signal: NEVER_ABORT.signal,
   });
   useLayoutEffect(() => {
     actions = hookActions;
@@ -354,5 +373,3 @@ function successResponse(revision: number): LensResponse {
     payload: {},
   };
 }
-
-const NEVER_ABORT = new AbortController();

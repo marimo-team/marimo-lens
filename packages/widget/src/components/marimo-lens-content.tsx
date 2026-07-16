@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 
 import type { Selection } from "@/contracts";
 
@@ -22,7 +22,6 @@ export function MarimoLensContent() {
   const stateRef = useLatestCommitted(model.state);
   const canceledPointerIds = useRef(new Set<number>());
   const activeAdjustment = useRef<AdjustmentCancel | null>(null);
-  const [lifecycle] = useState(() => new AbortController());
 
   const registerAdjustment = useCallback((cancel: AdjustmentCancel) => {
     activeAdjustment.current?.();
@@ -41,18 +40,16 @@ export function MarimoLensContent() {
 
   useEffect(
     () => () => {
-      lifecycle.abort();
       activeAdjustment.current?.();
       activeAdjustment.current = null;
     },
-    [lifecycle],
+    [],
   );
 
   const actions = useSelectionActions({
     stateRef,
     dispatch,
     protocol: model.protocol,
-    signal: lifecycle.signal,
   });
 
   useDocumentInteractions({

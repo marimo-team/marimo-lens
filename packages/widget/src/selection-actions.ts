@@ -1,4 +1,4 @@
-import { useCallback, useState, type Dispatch, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject } from "react";
 
 import type {
   ContextExportFormat,
@@ -25,9 +25,9 @@ export function useSelectionActions(options: {
   stateRef: RefObject<LensState>;
   dispatch: Dispatch<UiAction>;
   protocol: LensProtocolClient;
-  signal: AbortSignal;
 }) {
-  const { stateRef, dispatch, protocol, signal } = options;
+  const { stateRef, dispatch, protocol } = options;
+  const currentSignal = useLifecycleSignal();
   const [mutationQueue] = useState(() => ({ tail: Promise.resolve() }));
   const [captureGeneration] = useState(() => new Map<string, number>());
 
@@ -48,6 +48,7 @@ export function useSelectionActions(options: {
       mutation: RevisionedMutation,
       postcondition: (state: LensState) => boolean,
     ): Promise<void> => {
+      const signal = currentSignal();
       for (let attempt = 0; attempt < 2; attempt += 1) {
         signal.throwIfAborted();
         const baseRevision = stateRef.current.revision;
@@ -82,7 +83,7 @@ export function useSelectionActions(options: {
         }
       }
     },
-    [signal, stateRef],
+    [currentSignal, stateRef],
   );
 
   const commitSnapshot = useCallback(
@@ -92,6 +93,7 @@ export function useSelectionActions(options: {
       generation: number,
       result: Awaited<ReturnType<typeof captureSelectionSnapshot>>,
     ) => {
+      const signal = currentSignal();
       if (captureGeneration.get(selectionId) !== generation) return;
       await enqueueMutation(async () => {
         let retainedOutdated = false;
@@ -136,11 +138,13 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [captureGeneration, dispatch, enqueueMutation, protocol, runRevisioned, signal],
+    [captureGeneration, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned],
   );
 
   const captureSnapshot = useCallback(
     async (selection: Selection, output: HTMLElement, detailElement: Element) => {
+      const signal = currentSignal();
+      signal.throwIfAborted();
       const generation = (captureGeneration.get(selection.id) ?? 0) + 1;
       captureGeneration.set(selection.id, generation);
       const result = await captureSelectionSnapshot({
@@ -154,7 +158,7 @@ export function useSelectionActions(options: {
       signal.throwIfAborted();
       await commitSnapshot(selection.id, selection.anchor, generation, result);
     },
-    [captureGeneration, commitSnapshot, signal],
+    [captureGeneration, commitSnapshot, currentSignal],
   );
 
   const beginSelection = useCallback(
@@ -164,6 +168,8 @@ export function useSelectionActions(options: {
       anchor: SelectionAnchor,
       detailElement: Element,
     ) => {
+      const signal = currentSignal();
+      signal.throwIfAborted();
       const selection: Selection = {
         id: createSelectionId(),
         label: stateRef.current.nextLabel,
@@ -222,11 +228,13 @@ export function useSelectionActions(options: {
           focusDock();
         });
     },
-    [captureSnapshot, dispatch, enqueueMutation, protocol, runRevisioned, signal, stateRef],
+    [captureSnapshot, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned, stateRef],
   );
 
   const activateSelection = useCallback(
     (selectionId: string) => {
+      const signal = currentSignal();
+      signal.throwIfAborted();
       dispatch({ type: "selectionActivated", selectionId });
       void enqueueMutation(async () => {
         try {
@@ -248,7 +256,7 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [dispatch, enqueueMutation, protocol, runRevisioned, signal],
+    [currentSignal, dispatch, enqueueMutation, protocol, runRevisioned],
   );
 
   const openNote = useCallback(
@@ -261,6 +269,8 @@ export function useSelectionActions(options: {
 
   const saveNote = useCallback(
     (selectionId: string, note: string) => {
+      const signal = currentSignal();
+      signal.throwIfAborted();
       dispatch({ type: "noteSaveStarted", selectionId });
       void enqueueMutation(async () => {
         try {
@@ -288,11 +298,13 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [dispatch, enqueueMutation, protocol, runRevisioned, signal],
+    [currentSignal, dispatch, enqueueMutation, protocol, runRevisioned],
   );
 
   const deleteSelection = useCallback(
     (selection: Selection) => {
+      const signal = currentSignal();
+      signal.throwIfAborted();
       captureGeneration.delete(selection.id);
       dispatch({ type: "mutationStarted", selectionId: selection.id });
       void enqueueMutation(async () => {
@@ -319,10 +331,12 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [captureGeneration, dispatch, enqueueMutation, protocol, runRevisioned, signal],
+    [captureGeneration, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned],
   );
 
   const clearSelections = useCallback(() => {
+    const signal = currentSignal();
+    signal.throwIfAborted();
     captureGeneration.clear();
     dispatch({ type: "clearStarted" });
     void enqueueMutation(async () => {
@@ -353,10 +367,12 @@ export function useSelectionActions(options: {
         }
       }
     });
-  }, [captureGeneration, dispatch, enqueueMutation, protocol, runRevisioned, signal]);
+  }, [captureGeneration, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned]);
 
   const refreshSnapshot = useCallback(
     (selection: Selection) => {
+      const signal = currentSignal();
+      signal.throwIfAborted();
       const output = getOutputCell(selection.outputCellId)?.element;
       if (!output) {
         dispatch({ type: "announce", message: "Output unavailable." });
@@ -409,11 +425,13 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [captureSnapshot, dispatch, enqueueMutation, protocol, runRevisioned, signal, stateRef],
+    [captureSnapshot, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned, stateRef],
   );
 
   const repositionSelection = useCallback(
     (selection: Selection, anchor: SelectionAnchor) => {
+      const signal = currentSignal();
+      signal.throwIfAborted();
       const output = getOutputCell(selection.outputCellId)?.element;
       if (!output) {
         dispatch({ type: "announce", message: "Output unavailable." });
@@ -479,11 +497,13 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [captureSnapshot, dispatch, enqueueMutation, protocol, runRevisioned, signal, stateRef],
+    [captureSnapshot, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned, stateRef],
   );
 
   const copyContext = useCallback(
     async (format: ContextExportFormat) => {
+      const signal = currentSignal();
+      signal.throwIfAborted();
       const label = exportLabel(format);
       dispatch({ type: "exportStarted", message: `Preparing ${label}.` });
       try {
@@ -502,7 +522,7 @@ export function useSelectionActions(options: {
         });
       }
     },
-    [dispatch, mutationQueue, protocol, signal],
+    [currentSignal, dispatch, mutationQueue, protocol],
   );
 
   return {
@@ -516,6 +536,22 @@ export function useSelectionActions(options: {
     repositionSelection,
     copyContext,
   };
+}
+
+function useLifecycleSignal(): () => AbortSignal {
+  const controller = useRef<AbortController | null>(null);
+  if (controller.current === null) controller.current = new AbortController();
+
+  useEffect(() => {
+    if (controller.current?.signal.aborted) controller.current = new AbortController();
+    const active = controller.current;
+    return () => active?.abort();
+  }, []);
+
+  return useCallback(() => {
+    if (controller.current === null) throw new DOMException("Lens is inactive", "AbortError");
+    return controller.current.signal;
+  }, []);
 }
 
 function createSelectionId(): string {
