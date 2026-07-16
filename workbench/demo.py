@@ -9,7 +9,7 @@ def _(lens_fixture, mo):
     intro = mo.md("""
     # marimo-lens selection workbench
 
-    Create point and region selections with the Quiet Puck. Every fixture uses
+    Create point and region selections with the Lens dock. Every fixture uses
     the same output-cell path. The page covers text, tables, charts, canvas,
     SVG, layouts, scrollable and oversized outputs, media, iframes, and open
     shadow roots.
@@ -398,7 +398,7 @@ def _(lens_fixture, mo):
             mo.md("""
             ## Scrollable content
 
-            Scroll inside the list, then annotate a record near the bottom.
+            Scroll inside the list, then select a record near the bottom.
             """),
             scroll_content,
         ],

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 
 import type { RectAnchor, Selection, SelectionAnchor } from "@/contracts";
+import type { SnapshotAsset } from "@/protocol";
 import type { WorkflowState } from "@/state";
 
 import {
@@ -11,6 +12,7 @@ import {
   type ResizeHandle,
 } from "@/capture/anchor";
 import { getOutputCell } from "@/capture/output-root";
+import { SelectionPeek } from "@/components/selection-peek";
 import { previewAnchor } from "@/state";
 import { useViewportRevision } from "@/viewport";
 
@@ -21,6 +23,8 @@ type SelectionOverlayProps = {
   busySelectionIds: ReadonlySet<string>;
   capturingSelectionIds: ReadonlySet<string>;
   onActivate: (selection: Selection) => void;
+  onEditNote: (selection: Selection, motion: "animate" | "instant") => void;
+  loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>;
   onReposition: (selection: Selection, anchor: SelectionAnchor) => void;
   registerAdjustment: (cancel: AdjustmentCancel) => void;
   releaseAdjustment: (cancel: AdjustmentCancel) => void;
@@ -35,11 +39,29 @@ export function SelectionOverlay({
   busySelectionIds,
   capturingSelectionIds,
   onActivate,
+  onEditNote,
+  loadSnapshot,
   onReposition,
   registerAdjustment,
   releaseAdjustment,
 }: SelectionOverlayProps) {
   useViewportRevision();
+  const [peek, setPeek] = useState<{ selectionId: string; motion: "animate" | "instant" } | null>(
+    null,
+  );
+  const openPeek = useCallback(
+    (selectionId: string, motion: "animate" | "instant") => setPeek({ selectionId, motion }),
+    [],
+  );
+  const closePeek = useCallback((selectionId: string) => {
+    setPeek((current) => (current?.selectionId === selectionId ? null : current));
+  }, []);
+  const visiblePeek =
+    workflow.mode === "idle" &&
+    peek &&
+    selections.some((selection) => selection.id === peek.selectionId)
+      ? peek
+      : null;
   const activeCellId =
     workflow.mode === "armed"
       ? workflow.activeOutputCellId
@@ -82,7 +104,13 @@ export function SelectionOverlay({
             current={selection.id === currentSelectionId}
             busy={busySelectionIds.has(selection.id)}
             capturing={capturingSelectionIds.has(selection.id)}
+            peekOpen={visiblePeek?.selectionId === selection.id}
+            peekMotion={visiblePeek?.motion ?? "animate"}
             onActivate={onActivate}
+            onEditNote={onEditNote}
+            loadSnapshot={loadSnapshot}
+            onOpenPeek={openPeek}
+            onClosePeek={closePeek}
             onReposition={onReposition}
             registerAdjustment={registerAdjustment}
             releaseAdjustment={releaseAdjustment}
@@ -111,7 +139,13 @@ function SelectionMarker({
   current,
   busy,
   capturing,
+  peekOpen,
+  peekMotion,
   onActivate,
+  onEditNote,
+  loadSnapshot,
+  onOpenPeek,
+  onClosePeek,
   onReposition,
   registerAdjustment,
   releaseAdjustment,
@@ -121,7 +155,13 @@ function SelectionMarker({
   current: boolean;
   busy: boolean;
   capturing: boolean;
+  peekOpen: boolean;
+  peekMotion: "animate" | "instant";
   onActivate: (selection: Selection) => void;
+  onEditNote: (selection: Selection, motion: "animate" | "instant") => void;
+  loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>;
+  onOpenPeek: (selectionId: string, motion: "animate" | "instant") => void;
+  onClosePeek: (selectionId: string) => void;
   onReposition: (selection: Selection, anchor: SelectionAnchor) => void;
   registerAdjustment: (cancel: AdjustmentCancel) => void;
   releaseAdjustment: (cancel: AdjustmentCancel) => void;
@@ -134,15 +174,38 @@ function SelectionMarker({
     cancel: AdjustmentCancel;
   } | null>(null);
   const suppressPointerClick = useRef(false);
+  const peekOpenTimer = useRef<number | null>(null);
+  const peekCloseTimer = useRef<number | null>(null);
   const [preview, setPreview] = useState<SelectionAnchor | null>(null);
   const viewport = anchorToViewport(output, preview ?? selection.anchor);
+
+  const clearPeekTimers = () => {
+    if (peekOpenTimer.current !== null) window.clearTimeout(peekOpenTimer.current);
+    if (peekCloseTimer.current !== null) window.clearTimeout(peekCloseTimer.current);
+    peekOpenTimer.current = null;
+    peekCloseTimer.current = null;
+  };
+  const openPeekNow = (motion: "animate" | "instant") => {
+    clearPeekTimers();
+    onOpenPeek(selection.id, motion);
+  };
+  const schedulePeekOpen = () => {
+    clearPeekTimers();
+    peekOpenTimer.current = window.setTimeout(() => openPeekNow("animate"), 180);
+  };
+  const schedulePeekClose = () => {
+    clearPeekTimers();
+    peekCloseTimer.current = window.setTimeout(() => onClosePeek(selection.id), 120);
+  };
 
   useEffect(
     () => () => {
       const currentDrag = drag.current;
-      if (!currentDrag) return;
-      releaseAdjustment(currentDrag.cancel);
-      drag.current = null;
+      if (currentDrag) {
+        releaseAdjustment(currentDrag.cancel);
+        drag.current = null;
+      }
+      clearPeekTimers();
     },
     [releaseAdjustment],
   );
@@ -154,25 +217,39 @@ function SelectionMarker({
       data-current={current ? "true" : "false"}
       data-busy={busy ? "true" : "false"}
       data-capturing={capturing ? "true" : "false"}
+      data-marimo-lens-selection-cluster={selection.id}
       data-marimo-lens-selection-id={selection.id}
       style={selection.anchor.kind === "point" ? anchorStyle(viewport) : undefined}
       type="button"
       disabled={busy}
       aria-current={current ? "true" : undefined}
       aria-label={`${current ? "Current selection" : "Activate selection"} ${selection.label}. Drag to adjust.`}
-      onFocus={() => onActivate(selection)}
+      onPointerEnter={schedulePeekOpen}
+      onPointerLeave={schedulePeekClose}
+      onFocus={() => openPeekNow("instant")}
+      onBlur={(event) => {
+        const related = event.relatedTarget;
+        const cluster =
+          related instanceof Element
+            ? related.closest<HTMLElement>("[data-marimo-lens-selection-cluster]")
+            : null;
+        if (cluster?.dataset.marimoLensSelectionCluster === selection.id) return;
+        onClosePeek(selection.id);
+      }}
       onClick={(event) => {
-        if (event.detail === 0 && document.activeElement === event.currentTarget) return;
         if (event.detail > 0 && suppressPointerClick.current) {
           suppressPointerClick.current = false;
           return;
         }
         onActivate(selection);
+        openPeekNow(event.detail === 0 ? "instant" : "animate");
       }}
       onPointerDown={(event) => {
         if (event.button !== 0 || drag.current) return;
         event.preventDefault();
         event.stopPropagation();
+        clearPeekTimers();
+        onClosePeek(selection.id);
         onActivate(selection);
         event.currentTarget.setPointerCapture(event.pointerId);
         const target = event.currentTarget;
@@ -228,6 +305,8 @@ function SelectionMarker({
               event.clientY - currentDrag.startY,
             ),
           );
+        } else {
+          openPeekNow("animate");
         }
         setPreview(null);
       }}
@@ -242,34 +321,58 @@ function SelectionMarker({
     </button>
   );
 
+  const selectionPeek = peekOpen ? (
+    <SelectionPeek
+      selection={selection}
+      viewportAnchor={viewport}
+      capturing={capturing}
+      motion={peekMotion}
+      loadSnapshot={loadSnapshot}
+      onEditNote={onEditNote}
+      onClose={() => onClosePeek(selection.id)}
+      onPointerEnter={clearPeekTimers}
+      onPointerLeave={schedulePeekClose}
+    />
+  ) : null;
+
   const rectAnchor = selection.anchor;
-  if (rectAnchor.kind === "point" || viewport.kind === "point") return marker;
+  if (rectAnchor.kind === "point" || viewport.kind === "point") {
+    return (
+      <Fragment>
+        {marker}
+        {selectionPeek}
+      </Fragment>
+    );
+  }
 
   return (
-    <div
-      className="ml-rect-marker"
-      data-current={current ? "true" : "false"}
-      data-busy={busy ? "true" : "false"}
-      style={anchorStyle(viewport)}
-    >
-      {marker}
-      {current
-        ? RESIZE_HANDLES.map((handle) => (
-            <ResizeHandleButton
-              key={handle}
-              selection={selection}
-              anchor={rectAnchor}
-              output={output}
-              handle={handle}
-              disabled={busy}
-              onPreview={setPreview}
-              onCommit={(anchor) => onReposition(selection, anchor)}
-              registerAdjustment={registerAdjustment}
-              releaseAdjustment={releaseAdjustment}
-            />
-          ))
-        : null}
-    </div>
+    <Fragment>
+      <div
+        className="ml-rect-marker"
+        data-current={current ? "true" : "false"}
+        data-busy={busy ? "true" : "false"}
+        style={anchorStyle(viewport)}
+      >
+        {marker}
+        {current
+          ? RESIZE_HANDLES.map((handle) => (
+              <ResizeHandleButton
+                key={handle}
+                selection={selection}
+                anchor={rectAnchor}
+                output={output}
+                handle={handle}
+                disabled={busy}
+                onPreview={setPreview}
+                onCommit={(anchor) => onReposition(selection, anchor)}
+                registerAdjustment={registerAdjustment}
+                releaseAdjustment={releaseAdjustment}
+              />
+            ))
+          : null}
+      </div>
+      {selectionPeek}
+    </Fragment>
   );
 }
 

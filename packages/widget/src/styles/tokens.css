@@ -8,9 +8,6 @@
   --ml-primary-hover: #0b68cb;
   --ml-accent-foreground: #0b68cb;
   --ml-on-primary: #f8fafc;
-  --ml-dark: #252927;
-  --ml-on-dark: #eceeed;
-  --ml-on-dark-muted: #aab2af;
   --ml-destructive: var(--destructive, #ea5d5d);
   --ml-destructive-soft: #fef2f2;
   --ml-focus: var(--ring, #0880ea);

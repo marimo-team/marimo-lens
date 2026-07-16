@@ -1,39 +1,21 @@
-import {
-  AlertCircle,
-  Camera,
-  Check,
-  Clock3,
-  Copy,
-  Ellipsis,
-  LoaderCircle,
-  MessageSquare,
-  MousePointer2,
-  Pencil,
-  Trash2,
-  X,
-} from "lucide-react";
+import { MessageSquare, Pencil, Trash2, X } from "lucide-react";
 
 import type { Selection } from "@/contracts";
+import type { SnapshotAsset } from "@/protocol";
+import type { RevealMotion } from "@/reveal";
 
-export type ContextExportView =
-  | { status: "idle" }
-  | { status: "exporting" }
-  | { status: "success" }
-  | { status: "error"; message: string };
+import { SnapshotPreviewButton } from "@/components/selection-snapshot-preview";
 
 type SelectionListProps = {
   selections: Selection[];
   currentSelectionId: string | null;
   capturingSelectionIds: ReadonlySet<string>;
   busySelectionIds: ReadonlySet<string>;
-  exportState: ContextExportView;
   onClose: () => void;
-  onSelectMore: () => void;
-  onCopyContext: () => void;
-  onOpenMenu: () => void;
-  onActivate: (selection: Selection) => void;
-  onEditNote: (selection: Selection) => void;
+  onActivate: (selection: Selection, motion: RevealMotion) => void;
+  onEditNote: (selection: Selection, motion: "animate" | "instant") => void;
   onDelete: (selection: Selection) => void;
+  loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>;
 };
 
 export function SelectionList({
@@ -41,14 +23,11 @@ export function SelectionList({
   currentSelectionId,
   capturingSelectionIds,
   busySelectionIds,
-  exportState,
   onClose,
-  onSelectMore,
-  onCopyContext,
-  onOpenMenu,
   onActivate,
   onEditNote,
   onDelete,
+  loadSnapshot,
 }: SelectionListProps) {
   return (
     <section
@@ -79,6 +58,7 @@ export function SelectionList({
         {selections.map((selection) => {
           const current = selection.id === currentSelectionId;
           const busy = busySelectionIds.has(selection.id);
+          const kind = selection.anchor.kind === "point" ? "Point" : "Region";
           return (
             <li
               key={selection.id}
@@ -89,34 +69,41 @@ export function SelectionList({
                 className="ml-selection-list__summary"
                 type="button"
                 disabled={busy}
-                onFocus={() => onActivate(selection)}
-                onClick={(event) => {
-                  if (document.activeElement !== event.currentTarget) onActivate(selection);
-                }}
+                onClick={(event) =>
+                  onActivate(selection, event.detail === 0 ? "instant" : "smooth")
+                }
                 aria-current={current ? "true" : undefined}
-                aria-label={`${current ? "Current selection" : "Activate selection"} ${selection.label}, ${selection.note || "selected output"}, cell ${selection.outputCellId}`}
+                aria-label={`${current ? "Current selection" : "Activate selection"} ${selection.label}, ${selection.note || `cell ${selection.outputCellId}`}`}
               >
                 <span className="ml-label">{selection.label}</span>
                 <span className="ml-selection-list__copy">
-                  <strong>{selection.note || "Selected output"}</strong>
+                  <strong>{selection.note || `Cell ${selection.outputCellId}`}</strong>
                   <small>
-                    <span className="ml-code">{selection.outputCellId}</span>
-                    <span aria-hidden="true"> · </span>
-                    {selection.anchor.kind === "point" ? "Point" : "Region"}
+                    {selection.note ? (
+                      <>
+                        Cell <span className="ml-code">{selection.outputCellId}</span>
+                        <span aria-hidden="true"> · </span>
+                      </>
+                    ) : null}
+                    {kind}
                   </small>
-                  <SnapshotStatus
-                    selection={selection}
-                    capturing={capturingSelectionIds.has(selection.id)}
-                  />
                 </span>
-                {current ? <span className="ml-current-badge">Current</span> : null}
               </button>
               <div className="ml-selection-list__actions">
+                <SnapshotPreviewButton
+                  key={snapshotKey(selection)}
+                  selection={selection}
+                  capturing={capturingSelectionIds.has(selection.id)}
+                  variant="icon"
+                  loadSnapshot={loadSnapshot}
+                />
                 <button
                   className="ml-icon-button"
                   type="button"
                   disabled={busy}
-                  onClick={() => onEditNote(selection)}
+                  onClick={(event) =>
+                    onEditNote(selection, event.detail === 0 ? "instant" : "animate")
+                  }
                   aria-label={`${selection.note ? "Edit" : "Add"} note for ${selection.label}`}
                   title={selection.note ? "Edit note" : "Add note"}
                 >
@@ -141,93 +128,13 @@ export function SelectionList({
           );
         })}
       </ol>
-
-      <footer className="ml-sheet__footer">
-        <div className="ml-sheet__footer-actions">
-          <button className="ml-button ml-button--primary" type="button" onClick={onSelectMore}>
-            <MousePointer2 size={14} aria-hidden="true" /> Select more
-          </button>
-          <button
-            className="ml-button ml-button--secondary ml-copy-button"
-            type="button"
-            disabled={exportState.status === "exporting"}
-            onClick={onCopyContext}
-            title={exportState.status === "error" ? exportState.message : undefined}
-          >
-            <ContextExportIcon state={exportState} />
-            {contextExportLabel(exportState)}
-          </button>
-        </div>
-        <button
-          className="ml-icon-button"
-          type="button"
-          data-ml-menu
-          onClick={onOpenMenu}
-          aria-label="More selection actions"
-          aria-haspopup="menu"
-          aria-controls="marimo-lens-menu"
-        >
-          <Ellipsis size={17} aria-hidden="true" />
-        </button>
-      </footer>
     </section>
   );
 }
 
-function SnapshotStatus({ selection, capturing }: { selection: Selection; capturing: boolean }) {
-  if (capturing) {
-    return (
-      <span className="ml-snapshot-status" data-status="capturing">
-        <LoaderCircle className="ml-spin" size={12} aria-hidden="true" /> Preparing snapshot…
-      </span>
-    );
-  }
-
+function snapshotKey(selection: Selection): string {
   const snapshot = selection.snapshot;
-  switch (snapshot.status) {
-    case "outdated":
-      return (
-        <span className="ml-snapshot-status" data-status="outdated">
-          <Clock3 size={12} aria-hidden="true" /> Snapshot outdated
-        </span>
-      );
-    case "pending":
-      return (
-        <span className="ml-snapshot-status" data-status="capturing">
-          <LoaderCircle className="ml-spin" size={12} aria-hidden="true" /> Preparing snapshot…
-        </span>
-      );
-    case "available":
-      return (
-        <span className="ml-snapshot-status" data-status="ready">
-          <Camera size={12} aria-hidden="true" /> Snapshot ready
-        </span>
-      );
-    case "failed":
-      return (
-        <span className="ml-snapshot-status" data-status="failed">
-          <AlertCircle size={12} aria-hidden="true" /> Snapshot unavailable
-        </span>
-      );
-    default: {
-      const unreachable: never = snapshot;
-      return unreachable;
-    }
-  }
-}
-
-function ContextExportIcon({ state }: { state: ContextExportView }) {
-  if (state.status === "exporting") {
-    return <LoaderCircle className="ml-spin" size={14} aria-hidden="true" />;
-  }
-  if (state.status === "success") return <Check size={14} aria-hidden="true" />;
-  if (state.status === "error") return <AlertCircle size={14} aria-hidden="true" />;
-  return <Copy size={14} aria-hidden="true" />;
-}
-
-function contextExportLabel(state: ContextExportView): string {
-  if (state.status === "exporting") return "Preparing context…";
-  if (state.status === "success") return "Context copied";
-  if (state.status === "error") return "Copy failed";
-  return "Copy context";
+  return snapshot.status === "available" || snapshot.status === "outdated"
+    ? `${snapshot.id}:${snapshot.sha256}`
+    : `${selection.id}:${snapshot.status}`;
 }

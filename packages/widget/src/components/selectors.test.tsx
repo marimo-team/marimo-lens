@@ -53,6 +53,9 @@ describe("stable browser selectors", () => {
             onActivateSelection={onActivate}
             onEditNote={() => {}}
             onDeleteSelection={() => {}}
+            loadSnapshot={async () => {
+              throw new Error("Snapshot loading is not expected in this test");
+            }}
           />
           <SelectionNoteEditor
             selection={selection}
@@ -72,6 +75,10 @@ describe("stable browser selectors", () => {
             busySelectionIds={new Set()}
             capturingSelectionIds={new Set()}
             onActivate={onActivate}
+            onEditNote={() => {}}
+            loadSnapshot={async () => {
+              throw new Error("Snapshot loading is not expected in this test");
+            }}
             onReposition={() => {}}
             registerAdjustment={() => {}}
             releaseAdjustment={() => {}}

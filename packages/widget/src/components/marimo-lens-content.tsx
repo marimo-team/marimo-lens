@@ -11,6 +11,7 @@ import { SelectionOverlay, type AdjustmentCancel } from "@/components/selection-
 import { useDocumentInteractions } from "@/document-interactions";
 import { focusSelectionOrDock } from "@/focus";
 import { useLensModel } from "@/model";
+import { revealSelection } from "@/reveal";
 import { useSelectionActions } from "@/selection-actions";
 import { INITIAL_UI_STATE, locksCompetingInteractions, uiReducer } from "@/state";
 
@@ -21,9 +22,6 @@ export function MarimoLensContent() {
   const stateRef = useLatestCommitted(model.state);
   const canceledPointerIds = useRef(new Set<number>());
   const activeAdjustment = useRef<AdjustmentCancel | null>(null);
-  const seenPendingSelectionId = useRef<string | null>(null);
-  const receiptTimer = useRef<number | null>(null);
-  const [receiptSelectionId, setReceiptSelectionId] = useState<string | null>(null);
   const [lifecycle] = useState(() => new AbortController());
 
   const registerAdjustment = useCallback((cancel: AdjustmentCancel) => {
@@ -46,7 +44,6 @@ export function MarimoLensContent() {
       lifecycle.abort();
       activeAdjustment.current?.();
       activeAdjustment.current = null;
-      if (receiptTimer.current !== null) window.clearTimeout(receiptTimer.current);
     },
     [lifecycle],
   );
@@ -77,35 +74,22 @@ export function MarimoLensContent() {
   );
   const currentSelectionId = ui.optimisticCurrentSelectionId ?? model.state.currentSelectionId;
   const busySelectionIds = useMemo(() => new Set(ui.busySelectionIds), [ui.busySelectionIds]);
-  const capturingSelectionIds = useMemo(
-    () =>
-      new Set(
-        selections
-          .filter(({ snapshot }) => snapshot.status === "pending")
-          .map((selection) => selection.id),
-      ),
-    [selections],
-  );
+  const capturingSelectionIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const selection of selections) {
+      if (selection.snapshot.status === "pending") ids.add(selection.id);
+    }
+    return ids;
+  }, [selections]);
   const noteWorkflow = ui.workflow.mode === "editingNote" ? ui.workflow : null;
   const noteSelection = noteWorkflow
     ? (selections.find(({ id }) => id === noteWorkflow.selectionId) ?? null)
     : null;
-  const receiptSelection = receiptSelectionId
-    ? (selections.find(({ id }) => id === receiptSelectionId) ?? null)
-    : null;
   const interactionLocked = locksCompetingInteractions(ui);
-
-  const latestPending = ui.pendingSelections.at(-1)?.selection;
-  useEffect(() => {
-    if (!latestPending || latestPending.id === seenPendingSelectionId.current) return;
-    seenPendingSelectionId.current = latestPending.id;
-    setReceiptSelectionId(latestPending.id);
-    if (receiptTimer.current !== null) window.clearTimeout(receiptTimer.current);
-    receiptTimer.current = window.setTimeout(() => {
-      setReceiptSelectionId(null);
-      receiptTimer.current = null;
-    }, 4_000);
-  }, [latestPending]);
+  const loadSnapshot = useCallback(
+    (selectionId: string) => model.protocol.getSnapshot(selectionId),
+    [model.protocol],
+  );
 
   return (
     <>
@@ -121,7 +105,6 @@ export function MarimoLensContent() {
           capturingSelectionIds={capturingSelectionIds}
           busySelectionIds={busySelectionIds}
           interactionLocked={interactionLocked}
-          selectionReceipt={receiptSelection ? { selection: receiptSelection } : null}
           onToggleArmed={() =>
             dispatch(
               ui.workflow.mode === "armed" || ui.workflow.mode === "dragging"
@@ -133,9 +116,13 @@ export function MarimoLensContent() {
           onToggleMenu={() => dispatch({ type: "setMenuOpen", open: !ui.menuOpen })}
           onCopyContext={actions.copyContext}
           onClearSelections={actions.clearSelections}
-          onActivateSelection={(selection) => actions.activateSelection(selection.id)}
-          onEditNote={(selection) => actions.openNote(selection.id)}
+          onActivateSelection={(selection, motion) => {
+            revealSelection(selection, motion);
+            actions.activateSelection(selection.id);
+          }}
+          onEditNote={(selection, motion) => actions.openNote(selection.id, motion)}
           onDeleteSelection={actions.deleteSelection}
+          loadSnapshot={loadSnapshot}
         />
 
         <SelectionOverlay
@@ -147,6 +134,8 @@ export function MarimoLensContent() {
           registerAdjustment={registerAdjustment}
           releaseAdjustment={releaseAdjustment}
           onActivate={(selection) => actions.activateSelection(selection.id)}
+          onEditNote={(selection, motion) => actions.openNote(selection.id, motion)}
+          loadSnapshot={loadSnapshot}
           onReposition={actions.repositionSelection}
         />
 

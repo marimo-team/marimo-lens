@@ -68,7 +68,7 @@ describe("selection overlay", () => {
     expect(onActivate).toHaveBeenCalledWith(selection);
   });
 
-  test("makes a keyboard-focused marker current", () => {
+  test("opens marker actions on focus without changing the current selection", () => {
     setupOutput();
     const selection = selectionFixture();
     const onActivate = vi.fn();
@@ -78,8 +78,31 @@ describe("selection overlay", () => {
       '[data-marimo-lens-selection-id="selection-1"]',
     );
     act(() => marker?.focus());
-    expect(onActivate).toHaveBeenCalledOnce();
+    expect(onActivate).not.toHaveBeenCalled();
+    expect(
+      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
+    ).not.toBeNull();
+
+    act(() => marker?.click());
     expect(onActivate).toHaveBeenCalledWith(selection);
+  });
+
+  test("opens note editing next to a focused marker", () => {
+    setupOutput();
+    const selection = selectionFixture({ note: "" });
+    const onEditNote = vi.fn();
+    renderOverlay([selection], selection.id, { onEditNote });
+
+    const marker = document.querySelector<HTMLButtonElement>(
+      '[data-marimo-lens-selection-id="selection-1"]',
+    );
+    act(() => marker?.focus());
+    const addNote = Array.from(document.querySelectorAll("button")).find(
+      (button) => button.textContent === "Add note",
+    );
+    act(() => addNote?.click());
+
+    expect(onEditNote).toHaveBeenCalledWith(selection, "instant");
   });
 
   test("commits keyboard resizing once", () => {
@@ -137,6 +160,10 @@ function renderOverlay(
         busySelectionIds={new Set()}
         capturingSelectionIds={new Set()}
         onActivate={() => {}}
+        onEditNote={() => {}}
+        loadSnapshot={async () => {
+          throw new Error("Snapshot loading is not expected in this test");
+        }}
         onReposition={() => {}}
         registerAdjustment={() => {}}
         releaseAdjustment={() => {}}

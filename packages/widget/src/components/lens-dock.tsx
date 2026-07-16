@@ -1,11 +1,25 @@
-import { Check, Focus, MousePointer2, Trash2 } from "lucide-react";
-import { useLayoutEffect, useRef } from "react";
+import {
+  AlertCircle,
+  Aperture,
+  Check,
+  ChevronDown,
+  Copy,
+  Ellipsis,
+  FileText,
+  Files,
+  List,
+  LoaderCircle,
+  MousePointer2,
+  Trash2,
+} from "lucide-react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 
-import type { Selection } from "@/contracts";
+import type { ContextExportFormat, Selection } from "@/contracts";
+import type { SnapshotAsset } from "@/protocol";
+import type { RevealMotion } from "@/reveal";
+import type { ExportState } from "@/state";
 
-import { SelectionList, type ContextExportView } from "@/components/selection-list";
-
-export type SelectionReceipt = { selection: Selection } | null;
+import { SelectionList } from "@/components/selection-list";
 
 type LensDockProps = {
   selections: Selection[];
@@ -13,19 +27,19 @@ type LensDockProps = {
   armed: boolean;
   listOpen: boolean;
   menuOpen: boolean;
-  exportState: ContextExportView;
+  exportState: ExportState;
   capturingSelectionIds: ReadonlySet<string>;
   busySelectionIds: ReadonlySet<string>;
   interactionLocked: boolean;
-  selectionReceipt?: SelectionReceipt;
   onToggleArmed: () => void;
   onToggleList: () => void;
   onToggleMenu: () => void;
-  onCopyContext: () => void;
+  onCopyContext: (format: ContextExportFormat) => void;
   onClearSelections: () => void;
-  onActivateSelection: (selection: Selection) => void;
-  onEditNote: (selection: Selection) => void;
+  onActivateSelection: (selection: Selection, motion: RevealMotion) => void;
+  onEditNote: (selection: Selection, motion: "animate" | "instant") => void;
   onDeleteSelection: (selection: Selection) => void;
+  loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>;
 };
 
 export function LensDock({
@@ -38,7 +52,6 @@ export function LensDock({
   capturingSelectionIds,
   busySelectionIds,
   interactionLocked,
-  selectionReceipt = null,
   onToggleArmed,
   onToggleList,
   onToggleMenu,
@@ -47,14 +60,19 @@ export function LensDock({
   onActivateSelection,
   onEditNote,
   onDeleteSelection,
+  loadSnapshot,
 }: LensDockProps) {
   const dockRef = useRef<HTMLElement>(null);
+  const tabRef = useRef<HTMLButtonElement>(null);
   const listTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const [expanded, setExpanded] = useState(true);
   const hasSelections = selections.length > 0;
+  const commandsDisabled = interactionLocked || armed;
 
   useLayoutEffect(() => {
     const selector = listOpen
-      ? "[data-marimo-lens-selection-list] button:not(:disabled)"
+      ? '[data-marimo-lens-selection-list] [aria-current="true"], [data-marimo-lens-selection-list] .ml-selection-list__summary'
       : menuOpen
         ? "[data-marimo-lens-menu] button:not(:disabled)"
         : null;
@@ -66,46 +84,75 @@ export function LensDock({
     window.requestAnimationFrame(() => listTriggerRef.current?.focus());
   };
 
-  const beginSelecting = () => {
+  const closeMenu = () => {
+    onToggleMenu();
+    window.requestAnimationFrame(() => menuTriggerRef.current?.focus());
+  };
+
+  const collapse = () => {
     if (listOpen) onToggleList();
-    onToggleArmed();
+    if (menuOpen) onToggleMenu();
+    if (armed) onToggleArmed();
+    setExpanded(false);
+    window.requestAnimationFrame(() => tabRef.current?.focus());
+  };
+
+  const runMenuExport = (format: ContextExportFormat) => {
+    onCopyContext(format);
+    closeMenu();
   };
 
   return (
     <aside
       ref={dockRef}
       className="ml-dock"
+      data-expanded={expanded ? "true" : "false"}
       data-marimo-lens-dock
       data-marimo-lens-ui
       aria-label="Marimo Lens"
     >
-      {listOpen ? (
+      {expanded && listOpen ? (
         <SelectionList
           selections={selections}
           currentSelectionId={currentSelectionId}
           capturingSelectionIds={capturingSelectionIds}
           busySelectionIds={busySelectionIds}
-          exportState={exportState}
           onClose={closeList}
-          onSelectMore={beginSelecting}
-          onCopyContext={onCopyContext}
-          onOpenMenu={onToggleMenu}
           onActivate={onActivateSelection}
           onEditNote={onEditNote}
           onDelete={onDeleteSelection}
+          loadSnapshot={loadSnapshot}
         />
       ) : null}
 
-      {menuOpen ? (
+      {expanded && menuOpen ? (
         <div
           id="marimo-lens-menu"
           className="ml-menu"
           data-marimo-lens-menu
           data-marimo-lens-ui
           role="menu"
-          aria-label="Selection actions"
+          aria-label="Lens actions"
         >
           <button
+            type="button"
+            role="menuitem"
+            disabled={!hasSelections || exportState.status === "exporting"}
+            onClick={() => runMenuExport("references")}
+          >
+            <Files size={14} aria-hidden="true" /> Copy all references
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            disabled={!hasSelections || exportState.status === "exporting"}
+            onClick={() => runMenuExport("text")}
+          >
+            <FileText size={14} aria-hidden="true" /> Copy standalone text
+          </button>
+          <hr className="ml-menu__separator" />
+          <button
+            className="ml-menu__danger"
             type="button"
             role="menuitem"
             disabled={!hasSelections || busySelectionIds.size > 0 || interactionLocked}
@@ -116,61 +163,112 @@ export function LensDock({
         </div>
       ) : null}
 
-      {selectionReceipt && !listOpen && !armed ? (
-        <div className="ml-selection-receipt" data-marimo-lens-selection-receipt>
-          <output aria-live="polite" aria-atomic="true">
-            <Check size={14} aria-hidden="true" /> {selectionReceipt.selection.label} selected
-          </output>
-          <button type="button" onClick={() => onEditNote(selectionReceipt.selection)}>
-            Add note
+      {expanded ? (
+        <div className="ml-dockbar" data-armed={armed ? "true" : "false"}>
+          <button
+            className="ml-dockbar__action ml-dockbar__select"
+            type="button"
+            aria-pressed={armed}
+            data-ml-select
+            disabled={interactionLocked}
+            onClick={onToggleArmed}
+            aria-label={armed ? "Cancel selection mode" : "Select an output"}
+          >
+            <MousePointer2 size={15} aria-hidden="true" />
+            <span>{armed ? "Click or drag" : "Select"}</span>
+            {armed ? <kbd>ESC</kbd> : null}
+          </button>
+
+          {hasSelections ? (
+            <Fragment>
+              <span className="ml-dockbar__separator" aria-hidden="true" />
+              <button
+                ref={listTriggerRef}
+                className="ml-dockbar__action ml-dockbar__selections"
+                type="button"
+                data-ml-list
+                disabled={commandsDisabled}
+                onClick={onToggleList}
+                aria-expanded={listOpen}
+                aria-controls="marimo-lens-selection-list"
+                aria-label={`Open ${selections.length} ${selections.length === 1 ? "selection" : "selections"}`}
+                title="Selections"
+              >
+                <List size={15} aria-hidden="true" />
+                <span className="ml-dockbar__count">{selections.length}</span>
+              </button>
+              <button
+                className="ml-dockbar__action ml-dockbar__copy"
+                type="button"
+                disabled={
+                  commandsDisabled || !currentSelectionId || exportState.status === "exporting"
+                }
+                onClick={() => onCopyContext("current")}
+                title={
+                  exportState.status === "error" ? exportState.message : "Copy current reference"
+                }
+              >
+                <ContextExportIcon state={exportState} />
+                <span>{contextExportLabel(exportState)}</span>
+              </button>
+              <button
+                ref={menuTriggerRef}
+                className="ml-dockbar__action ml-dockbar__icon"
+                type="button"
+                data-ml-menu
+                disabled={commandsDisabled}
+                onClick={onToggleMenu}
+                aria-label="More Lens actions"
+                aria-haspopup="menu"
+                aria-expanded={menuOpen}
+                aria-controls="marimo-lens-menu"
+                title="More actions"
+              >
+                <Ellipsis size={16} aria-hidden="true" />
+              </button>
+            </Fragment>
+          ) : null}
+
+          <span className="ml-dockbar__separator" aria-hidden="true" />
+          <button
+            className="ml-dockbar__action ml-dockbar__icon"
+            type="button"
+            onClick={collapse}
+            aria-label="Collapse Lens"
+            title="Collapse Lens"
+          >
+            <ChevronDown size={16} aria-hidden="true" />
           </button>
         </div>
-      ) : null}
-
-      <div
-        className="ml-puck"
-        data-empty={hasSelections ? "false" : "true"}
-        data-armed={armed ? "true" : "false"}
-      >
+      ) : (
         <button
-          className="ml-puck__select"
+          ref={tabRef}
+          className="ml-dock-tab"
           type="button"
-          aria-pressed={armed}
-          data-ml-select
-          disabled={interactionLocked}
-          onClick={onToggleArmed}
-          aria-label={armed ? "Cancel selection mode" : hasSelections ? "Select more" : "Select"}
+          onClick={() => setExpanded(true)}
+          aria-label="Open Lens"
+          title="Open Lens"
         >
-          {armed ? (
-            <MousePointer2 className="ml-puck__armed-icon" size={15} aria-hidden="true" />
-          ) : hasSelections ? (
-            <Focus size={15} aria-hidden="true" />
-          ) : (
-            <MousePointer2 className="ml-puck__empty-icon" size={15} aria-hidden="true" />
-          )}
-          <span className="ml-puck__label">
-            {armed ? "Click or drag" : hasSelections ? "Select more" : "Select"}
-          </span>
-          {armed ? <kbd>ESC</kbd> : null}
+          <Aperture size={17} aria-hidden="true" />
+          {hasSelections ? <span>{selections.length}</span> : null}
         </button>
-
-        {hasSelections && !armed ? (
-          <button
-            ref={listTriggerRef}
-            className="ml-puck__count"
-            type="button"
-            data-ml-list
-            data-ml-menu
-            disabled={interactionLocked}
-            onClick={onToggleList}
-            aria-expanded={listOpen}
-            aria-controls="marimo-lens-selection-list"
-            aria-label={`Open ${selections.length} ${selections.length === 1 ? "selection" : "selections"}`}
-          >
-            <span>{selections.length}</span>
-          </button>
-        ) : null}
-      </div>
+      )}
     </aside>
   );
+}
+
+function ContextExportIcon({ state }: { state: ExportState }) {
+  if (state.status === "exporting") {
+    return <LoaderCircle className="ml-spin" size={14} aria-hidden="true" />;
+  }
+  if (state.status === "success") return <Check size={14} aria-hidden="true" />;
+  if (state.status === "error") return <AlertCircle size={14} aria-hidden="true" />;
+  return <Copy size={14} aria-hidden="true" />;
+}
+
+function contextExportLabel(state: ExportState): string {
+  if (state.status === "exporting") return "Copying…";
+  if (state.status === "success") return "Copied";
+  if (state.status === "error") return "Retry";
+  return "Copy";
 }

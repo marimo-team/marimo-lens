@@ -179,6 +179,28 @@ describe("selection mutations", () => {
     expect(stateRef.current.selections[0]?.snapshot.status).toBe("outdated");
     expect(latestUi?.announcement).toBe("Snapshot refresh failed. Previous snapshot retained.");
   });
+
+  test("copies the requested context projection", async () => {
+    const stateRef = { current: lensState() };
+    const exportContext = vi.fn(async (format: string) => `context:${format}`);
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    const protocol = {
+      putSelection: vi.fn(),
+      activateSelection: vi.fn(),
+      deleteSelection: vi.fn(),
+      clearSelections: vi.fn(),
+      exportContext,
+    } as unknown as LensProtocolClient;
+    mount(stateRef, protocol);
+
+    await act(async () => actions?.copyContext("current"));
+
+    expect(exportContext).toHaveBeenCalledWith("current");
+    expect(writeText).toHaveBeenCalledWith("context:current");
+    expect(latestUi?.export).toEqual({ status: "success" });
+    expect(latestUi?.announcement).toBe("Current reference copied.");
+  });
 });
 
 function mount(stateRef: { current: LensState }, protocol: LensProtocolClient): void {

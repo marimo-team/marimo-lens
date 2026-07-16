@@ -14,16 +14,24 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("quiet Lens puck", () => {
-  test("starts as a compact labeled Select action", () => {
+describe("Lens dock", () => {
+  test("starts with an explicit Select action and a latched collapse control", () => {
     renderDock({ selections: [] });
 
     expect(document.querySelector("[data-ml-select]")?.textContent).toBe("Select");
     expect(document.querySelector("[data-ml-list]")).toBeNull();
-    expect(document.querySelector("[data-marimo-lens-selection-list]")).toBeNull();
+
+    act(() => findButton("Collapse Lens")?.click());
+    expect(findButton("Open Lens")).not.toBeNull();
+    act(() => {
+      findButton("Open Lens")?.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }));
+    });
+    expect(findButton("Open Lens")).not.toBeNull();
+    act(() => findButton("Open Lens")?.click());
+    expect(document.querySelector("[data-ml-select]")).not.toBeNull();
   });
 
-  test("opens the selection sheet and restores focus to the count", () => {
+  test("opens the selection sheet and restores focus to its trigger", () => {
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
@@ -35,36 +43,15 @@ describe("quiet Lens puck", () => {
 
     const listTrigger = document.querySelector<HTMLButtonElement>("[data-ml-list]")!;
     act(() => listTrigger.click());
-    expect(document.activeElement?.closest("[data-marimo-lens-selection-list]")).not.toBeNull();
-    expect(document.querySelector('[aria-current="true"]')?.textContent).toContain(
-      "Selected output",
-    );
+    expect(document.activeElement?.classList.contains("ml-selection-list__summary")).toBe(true);
+    expect(document.querySelector('[aria-current="true"]')?.textContent).toContain("Cell cell-1");
 
-    const close = document.querySelector<HTMLButtonElement>(
-      '[data-marimo-lens-selection-list] [aria-label="Close selections"]',
-    )!;
+    const close = findButton("Close selections")!;
     act(() => close.click());
     expect(document.activeElement).toBe(listTrigger);
   });
 
-  test("offers note editing after selection creation", () => {
-    const selection = selectionFixture({ note: "" });
-    const onEditNote = vi.fn();
-    renderDock({
-      selections: [selection],
-      currentSelectionId: selection.id,
-      selectionReceipt: { selection },
-      onEditNote,
-    });
-
-    const addNote = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-      (button) => button.textContent === "Add note",
-    );
-    act(() => addNote?.click());
-    expect(onEditNote).toHaveBeenCalledWith(selection);
-  });
-
-  test("shows one-shot selection mode and its escape hint", () => {
+  test("keeps one-shot selection mode within a stable action slot", () => {
     renderDock({ armed: true });
 
     const select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
@@ -73,7 +60,7 @@ describe("quiet Lens puck", () => {
     expect(select.textContent).toContain("ESC");
   });
 
-  test("makes a keyboard-focused selection row current", () => {
+  test("focuses rows without activation and activates through an explicit command", () => {
     const first = selectionFixture();
     const second = selectionFixture({ id: "selection-2", label: "S2" });
     const onActivateSelection = vi.fn();
@@ -86,10 +73,27 @@ describe("quiet Lens puck", () => {
 
     const secondRow = document.querySelector<HTMLButtonElement>(
       '[aria-label^="Activate selection S2"]',
-    );
-    act(() => secondRow?.focus());
-    expect(onActivateSelection).toHaveBeenCalledOnce();
-    expect(onActivateSelection).toHaveBeenCalledWith(second);
+    )!;
+    act(() => secondRow.focus());
+    expect(onActivateSelection).not.toHaveBeenCalled();
+    act(() => secondRow.click());
+    expect(onActivateSelection).toHaveBeenCalledWith(second, "instant");
+  });
+
+  test("copies the current reference directly and keeps expanded formats in the menu", () => {
+    const onCopyContext = vi.fn();
+    renderDock({
+      selections: [selectionFixture()],
+      currentSelectionId: "selection-1",
+      menuOpen: true,
+      onCopyContext,
+    });
+
+    act(() => document.querySelector<HTMLButtonElement>(".ml-dockbar__copy")?.click());
+    expect(onCopyContext).toHaveBeenCalledWith("current");
+
+    act(() => findButton("Copy all references")?.click());
+    expect(onCopyContext).toHaveBeenLastCalledWith("references");
   });
 });
 
@@ -141,5 +145,17 @@ function defaultProps(): React.ComponentProps<typeof LensDock> {
     onActivateSelection: () => {},
     onEditNote: () => {},
     onDeleteSelection: () => {},
+    loadSnapshot: async () => {
+      throw new Error("Snapshot fixture unavailable");
+    },
   };
+}
+
+function findButton(label: string): HTMLButtonElement | null {
+  return (
+    Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) =>
+        button.textContent?.trim() === label || button.getAttribute("aria-label") === label,
+    ) ?? null
+  );
 }

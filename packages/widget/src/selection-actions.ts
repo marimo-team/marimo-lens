@@ -1,6 +1,13 @@
-import { useCallback, useRef, type Dispatch, type RefObject } from "react";
+import { useCallback, useState, type Dispatch, type RefObject } from "react";
 
-import type { ImageAction, LensResponse, LensState, Selection, SelectionAnchor } from "@/contracts";
+import type {
+  ContextExportFormat,
+  ImageAction,
+  LensResponse,
+  LensState,
+  Selection,
+  SelectionAnchor,
+} from "@/contracts";
 import type { LensProtocolClient } from "@/protocol";
 import type { SelectionMotion, UiAction } from "@/state";
 
@@ -21,17 +28,20 @@ export function useSelectionActions(options: {
   signal: AbortSignal;
 }) {
   const { stateRef, dispatch, protocol, signal } = options;
-  const mutationTail = useRef<Promise<void>>(Promise.resolve());
-  const captureGeneration = useRef(new Map<string, number>());
+  const [mutationQueue] = useState(() => ({ tail: Promise.resolve() }));
+  const [captureGeneration] = useState(() => new Map<string, number>());
 
-  const enqueueMutation = useCallback(<T>(mutation: () => Promise<T>): Promise<T> => {
-    const result = mutationTail.current.then(mutation, mutation);
-    mutationTail.current = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
-  }, []);
+  const enqueueMutation = useCallback(
+    <T>(mutation: () => Promise<T>): Promise<T> => {
+      const result = mutationQueue.tail.then(mutation, mutation);
+      mutationQueue.tail = result.then(
+        () => undefined,
+        () => undefined,
+      );
+      return result;
+    },
+    [mutationQueue],
+  );
 
   const runRevisioned = useCallback(
     async (
@@ -82,7 +92,7 @@ export function useSelectionActions(options: {
       generation: number,
       result: Awaited<ReturnType<typeof captureSelectionSnapshot>>,
     ) => {
-      if (captureGeneration.current.get(selectionId) !== generation) return;
+      if (captureGeneration.get(selectionId) !== generation) return;
       await enqueueMutation(async () => {
         let retainedOutdated = false;
         const snapshot = result.status === "available" ? result.snapshot.metadata : result.snapshot;
@@ -113,7 +123,7 @@ export function useSelectionActions(options: {
             );
           },
         );
-        if (!signal.aborted && captureGeneration.current.get(selectionId) === generation) {
+        if (!signal.aborted && captureGeneration.get(selectionId) === generation) {
           dispatch({
             type: "announce",
             message:
@@ -126,13 +136,13 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [dispatch, enqueueMutation, protocol, runRevisioned, signal],
+    [captureGeneration, dispatch, enqueueMutation, protocol, runRevisioned, signal],
   );
 
   const captureSnapshot = useCallback(
     async (selection: Selection, output: HTMLElement, detailElement: Element) => {
-      const generation = (captureGeneration.current.get(selection.id) ?? 0) + 1;
-      captureGeneration.current.set(selection.id, generation);
+      const generation = (captureGeneration.get(selection.id) ?? 0) + 1;
+      captureGeneration.set(selection.id, generation);
       const result = await captureSelectionSnapshot({
         selectionId: selection.id,
         label: selection.label,
@@ -144,7 +154,7 @@ export function useSelectionActions(options: {
       signal.throwIfAborted();
       await commitSnapshot(selection.id, selection.anchor, generation, result);
     },
-    [commitSnapshot, signal],
+    [captureGeneration, commitSnapshot, signal],
   );
 
   const beginSelection = useCallback(
@@ -283,7 +293,7 @@ export function useSelectionActions(options: {
 
   const deleteSelection = useCallback(
     (selection: Selection) => {
-      captureGeneration.current.delete(selection.id);
+      captureGeneration.delete(selection.id);
       dispatch({ type: "mutationStarted", selectionId: selection.id });
       void enqueueMutation(async () => {
         try {
@@ -309,11 +319,11 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [dispatch, enqueueMutation, protocol, runRevisioned, signal],
+    [captureGeneration, dispatch, enqueueMutation, protocol, runRevisioned, signal],
   );
 
   const clearSelections = useCallback(() => {
-    captureGeneration.current.clear();
+    captureGeneration.clear();
     dispatch({ type: "clearStarted" });
     void enqueueMutation(async () => {
       let cleared = false;
@@ -343,7 +353,7 @@ export function useSelectionActions(options: {
         }
       }
     });
-  }, [dispatch, enqueueMutation, protocol, runRevisioned, signal]);
+  }, [captureGeneration, dispatch, enqueueMutation, protocol, runRevisioned, signal]);
 
   const refreshSnapshot = useCallback(
     (selection: Selection) => {
@@ -472,24 +482,28 @@ export function useSelectionActions(options: {
     [captureSnapshot, dispatch, enqueueMutation, protocol, runRevisioned, signal, stateRef],
   );
 
-  const copyContext = useCallback(async () => {
-    dispatch({ type: "exportStarted" });
-    try {
-      await mutationTail.current;
-      signal.throwIfAborted();
-      const context = await protocol.exportContext();
-      signal.throwIfAborted();
-      await copyText(context);
-      signal.throwIfAborted();
-      dispatch({ type: "exportSucceeded" });
-    } catch (error) {
-      if (signal.aborted || isAbortError(error)) return;
-      dispatch({
-        type: "exportFailed",
-        message: errorMessage(error, "Context could not be copied"),
-      });
-    }
-  }, [dispatch, protocol, signal]);
+  const copyContext = useCallback(
+    async (format: ContextExportFormat) => {
+      const label = exportLabel(format);
+      dispatch({ type: "exportStarted", message: `Preparing ${label}.` });
+      try {
+        await mutationQueue.tail;
+        signal.throwIfAborted();
+        const context = await protocol.exportContext(format);
+        signal.throwIfAborted();
+        await copyText(context);
+        signal.throwIfAborted();
+        dispatch({ type: "exportSucceeded", message: `${sentenceCase(label)} copied.` });
+      } catch (error) {
+        if (signal.aborted || isAbortError(error)) return;
+        dispatch({
+          type: "exportFailed",
+          message: errorMessage(error, "Context could not be copied"),
+        });
+      }
+    },
+    [dispatch, mutationQueue, protocol, signal],
+  );
 
   return {
     beginSelection,
@@ -557,4 +571,14 @@ function errorMessage(error: unknown, fallback: string): string {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+function exportLabel(format: ContextExportFormat): string {
+  if (format === "current") return "current reference";
+  if (format === "references") return "selection references";
+  return "standalone context";
+}
+
+function sentenceCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }

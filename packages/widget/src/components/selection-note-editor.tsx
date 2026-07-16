@@ -63,7 +63,9 @@ export function SelectionNoteEditor({
         <div className="ml-note-editor__identity">
           <h2 id={headingId}>{title}</h2>
           <span>
-            Selected output · <span className="ml-code">{selection.outputCellId}</span>
+            Cell <span className="ml-code">{selection.outputCellId}</span>
+            <span aria-hidden="true"> · </span>
+            {selection.anchor.kind === "point" ? "Point" : "Region"}
           </span>
         </div>
         <button
@@ -86,8 +88,8 @@ export function SelectionNoteEditor({
         className="ml-note-editor__input"
         value={note}
         maxLength={4_000}
-        rows={4}
-        placeholder="Add a note to this selection (optional)"
+        rows={3}
+        placeholder="Add context for this selection"
         disabled={mutationPending}
         aria-invalid={saveError ? "true" : undefined}
         aria-describedby={saveError ? errorId : undefined}

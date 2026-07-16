@@ -70,8 +70,8 @@ export type UiAction =
   | { type: "clearFinished" }
   | { type: "setListOpen"; open: boolean }
   | { type: "setMenuOpen"; open: boolean }
-  | { type: "exportStarted" }
-  | { type: "exportSucceeded" }
+  | { type: "exportStarted"; message: string }
+  | { type: "exportSucceeded"; message: string }
   | { type: "exportFailed"; message: string }
   | { type: "announce"; message: string };
 
@@ -250,13 +250,13 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       return {
         ...state,
         export: { status: "exporting" },
-        announcement: "Preparing context.",
+        announcement: action.message,
       };
     case "exportSucceeded":
       return {
         ...state,
         export: { status: "success" },
-        announcement: "Context copied.",
+        announcement: action.message,
       };
     case "exportFailed":
       return {
