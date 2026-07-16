@@ -21,9 +21,6 @@ catalogs:
     '@types/react-dom':
       specifier: ^19.2.3
       version: 19.2.3
-    es-module-lexer:
-      specifier: ^2.3.1
-      version: 2.3.1
     html-to-image:
       specifier: 1.11.13
       version: 1.11.13
@@ -72,36 +69,8 @@ importers:
         specifier: 'catalog:'
         version: 0.2.4(@types/node@22.20.1)(@voidzero-dev/vite-plus-core@0.2.4(@types/node@22.20.1)(typescript@6.0.3))(jsdom@29.1.1)(typescript@6.0.3)
 
-  packages/anywidget-bundle:
-    dependencies:
-      '@anywidget/types':
-        specifier: 'catalog:'
-        version: 0.4.0
-      es-module-lexer:
-        specifier: 'catalog:'
-        version: 2.3.1
-    devDependencies:
-      '@types/node':
-        specifier: 'catalog:'
-        version: 22.20.1
-      jsdom:
-        specifier: 'catalog:'
-        version: 29.1.1
-      typescript:
-        specifier: 'catalog:'
-        version: 6.0.3
-      vite:
-        specifier: npm:@voidzero-dev/vite-plus-core@0.2.4
-        version: '@voidzero-dev/vite-plus-core@0.2.4(@types/node@22.20.1)(typescript@6.0.3)'
-      vite-plus:
-        specifier: 'catalog:'
-        version: 0.2.4(@types/node@22.20.1)(@voidzero-dev/vite-plus-core@0.2.4(@types/node@22.20.1)(typescript@6.0.3))(jsdom@29.1.1)(typescript@6.0.3)
-
   packages/marimo-lens:
     dependencies:
-      '@marimo-lens/anywidget-bundle':
-        specifier: workspace:*
-        version: link:../anywidget-bundle
       '@marimo-lens/widget':
         specifier: workspace:*
         version: link:../widget
@@ -109,6 +78,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
+      anywidget-bundle:
+        specifier: 0.0.1
+        version: 0.0.1(@voidzero-dev/vite-plus-core@0.2.4(@types/node@22.20.1)(typescript@6.0.3))
       vite:
         specifier: npm:@voidzero-dev/vite-plus-core@0.2.4
         version: '@voidzero-dev/vite-plus-core@0.2.4(@types/node@22.20.1)(typescript@6.0.3)'
@@ -736,6 +708,12 @@ packages:
   ansi-styles@5.2.0:
     resolution: {integrity: sha512-Cxwpt2SfTzTtXcfOlzGEee8O+c+MmUgGrNiBcXnuWxuFJHe6a5Hz7qwhwe5OgaSYI0IJvkLqWX1ASG+cJOkEiA==}
     engines: {node: '>=10'}
+
+  anywidget-bundle@0.0.1:
+    resolution: {integrity: sha512-iSYtIOWFd8b6bKrRPlutQpxgmUWMg0LlSExDdJ5wmSgyngQCbdN07RsAvcPQm8WZXVySqbQOzXvWbBaN0jRb0w==}
+    engines: {node: '>=20.19.0'}
+    peerDependencies:
+      vite: '>=8 || ^0.2.4'
 
   aria-query@5.3.0:
     resolution: {integrity: sha512-b0P0sZPKtyu8HkeRAfCq0IfURZK+SuwMjY1UXGBU27wpAiTwQAIlq56IbIO+ytk/JjS1fMR14ee5WBBfKi5J6A==}
@@ -1553,6 +1531,12 @@ snapshots:
   ansi-regex@5.0.1: {}
 
   ansi-styles@5.2.0: {}
+
+  anywidget-bundle@0.0.1(@voidzero-dev/vite-plus-core@0.2.4(@types/node@22.20.1)(typescript@6.0.3)):
+    dependencies:
+      '@anywidget/types': 0.4.0
+      es-module-lexer: 2.3.1
+      vite: '@voidzero-dev/vite-plus-core@0.2.4(@types/node@22.20.1)(typescript@6.0.3)'
 
   aria-query@5.3.0:
     dependencies:

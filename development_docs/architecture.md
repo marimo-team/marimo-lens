@@ -8,19 +8,18 @@ marimo DAG context, and context export.
 ## Package graph
 
 ```text
-@marimo-lens/anywidget-bundle
-          |
-          +-------------------+
-                              v
+anywidget-bundle npm ----+
+                         v
 @marimo-lens/widget --> @marimo-lens/python --> PyPI marimo-lens
-                                                 |
-                                                 v
+                         ^                       |
+anywidget-bundle PyPI ---+                       v
                                            marimo notebook
 ```
 
-`@marimo-lens/anywidget-bundle` is product-agnostic. It emits the manifest,
-bootstrap, app module, chunks, and stylesheet. It owns module loading, custom
-message transport for bundle resources, Blob URL cleanup, and development HMR.
+The npm `anywidget-bundle` package emits the manifest, bootstrap, app module,
+chunks, and stylesheet. The PyPI package loads those artifacts and serves
+manifest modules. Together they own module loading, bundle resource messages,
+Blob URL cleanup, and development HMR.
 
 `@marimo-lens/widget` is the browser application. It resolves the canonical
 `output-<cell-id>` root, records a point or rectangle, commits the selection,

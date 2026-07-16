@@ -58,7 +58,7 @@ def test_public_api_has_one_constructor_and_one_context_operation() -> None:
         "currentSelectionId": None,
         "selections": [],
     }
-    assert lens._lens_css == lens._css
+    assert lens._lens_css == lens.bundle.read_style()
 
 
 def test_pointer_release_selection_exists_before_image_capture() -> None:

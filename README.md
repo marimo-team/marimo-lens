@@ -106,7 +106,7 @@ pnpm dev
 Run the workbench in another shell:
 
 ```sh
-MARIMO_LENS_VITE_DEV_SERVER=http://127.0.0.1:5173 \
+MARIMO_LENS_VITE_DEV_SERVER=http://localhost:5173 \
   uv run --all-packages --group workbench \
   marimo run workbench/demo.py --port 28889 --headless
 ```

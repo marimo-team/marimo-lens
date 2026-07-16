@@ -17,6 +17,9 @@ resolution-markers = [
 exclude-newer = "0001-01-01T00:00:00Z" # This has no effect and is included for backwards compatibility when using relative exclude-newer values.
 exclude-newer-span = "P3D"
 
+[options.exclude-newer-package]
+anywidget-bundle = "2026-07-15T17:43:30Z"
+
 [manifest]
 members = [
     "marimo-lens",
@@ -89,6 +92,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/79/31/0491d707c674b34267f55d96d6a7148e55e7b6718a271686232cf295fbe2/anywidget-0.11.0.tar.gz", hash = "sha256:6695fbef9449cf8c27f421b96c5837aa37f909ec1f60cfa33add333e1b70b169", size = 426999, upload-time = "2026-04-27T23:42:09.576Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/8e/c2/8fec8e8e2eb920cc2280f569144080cd58622a2eda83bfa4c0c354a63264/anywidget-0.11.0-py3-none-any.whl", hash = "sha256:c574d9acc6503ad27b37a9acea48f957a8ba7c9c9876cfcb37898931c098ce9d", size = 317341, upload-time = "2026-04-27T23:42:08.356Z" },
+]
+
+[[package]]
+name = "anywidget-bundle"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anywidget" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b2/49/76f48fe3a92dd99a24b6831bba886a3589ebe09244713a93e2e0e11655cd/anywidget_bundle-0.0.1.tar.gz", hash = "sha256:963919d080fa5e0386d9d4b0e4b039331c2cca6894539c48b21302f16cb61303", size = 6283, upload-time = "2026-07-15T17:43:29.836Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/39/b2/a9b7d786f77f19d8e4cde92fdb34c810146b5d2c5be282695c11c77fc350/anywidget_bundle-0.0.1-py3-none-any.whl", hash = "sha256:4388f33b076cb17aa9ffbdbccded31c6c642e86c395cbf3361a48b4c16aaaf5c", size = 7206, upload-time = "2026-07-15T17:43:28.751Z" },
 ]
 
 [[package]]
@@ -1163,6 +1178,7 @@ version = "0.0.0"
 source = { editable = "packages/marimo-lens" }
 dependencies = [
     { name = "anywidget" },
+    { name = "anywidget-bundle" },
     { name = "marimo" },
     { name = "traitlets" },
 ]
@@ -1175,6 +1191,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anywidget", specifier = ">=0.11.0" },
+    { name = "anywidget-bundle", specifier = "==0.0.1" },
     { name = "marimo", specifier = ">=0.23.0" },
     { name = "traitlets", specifier = ">=5" },
 ]

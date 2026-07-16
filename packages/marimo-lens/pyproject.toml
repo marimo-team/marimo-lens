@@ -15,7 +15,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
 ]
-dependencies = ["anywidget>=0.11.0", "marimo>=0.23.0", "traitlets>=5"]
+dependencies = ["anywidget-bundle==0.0.1", "anywidget>=0.11.0", "marimo>=0.23.0", "traitlets>=5"]
 
 [dependency-groups]
 dev = ["hatchling>=1.29"]

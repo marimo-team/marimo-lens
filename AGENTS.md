@@ -14,7 +14,7 @@ Use Node 22.18 or newer and the pnpm version declared in the root manifest.
 | Install Python           | `uv sync --locked --all-packages --all-groups`                                        | workspace environment resolves   |
 | Install JavaScript       | `pnpm install --frozen-lockfile`                                                      | all workspace packages resolve   |
 | Check JavaScript         | `pnpm check`                                                                          | format, lint, and types pass     |
-| Test JavaScript          | `pnpm test`                                                                           | widget and bundle tests pass     |
+| Test JavaScript          | `pnpm test`                                                                           | widget tests pass                |
 | Build JavaScript         | `pnpm build`                                                                          | packages and Python assets build |
 | Check Python format      | `uv run --locked --all-packages --all-groups ruff format --check .`                   | no changes required              |
 | Lint Python              | `uv run --locked --all-packages --all-groups ruff check .`                            | no diagnostics                   |
@@ -29,8 +29,8 @@ manifest when its model is created.
 ## Workspace ownership
 
 ```text
-packages/anywidget-bundle
-        manifest, chunk transport, lifecycle, Vite plugin
+anywidget-bundle (npm and PyPI)
+        manifest build and module transport
                      |
                      v
 packages/marimo-lens <---- packages/widget
@@ -40,10 +40,9 @@ Python API and wheel       output selection UI and PNG capture
       workbench
 ```
 
-- `packages/anywidget-bundle/` owns app-agnostic anywidget bundling. It emits
-  the bootstrap, app module, chunks, stylesheet, and `anywidget.json`. It also
-  owns browser module loading, custom-message transport for bundle resources,
-  and development HMR.
+- `anywidget-bundle` owns app-agnostic anywidget bundling. Its npm package
+  emits the bootstrap, app module, chunks, stylesheet, and `anywidget.json`.
+  Its Python package serves manifest modules and owns the bundle lifecycle.
 - `packages/widget/` owns output-cell interaction, normalized anchors, bounded
   DOM hints, asynchronous PNG capture, protocol requests, reducer state, and
   Lens dock presentation.
@@ -55,9 +54,9 @@ Python API and wheel       output selection UI and PNG capture
   READMEs contain user workflows.
 
 Cross-package TypeScript imports use package names. The Python composition
-package depends on `@marimo-lens/widget` and
-`@marimo-lens/anywidget-bundle`. Keep selection and capture logic out of the
-generic bundle package.
+package consumes `@marimo-lens/widget` from this workspace, `anywidget-bundle`
+from npm during Vite builds, and `anywidget-bundle` from PyPI at runtime. Keep
+selection and capture logic within the marimo-lens packages.
 
 The root `package.json`, `pnpm-workspace.yaml`, `vite.config.ts`, and
 `tsconfig.json` own JavaScript orchestration and shared policy. Package

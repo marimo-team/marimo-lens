@@ -25,7 +25,7 @@ pnpm dev
 Start the workbench in another shell:
 
 ```sh
-MARIMO_LENS_VITE_DEV_SERVER=http://127.0.0.1:5173 \
+MARIMO_LENS_VITE_DEV_SERVER=http://localhost:5173 \
   uv run --all-packages --group workbench \
   marimo run workbench/demo.py --port 28889 --headless
 ```
@@ -45,7 +45,6 @@ make check
 Use package commands while iterating:
 
 ```sh
-pnpm --filter @marimo-lens/anywidget-bundle test
 pnpm --filter @marimo-lens/widget test
 pnpm --filter @marimo-lens/python build
 uv run --locked --all-packages --all-groups \

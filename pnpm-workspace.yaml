@@ -12,7 +12,6 @@ catalog:
   "@types/node": ^22.20.1
   "@types/react": ^19.2.17
   "@types/react-dom": ^19.2.3
-  es-module-lexer: ^2.3.1
   html-to-image: 1.11.13
   jsdom: 29.1.1
   lucide-react: 1.24.0
@@ -36,3 +35,5 @@ allowBuilds:
   esbuild: true
 
 minimumReleaseAge: 2880
+minimumReleaseAgeExclude:
+  - anywidget-bundle@0.0.1

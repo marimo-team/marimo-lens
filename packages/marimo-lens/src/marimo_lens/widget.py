@@ -11,8 +11,8 @@ from contextlib import suppress
 from typing import Any, cast
 
 import traitlets
+from anywidget_bundle import Bundle, BundledWidget
 
-from ._anywidget_bundle import Bundle, BundledWidget
 from ._context import build_context, validate_selection_budget
 from ._images import ImageError, ImageStore
 from ._protocol import (
@@ -61,7 +61,7 @@ class Lens(BundledWidget):
         self._selections: list[dict[str, Any]] = []
         self._images = ImageStore()
         super().__init__(_state=self._state_payload())
-        self._lens_css = self._css
+        self._lens_css = self.bundle.read_style()
         # BundledWidget owns bundle module messages. Lens adds an independent
         # callback on the same comm after the bundle callback is registered.
         self.on_msg(self._handle_lens_message)

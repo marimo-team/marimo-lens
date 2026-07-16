@@ -7,11 +7,11 @@
     "dev": "vp dev"
   },
   "dependencies": {
-    "@marimo-lens/anywidget-bundle": "workspace:*",
     "@marimo-lens/widget": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "anywidget-bundle": "0.0.1",
     "vite": "catalog:",
     "vite-plus": "catalog:"
   }

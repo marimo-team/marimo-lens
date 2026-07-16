@@ -59,23 +59,12 @@ export default defineConfig({
         },
       },
       {
-        files: ["packages/anywidget-bundle/**"],
-        rules: {
-          "no-restricted-imports": [
-            "error",
-            {
-              patterns: ["@marimo-lens/widget", "@marimo-lens/widget/*"],
-            },
-          ],
-        },
-      },
-      {
         files: ["packages/widget/**"],
         rules: {
           "no-restricted-imports": [
             "error",
             {
-              patterns: ["@marimo-lens/anywidget-bundle", "@marimo-lens/anywidget-bundle/*"],
+              patterns: ["anywidget-bundle", "anywidget-bundle/*"],
             },
           ],
         },

@@ -15,6 +15,7 @@ workbench = [
 
 [tool.uv]
 exclude-newer = "3 days"
+exclude-newer-package = { anywidget-bundle = "2026-07-15T17:43:30Z" }
 
 [tool.pyrefly]
 project-includes = ["packages/marimo-lens", "workbench"]
