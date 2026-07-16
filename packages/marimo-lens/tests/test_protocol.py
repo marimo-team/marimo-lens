@@ -56,7 +56,7 @@ def test_put_command_parses_complete_selection_and_png_buffer() -> None:
     assert command.payload["selection"]["snapshot"]["status"] == "available"
 
 
-def test_activate_delete_clear_and_export_use_object_payloads() -> None:
+def test_activate_delete_clear_export_and_snapshot_use_object_payloads() -> None:
     activate = parse_command(
         _command(
             "selection.activate",
@@ -72,7 +72,10 @@ def test_activate_delete_clear_and_export_use_object_payloads() -> None:
         [],
     )
     clear = parse_command(_command("selections.clear", {"expectedRevision": 4}), [])
-    export = parse_command(_command("context.export", {}), [])
+    export = parse_command(_command("context.export", {"format": "current"}), [])
+    snapshot = parse_command(
+        _command("snapshot.get", {"selectionId": "selection-1"}), []
+    )
 
     assert activate is not None
     assert activate.payload == {
@@ -87,7 +90,9 @@ def test_activate_delete_clear_and_export_use_object_payloads() -> None:
     assert clear is not None
     assert clear.payload == {"expectedRevision": 4}
     assert export is not None
-    assert export.payload == {}
+    assert export.payload == {"format": "current"}
+    assert snapshot is not None
+    assert snapshot.payload == {"selectionId": "selection-1"}
 
 
 def test_command_ignores_envelopes_owned_by_bundle_transport() -> None:
@@ -107,13 +112,20 @@ def test_command_rejects_protocol_drift(
     updates: dict[str, object],
     code: str,
 ) -> None:
-    content = _command("context.export", {})
+    content = _command("context.export", {"format": "text"})
     content.update(updates)
 
     with pytest.raises(ProtocolError) as raised:
         parse_command(content, [])
 
     assert raised.value.code == code
+
+
+def test_context_export_rejects_unknown_format() -> None:
+    with pytest.raises(ProtocolError) as raised:
+        parse_command(_command("context.export", {"format": "verbose"}), [])
+
+    assert raised.value.code == "invalid_export_format"
 
 
 def test_put_requires_expected_revision_and_matching_buffer_action() -> None:

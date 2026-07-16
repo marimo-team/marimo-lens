@@ -27,8 +27,8 @@ class FakeModel {
     this.onSend?.(command);
   }
 
-  emit(message: unknown) {
-    for (const handler of this.handlers) handler(message, []);
+  emit(message: unknown, buffers: DataView[] = []) {
+    for (const handler of this.handlers) handler(message, buffers);
   }
 
   asAnyModel(): AnyModel {
@@ -55,12 +55,16 @@ describe("Lens command protocol", () => {
   test("exports standalone text through the context command", async () => {
     const model = new FakeModel();
     const client = new LensProtocolClient(model.asAnyModel());
-    await expect(client.exportContext()).rejects.toMatchObject({ code: "client_disposed" });
+    await expect(client.exportContext("text")).rejects.toMatchObject({ code: "client_disposed" });
 
     client.start();
     model.onSend = (command) => model.emit(success(command, { text: "Use selection S1" }));
-    await expect(client.exportContext()).resolves.toBe("Use selection S1");
-    expect(model.sent[0]?.command).toMatchObject({ version: 1, type: "context.export" });
+    await expect(client.exportContext("text")).resolves.toBe("Use selection S1");
+    expect(model.sent[0]?.command).toMatchObject({
+      version: 1,
+      type: "context.export",
+      payload: { format: "text" },
+    });
     client.dispose();
   });
 
@@ -96,13 +100,47 @@ describe("Lens command protocol", () => {
     const model = new FakeModel();
     const client = new LensProtocolClient(model.asAnyModel());
     client.start();
-    const request = client.exportContext();
+    const request = client.exportContext("current");
     const command = model.sent[0]?.command;
     expect(command).toBeDefined();
     model.emit({ protocol: "another-widget.response", requestId: command?.requestId });
     model.emit(success(command!, { text: "Selection S1" }));
 
     await expect(request).resolves.toBe("Selection S1");
+    client.dispose();
+  });
+
+  test("returns the exact snapshot response buffer", async () => {
+    const model = new FakeModel();
+    const client = new LensProtocolClient(model.asAnyModel());
+    client.start();
+    const source = new Uint8Array([0, 137, 80, 78, 71, 0]);
+    model.onSend = (command) =>
+      model.emit(
+        success(command, {
+          selectionId: "selection-1",
+          snapshot: {
+            status: "available",
+            id: "image:selection-1",
+            mediaType: "image/png",
+            width: 1,
+            height: 1,
+            sha256: "a".repeat(64),
+            capturedAt: "2026-07-14T10:01:00Z",
+          },
+        }),
+        [new DataView(source.buffer, 1, 4)],
+      );
+
+    const result = await client.getSnapshot("selection-1");
+
+    expect(result.snapshot).toMatchObject({ id: "image:selection-1" });
+    expect(result.bytes).toEqual(new Uint8Array([137, 80, 78, 71]));
+    expect(model.sent[0]?.command).toMatchObject({
+      version: 1,
+      type: "snapshot.get",
+      payload: { selectionId: "selection-1" },
+    });
     client.dispose();
   });
 
@@ -152,7 +190,7 @@ describe("Lens command protocol", () => {
     const model = new FakeModel();
     const client = new LensProtocolClient(model.asAnyModel());
     client.start();
-    const request = client.exportContext();
+    const request = client.exportContext("text");
     const rejection = expect(request).rejects.toMatchObject({ code: "timeout" });
 
     await vi.advanceTimersByTimeAsync(20_000);

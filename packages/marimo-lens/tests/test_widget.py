@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import inspect
+import json
 from collections.abc import Sequence
 from typing import Any, cast
 
@@ -428,7 +429,7 @@ def test_context_export_uses_one_runtime_and_selection_revision(
     lens = RecordingLens()
     _put(lens, revision=0, selection_value=selection())
 
-    _send(lens, "context.export", {})
+    _send(lens, "context.export", {"format": "text"})
     response = lens.sent[-1][0]
 
     assert response["ok"] is True
@@ -440,6 +441,45 @@ def test_context_export_uses_one_runtime_and_selection_revision(
     assert references["selections"][0]["outputCellId"] == "cell-view"
     assert "cells" not in references
     assert references["revision"] == response["revision"]
+
+
+def test_context_export_projects_current_and_all_references() -> None:
+    lens = RecordingLens()
+    _put(lens, revision=0, selection_value=selection(note="Inspect this value"))
+
+    _send(lens, "context.export", {"format": "current"})
+    current = json.loads(lens.sent[-1][0]["payload"]["text"])
+    _send(lens, "context.export", {"format": "references"})
+    references = json.loads(lens.sent[-1][0]["payload"]["text"])
+
+    assert current["id"] == "selection-1"
+    assert current["outputCellId"] == "cell-view"
+    assert "source" not in current
+    assert references["currentSelectionId"] == "selection-1"
+    assert references["selections"] == [current]
+
+
+def test_snapshot_get_returns_the_exact_stored_png() -> None:
+    lens = RecordingLens()
+    data = png()
+    _put(
+        lens,
+        revision=0,
+        selection_value=selection(snapshot=snapshot_metadata(data)),
+        data=data,
+        image_action="replace",
+    )
+
+    _send(lens, "snapshot.get", {"selectionId": "selection-1"})
+    response, buffers = lens.sent[-1]
+
+    assert response["ok"] is True
+    assert response["version"] == 1
+    assert response["payload"]["selectionId"] == "selection-1"
+    assert (
+        response["payload"]["snapshot"]["sha256"] == snapshot_metadata(data)["sha256"]
+    )
+    assert buffers == [data]
 
 
 def _put(

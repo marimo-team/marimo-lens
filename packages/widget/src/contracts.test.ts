@@ -2,6 +2,8 @@ import { describe, expect, test } from "vite-plus/test";
 
 import {
   ActivateSelectionCommandSchema,
+  ExportContextCommandSchema,
+  GetSnapshotCommandSchema,
   DeleteSelectionCommandSchema,
   LensStateSchema,
   PutSelectionCommandSchema,
@@ -129,6 +131,35 @@ describe("selection contracts", () => {
         "command",
       ),
     ).toThrow();
+  });
+
+  test("keeps read commands explicit and revision free", () => {
+    expect(
+      parseContract(
+        ExportContextCommandSchema,
+        {
+          protocol: "marimo-lens.command",
+          version: 1,
+          requestId: "request-1",
+          type: "context.export",
+          payload: { format: "current" },
+        },
+        "command",
+      ),
+    ).toMatchObject({ payload: { format: "current" } });
+    expect(
+      parseContract(
+        GetSnapshotCommandSchema,
+        {
+          protocol: "marimo-lens.command",
+          version: 1,
+          requestId: "request-2",
+          type: "snapshot.get",
+          payload: { selectionId: "selection-1" },
+        },
+        "command",
+      ),
+    ).toMatchObject({ payload: { selectionId: "selection-1" } });
   });
 
   test("keeps image actions aligned with snapshot status", () => {

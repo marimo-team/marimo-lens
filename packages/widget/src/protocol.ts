@@ -3,20 +3,37 @@ import type { AnyModel } from "@anywidget/types";
 import type {
   CommandPayload,
   CommandType,
+  ContextExportFormat,
   ImageAction,
   LensResponse,
   Selection,
+  StoredSnapshot,
 } from "@/contracts";
 
-import { LensCommandSchema, parseContract, parseLensResponse } from "@/contracts";
+import {
+  LensCommandSchema,
+  SnapshotResponsePayloadSchema,
+  parseContract,
+  parseLensResponse,
+} from "@/contracts";
 
 const RESPONSE_PROTOCOL = "marimo-lens.response";
 const REQUEST_TIMEOUT_MS = 20_000;
 
 type PendingRequest = {
-  resolve: (response: LensResponse) => void;
+  resolve: (reply: ProtocolReply) => void;
   reject: (error: Error) => void;
   timeout: number;
+};
+
+type ProtocolReply = {
+  response: LensResponse;
+  buffers: DataView[];
+};
+
+export type SnapshotAsset = {
+  snapshot: StoredSnapshot;
+  bytes: Uint8Array;
 };
 
 export class LensProtocolError extends Error {
@@ -93,8 +110,8 @@ export class LensProtocolClient {
     return this.request("selections.clear", { expectedRevision });
   }
 
-  async exportContext(): Promise<string> {
-    const response = await this.request("context.export", {});
+  async exportContext(format: ContextExportFormat): Promise<string> {
+    const response = await this.request("context.export", { format });
     const context = response.payload.text;
     if (typeof context !== "string") {
       throw new LensProtocolError("invalid_response", "Context response is missing its text");
@@ -102,11 +119,38 @@ export class LensProtocolClient {
     return context;
   }
 
+  async getSnapshot(selectionId: string): Promise<SnapshotAsset> {
+    const { response, buffers } = await this.#request("snapshot.get", { selectionId });
+    const payload = parseContract(
+      SnapshotResponsePayloadSchema,
+      response.payload,
+      "Snapshot response",
+    );
+    if (payload.selectionId !== selectionId || buffers.length !== 1) {
+      throw new LensProtocolError(
+        "invalid_response",
+        "Snapshot response must contain the requested selection and one PNG buffer",
+      );
+    }
+    return {
+      snapshot: payload.snapshot,
+      bytes: exactBytes(buffers[0]),
+    };
+  }
+
   request<TType extends CommandType>(
     type: TType,
     payload: CommandPayload<TType>,
     buffers: ArrayBuffer[] = [],
   ): Promise<LensResponse> {
+    return this.#request(type, payload, buffers).then(({ response }) => response);
+  }
+
+  #request<TType extends CommandType>(
+    type: TType,
+    payload: CommandPayload<TType>,
+    buffers: ArrayBuffer[] = [],
+  ): Promise<ProtocolReply> {
     if (!this.#started) {
       return Promise.reject(
         new LensProtocolError("client_disposed", "Lens is not connected to its widget model"),
@@ -125,7 +169,7 @@ export class LensProtocolClient {
       "Lens command",
     );
 
-    return new Promise<LensResponse>((resolve, reject) => {
+    return new Promise<ProtocolReply>((resolve, reject) => {
       const timeout = window.setTimeout(() => {
         this.#pending.delete(requestId);
         reject(new LensProtocolError("timeout", `Lens request ${type} timed out`));
@@ -138,15 +182,19 @@ export class LensProtocolClient {
         this.#pending.delete(requestId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
-    }).then((response) => {
-      if (!response.ok) {
-        throw new LensProtocolError(response.error.code, response.error.message, response.revision);
+    }).then((reply) => {
+      if (!reply.response.ok) {
+        throw new LensProtocolError(
+          reply.response.error.code,
+          reply.response.error.message,
+          reply.response.revision,
+        );
       }
-      return response;
+      return reply;
     });
   }
 
-  readonly #handleMessage = (message: unknown): void => {
+  readonly #handleMessage = (message: unknown, buffers: DataView[] = []): void => {
     if (!isResponseMessage(message)) return;
     const requestId = typeof message.requestId === "string" ? message.requestId : null;
     if (!requestId) return;
@@ -163,7 +211,7 @@ export class LensProtocolClient {
     }
     window.clearTimeout(pending.timeout);
     this.#pending.delete(requestId);
-    pending.resolve(response);
+    pending.resolve({ response, buffers });
   };
 }
 
@@ -180,6 +228,13 @@ function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
   return copy.buffer;
+}
+
+function exactBytes(view: DataView): Uint8Array {
+  const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy;
 }
 
 function createRequestId(): string {

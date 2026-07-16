@@ -26,7 +26,9 @@ CommandType = Literal[
     "selection.delete",
     "selections.clear",
     "context.export",
+    "snapshot.get",
 ]
+ContextExportFormat = Literal["current", "references", "text"]
 ImageAction = Literal["preserve", "replace", "clear"]
 
 _COMMAND_TYPES = {
@@ -35,7 +37,9 @@ _COMMAND_TYPES = {
     "selection.delete",
     "selections.clear",
     "context.export",
+    "snapshot.get",
 }
+_CONTEXT_EXPORT_FORMATS = {"current", "references", "text"}
 _IMAGE_ACTIONS = {"preserve", "replace", "clear"}
 _LABEL = re.compile(r"S[1-9][0-9]*\Z")
 _SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -119,8 +123,29 @@ def parse_command(
         }
     elif command_type == "context.export":
         _require_no_buffers(buffers)
-        _exact_keys(payload, required=set(), field="payload")
-        canonical_payload = {}
+        _exact_keys(payload, required={"format"}, field="payload")
+        export_format = payload.get("format")
+        if (
+            not isinstance(export_format, str)
+            or export_format not in _CONTEXT_EXPORT_FORMATS
+        ):
+            raise ProtocolError(
+                "invalid_export_format",
+                "Context export format must be current, references, or text.",
+            )
+        canonical_payload = {
+            "format": cast(ContextExportFormat, export_format),
+        }
+    elif command_type == "snapshot.get":
+        _require_no_buffers(buffers)
+        _exact_keys(payload, required={"selectionId"}, field="payload")
+        canonical_payload = {
+            "selectionId": _string(
+                payload.get("selectionId"),
+                field="selectionId",
+                maximum=MAX_SELECTION_ID,
+            )
+        }
     else:
         raise ProtocolError(
             "unsupported_command",

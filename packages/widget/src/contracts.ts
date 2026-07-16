@@ -137,6 +137,16 @@ export const LensStateSchema = v.pipe(
 );
 
 export const ImageActionSchema = v.picklist(["preserve", "replace", "clear"]);
+export const ContextExportFormatSchema = v.picklist(["current", "references", "text"]);
+export const StoredSnapshotSchema = v.variant("status", [
+  AvailableSnapshotSchema,
+  OutdatedSnapshotSchema,
+]);
+
+export const SnapshotResponsePayloadSchema = v.strictObject({
+  selectionId: NonEmptyStringSchema,
+  snapshot: StoredSnapshotSchema,
+});
 
 const CommandBaseSchema = {
   protocol: v.literal("marimo-lens.command"),
@@ -191,7 +201,17 @@ export const ClearSelectionsCommandSchema = v.strictObject({
 export const ExportContextCommandSchema = v.strictObject({
   ...CommandBaseSchema,
   type: v.literal("context.export"),
-  payload: v.strictObject({}),
+  payload: v.strictObject({
+    format: ContextExportFormatSchema,
+  }),
+});
+
+export const GetSnapshotCommandSchema = v.strictObject({
+  ...CommandBaseSchema,
+  type: v.literal("snapshot.get"),
+  payload: v.strictObject({
+    selectionId: NonEmptyStringSchema,
+  }),
 });
 
 export const LensCommandSchema = v.variant("type", [
@@ -200,6 +220,7 @@ export const LensCommandSchema = v.variant("type", [
   DeleteSelectionCommandSchema,
   ClearSelectionsCommandSchema,
   ExportContextCommandSchema,
+  GetSnapshotCommandSchema,
 ]);
 
 const ResponseBaseSchema = {
@@ -238,6 +259,9 @@ export type SelectionSnapshot = v.InferOutput<typeof SelectionSnapshotSchema>;
 export type Selection = v.InferOutput<typeof SelectionSchema>;
 export type LensState = v.InferOutput<typeof LensStateSchema>;
 export type ImageAction = v.InferOutput<typeof ImageActionSchema>;
+export type ContextExportFormat = v.InferOutput<typeof ContextExportFormatSchema>;
+export type StoredSnapshot = v.InferOutput<typeof StoredSnapshotSchema>;
+export type SnapshotResponsePayload = v.InferOutput<typeof SnapshotResponsePayloadSchema>;
 export type LensCommand = v.InferOutput<typeof LensCommandSchema>;
 export type LensResponse = v.InferOutput<typeof LensResponseSchema>;
 

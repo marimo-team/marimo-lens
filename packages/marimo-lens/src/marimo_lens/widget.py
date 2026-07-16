@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 import pathlib
 import threading
 from collections.abc import Mapping, Sequence
@@ -24,7 +25,7 @@ from ._protocol import (
     success_response,
 )
 from ._runtime import collect_runtime_snapshot
-from .context import LensContext
+from .context import LensContext, SelectionImage
 
 _BUNDLE = Bundle(
     static_dir=pathlib.Path(__file__).parent / "static",
@@ -130,8 +131,9 @@ class Lens(BundledWidget):
         if command is None:
             return
 
+        response_buffers: tuple[bytes, ...] = ()
         try:
-            response = self._execute(command, buffers)
+            response, response_buffers = self._execute(command, buffers)
         except (ProtocolError, ImageError) as error:
             response = error_response(
                 request_id=command.request_id,
@@ -146,20 +148,51 @@ class Lens(BundledWidget):
                 code="internal_error",
                 message=f"{type(error).__name__}: {error}",
             )
-        self.send(response)
+        self.send(response, buffers=response_buffers)
 
     def _execute(
         self,
         command: Command,
         buffers: Sequence[bytes | bytearray | memoryview],
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], tuple[bytes, ...]]:
         if command.type == "context.export":
             context = self.context()
-            return success_response(
-                request_id=command.request_id,
-                revision=cast(int, context.references["revision"]),
-                payload={"text": context.text},
+            return (
+                success_response(
+                    request_id=command.request_id,
+                    revision=cast(int, context.references["revision"]),
+                    payload={
+                        "text": self._context_export_text(
+                            context,
+                            str(command.payload["format"]),
+                        )
+                    },
+                ),
+                (),
             )
+
+        if command.type == "snapshot.get":
+            with self._lock:
+                if self._lens_closed:
+                    raise ProtocolError("lens_closed", "Lens is closed.")
+                selection_id = str(command.payload["selectionId"])
+                image = self._images.get(selection_id)
+                if image is None:
+                    raise ProtocolError(
+                        "snapshot_not_found",
+                        "The selection has no stored snapshot.",
+                    )
+                return (
+                    success_response(
+                        request_id=command.request_id,
+                        revision=self._revision,
+                        payload={
+                            "selectionId": selection_id,
+                            "snapshot": self._snapshot_payload(image),
+                        },
+                    ),
+                    (image.data,),
+                )
 
         with self._lock:
             if self._lens_closed:
@@ -190,11 +223,46 @@ class Lens(BundledWidget):
                     "Lens command type is not supported.",
                 )
 
-            return success_response(
-                request_id=command.request_id,
-                revision=self._revision,
-                payload=payload,
+            return (
+                success_response(
+                    request_id=command.request_id,
+                    revision=self._revision,
+                    payload=payload,
+                ),
+                (),
             )
+
+    @staticmethod
+    def _context_export_text(context: LensContext, export_format: str) -> str:
+        if export_format == "text":
+            return context.text
+        if export_format == "references":
+            value: object = context.references
+        elif export_format == "current":
+            value = context.current
+            if value is None:
+                raise ProtocolError(
+                    "selection_not_found",
+                    "Lens has no current selection to copy.",
+                )
+        else:
+            raise ProtocolError(
+                "invalid_export_format",
+                "Context export format must be current, references, or text.",
+            )
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+    @staticmethod
+    def _snapshot_payload(image: SelectionImage) -> dict[str, object]:
+        return {
+            "status": "outdated" if image.outdated else "available",
+            "id": image.id,
+            "mediaType": image.media_type,
+            "width": image.width,
+            "height": image.height,
+            "sha256": image.sha256,
+            "capturedAt": image.captured_at,
+        }
 
     def _put_selection(
         self,
