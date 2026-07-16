@@ -1,7 +1,7 @@
 # Development
 
-Use Node 22.18 or newer and the Corepack-managed pnpm version declared in
-`package.json`.
+Use the Node version declared in `.node-version` and the Corepack-managed pnpm
+version declared in `package.json`.
 
 ```sh
 uv sync --locked --all-packages --all-groups
@@ -63,20 +63,37 @@ Build browser assets before Python distributions:
 
 ```sh
 pnpm --filter @marimo-lens/python build
-uv build --package marimo-lens --out-dir dist
+uv build --no-sources --package marimo-lens --out-dir dist
 ```
 
 Validate the archive boundary:
 
 ```sh
 uvx twine check dist/marimo_lens-*.whl dist/marimo_lens-*.tar.gz
-uv build --wheel dist/marimo_lens-*.tar.gz --out-dir dist/from-sdist
+uv build --no-sources --wheel dist/marimo_lens-*.tar.gz --out-dir dist/from-sdist
 uv run --no-project --with dist/from-sdist/marimo_lens-*.whl \
   python -c "from marimo_lens import Lens, LensContext, SelectionImage; Lens()"
 ```
 
 The sdist build uses its packaged browser assets. Hatch reports each required
 manifest artifact when the graph is incomplete.
+
+## Release
+
+Create a release commit and annotated tag from a clean `main` branch:
+
+```sh
+./scripts/release.sh minor
+```
+
+Use `major`, `minor`, or `patch` for a final-version bump. Use `stable` to
+finish a prerelease. The script runs `make check`, updates the package version
+and `uv.lock`, creates the release commit and `vX.Y.Z` tag, then prints the
+exact push command.
+
+Pushing the tag starts `.github/workflows/publish.yml`. The workflow checks the
+tag against the package version, rebuilds and validates the wheel and sdist,
+then publishes through PyPI Trusted Publishing in the `pypi` environment.
 
 ## Browser checks
 
