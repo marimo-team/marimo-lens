@@ -13,7 +13,9 @@ lens
 ```
 
 Press **Select**, then click or drag over an output. The pointer release creates
-the selection immediately. Add a note from the selection list when needed.
+the selection immediately. Hover or focus its marker to add a note or preview
+the exact stored snapshot. The selection list provides the same actions and
+reveals an activated selection's output cell.
 
 ```python
 context = lens.context()

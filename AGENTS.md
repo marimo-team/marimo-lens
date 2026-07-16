@@ -46,7 +46,7 @@ Python API and wheel       output selection UI and PNG capture
   and development HMR.
 - `packages/widget/` owns output-cell interaction, normalized anchors, bounded
   DOM hints, asynchronous PNG capture, protocol requests, reducer state, and
-  Quiet Puck presentation.
+  Lens dock presentation.
 - `packages/marimo-lens/` owns the publishable Python distribution. Python
   validates selection commands, stores PNG bytes, reads the marimo runtime,
   resolves provenance, and returns `LensContext`.
@@ -78,7 +78,7 @@ setup, watch mode, packaging, and browser checks.
 - A selection contains a stable id, stable `S<n>` label, optional note, output
   cell id, normalized anchor, bounded DOM hint, and image state.
 - Deleting or clearing selections leaves allocated labels unused.
-- Creation, focus, and note editing make a selection current.
+- Creation, explicit activation, and note editing make a selection current.
 - Deleting the current selection selects the most recently active remaining
   selection.
 - Snapshot capture runs after selection creation. Capture failure never blocks
@@ -148,7 +148,7 @@ The private `_state` trait has this shape:
 Commands use `marimo-lens.command` version 1 and always include `requestId`,
 `type`, and an object `payload`. Supported command types are
 `selection.put`, `selection.activate`, `selection.delete`, `selections.clear`,
-and `context.export`.
+`context.export`, and `snapshot.get`.
 
 Version 1 has one selection-first schema. Keep one parser and one response
 shape across Python and TypeScript.
@@ -166,29 +166,34 @@ resource messages independent on the shared custom-message channel.
 Python owns monotonic label allocation through `_state.nextLabel`. Advance it
 after a successful new selection and keep it across delete and clear.
 
+`context.export` accepts `current`, `references`, or `text`. `snapshot.get`
+accepts one selection ID and returns the exact stored PNG in one response
+buffer.
+
 ## Browser interaction
 
-The Quiet Puck is fixed at the bottom-right on desktop and bottom-center on
-narrow viewports. Its primary controls are **Select**, the selection count,
-**Select more**, **Copy context**, and **Clear selections**.
+The Lens dock is fixed at bottom center. It opens as a stable action bar and
+stays open until the user collapses it. Hover never changes its geometry. Its
+primary controls are **Select**, the selection count, **Copy**, the actions
+menu, and collapse.
 
-The empty state uses a compact labeled **Select** control. The resting state
-uses one split control with **Select** and the selection count. The count opens
-the review sheet. The armed state expands to **Click or drag** with an **ESC**
-affordance. Pending and receipt states reuse the same anchor and change density
-in place.
+The collapsed state is a compact Lens tab with the selection count. **Select**
+changes to **Click or drag** with an **ESC** affordance while armed. **Copy**
+exports the current reference. The actions menu exports all references or
+standalone text and clears selections.
 
 Clicking creates a point. Dragging creates a rectangle. Use pointer capture for
 the gesture. Resolve the output through `event.composedPath()` and the canonical
 `output-<cell-id>` root. Keyboard users move between output cells and press
 Enter to create a centered point. Escape cancels the active layer.
 
-The review sheet lists selections, shows which selection is current, and offers
-**Add note** or **Edit note**, snapshot status, **Select more**, **Copy
-context**, removal, and clear actions. A marker or list-row focus activates the
-selection. The note editor never gates selection creation.
+The selection sheet lists selections and offers **Add note** or **Edit note**,
+exact snapshot preview, and removal. Explicit row activation makes a selection
+current and reveals its output cell. Row focus alone does not mutate state. A
+marker exposes local note and snapshot actions on hover or focus. The note
+editor never gates selection creation.
 
-Use a small reducer for idle, armed, dragging, note-editing, and receipt states.
+Use a small reducer for idle, armed, dragging, and note-editing states.
 Keep input text local to the note editor. Effects connect React to model
 messages, DOM listeners, timers, browser APIs, and teardown.
 
@@ -249,8 +254,9 @@ outdated capture. Join images to selections through
 `SelectionImage.selection_id`.
 
 marimo-pair evaluates `lens.context()` in the live kernel and resolves each
-`outputCellId` through marimo's cell collection and graph. Pair-specific
-scratchpad and edit operations remain outside this package.
+`outputCellId` through `ctx.graph.cells` and queries graph neighbors when the
+request needs them. Pair-specific scratchpad and edit operations remain outside
+this package.
 
 ## Bundle resources
 
@@ -307,7 +313,8 @@ server after validation.
 For the Pair boundary, start the notebook with `marimo edit --headless
 --no-token`, create selections through the browser, then evaluate
 `lens.context()` through marimo-pair. Resolve every output cell and its
-ancestors from the live kernel. Assert that references contain no source,
+ancestors from the live kernel through `ctx.graph.cells` and
+`ctx.graph.ancestors`. Assert that references contain no source,
 control state, or PNG bytes. Verify text with image input omitted and repeat
 with a failed capture. Record compact references bytes and text characters.
 

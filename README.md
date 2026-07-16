@@ -15,15 +15,19 @@ lens
 ```
 
 Press **Select**, then click or drag inside an output. Lens creates `S1` and
-returns to its resting state. Add a note from the selection list when the
-receiver needs an explicit instruction.
+returns to its resting state. Hover or focus the marker to add a note beside
+the selection or preview the exact stored snapshot.
+
+The bottom-center dock stays open until you collapse it. **Copy** copies the
+current reference. The actions menu exposes all selection references and the
+standalone text context.
 
 Read one current context snapshot from Python:
 
 ```python
 context = lens.context()
 
-context.current      # most recently created, focused, or edited selection
+context.current      # most recently created, activated, or edited selection
 context.references   # compact live output-cell references
 context.text         # standalone text with bounded DAG context
 
@@ -61,8 +65,9 @@ and dataflow graph.
 
 marimo-pair can evaluate `lens.context()` in the same kernel and resolve those
 cell IDs directly. Lens has no Pair dependency or Pair-specific API. Pair can
-send the compact references it needs and keep notebook edits, scratchpad state,
-and agent lifecycle on its side of the boundary.
+start from `context.current`, query graph neighbors when the request needs
+them, and keep notebook edits, scratchpad state, and agent lifecycle on its side
+of the boundary.
 
 `context.text` materializes the selected cells and their bounded upstream
 closure. It includes source, definitions, references, direct parent IDs, and

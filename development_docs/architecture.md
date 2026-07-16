@@ -63,7 +63,8 @@ notebook's Lens state. `context()` returns a detached snapshot from one Python
 selection revision and one current marimo runtime snapshot.
 
 `LensContext.current` is the current selection reference, or `None` when no
-selection exists. Creation, focus, and note editing make a selection current.
+selection exists. Creation, explicit activation, and note editing make a
+selection current.
 Deleting the current selection falls back to the most recently active remaining
 selection.
 
@@ -78,10 +79,11 @@ lens.context()
     +-- images ------> optional vision input
 ```
 
-A live consumer resolves each `outputCellId` through marimo's current cell
-collection and dataflow graph. marimo-pair evaluates `lens.context()` in the
-running kernel, reads the compact references it needs, and keeps scratchpad,
-edits, and agent lifecycle outside Lens.
+A live consumer resolves each `outputCellId` through marimo's current dataflow
+graph. marimo-pair evaluates `lens.context()` in the running kernel, reads the
+compact references it needs, and queries upstream or downstream cells when the
+request calls for them. Scratchpad state, edits, and agent lifecycle stay
+outside Lens.
 
 The text surface materializes bounded source, DAG edges, DOM hints, notes, and
 current relevant control values. It remains complete when every note is empty
@@ -97,10 +99,12 @@ capture-time evidence.
    state.
 5. Python validates the command, allocates the next stable `S<n>` label, makes
    the new selection current, increments the revision, and publishes `_state`.
-6. The browser returns to its resting state and shows a short receipt.
+6. The browser returns to its resting state. The marker exposes local note and
+   snapshot actions on hover or focus.
 7. PNG capture runs in the background. A second `selection.put` stores either
    successful image metadata and one binary buffer or an explicit failure.
-8. Focusing a marker or list row sends `selection.activate`.
+8. Activating a marker or list row sends `selection.activate`. List activation
+   reveals the owning output cell before the mutation completes.
 9. Editing a note sends `selection.put` while preserving the image.
 10. `lens.context()` refreshes runtime provenance and returns current,
     references, standalone text, and successful image bytes.
@@ -178,10 +182,16 @@ Supported command types are:
 - `selection.delete`
 - `selections.clear`
 - `context.export`
+- `snapshot.get`
 
 Every mutation includes `expectedRevision`. `selection.put` includes
 `imageAction` with `preserve`, `replace`, or `clear`. `replace` carries exactly
 one PNG buffer. The remaining actions carry zero buffers.
+
+`context.export` accepts `current`, `references`, or `text`. The first two
+formats return compact JSON. The text format returns the bounded standalone
+context. `snapshot.get` accepts a selection ID and returns metadata plus the
+exact stored PNG in one response buffer.
 
 Responses use `marimo-lens.response` version 1 and always carry `requestId`,
 `ok`, `revision`, and an object `payload`. Failed responses add an `error`
@@ -201,8 +211,9 @@ currentSelectionId, selections
 ```
 
 Each selection carries its note, output cell ID, normalized anchor, bounded DOM
-hint, status-only snapshot record, and live cell status. References exclude source
-bodies, DAG snapshots, control values, image bytes, and ambient caller identity.
+hint, status-only snapshot record, and live cell status. References exclude
+source bodies, DAG snapshots, control values, image bytes, and ambient caller
+identity.
 
 `LensContext.text` renders the same selections with current relevant controls
 and up to 64 cells in topological order. Each cell includes source, definitions,
@@ -238,7 +249,9 @@ in `widget.py`.
 - `capture/anchor.ts` maps pointer coordinates to normalized geometry.
 - `capture/dom-hint.ts` records bounded capture-time evidence.
 - `capture/image.ts` captures and composes marked PNG evidence.
-- `components/` owns the Quiet Puck, review sheet, overlay, and note editor.
+- `reveal.ts` reveals the owning output for explicit list activation.
+- `components/` owns the bottom-center dock, selection sheet, marker-local
+  actions, exact snapshot preview, overlay, and note editor.
 
 The browser performs no notebook graph work. Python performs no DOM work.
 

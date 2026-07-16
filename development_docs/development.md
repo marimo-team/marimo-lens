@@ -98,17 +98,21 @@ agent-browser --session marimo-lens-e2e snapshot -i
 
 Exercise these contracts:
 
-- Empty, resting, focused, selecting, pending, and receipt puck states
+- Expanded and collapsed bottom-center dock states with explicit toggles
+- Stable dock geometry on hover
 - Point selection on text, table, SVG, canvas, chart, and widget outputs
 - Region selection on a nested layout
 - Immediate commit on pointer release with an empty note
-- One-shot return to the resting puck
+- One-shot return to the resting dock
 - Stable `S<n>` label in the captured image
-- Optional note add and edit with image preservation
+- Marker-local note add and edit with image preservation
+- Exact stored PNG preview from a marker and selection row
 - Anchor move and resize with replacement capture
-- Selection activation, delete, clear, and current-selection fallback
+- Selection activation with output reveal, delete, clear, and current-selection
+  fallback
 - Output rerun with marker reconnection, fresh text context, and retained capture-time images
-- **Copy context** with refreshed Python provenance
+- **Copy** for the current reference, plus all references and standalone text
+  from the actions menu
 - Keyboard selection and Escape cancellation
 - Narrow viewport and coarse-pointer placement
 - Light, dark, and reduced-motion settings
@@ -140,9 +144,9 @@ the live cell collection. Project code and notebook cells must use public
 marimo APIs.
 
 For every selection, verify that `outputCellId` resolves through
-`ctx.cells[outputCellId]`. Compare `ctx.graph.ancestors(outputCellId)` with the
-selected cell plus the bounded, topologically ordered ancestor subset rendered
-in `context.text`.
+`ctx.graph.cells[outputCellId]`. Compare
+`ctx.graph.ancestors(outputCellId)` with the selected cell plus the bounded,
+topologically ordered ancestor subset rendered in `context.text`.
 
 Assert these contracts:
 
