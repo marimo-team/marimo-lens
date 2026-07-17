@@ -43,6 +43,18 @@ and widgets. Artifact interpretation belongs to the consumer of the context.
 The output cell source, definitions, references, and direct DAG parents form
 the durable semantic contract.
 
+When a canonical output root leaves the document, its selection stays active
+and the browser presents `Output unavailable`. The note, snapshot, activation,
+and removal actions remain available. An output root with the same
+`outputCellId` restores browser targeting.
+
+Runtime context derives `cellStatus` from the current marimo graph. `available`
+means the graph contains the exact output cell ID. `missing` means the runtime
+is available but that ID is absent. `unavailable` means Lens could not read the
+current notebook runtime. A graph cell with the exact ID restores semantic
+lineage. DOM availability and graph membership are independent. Lens does not
+infer identity from notebook position or visual similarity.
+
 ## Public API
 
 ```python
@@ -51,21 +63,37 @@ from marimo_lens import Lens
 lens = Lens()
 context = lens.context()
 
+context.revision
 context.current
 context.references
 context.text
 context.images
+
+selection = context.current
+if selection is not None:
+    new_revision = lens.resolve(
+        selection["id"],
+        expected_revision=context.revision,
+        summary="Updated the aggregation cell and verified the chart.",
+    )
 ```
 
 `Lens()` accepts no public configuration. One displayed instance owns the
-notebook's Lens state. `context()` returns a detached snapshot from one Python
-selection revision and one current marimo runtime snapshot.
+notebook's Lens state. Another instance reports the active Lens and stays
+inactive until ownership is available. `context()` returns a detached snapshot
+from one Python selection revision and one current marimo runtime snapshot.
 
 `LensContext.current` is the current selection reference, or `None` when no
 selection exists. Creation, explicit activation, and note editing make a
 selection current.
 Deleting the current selection falls back to the most recently active remaining
 selection.
+
+`LensContext.revision` is the selection revision captured with the context.
+`Lens.resolve()` uses that revision to atomically remove one completed
+selection and its image. It returns the resulting revision. A conflict,
+missing selection, or closed widget raises `LensError` with a stable `code`
+and the current revision.
 
 ## Consumer boundary
 
@@ -74,15 +102,16 @@ lens.context()
     |
     +-- current -----> current-reference workflows
     +-- references --> live cell resolver, including marimo-pair
-    +-- text --------> text-only agent or clipboard
+    +-- text --------> text-only agent or portable handoff
     +-- images ------> optional vision input
 ```
 
 A live consumer resolves each `outputCellId` through marimo's current dataflow
 graph. marimo-pair evaluates `lens.context()` in the running kernel, reads the
 compact references it needs, and queries upstream or downstream cells when the
-request calls for them. Scratchpad state, edits, and agent lifecycle stay
-outside Lens.
+request calls for them. Scratchpad state and notebook edits stay outside Lens.
+After verification, Pair calls `lens.resolve()` for the selection that carried
+the completed intent.
 
 The text surface materializes bounded source, DAG edges, DOM hints, notes, and
 current relevant control values. It remains complete when every note is empty
@@ -107,6 +136,9 @@ capture-time evidence.
 9. Editing a note sends `selection.put` while preserving the image.
 10. `lens.context()` refreshes runtime provenance and returns current,
     references, standalone text, and successful image bytes.
+11. After verified notebook work, a live agent calls `lens.resolve()` with the
+    selection ID and captured revision. Python removes the selection and image,
+    then sends a transient completion receipt to the browser.
 
 Snapshot work never gates selection creation. A capture timeout, cross-origin
 boundary, or unsupported browser surface changes image status while keeping the
@@ -147,7 +179,7 @@ Python publishes one private trait:
 {
   "revision": 4,
   "nextLabel": "S5",
-  "currentSelectionId": "selection-id",
+  "currentSelectionId": null,
   "selections": []
 }
 ```
@@ -196,8 +228,34 @@ Responses use `marimo-lens.response` version 1 and always carry `requestId`,
 `ok`, `revision`, and an object `payload`. Failed responses add an `error`
 object with string `code` and `message` fields.
 
-Bundle resource messages and Lens command messages share the anywidget custom
-message channel. Their protocol envelopes remain independent.
+Bundle resources, Lens commands and responses, and Lens events share the
+anywidget custom-message channel. Their protocol envelopes remain independent.
+
+## Agent resolution event
+
+`Lens.resolve()` mutates Python state directly, while browser commands continue
+to serve user interactions. After the mutation commits, Python sends a
+best-effort `marimo-lens.event` version 1 message:
+
+```json
+{
+  "protocol": "marimo-lens.event",
+  "version": 1,
+  "type": "selection.resolved",
+  "revision": 9,
+  "payload": {
+    "selectionId": "selection-id",
+    "label": "S1",
+    "summary": "Updated the aggregation cell and verified the chart."
+  }
+}
+```
+
+The summary field is optional. When the event arrives, the browser displays a
+compact receipt and announces it through its accessibility status channel.
+Receipt delivery does not affect the committed mutation. `_state` continues to
+represent active selections, while the notebook change and agent response
+carry the durable outcome.
 
 ## Context references
 
@@ -228,6 +286,7 @@ capture-time evidence.
 ## Python ownership
 
 - `context.py` defines `LensContext` and `SelectionImage`.
+- `errors.py` defines the public `LensError` mutation failure.
 - `widget.py` composes state, protocol, image storage, runtime reads, and export.
 - `_runtime.py` reads current cells, direct DAG parents, and controls.
 - `_provenance.py` resolves the bounded upstream closure.
@@ -241,7 +300,8 @@ in `widget.py`.
 ## Browser ownership
 
 - `model.ts` reads authoritative `_state` and exposes protocol operations.
-- `protocol.ts` owns request correlation and binary custom messages.
+- `protocol.ts` owns request correlation, binary custom messages, and transient
+  resolution events.
 - `state.ts` owns the interaction reducer.
 - `selection-actions.ts` owns serialized mutations and background capture.
 - `capture/output-root.ts` resolves canonical marimo outputs.
@@ -250,7 +310,8 @@ in `widget.py`.
 - `capture/image.ts` captures and composes marked PNG evidence.
 - `reveal.ts` reveals the owning output for explicit list activation.
 - `components/` owns the bottom-center dock, selection sheet, marker-local
-  actions, exact snapshot preview, overlay, and note editor.
+  actions, exact snapshot preview, overlay, note editor, model ownership, and
+  resolution receipt.
 
 The browser performs no notebook graph work. Python performs no DOM work.
 

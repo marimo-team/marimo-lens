@@ -84,8 +84,13 @@ setup, watch mode, packaging, and browser checks.
   the cell-backed reference.
 - Editing a note preserves its image.
 - Moving or resizing a selection captures a replacement image.
+- A missing output keeps its selection, note, snapshot, and actions available.
+- The exact output cell ID reattaches a detached selection.
 - The marimo DAG is the source of truth for cell lineage.
 - `Lens.context()` refreshes runtime provenance for each call.
+- `Lens.resolve()` removes one completed selection and its PNG against an
+  expected revision.
+- A resolution receipt is transient browser feedback.
 - PNG bytes stay outside trait state, JSON references, local storage, and text
   prompts.
 - `LensContext.references` contains selections and live output cell references.
@@ -99,7 +104,8 @@ setup, watch mode, packaging, and browser checks.
 
 ## Public Python API
 
-The top-level package exports `Lens`, `LensContext`, and `SelectionImage`.
+The top-level package exports `Lens`, `LensContext`, `LensError`, and
+`SelectionImage`.
 
 ```python
 import marimo as mo
@@ -109,10 +115,19 @@ lens = mo.ui.anywidget(Lens())
 lens
 
 context = lens.context()
+context.revision
 context.current
 context.references
 context.text
 context.images
+
+selection = context.current
+if selection is not None:
+    revision = lens.resolve(
+        selection["id"],
+        expected_revision=context.revision,
+        summary="Updated the aggregation cell and verified the chart.",
+    )
 ```
 
 `lens.context()` returns one detached snapshot. `current` is the current
@@ -121,9 +136,17 @@ is a standalone contract. `images` contains successful and retained outdated
 captures in selection order and may be empty. `Lens()` accepts no public
 configuration.
 
+`lens.resolve(selection_id, *, expected_revision, summary=None)` atomically
+removes one active selection and its stored PNG, applies current-selection
+fallback, and returns the resulting revision. `summary` is trimmed and bounded
+to 240 UTF-16 code units. A conflict, missing selection, or closed widget
+raises `LensError` with a stable `code` and the current `revision`. Failed
+resolution leaves selection state unchanged.
+
 Python modules have focused ownership:
 
 - `context.py` owns public result types.
+- `errors.py` owns `LensError`.
 - `widget.py` owns AnyWidget lifecycle and composition.
 - `_runtime.py` reads the active marimo runtime.
 - `_provenance.py` resolves bounded DAG context.
@@ -156,6 +179,12 @@ Responses use `marimo-lens.response` version 1 and always include `requestId`,
 `ok`, `revision`, and an object `payload`. Failed responses include an `error`
 object with `code` and `message`.
 
+Agent resolution sends a best-effort `marimo-lens.event` version 1 message with
+type `selection.resolved`, the resulting revision, selection ID, stable label,
+and optional summary. The event is transient and stays outside `_state`,
+context packets, and image storage. Event delivery failure never rolls back a
+resolution.
+
 Every mutation carries `expectedRevision`. `selection.put` also uses
 `imageAction` with `preserve`, `replace`, or `clear`. Reject stale revisions
 before processing image bytes. `replace` sends exactly one PNG binary buffer.
@@ -173,13 +202,11 @@ buffer.
 
 The Lens dock is fixed at bottom center. It opens as a stable action bar and
 stays open until the user collapses it. Hover never changes its geometry. Its
-primary controls are **Select**, the selection count, **Copy**, the actions
-menu, and collapse.
+primary controls are **Select**, the selection count, and collapse.
 
 The collapsed state is a compact Lens tab with the selection count. **Select**
-changes to **Click or drag** with an **ESC** affordance while armed. **Copy**
-exports the current reference. The actions menu exports all references or
-standalone text and clears selections.
+changes to **Click or drag** with an **ESC** affordance while armed. The
+selection count opens the selection sheet.
 
 Clicking creates a point. Dragging creates a rectangle. Use pointer capture for
 the gesture. Resolve the output through `event.composedPath()` and the canonical
@@ -187,10 +214,17 @@ the gesture. Resolve the output through `event.composedPath()` and the canonical
 Enter to create a centered point. Escape cancels the active layer.
 
 The selection sheet lists selections and offers **Add note** or **Edit note**,
-exact snapshot preview, and removal. Explicit row activation makes a selection
-current and reveals its output cell. Row focus alone does not mutate state. A
-marker exposes local note and snapshot actions on hover or focus. The note
-editor never gates selection creation.
+exact snapshot preview, removal, and **Clear selections**. Explicit row
+activation makes a selection current and reveals its output cell. Row focus
+alone does not mutate state. A marker exposes local note and snapshot actions
+on hover or focus. The note editor never gates selection creation.
+
+A detached selection remains in the sheet with quiet `Output unavailable`
+status. Activation keeps it current and announces the same status. The note,
+snapshot, and removal actions remain available. A matching output cell ID
+reattaches it. A resolution event removes the row and marker through canonical
+state, then shows a compact receipt in the active dock surface for several
+seconds.
 
 Use a small reducer for idle, armed, dragging, and note-editing states.
 Keep input text local to the note editor. Effects connect React to model
@@ -276,15 +310,16 @@ must use the assets carried by that archive.
 
 ## Test design
 
-- Test Python behavior through public imports, `Lens.context()`, command
-  responses, references values, image bytes, and built artifacts.
+- Test Python behavior through public imports, `Lens.context()`,
+  `Lens.resolve()`, command responses, references values, image bytes, and
+  built artifacts.
 - Assert that references remain source-free and text remains complete with
   empty notes and no images.
 - Check live Pair interoperability by resolving output cell IDs against the
   active marimo cell collection and DAG.
 - Test TypeScript behavior through reducer state, output-root resolution,
   normalized geometry, immediate creation, background PNG composition,
-  protocol requests, and DOM behavior.
+  protocol requests, transient resolution events, and DOM behavior.
 - Test each lifecycle transition and failure path through the boundary a
   consumer observes.
 - Verify layout, overlays, focus, pointer behavior, responsive placement, and
@@ -305,9 +340,10 @@ selections across text, table, Altair or Vega, Plotly, Matplotlib, generic SVG,
 canvas, nested layouts, open shadow roots, scrollable content, and an external
 iframe failure. Verify immediate commit, one-shot mode, note editing, current
 selection, moving, resizing, deletion, clear, keyboard operation, output
-reruns, context copying, light and dark themes, narrow viewports, and reduced
-motion. Inspect console and page errors. Close the browser session and stop the
-server after validation.
+reruns, output detachment and exact-ID reconnection, agent resolution receipts,
+light and dark themes, narrow viewports, and reduced motion. Inspect console
+and page errors. Close the browser session and stop the server after
+validation.
 
 For the Pair boundary, start the notebook with `marimo edit --headless
 --no-token`, create selections through the browser, then evaluate
@@ -316,6 +352,13 @@ ancestors from the live kernel through `ctx.graph.cells` and
 `ctx.graph.ancestors`. Assert that references contain no source,
 control state, or PNG bytes. Verify text with image input omitted and repeat
 with a failed capture. Record compact references bytes and text characters.
+
+Apply and verify one notebook change through marimo-pair, then resolve its
+selection through the helper with the captured revision. Verify the browser
+removes the row and marker, updates the count, and shows the transient receipt.
+Repeat after deleting the selected output cell. Confirm the detached reference
+reports `cellStatus: "missing"` before resolution. Exercise a stale revision
+and confirm the helper preserves the active selection.
 
 Frontend changes require `pnpm check`, `pnpm test`, `pnpm build`,
 `pnpm dlx react-doctor@latest . --verbose --scope changed`, and the browser

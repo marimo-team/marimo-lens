@@ -72,7 +72,7 @@ Validate the archive boundary:
 uvx twine check dist/marimo_lens-*.whl dist/marimo_lens-*.tar.gz
 uv build --no-sources --wheel dist/marimo_lens-*.tar.gz --out-dir dist/from-sdist
 uv run --no-project --with dist/from-sdist/marimo_lens-*.whl \
-  python -c "from marimo_lens import Lens, LensContext, SelectionImage; Lens()"
+  python -c "from marimo_lens import Lens, LensContext, LensError, SelectionImage; Lens()"
 ```
 
 The sdist build uses its packaged browser assets. Hatch reports each required
@@ -114,7 +114,8 @@ agent-browser --session marimo-lens-e2e snapshot -i
 
 Exercise these contracts:
 
-- Expanded and collapsed bottom-center dock states with explicit toggles
+- Expanded and collapsed bottom-center dock states with selection, list, and
+  collapse controls
 - Stable dock geometry on hover
 - Point selection on text, table, SVG, canvas, chart, and widget outputs
 - Region selection on a nested layout
@@ -126,9 +127,12 @@ Exercise these contracts:
 - Anchor move and resize with replacement capture
 - Selection activation with output reveal, delete, clear, and current-selection
   fallback
-- Output rerun with marker reconnection, fresh text context, and retained capture-time images
-- **Copy** for the current reference, plus all references and standalone text
-  from the actions menu
+- Output removal with `Output unavailable`, retained actions and snapshot, and
+  exact-ID marker reconnection
+- Output rerun with fresh text context and retained capture-time images
+- Agent resolution with row, marker, image, and count removal plus a transient
+  receipt in the active dock surface
+- Resolution while the selection sheet or note editor is open
 - Keyboard selection and Escape cancellation
 - Narrow viewport and coarse-pointer placement
 - Light, dark, and reduced-motion settings
@@ -159,17 +163,20 @@ scratchpad execution path. The scratchpad may use `marimo._code_mode` to inspect
 the live cell collection. Project code and notebook cells must use public
 marimo APIs.
 
-For every selection, verify that `outputCellId` resolves through
-`ctx.graph.cells[outputCellId]`. Compare
+For each selection with `cellStatus: "available"`, verify that `outputCellId`
+resolves through `ctx.graph.cells[outputCellId]`. Compare
 `ctx.graph.ancestors(outputCellId)` with the selected cell plus the bounded,
 topologically ordered ancestor subset rendered in `context.text`.
+For a `missing` selection, verify that its stored selection ID, note, DOM hint,
+and snapshot remain readable and that the helper can resolve it after the
+notebook change is verified.
 
 Assert these contracts:
 
 - References have `protocol`, `version`, `revision`, `generatedAt`, `notebook`,
   `currentSelectionId`, and `selections` as their complete top-level shape.
-- `currentSelectionId` identifies the most recently created, focused, or edited
-  selection.
+- `currentSelectionId` identifies the most recently created, explicitly
+  activated, or edited selection.
 - References contain no cell source, control state, PNG bytes, or scratchpad
   caller identity.
 - Text contains each output cell reference, selected source, upstream source,
@@ -177,6 +184,12 @@ Assert these contracts:
   absent.
 - A failed image capture still produces complete references and text.
 - `LensContext.images` contains successful captures in selection order.
+- Resolving by stable selection ID and captured revision removes the selection
+  and image, increments the revision, and returns a compact helper receipt.
+- A stale helper revision returns `revision-conflict` and preserves the
+  selection.
+- A detached selection keeps `cellStatus: "missing"` and resolves after the
+  selected output cell is deleted.
 - Selection state stays at or below 40,000 bytes, references at or below 45,000
   bytes, and text at or below 64,000 characters.
 
