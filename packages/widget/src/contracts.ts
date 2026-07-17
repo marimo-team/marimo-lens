@@ -10,6 +10,7 @@ const PositiveNormalizedNumberSchema = v.pipe(
 );
 const PositiveIntegerSchema = v.pipe(v.number(), v.integer(), v.minValue(1));
 const RevisionSchema = v.pipe(v.number(), v.integer(), v.minValue(0));
+export const SelectionLabelSchema = v.pipe(v.string(), v.regex(/^S[1-9]\d*$/));
 
 export const PointAnchorSchema = v.strictObject({
   kind: v.literal("point"),
@@ -95,7 +96,7 @@ export const SelectionSnapshotSchema = v.variant("status", [
 
 const SelectionObjectSchema = v.strictObject({
   id: NonEmptyStringSchema,
-  label: v.pipe(v.string(), v.regex(/^S[1-9]\d*$/)),
+  label: SelectionLabelSchema,
   note: v.pipe(v.string(), v.maxLength(4_000)),
   outputCellId: NonEmptyStringSchema,
   createdAt: NonEmptyStringSchema,
@@ -247,6 +248,18 @@ export const FailedResponseSchema = v.strictObject({
 
 export const LensResponseSchema = v.variant("ok", [SuccessfulResponseSchema, FailedResponseSchema]);
 
+export const SelectionResolvedEventSchema = v.strictObject({
+  protocol: v.literal("marimo-lens.event"),
+  version: v.literal(1),
+  type: v.literal("selection.resolved"),
+  revision: RevisionSchema,
+  payload: v.strictObject({
+    selectionId: NonEmptyStringSchema,
+    label: SelectionLabelSchema,
+    summary: v.optional(v.pipe(v.string(), v.nonEmpty(), v.maxLength(240))),
+  }),
+});
+
 export type PointAnchor = v.InferOutput<typeof PointAnchorSchema>;
 export type RectAnchor = v.InferOutput<typeof RectAnchorSchema>;
 export type SelectionAnchor = v.InferOutput<typeof SelectionAnchorSchema>;
@@ -264,6 +277,7 @@ export type StoredSnapshot = v.InferOutput<typeof StoredSnapshotSchema>;
 export type SnapshotResponsePayload = v.InferOutput<typeof SnapshotResponsePayloadSchema>;
 export type LensCommand = v.InferOutput<typeof LensCommandSchema>;
 export type LensResponse = v.InferOutput<typeof LensResponseSchema>;
+export type SelectionResolvedEvent = v.InferOutput<typeof SelectionResolvedEventSchema>;
 
 export type CommandType = LensCommand["type"];
 export type CommandPayload<TType extends CommandType> = Extract<
@@ -288,4 +302,8 @@ export function parseLensState(input: unknown): LensState {
 
 export function parseLensResponse(input: unknown): LensResponse {
   return parseContract(LensResponseSchema, input, "Lens response");
+}
+
+export function parseSelectionResolvedEvent(input: unknown): SelectionResolvedEvent {
+  return parseContract(SelectionResolvedEventSchema, input, "Lens resolution event");
 }

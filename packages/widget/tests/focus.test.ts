@@ -28,9 +28,12 @@ describe("focus restoration", () => {
   });
 
   test("returns to the stable Select control after removal", () => {
+    const container = document.createElement("aside");
+    container.setAttribute("data-marimo-lens-dock", "");
     const dock = document.createElement("button");
     dock.setAttribute("data-ml-select", "");
-    document.body.appendChild(dock);
+    container.appendChild(dock);
+    document.body.appendChild(container);
 
     focusDock();
 
@@ -45,11 +48,41 @@ describe("focus restoration", () => {
     });
 
     focusDock();
+    const container = document.createElement("aside");
+    container.setAttribute("data-marimo-lens-dock", "");
     const laterDock = document.createElement("button");
     laterDock.setAttribute("data-ml-select", "");
-    document.body.appendChild(laterDock);
+    container.appendChild(laterDock);
+    document.body.appendChild(container);
     scheduled?.(0);
 
     expect(document.activeElement).not.toBe(laterDock);
+  });
+
+  test("returns to the collapsed Lens tab after a selection disappears", () => {
+    const dock = document.createElement("aside");
+    dock.setAttribute("data-marimo-lens-dock", "");
+    const tab = document.createElement("button");
+    tab.setAttribute("data-ml-dock-tab", "");
+    dock.appendChild(tab);
+    document.body.appendChild(dock);
+
+    focusSelectionOrDock("selection-1");
+
+    expect(document.activeElement).toBe(tab);
+  });
+
+  test("returns to the first enabled dock control when Lens is expanded", () => {
+    const dock = document.createElement("aside");
+    dock.setAttribute("data-marimo-lens-dock", "");
+    const disabled = document.createElement("button");
+    disabled.disabled = true;
+    const enabled = document.createElement("button");
+    dock.append(disabled, enabled);
+    document.body.appendChild(dock);
+
+    focusSelectionOrDock("selection-1");
+
+    expect(document.activeElement).toBe(enabled);
   });
 });

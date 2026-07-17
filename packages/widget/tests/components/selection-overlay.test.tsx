@@ -5,7 +5,8 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import type { Selection, SelectionAnchor } from "@/contracts";
 
 import { SelectionOverlay } from "@/components/selection-overlay";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "../test-fixtures";
 
 let root: Root | null = null;
 
@@ -105,6 +106,51 @@ describe("selection overlay", () => {
     expect(onEditNote).toHaveBeenCalledWith(selection, "instant");
   });
 
+  test("removes a selection from its marker actions", () => {
+    setupOutput();
+    const selection = selectionFixture();
+    const onDelete = vi.fn();
+    renderOverlay([selection], selection.id, { onDelete });
+
+    const marker = document.querySelector<HTMLButtonElement>(
+      '[data-marimo-lens-selection-id="selection-1"]',
+    );
+    act(() => marker?.focus());
+    const remove = document.querySelector<HTMLButtonElement>(
+      'button[aria-label="Remove selection S1"]',
+    );
+    act(() => remove?.click());
+
+    expect(onDelete).toHaveBeenCalledWith(selection);
+    expect(
+      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
+    ).toBeNull();
+  });
+
+  test("keeps marker actions closed after an output reattaches", () => {
+    setupOutput();
+    const selection = selectionFixture();
+    const rerender = renderOverlay([selection], selection.id);
+
+    const marker = document.querySelector<HTMLButtonElement>(
+      '[data-marimo-lens-selection-id="selection-1"]',
+    );
+    act(() => marker?.focus());
+    expect(
+      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
+    ).not.toBeNull();
+
+    rerender({ availableOutputCellIds: new Set() });
+    expect(
+      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
+    ).toBeNull();
+
+    rerender({ availableOutputCellIds: new Set([selection.outputCellId]) });
+    expect(
+      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
+    ).toBeNull();
+  });
+
   test("commits keyboard resizing once", () => {
     setupOutput();
     const selection = selectionFixture({
@@ -151,24 +197,31 @@ function renderOverlay(
   const container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  act(() => {
-    root?.render(
-      <SelectionOverlay
-        selections={selections}
-        currentSelectionId={currentSelectionId}
-        workflow={{ mode: "idle" }}
-        busySelectionIds={new Set()}
-        capturingSelectionIds={new Set()}
-        onActivate={() => {}}
-        onEditNote={() => {}}
-        loadSnapshot={async () => {
-          throw new Error("Snapshot loading is not expected in this test");
-        }}
-        onReposition={() => {}}
-        registerAdjustment={() => {}}
-        releaseAdjustment={() => {}}
-        {...overrides}
-      />,
-    );
-  });
+  const render = (next: Partial<React.ComponentProps<typeof SelectionOverlay>> = {}) => {
+    act(() => {
+      root?.render(
+        <SelectionOverlay
+          selections={selections}
+          currentSelectionId={currentSelectionId}
+          availableOutputCellIds={new Set(selections.map(({ outputCellId }) => outputCellId))}
+          workflow={{ mode: "idle" }}
+          busySelectionIds={new Set()}
+          capturingSelectionIds={new Set()}
+          onActivate={() => {}}
+          onEditNote={() => {}}
+          onDelete={() => {}}
+          loadSnapshot={async () => {
+            throw new Error("Snapshot loading is not expected in this test");
+          }}
+          onReposition={() => {}}
+          registerAdjustment={() => {}}
+          releaseAdjustment={() => {}}
+          {...overrides}
+          {...next}
+        />,
+      );
+    });
+  };
+  render();
+  return render;
 }

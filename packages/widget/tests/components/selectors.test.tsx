@@ -6,7 +6,8 @@ import { LensDock } from "@/components/lens-dock";
 import { LensStatus } from "@/components/lens-status";
 import { SelectionNoteEditor } from "@/components/selection-note-editor";
 import { SelectionOverlay } from "@/components/selection-overlay";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "../test-fixtures";
 
 let root: Root | null = null;
 
@@ -38,17 +39,15 @@ describe("stable browser selectors", () => {
           <LensDock
             selections={[selection]}
             currentSelectionId={selection.id}
+            availableOutputCellIds={new Set([selection.outputCellId])}
             armed={false}
             listOpen
-            menuOpen={false}
-            exportState={{ status: "idle" }}
+            clearPending={false}
             capturingSelectionIds={new Set()}
             busySelectionIds={new Set()}
             interactionLocked={false}
             onToggleArmed={() => {}}
             onToggleList={() => {}}
-            onToggleMenu={() => {}}
-            onCopyContext={() => {}}
             onClearSelections={() => {}}
             onActivateSelection={onActivate}
             onEditNote={() => {}}
@@ -71,11 +70,13 @@ describe("stable browser selectors", () => {
           <SelectionOverlay
             selections={[selection]}
             currentSelectionId={selection.id}
+            availableOutputCellIds={new Set([selection.outputCellId])}
             workflow={{ mode: "idle" }}
             busySelectionIds={new Set()}
             capturingSelectionIds={new Set()}
             onActivate={onActivate}
             onEditNote={() => {}}
+            onDelete={() => {}}
             loadSnapshot={async () => {
               throw new Error("Snapshot loading is not expected in this test");
             }}

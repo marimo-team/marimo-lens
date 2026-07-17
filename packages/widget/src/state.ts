@@ -24,12 +24,6 @@ export type WorkflowState =
       error?: string;
     };
 
-export type ExportState =
-  | { status: "idle" }
-  | { status: "exporting" }
-  | { status: "success" }
-  | { status: "error"; message: string };
-
 export type UiState = {
   workflow: WorkflowState;
   pendingSelections: PendingSelection[];
@@ -37,8 +31,6 @@ export type UiState = {
   busySelectionIds: string[];
   clearPending: boolean;
   listOpen: boolean;
-  menuOpen: boolean;
-  export: ExportState;
   announcement: string;
 };
 
@@ -69,10 +61,6 @@ export type UiAction =
   | { type: "clearStarted" }
   | { type: "clearFinished" }
   | { type: "setListOpen"; open: boolean }
-  | { type: "setMenuOpen"; open: boolean }
-  | { type: "exportStarted"; message: string }
-  | { type: "exportSucceeded"; message: string }
-  | { type: "exportFailed"; message: string }
   | { type: "announce"; message: string };
 
 export const INITIAL_UI_STATE: UiState = {
@@ -82,8 +70,6 @@ export const INITIAL_UI_STATE: UiState = {
   busySelectionIds: [],
   clearPending: false,
   listOpen: false,
-  menuOpen: false,
-  export: { status: "idle" },
   announcement: "",
 };
 
@@ -94,7 +80,6 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
         ...state,
         workflow: { mode: "armed", activeOutputCellId: null },
         listOpen: false,
-        menuOpen: false,
         announcement: "Select mode active. Click a point or drag a region.",
       };
     case "disarm":
@@ -196,7 +181,6 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
         },
         optimisticCurrentSelectionId: action.selectionId,
         listOpen: false,
-        menuOpen: false,
       };
     case "closeNote":
       return { ...state, workflow: { mode: "idle" } };
@@ -239,31 +223,11 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
         busySelectionIds: removeValue(state.busySelectionIds, action.selectionId),
       };
     case "clearStarted":
-      return { ...state, clearPending: true, menuOpen: false };
+      return { ...state, clearPending: true };
     case "clearFinished":
       return { ...state, clearPending: false };
     case "setListOpen":
-      return { ...state, listOpen: action.open, menuOpen: false };
-    case "setMenuOpen":
-      return { ...state, menuOpen: action.open, listOpen: false };
-    case "exportStarted":
-      return {
-        ...state,
-        export: { status: "exporting" },
-        announcement: action.message,
-      };
-    case "exportSucceeded":
-      return {
-        ...state,
-        export: { status: "success" },
-        announcement: action.message,
-      };
-    case "exportFailed":
-      return {
-        ...state,
-        export: { status: "error", message: action.message },
-        announcement: action.message,
-      };
+      return { ...state, listOpen: action.open };
     case "announce":
       return { ...state, announcement: action.message };
   }

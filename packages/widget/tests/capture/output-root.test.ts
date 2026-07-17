@@ -6,6 +6,7 @@ import {
   listOutputCells,
   outputCellFromElement,
   outputCellFromEvent,
+  registerLensHostOutput,
 } from "@/capture/output-root";
 
 afterEach(() => {
@@ -42,6 +43,28 @@ describe("marimo output resolution", () => {
     const hostMarker = document.createElement("span");
     hostMarker.setAttribute("data-marimo-lens-host", "");
     lensOutput.appendChild(hostMarker);
+    const release = registerLensHostOutput(hostMarker);
+    const notebookOutput = visibleOutput("analysis-cell");
+
+    expect(getOutputCell("lens-cell")).toBeNull();
+    expect(listOutputCells()).toEqual([{ id: "analysis-cell", element: notebookOutput }]);
+
+    release();
+    expect(getOutputCell("lens-cell")).toMatchObject({ id: "lens-cell", element: lensOutput });
+  });
+
+  test("excludes a Lens host marker inside an open shadow root", () => {
+    const lensOutput = visibleOutput("lens-cell");
+    const widget = document.createElement("marimo-anywidget");
+    const shadow = widget.attachShadow({ mode: "open" });
+    const nestedHost = document.createElement("div");
+    const nestedShadow = nestedHost.attachShadow({ mode: "open" });
+    const hostMarker = document.createElement("span");
+    hostMarker.setAttribute("data-marimo-lens-host", "");
+    nestedShadow.appendChild(hostMarker);
+    shadow.appendChild(nestedHost);
+    lensOutput.appendChild(widget);
+    registerLensHostOutput(hostMarker);
     const notebookOutput = visibleOutput("analysis-cell");
 
     expect(getOutputCell("lens-cell")).toBeNull();

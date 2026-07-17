@@ -1,6 +1,26 @@
 import type { OutputCell } from "@/types";
 
 const OUTPUT_ID_PREFIX = "output-";
+const LENS_OUTPUT_REGISTRY = Symbol.for("marimo-lens.output-registry.v1");
+
+type LensOutputRegistry = WeakMap<HTMLElement, number>;
+
+export function registerLensHostOutput(host: Element): () => void {
+  const output = owningOutputRoot(host);
+  if (!output) return () => {};
+
+  const registry = lensOutputRegistry(output.ownerDocument);
+  registry.set(output, (registry.get(output) ?? 0) + 1);
+
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const owners = registry.get(output) ?? 0;
+    if (owners <= 1) registry.delete(output);
+    else registry.set(output, owners - 1);
+  };
+}
 
 export function outputCellFromElement(element: Element | null): OutputCell | null {
   let current: Element | null = element;
@@ -57,9 +77,36 @@ export function deepestElementFromEvent(event: Event, output: HTMLElement): Elem
 
 function outputCellFromRoot(element: Element): OutputCell | null {
   if (!(element instanceof HTMLElement) || !element.id.startsWith(OUTPUT_ID_PREFIX)) return null;
-  if (element.querySelector("[data-marimo-lens-host]")) return null;
+  if (containsLensHost(element)) return null;
   const id = element.id.slice(OUTPUT_ID_PREFIX.length);
   return id.length > 0 ? { id, element } : null;
+}
+
+function containsLensHost(output: HTMLElement): boolean {
+  const registry: unknown = Reflect.get(output.ownerDocument, LENS_OUTPUT_REGISTRY);
+  return registry instanceof WeakMap && registry.has(output);
+}
+
+function owningOutputRoot(element: Element): HTMLElement | null {
+  let current: Element | null = element;
+  while (current) {
+    if (current instanceof HTMLElement && current.id.startsWith(OUTPUT_ID_PREFIX)) return current;
+    const root = current.getRootNode();
+    current = current.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+  }
+  return null;
+}
+
+function lensOutputRegistry(ownerDocument: Document): LensOutputRegistry {
+  const existing: unknown = Reflect.get(ownerDocument, LENS_OUTPUT_REGISTRY);
+  if (existing instanceof WeakMap) return existing as LensOutputRegistry;
+
+  const registry: LensOutputRegistry = new WeakMap();
+  Object.defineProperty(ownerDocument, LENS_OUTPUT_REGISTRY, {
+    configurable: true,
+    value: registry,
+  });
+  return registry;
 }
 
 function descendOpenShadowRoots(element: Element, x: number, y: number): Element {

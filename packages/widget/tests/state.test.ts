@@ -1,7 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
 import { INITIAL_UI_STATE, gestureAnchor, locksCompetingInteractions, uiReducer } from "@/state";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "./test-fixtures";
 
 describe("selection workflow", () => {
   test("returns to idle as soon as pointer release queues a selection", () => {

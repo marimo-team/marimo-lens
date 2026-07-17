@@ -1,6 +1,6 @@
 import type { CSSProperties, PointerEventHandler } from "react";
 
-import { MessageSquarePlus, Pencil } from "lucide-react";
+import { MessageSquarePlus, Pencil, Trash2 } from "lucide-react";
 
 import type { Selection, SelectionAnchor } from "@/contracts";
 import type { SnapshotAsset } from "@/protocol";
@@ -14,6 +14,7 @@ type SelectionPeekProps = {
   motion: "animate" | "instant";
   loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>;
   onEditNote: (selection: Selection, motion: "animate" | "instant") => void;
+  onDelete: (selection: Selection) => void;
   onClose: () => void;
   onPointerEnter: PointerEventHandler<HTMLElement>;
   onPointerLeave: PointerEventHandler<HTMLElement>;
@@ -26,6 +27,7 @@ export function SelectionPeek({
   motion,
   loadSnapshot,
   onEditNote,
+  onDelete,
   onClose,
   onPointerEnter,
   onPointerLeave,
@@ -70,11 +72,25 @@ export function SelectionPeek({
           )}
           {selection.note ? "Edit note" : "Add note"}
         </button>
-        <SnapshotPreviewButton
-          selection={selection}
-          capturing={capturing}
-          loadSnapshot={loadSnapshot}
-        />
+        <div className="ml-selection-peek__secondary-actions">
+          <SnapshotPreviewButton
+            selection={selection}
+            capturing={capturing}
+            loadSnapshot={loadSnapshot}
+          />
+          <button
+            className="ml-icon-button ml-icon-button--danger"
+            type="button"
+            onClick={() => {
+              onClose();
+              onDelete(selection);
+            }}
+            aria-label={`Remove selection ${selection.label}`}
+            title="Remove selection"
+          >
+            <Trash2 size={14} aria-hidden="true" />
+          </button>
+        </div>
       </footer>
     </section>
   );

@@ -3,7 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { LensDock } from "@/components/lens-dock";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "../test-fixtures";
 
 let root: Root | null = null;
 
@@ -29,6 +30,16 @@ describe("Lens dock", () => {
     expect(findButton("Open Lens")).not.toBeNull();
     act(() => findButton("Open Lens")?.click());
     expect(document.querySelector("[data-ml-select]")).not.toBeNull();
+  });
+
+  test("announces the selection count from the collapsed dock", () => {
+    renderDock({
+      selections: [selectionFixture(), selectionFixture({ id: "selection-2", label: "S2" })],
+    });
+
+    act(() => findButton("Collapse Lens")?.click());
+
+    expect(findButton("Open Lens, 2 selections")).not.toBeNull();
   });
 
   test("opens the selection sheet and restores focus to its trigger", () => {
@@ -80,41 +91,69 @@ describe("Lens dock", () => {
     expect(onActivateSelection).toHaveBeenCalledWith(second, "instant");
   });
 
-  test("copies the current reference directly and keeps expanded formats in the menu", () => {
-    const onCopyContext = vi.fn();
+  test("keeps the dock focused on selecting and opening selections", () => {
+    renderDock({ selections: [selectionFixture()], currentSelectionId: "selection-1" });
+
+    expect(
+      Array.from(document.querySelectorAll<HTMLButtonElement>(".ml-dockbar button")).map((button) =>
+        button.getAttribute("aria-label"),
+      ),
+    ).toEqual(["Select an output", "Open 1 selection", "Collapse Lens"]);
+  });
+
+  test("keeps bulk clearing in the selection sheet", () => {
+    const onClearSelections = vi.fn();
     renderDock({
       selections: [selectionFixture()],
       currentSelectionId: "selection-1",
-      menuOpen: true,
-      onCopyContext,
+      listOpen: true,
+      onClearSelections,
     });
 
-    act(() => document.querySelector<HTMLButtonElement>(".ml-dockbar__copy")?.click());
-    expect(onCopyContext).toHaveBeenCalledWith("current");
+    act(() => findButton("Clear selections")?.click());
+    expect(onClearSelections).toHaveBeenCalledOnce();
+  });
 
-    act(() => findButton("Copy all references")?.click());
-    expect(onCopyContext).toHaveBeenLastCalledWith("references");
+  test("keeps a detached selection actionable and labels its unavailable output", () => {
+    const selection = selectionFixture();
+    const onActivateSelection = vi.fn();
+    const onEditNote = vi.fn();
+    const onDeleteSelection = vi.fn();
+    renderDock({
+      selections: [selection],
+      currentSelectionId: selection.id,
+      availableOutputCellIds: new Set(),
+      listOpen: true,
+      onActivateSelection,
+      onEditNote,
+      onDeleteSelection,
+    });
+
+    const summary = document.querySelector<HTMLButtonElement>('[aria-label*="Output unavailable"]');
+    expect(summary?.textContent).toContain("Output unavailable");
+    expect(summary?.getAttribute("aria-current")).toBe("true");
+    expect(findButton("Snapshot ready for S1. Preview image.")?.disabled).toBe(false);
+    expect(findButton("Edit note for S1")?.disabled).toBe(false);
+    expect(findButton("Remove selection S1")?.disabled).toBe(false);
+
+    act(() => summary?.click());
+    expect(onActivateSelection).toHaveBeenCalledWith(selection, "instant");
+    act(() => findButton("Edit note for S1")?.click());
+    expect(onEditNote).toHaveBeenCalledWith(selection, "instant");
+    act(() => findButton("Remove selection S1")?.click());
+    expect(onDeleteSelection).toHaveBeenCalledWith(selection);
   });
 });
 
 function DockHarness() {
   const [listOpen, setListOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   return (
     <LensDock
       {...defaultProps()}
       selections={[selectionFixture({ note: "" })]}
       currentSelectionId="selection-1"
       listOpen={listOpen}
-      menuOpen={menuOpen}
-      onToggleList={() => {
-        setListOpen((open) => !open);
-        setMenuOpen(false);
-      }}
-      onToggleMenu={() => {
-        setMenuOpen((open) => !open);
-        setListOpen(false);
-      }}
+      onToggleList={() => setListOpen((open) => !open)}
     />
   );
 }
@@ -130,17 +169,15 @@ function defaultProps(): React.ComponentProps<typeof LensDock> {
   return {
     selections: [],
     currentSelectionId: null,
+    availableOutputCellIds: new Set(),
     armed: false,
     listOpen: false,
-    menuOpen: false,
-    exportState: { status: "idle" },
+    clearPending: false,
     capturingSelectionIds: new Set(),
     busySelectionIds: new Set(),
     interactionLocked: false,
     onToggleArmed: () => {},
     onToggleList: () => {},
-    onToggleMenu: () => {},
-    onCopyContext: () => {},
     onClearSelections: () => {},
     onActivateSelection: () => {},
     onEditNote: () => {},

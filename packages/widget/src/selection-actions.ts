@@ -1,13 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type RefObject } from "react";
 
-import type {
-  ContextExportFormat,
-  ImageAction,
-  LensResponse,
-  LensState,
-  Selection,
-  SelectionAnchor,
-} from "@/contracts";
+import type { ImageAction, LensResponse, LensState, Selection, SelectionAnchor } from "@/contracts";
 import type { LensProtocolClient } from "@/protocol";
 import type { SelectionMotion, UiAction } from "@/state";
 
@@ -16,7 +9,7 @@ import { collectDomHint } from "@/capture/dom-hint";
 import { captureSelectionSnapshot } from "@/capture/image";
 import { deepestElementAtPoint, getOutputCell } from "@/capture/output-root";
 import { waitForRevision } from "@/conflict";
-import { focusDock, focusMenuTrigger, focusSelectionOrDock } from "@/focus";
+import { focusDock, focusSelectionOrDock } from "@/focus";
 import { LensProtocolError } from "@/protocol";
 
 type RevisionedMutation = (state: LensState) => Promise<LensResponse>;
@@ -29,7 +22,25 @@ export function useSelectionActions(options: {
   const { stateRef, dispatch, protocol } = options;
   const currentSignal = useLifecycleSignal();
   const [mutationQueue] = useState(() => ({ tail: Promise.resolve() }));
-  const [captureGeneration] = useState(() => new Map<string, number>());
+  const [captureGeneration] = useState(() => new Map<string, symbol>());
+
+  const reserveSnapshotCapture = useCallback(
+    (selectionId: string): symbol => {
+      const ticket = Symbol(selectionId);
+      captureGeneration.set(selectionId, ticket);
+      return ticket;
+    },
+    [captureGeneration],
+  );
+
+  const releaseSnapshotCapture = useCallback(
+    (selectionId: string, generation: symbol) => {
+      if (captureGeneration.get(selectionId) === generation) {
+        captureGeneration.delete(selectionId);
+      }
+    },
+    [captureGeneration],
+  );
 
   const enqueueMutation = useCallback(
     <T>(mutation: () => Promise<T>): Promise<T> => {
@@ -90,12 +101,13 @@ export function useSelectionActions(options: {
     async (
       selectionId: string,
       anchor: SelectionAnchor,
-      generation: number,
+      generation: symbol,
       result: Awaited<ReturnType<typeof captureSelectionSnapshot>>,
     ) => {
       const signal = currentSignal();
       if (captureGeneration.get(selectionId) !== generation) return;
       await enqueueMutation(async () => {
+        if (captureGeneration.get(selectionId) !== generation) return;
         let retainedOutdated = false;
         const snapshot = result.status === "available" ? result.snapshot.metadata : result.snapshot;
         await runRevisioned(
@@ -125,7 +137,15 @@ export function useSelectionActions(options: {
             );
           },
         );
-        if (!signal.aborted && captureGeneration.get(selectionId) === generation) {
+        const current = stateRef.current.selections.find(
+          (selection) => selection.id === selectionId,
+        );
+        if (
+          !signal.aborted &&
+          captureGeneration.get(selectionId) === generation &&
+          current &&
+          sameAnchor(current.anchor, anchor)
+        ) {
           dispatch({
             type: "announce",
             message:
@@ -138,27 +158,55 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [captureGeneration, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned],
+    [
+      captureGeneration,
+      currentSignal,
+      dispatch,
+      enqueueMutation,
+      protocol,
+      runRevisioned,
+      stateRef,
+    ],
   );
 
   const captureSnapshot = useCallback(
-    async (selection: Selection, output: HTMLElement, detailElement: Element) => {
+    async (
+      selection: Selection,
+      output: HTMLElement,
+      detailElement: Element,
+      generation: symbol,
+    ) => {
       const signal = currentSignal();
       signal.throwIfAborted();
-      const generation = (captureGeneration.get(selection.id) ?? 0) + 1;
-      captureGeneration.set(selection.id, generation);
-      const result = await captureSelectionSnapshot({
-        selectionId: selection.id,
-        label: selection.label,
-        anchor: selection.anchor,
-        output,
-        detailElement,
-        signal,
-      });
-      signal.throwIfAborted();
-      await commitSnapshot(selection.id, selection.anchor, generation, result);
+      if (captureGeneration.get(selection.id) !== generation) return;
+      const current = stateRef.current.selections.find(({ id }) => id === selection.id);
+      if (!current || !sameAnchor(current.anchor, selection.anchor)) return;
+      try {
+        const result = await captureSelectionSnapshot({
+          selectionId: selection.id,
+          label: selection.label,
+          anchor: selection.anchor,
+          output,
+          detailElement,
+          signal,
+        });
+        signal.throwIfAborted();
+        await commitSnapshot(selection.id, selection.anchor, generation, result);
+      } catch (error) {
+        if (captureGeneration.get(selection.id) !== generation) return;
+        throw error;
+      } finally {
+        releaseSnapshotCapture(selection.id, generation);
+      }
     },
-    [captureGeneration, commitSnapshot, currentSignal],
+    [captureGeneration, commitSnapshot, currentSignal, releaseSnapshotCapture, stateRef],
+  );
+
+  const invalidateSnapshotCapture = useCallback(
+    (selectionId: string) => {
+      captureGeneration.delete(selectionId);
+    },
+    [captureGeneration],
   );
 
   const beginSelection = useCallback(
@@ -180,6 +228,7 @@ export function useSelectionActions(options: {
         domHint: collectDomHint(detailElement, output),
         snapshot: { status: "pending" },
       };
+      const captureTicket = reserveSnapshotCapture(selection.id);
       dispatch({ type: "selectionQueued", pending: { selection } });
 
       const committed = enqueueMutation(async () => {
@@ -211,14 +260,27 @@ export function useSelectionActions(options: {
       void committed
         .then((saved) => {
           if (signal.aborted) return;
+          if (
+            captureGeneration.get(saved.id) !== captureTicket ||
+            !stateRef.current.selections.some(({ id }) => id === saved.id)
+          ) {
+            releaseSnapshotCapture(saved.id, captureTicket);
+            return;
+          }
           dispatch({ type: "selectionCommitted", selectionId: saved.id, label: saved.label });
           focusSelectionOrDock(saved.id);
-          void captureSnapshot(saved, output, detailElement).catch((error: unknown) => {
-            if (signal.aborted || isAbortError(error)) return;
-            dispatch({ type: "announce", message: errorMessage(error, "Snapshot capture failed") });
-          });
+          void captureSnapshot(saved, output, detailElement, captureTicket).catch(
+            (error: unknown) => {
+              if (signal.aborted || isAbortError(error)) return;
+              dispatch({
+                type: "announce",
+                message: errorMessage(error, "Snapshot capture failed"),
+              });
+            },
+          );
         })
         .catch((error: unknown) => {
+          releaseSnapshotCapture(selection.id, captureTicket);
           if (signal.aborted || isAbortError(error)) return;
           dispatch({
             type: "selectionFailed",
@@ -228,7 +290,18 @@ export function useSelectionActions(options: {
           focusDock();
         });
     },
-    [captureSnapshot, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned, stateRef],
+    [
+      captureGeneration,
+      captureSnapshot,
+      currentSignal,
+      dispatch,
+      enqueueMutation,
+      protocol,
+      releaseSnapshotCapture,
+      reserveSnapshotCapture,
+      runRevisioned,
+      stateRef,
+    ],
   );
 
   const activateSelection = useCallback(
@@ -305,7 +378,6 @@ export function useSelectionActions(options: {
     (selection: Selection) => {
       const signal = currentSignal();
       signal.throwIfAborted();
-      captureGeneration.delete(selection.id);
       dispatch({ type: "mutationStarted", selectionId: selection.id });
       void enqueueMutation(async () => {
         try {
@@ -316,6 +388,7 @@ export function useSelectionActions(options: {
                 : Promise.resolve(localResponse(state.revision)),
             (latest) => !latest.selections.some((candidate) => candidate.id === selection.id),
           );
+          invalidateSnapshotCapture(selection.id);
           dispatch({ type: "closeNote" });
           dispatch({ type: "setListOpen", open: false });
           dispatch({ type: "announce", message: `${selection.label} removed.` });
@@ -331,24 +404,29 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [captureGeneration, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned],
+    [currentSignal, dispatch, enqueueMutation, invalidateSnapshotCapture, protocol, runRevisioned],
   );
 
   const clearSelections = useCallback(() => {
     const signal = currentSignal();
     signal.throwIfAborted();
-    captureGeneration.clear();
     dispatch({ type: "clearStarted" });
     void enqueueMutation(async () => {
       let cleared = false;
+      let clearedSelectionIds: string[] = [];
       try {
         await runRevisioned(
-          (state) =>
-            state.selections.length === 0
+          (state) => {
+            clearedSelectionIds = state.selections.map(({ id }) => id);
+            return state.selections.length === 0
               ? Promise.resolve(localResponse(state.revision))
-              : protocol.clearSelections(state.revision),
+              : protocol.clearSelections(state.revision);
+          },
           (latest) => latest.selections.length === 0,
         );
+        for (const selectionId of clearedSelectionIds) {
+          invalidateSnapshotCapture(selectionId);
+        }
         cleared = true;
         dispatch({ type: "closeNote" });
         dispatch({ type: "setListOpen", open: false });
@@ -363,11 +441,17 @@ export function useSelectionActions(options: {
         if (!signal.aborted) {
           dispatch({ type: "clearFinished" });
           if (cleared) focusDock();
-          else focusMenuTrigger();
         }
       }
     });
-  }, [captureGeneration, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned]);
+  }, [
+    currentSignal,
+    dispatch,
+    enqueueMutation,
+    invalidateSnapshotCapture,
+    protocol,
+    runRevisioned,
+  ]);
 
   const refreshSnapshot = useCallback(
     (selection: Selection) => {
@@ -384,6 +468,7 @@ export function useSelectionActions(options: {
           ? center
           : { x: center.x + center.width / 2, y: center.y + center.height / 2 };
       const detail = deepestElementAtPoint(point.x, point.y) ?? output;
+      const captureTicket = reserveSnapshotCapture(selection.id);
       dispatch({ type: "mutationStarted", selectionId: selection.id });
       void enqueueMutation(async () => {
         try {
@@ -410,11 +495,12 @@ export function useSelectionActions(options: {
             },
           );
           const current = requireSelection(stateRef.current, selection.id);
-          void captureSnapshot(current, output, detail).catch((error: unknown) => {
+          void captureSnapshot(current, output, detail, captureTicket).catch((error: unknown) => {
             if (signal.aborted || isAbortError(error)) return;
             dispatch({ type: "announce", message: errorMessage(error, "Snapshot capture failed") });
           });
         } catch (error) {
+          releaseSnapshotCapture(selection.id, captureTicket);
           if (signal.aborted || isAbortError(error)) return;
           dispatch({
             type: "announce",
@@ -425,7 +511,17 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [captureSnapshot, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned, stateRef],
+    [
+      captureSnapshot,
+      currentSignal,
+      dispatch,
+      enqueueMutation,
+      protocol,
+      releaseSnapshotCapture,
+      reserveSnapshotCapture,
+      runRevisioned,
+      stateRef,
+    ],
   );
 
   const repositionSelection = useCallback(
@@ -444,6 +540,7 @@ export function useSelectionActions(options: {
           : { x: center.x + center.width / 2, y: center.y + center.height / 2 };
       const detail = deepestElementAtPoint(point.x, point.y) ?? output;
       const domHint = collectDomHint(detail, output);
+      const captureTicket = reserveSnapshotCapture(selection.id);
       dispatch({ type: "mutationStarted", selectionId: selection.id });
       void enqueueMutation(async () => {
         try {
@@ -478,7 +575,7 @@ export function useSelectionActions(options: {
             updated;
           if (saved) {
             dispatch({ type: "announce", message: `${saved.label} adjusted.` });
-            void captureSnapshot(saved, output, detail).catch((error: unknown) => {
+            void captureSnapshot(saved, output, detail, captureTicket).catch((error: unknown) => {
               if (signal.aborted || isAbortError(error)) return;
               dispatch({
                 type: "announce",
@@ -487,6 +584,7 @@ export function useSelectionActions(options: {
             });
           }
         } catch (error) {
+          releaseSnapshotCapture(selection.id, captureTicket);
           if (signal.aborted || isAbortError(error)) return;
           dispatch({
             type: "announce",
@@ -497,32 +595,17 @@ export function useSelectionActions(options: {
         }
       });
     },
-    [captureSnapshot, currentSignal, dispatch, enqueueMutation, protocol, runRevisioned, stateRef],
-  );
-
-  const copyContext = useCallback(
-    async (format: ContextExportFormat) => {
-      const signal = currentSignal();
-      signal.throwIfAborted();
-      const label = exportLabel(format);
-      dispatch({ type: "exportStarted", message: `Preparing ${label}.` });
-      try {
-        await mutationQueue.tail;
-        signal.throwIfAborted();
-        const context = await protocol.exportContext(format);
-        signal.throwIfAborted();
-        await copyText(context);
-        signal.throwIfAborted();
-        dispatch({ type: "exportSucceeded", message: `${sentenceCase(label)} copied.` });
-      } catch (error) {
-        if (signal.aborted || isAbortError(error)) return;
-        dispatch({
-          type: "exportFailed",
-          message: errorMessage(error, "Context could not be copied"),
-        });
-      }
-    },
-    [currentSignal, dispatch, mutationQueue, protocol],
+    [
+      captureSnapshot,
+      currentSignal,
+      dispatch,
+      enqueueMutation,
+      protocol,
+      releaseSnapshotCapture,
+      reserveSnapshotCapture,
+      runRevisioned,
+      stateRef,
+    ],
   );
 
   return {
@@ -534,7 +617,7 @@ export function useSelectionActions(options: {
     clearSelections,
     refreshSnapshot,
     repositionSelection,
-    copyContext,
+    invalidateSnapshotCapture,
   };
 }
 
@@ -585,36 +668,10 @@ function sameSnapshot(left: Selection["snapshot"], right: Selection["snapshot"])
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const textarea = document.createElement("textarea");
-  textarea.value = text;
-  textarea.style.position = "fixed";
-  textarea.style.opacity = "0";
-  document.body.appendChild(textarea);
-  textarea.select();
-  const copied = document.execCommand("copy");
-  textarea.remove();
-  if (!copied) throw new Error("Clipboard access is unavailable");
-}
-
 function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
 }
 
 function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === "AbortError";
-}
-
-function exportLabel(format: ContextExportFormat): string {
-  if (format === "current") return "current reference";
-  if (format === "references") return "selection references";
-  return "standalone context";
-}
-
-function sentenceCase(value: string): string {
-  return value.charAt(0).toUpperCase() + value.slice(1);
 }

@@ -5,7 +5,8 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import type { LensCommand } from "@/contracts";
 
 import { LensProtocolClient, LensProtocolError } from "@/protocol";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "./test-fixtures";
 
 type MessageHandler = (message: unknown, buffers: DataView[]) => void;
 
@@ -107,6 +108,76 @@ describe("Lens command protocol", () => {
     model.emit(success(command!, { text: "Selection S1" }));
 
     await expect(request).resolves.toBe("Selection S1");
+    client.dispose();
+  });
+
+  test("delivers resolution events without disturbing response correlation", async () => {
+    const model = new FakeModel();
+    const client = new LensProtocolClient(model.asAnyModel());
+    const listener = vi.fn();
+    client.start();
+    client.onSelectionResolved(listener);
+
+    const request = client.exportContext("current");
+    const command = model.sent[0]?.command;
+    model.emit({
+      protocol: "marimo-lens.event",
+      version: 1,
+      type: "selection.resolved",
+      revision: 4,
+      payload: {
+        selectionId: "selection-1",
+        label: "S1",
+        summary: "Updated the chart cell.",
+      },
+    });
+    model.emit(success(command!, { text: "Selection S2" }));
+
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ revision: 4, payload: expect.objectContaining({ label: "S1" }) }),
+    );
+    await expect(request).resolves.toBe("Selection S2");
+    client.dispose();
+  });
+
+  test("ignores malformed events and removes resolution listeners", () => {
+    const model = new FakeModel();
+    const client = new LensProtocolClient(model.asAnyModel());
+    const unsubscribed = vi.fn();
+    const disposed = vi.fn();
+    client.start();
+    const unsubscribe = client.onSelectionResolved(unsubscribed);
+
+    model.emit({
+      protocol: "marimo-lens.event",
+      version: 1,
+      type: "selection.resolved",
+      revision: 4,
+      payload: { selectionId: "selection-1", label: "bad-label" },
+    });
+    expect(unsubscribed).not.toHaveBeenCalled();
+
+    unsubscribe();
+    model.emit({
+      protocol: "marimo-lens.event",
+      version: 1,
+      type: "selection.resolved",
+      revision: 4,
+      payload: { selectionId: "selection-1", label: "S1" },
+    });
+    expect(unsubscribed).not.toHaveBeenCalled();
+
+    client.onSelectionResolved(disposed);
+    client.dispose();
+    client.start();
+    model.emit({
+      protocol: "marimo-lens.event",
+      version: 1,
+      type: "selection.resolved",
+      revision: 5,
+      payload: { selectionId: "selection-2", label: "S2" },
+    });
+    expect(disposed).not.toHaveBeenCalled();
     client.dispose();
   });
 

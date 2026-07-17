@@ -5,7 +5,8 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import type { Selection } from "@/contracts";
 
 import { SelectionNoteEditor } from "@/components/selection-note-editor";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "../test-fixtures";
 
 let root: Root | null = null;
 

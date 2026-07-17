@@ -8,7 +8,6 @@ type EscapeController = {
   focusSelection: (selectionId: string) => void;
   focusDock: () => void;
   focusListTrigger: () => void;
-  focusMenuTrigger: () => void;
 };
 
 export function handleLensEscape(event: KeyboardEvent, controller: EscapeController): boolean {
@@ -19,14 +18,9 @@ export function handleLensEscape(event: KeyboardEvent, controller: EscapeControl
   } else if (workflow.mode === "editingNote") {
     controller.dispatch({ type: "closeNote" });
     controller.focusSelection(workflow.selectionId);
-  } else if (controller.state.listOpen || controller.state.menuOpen) {
-    if (controller.state.menuOpen) {
-      controller.dispatch({ type: "setMenuOpen", open: false });
-      controller.focusMenuTrigger();
-    } else {
-      controller.dispatch({ type: "setListOpen", open: false });
-      controller.focusListTrigger();
-    }
+  } else if (controller.state.listOpen) {
+    controller.dispatch({ type: "setListOpen", open: false });
+    controller.focusListTrigger();
   } else if (workflow.mode === "armed" || workflow.mode === "dragging") {
     if (workflow.mode === "dragging") {
       controller.cancelDrag(workflow.pointerId, workflow.output.element);

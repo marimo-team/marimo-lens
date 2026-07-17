@@ -9,7 +9,8 @@ import type { CaptureResult } from "@/types";
 import { captureSelectionSnapshot } from "@/capture/image";
 import { useSelectionActions } from "@/selection-actions";
 import { INITIAL_UI_STATE, uiReducer, type UiState } from "@/state";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "./test-fixtures";
 
 vi.mock("@/capture/image", () => ({ captureSelectionSnapshot: vi.fn() }));
 
@@ -83,6 +84,74 @@ describe("selection mutations", () => {
     expect(protocol.putSelection.mock.calls[1]?.[1]).toBe("clear");
   });
 
+  test("suppresses an automatic snapshot after its selection is resolved", async () => {
+    const output = visibleOutput();
+    const capture = deferred<CaptureResult>();
+    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    mount(stateRef, protocol.client);
+
+    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    await flush();
+    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
+
+    act(() => actions?.invalidateSnapshotCapture("selection-fixed"));
+    stateRef.current = {
+      ...stateRef.current,
+      revision: 2,
+      currentSelectionId: null,
+      selections: [],
+    };
+    capture.resolve(availableCapture());
+    await flush();
+
+    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
+    expect(latestUi?.announcement).not.toBe("Snapshot ready.");
+  });
+
+  test("suppresses a completed snapshot when canonical state removed the selection", async () => {
+    const output = visibleOutput();
+    const capture = deferred<CaptureResult>();
+    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    mount(stateRef, protocol.client);
+
+    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    await flush();
+    stateRef.current = {
+      ...stateRef.current,
+      revision: 2,
+      currentSelectionId: null,
+      selections: [],
+    };
+
+    capture.resolve(availableCapture());
+    await flush();
+
+    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
+    expect(latestUi?.announcement).not.toBe("Snapshot ready.");
+  });
+
+  test("does not start a queued automatic snapshot after resolution", async () => {
+    const output = visibleOutput();
+    vi.mocked(captureSelectionSnapshot).mockResolvedValue(availableCapture());
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    mount(stateRef, protocol.client);
+
+    act(() => {
+      actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output);
+      actions?.invalidateSnapshotCapture("selection-fixed");
+    });
+    await flush();
+
+    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
+    expect(captureSelectionSnapshot).not.toHaveBeenCalled();
+    expect(latestUi?.announcement).not.toBe("Snapshot ready.");
+  });
+
   test("commits a selection when development mode replays effects", async () => {
     const output = visibleOutput();
     vi.mocked(captureSelectionSnapshot).mockResolvedValue(failedCapture());
@@ -96,6 +165,94 @@ describe("selection mutations", () => {
     expect(protocol.putSelection).toHaveBeenCalledTimes(2);
     expect(stateRef.current.selections).toHaveLength(1);
     expect(stateRef.current.currentSelectionId).toBe("selection-fixed");
+  });
+
+  test("continues a detached pending capture when deletion fails", async () => {
+    const output = visibleOutput();
+    const interrupted = deferred<CaptureResult>();
+    vi.mocked(captureSelectionSnapshot).mockReturnValue(interrupted.promise);
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    protocol.deleteSelection.mockRejectedValueOnce(new Error("Remove failed"));
+    mount(stateRef, protocol.client);
+
+    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    await flush();
+    output.remove();
+    act(() => actions?.deleteSelection(stateRef.current.selections[0]!));
+    await flush();
+
+    expect(captureSelectionSnapshot).toHaveBeenCalledTimes(1);
+    expect(stateRef.current.selections[0]?.snapshot.status).toBe("pending");
+
+    interrupted.resolve(availableCapture());
+    await flush();
+    expect(protocol.putSelection).toHaveBeenCalledTimes(2);
+    expect(stateRef.current.selections[0]?.snapshot.status).toBe("available");
+  });
+
+  test("continues detached pending captures when clearing fails", async () => {
+    const output = visibleOutput();
+    const interrupted = deferred<CaptureResult>();
+    vi.mocked(captureSelectionSnapshot).mockReturnValue(interrupted.promise);
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    protocol.clearSelections.mockRejectedValueOnce(new Error("Clear failed"));
+    mount(stateRef, protocol.client);
+
+    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    await flush();
+    output.remove();
+    act(() => actions?.clearSelections());
+    await flush();
+
+    expect(captureSelectionSnapshot).toHaveBeenCalledTimes(1);
+    expect(stateRef.current.selections[0]?.snapshot.status).toBe("pending");
+
+    interrupted.resolve(availableCapture());
+    await flush();
+    expect(protocol.putSelection).toHaveBeenCalledTimes(2);
+    expect(stateRef.current.selections[0]?.snapshot.status).toBe("available");
+  });
+
+  test("suppresses a pending capture after deletion succeeds", async () => {
+    const output = visibleOutput();
+    const capture = deferred<CaptureResult>();
+    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    mount(stateRef, protocol.client);
+
+    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    await flush();
+    act(() => actions?.deleteSelection(stateRef.current.selections[0]!));
+    await flush();
+
+    capture.resolve(availableCapture());
+    await flush();
+    expect(stateRef.current.selections).toEqual([]);
+    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
+    expect(latestUi?.announcement).not.toBe("Snapshot ready.");
+  });
+
+  test("suppresses pending captures after clearing succeeds", async () => {
+    const output = visibleOutput();
+    const capture = deferred<CaptureResult>();
+    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    mount(stateRef, protocol.client);
+
+    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    await flush();
+    act(() => actions?.clearSelections());
+    await flush();
+
+    capture.resolve(availableCapture());
+    await flush();
+    expect(stateRef.current.selections).toEqual([]);
+    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
+    expect(latestUi?.announcement).not.toBe("Snapshot ready.");
   });
 
   test("activates an older selection and saves an empty optional note", async () => {
@@ -194,28 +351,6 @@ describe("selection mutations", () => {
     expect(stateRef.current.selections[0]?.snapshot.status).toBe("outdated");
     expect(latestUi?.announcement).toBe("Snapshot refresh failed. Previous snapshot retained.");
   });
-
-  test("copies the requested context projection", async () => {
-    const stateRef = { current: lensState() };
-    const exportContext = vi.fn(async (format: string) => `context:${format}`);
-    const writeText = vi.fn(async () => undefined);
-    vi.stubGlobal("navigator", { clipboard: { writeText } });
-    const protocol = {
-      putSelection: vi.fn(),
-      activateSelection: vi.fn(),
-      deleteSelection: vi.fn(),
-      clearSelections: vi.fn(),
-      exportContext,
-    } as unknown as LensProtocolClient;
-    mount(stateRef, protocol);
-
-    await act(async () => actions?.copyContext("current"));
-
-    expect(exportContext).toHaveBeenCalledWith("current");
-    expect(writeText).toHaveBeenCalledWith("context:current");
-    expect(latestUi?.export).toEqual({ status: "success" });
-    expect(latestUi?.announcement).toBe("Current reference copied.");
-  });
 });
 
 function mount(
@@ -279,14 +414,37 @@ function statefulProtocol(stateRef: { current: LensState }) {
     stateRef.current = { ...stateRef.current, revision, currentSelectionId: selectionId };
     return successResponse(revision);
   });
+  const deleteSelection = vi.fn(async (selectionId: string, expectedRevision: number) => {
+    expect(expectedRevision).toBe(stateRef.current.revision);
+    const revision = expectedRevision + 1;
+    const selections = stateRef.current.selections.filter(({ id }) => id !== selectionId);
+    stateRef.current = {
+      ...stateRef.current,
+      revision,
+      currentSelectionId: selections.at(-1)?.id ?? null,
+      selections,
+    };
+    return successResponse(revision);
+  });
+  const clearSelections = vi.fn(async (expectedRevision: number) => {
+    expect(expectedRevision).toBe(stateRef.current.revision);
+    const revision = expectedRevision + 1;
+    stateRef.current = {
+      ...stateRef.current,
+      revision,
+      currentSelectionId: null,
+      selections: [],
+    };
+    return successResponse(revision);
+  });
   const client = {
     putSelection,
     activateSelection,
-    deleteSelection: vi.fn(),
-    clearSelections: vi.fn(),
+    deleteSelection,
+    clearSelections,
     exportContext: vi.fn(),
   } as unknown as LensProtocolClient;
-  return { client, putSelection, activateSelection };
+  return { client, putSelection, activateSelection, deleteSelection, clearSelections };
 }
 
 function lensState(

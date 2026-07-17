@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { revealSelection } from "@/reveal";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "./test-fixtures";
 
 afterEach(() => {
   document.body.replaceChildren();

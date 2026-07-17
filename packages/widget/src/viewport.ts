@@ -25,7 +25,6 @@ export function useViewportRevision(): number {
       attributes: true,
       attributeFilter: ["class", "hidden", "style"],
     });
-
     return () => {
       if (frame) window.cancelAnimationFrame(frame);
       resizeObserver?.disconnect();

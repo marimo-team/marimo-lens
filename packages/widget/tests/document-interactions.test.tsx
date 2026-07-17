@@ -179,7 +179,5 @@ const INITIAL_STATE: UiState = {
   busySelectionIds: [],
   clearPending: false,
   listOpen: false,
-  menuOpen: false,
-  export: { status: "idle" },
   announcement: "",
 };

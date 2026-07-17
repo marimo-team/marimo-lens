@@ -7,10 +7,12 @@ import {
   DeleteSelectionCommandSchema,
   LensStateSchema,
   PutSelectionCommandSchema,
+  SelectionResolvedEventSchema,
   SelectionSchema,
   parseContract,
 } from "@/contracts";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "./test-fixtures";
 
 describe("selection contracts", () => {
   test("accepts empty notes and every snapshot lifecycle state", () => {
@@ -192,5 +194,45 @@ describe("selection contracts", () => {
     expect(
       parseContract(PutSelectionCommandSchema, command(selectionFixture(), "replace"), "command"),
     ).toMatchObject({ payload: { imageAction: "replace" } });
+  });
+
+  test("accepts the strict selection resolution event", () => {
+    const event = {
+      protocol: "marimo-lens.event",
+      version: 1,
+      type: "selection.resolved",
+      revision: 4,
+      payload: {
+        selectionId: "selection-1",
+        label: "S1",
+        summary: "Updated the chart cell.",
+      },
+    };
+
+    expect(parseContract(SelectionResolvedEventSchema, event, "event")).toEqual(event);
+    expect(() =>
+      parseContract(
+        SelectionResolvedEventSchema,
+        { ...event, payload: { ...event.payload, summary: "" } },
+        "event",
+      ),
+    ).toThrow();
+    expect(() =>
+      parseContract(
+        SelectionResolvedEventSchema,
+        { ...event, payload: { ...event.payload, summary: "😀".repeat(121) } },
+        "event",
+      ),
+    ).toThrow();
+    expect(() =>
+      parseContract(
+        SelectionResolvedEventSchema,
+        { ...event, payload: { ...event.payload, extra: true } },
+        "event",
+      ),
+    ).toThrow();
+    expect(() =>
+      parseContract(SelectionResolvedEventSchema, { ...event, version: 2 }, "event"),
+    ).toThrow();
   });
 });

@@ -7,6 +7,7 @@ import type {
   ImageAction,
   LensResponse,
   Selection,
+  SelectionResolvedEvent,
   StoredSnapshot,
 } from "@/contracts";
 
@@ -15,8 +16,10 @@ import {
   SnapshotResponsePayloadSchema,
   parseContract,
   parseLensResponse,
+  parseSelectionResolvedEvent,
 } from "@/contracts";
 
+const EVENT_PROTOCOL = "marimo-lens.event";
 const RESPONSE_PROTOCOL = "marimo-lens.response";
 const REQUEST_TIMEOUT_MS = 20_000;
 
@@ -30,6 +33,8 @@ type ProtocolReply = {
   response: LensResponse;
   buffers: DataView[];
 };
+
+type SelectionResolvedListener = (event: SelectionResolvedEvent) => void;
 
 export type SnapshotAsset = {
   snapshot: StoredSnapshot;
@@ -51,6 +56,7 @@ export class LensProtocolError extends Error {
 export class LensProtocolClient {
   readonly #model: AnyModel;
   readonly #pending = new Map<string, PendingRequest>();
+  readonly #selectionResolvedListeners = new Set<SelectionResolvedListener>();
   #started = false;
 
   constructor(model: AnyModel) {
@@ -73,6 +79,12 @@ export class LensProtocolClient {
       );
     }
     this.#pending.clear();
+    this.#selectionResolvedListeners.clear();
+  }
+
+  onSelectionResolved(listener: SelectionResolvedListener): () => void {
+    this.#selectionResolvedListeners.add(listener);
+    return () => this.#selectionResolvedListeners.delete(listener);
   }
 
   putSelection(
@@ -195,6 +207,16 @@ export class LensProtocolClient {
   }
 
   readonly #handleMessage = (message: unknown, buffers: DataView[] = []): void => {
+    if (isEventMessage(message)) {
+      let event: SelectionResolvedEvent;
+      try {
+        event = parseSelectionResolvedEvent(message);
+      } catch {
+        return;
+      }
+      for (const listener of this.#selectionResolvedListeners) listener(event);
+      return;
+    }
     if (!isResponseMessage(message)) return;
     const requestId = typeof message.requestId === "string" ? message.requestId : null;
     if (!requestId) return;
@@ -213,6 +235,15 @@ export class LensProtocolClient {
     this.#pending.delete(requestId);
     pending.resolve({ response, buffers });
   };
+}
+
+function isEventMessage(message: unknown): message is { protocol: string } {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    "protocol" in message &&
+    message.protocol === EVENT_PROTOCOL
+  );
 }
 
 function isResponseMessage(message: unknown): message is { protocol: string; requestId?: unknown } {

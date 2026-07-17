@@ -5,7 +5,8 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import type { SnapshotAsset } from "@/protocol";
 
 import { SnapshotPreviewButton } from "@/components/selection-snapshot-preview";
-import { selectionFixture } from "@/test-fixtures";
+
+import { selectionFixture } from "../test-fixtures";
 
 let root: Root | null = null;
 

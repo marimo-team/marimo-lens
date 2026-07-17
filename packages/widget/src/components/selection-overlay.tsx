@@ -19,11 +19,13 @@ import { useViewportRevision } from "@/viewport";
 type SelectionOverlayProps = {
   selections: Selection[];
   currentSelectionId: string | null;
+  availableOutputCellIds: ReadonlySet<string>;
   workflow: WorkflowState;
   busySelectionIds: ReadonlySet<string>;
   capturingSelectionIds: ReadonlySet<string>;
   onActivate: (selection: Selection) => void;
   onEditNote: (selection: Selection, motion: "animate" | "instant") => void;
+  onDelete: (selection: Selection) => void;
   loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>;
   onReposition: (selection: Selection, anchor: SelectionAnchor) => void;
   registerAdjustment: (cancel: AdjustmentCancel) => void;
@@ -35,11 +37,13 @@ export type AdjustmentCancel = () => void;
 export function SelectionOverlay({
   selections,
   currentSelectionId,
+  availableOutputCellIds,
   workflow,
   busySelectionIds,
   capturingSelectionIds,
   onActivate,
   onEditNote,
+  onDelete,
   loadSnapshot,
   onReposition,
   registerAdjustment,
@@ -56,6 +60,11 @@ export function SelectionOverlay({
   const closePeek = useCallback((selectionId: string) => {
     setPeek((current) => (current?.selectionId === selectionId ? null : current));
   }, []);
+  useEffect(() => {
+    if (!peek) return;
+    const selection = selections.find(({ id }) => id === peek.selectionId);
+    if (!selection || !availableOutputCellIds.has(selection.outputCellId)) setPeek(null);
+  }, [availableOutputCellIds, peek, selections]);
   const visiblePeek =
     workflow.mode === "idle" &&
     peek &&
@@ -94,6 +103,7 @@ export function SelectionOverlay({
         <AnchorPreview output={workflow.output.element} anchor={draftAnchor} />
       ) : null}
       {selections.map((selection) => {
+        if (!availableOutputCellIds.has(selection.outputCellId)) return null;
         const output = getOutputCell(selection.outputCellId)?.element;
         if (!output || !isAnchorInsideOutputViewport(output, selection.anchor)) return null;
         return (
@@ -108,6 +118,7 @@ export function SelectionOverlay({
             peekMotion={visiblePeek?.motion ?? "animate"}
             onActivate={onActivate}
             onEditNote={onEditNote}
+            onDelete={onDelete}
             loadSnapshot={loadSnapshot}
             onOpenPeek={openPeek}
             onClosePeek={closePeek}
@@ -143,6 +154,7 @@ function SelectionMarker({
   peekMotion,
   onActivate,
   onEditNote,
+  onDelete,
   loadSnapshot,
   onOpenPeek,
   onClosePeek,
@@ -159,6 +171,7 @@ function SelectionMarker({
   peekMotion: "animate" | "instant";
   onActivate: (selection: Selection) => void;
   onEditNote: (selection: Selection, motion: "animate" | "instant") => void;
+  onDelete: (selection: Selection) => void;
   loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>;
   onOpenPeek: (selectionId: string, motion: "animate" | "instant") => void;
   onClosePeek: (selectionId: string) => void;
@@ -329,6 +342,7 @@ function SelectionMarker({
       motion={peekMotion}
       loadSnapshot={loadSnapshot}
       onEditNote={onEditNote}
+      onDelete={onDelete}
       onClose={() => onClosePeek(selection.id)}
       onPointerEnter={clearPeekTimers}
       onPointerLeave={schedulePeekClose}

@@ -55,6 +55,7 @@ export function SelectionNoteEditor({
       data-placement={position.placement}
       data-instant={motion === "instant" ? "true" : "false"}
       data-marimo-lens-note-editor
+      data-marimo-lens-selection-cluster={selection.id}
       data-marimo-lens-ui
       aria-labelledby={headingId}
     >

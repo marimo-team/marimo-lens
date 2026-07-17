@@ -8,6 +8,7 @@
   --ml-primary-hover: #0b68cb;
   --ml-accent-foreground: #0b68cb;
   --ml-on-primary: #f8fafc;
+  --ml-logo: rgb(11.372375% 45.097351% 38.822937%);
   --ml-destructive: var(--destructive, #ea5d5d);
   --ml-destructive-soft: #fef2f2;
   --ml-focus: var(--ring, #0880ea);
@@ -32,6 +33,7 @@
   --ml-primary-hover: #1d5b6a;
   --ml-accent-foreground: #b6ecf7;
   --ml-on-primary: #b6ecf7;
+  --ml-logo: rgb(79.214478% 85.096741% 58.822632%);
   --ml-destructive-soft: #451f22;
   --ml-shadow: 0 2px 8px rgb(0 0 0 / 24%);
 }

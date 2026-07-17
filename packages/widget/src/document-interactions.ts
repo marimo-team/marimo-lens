@@ -11,7 +11,7 @@ import {
   outputCellFromEvent,
 } from "@/capture/output-root";
 import { handleLensEscape } from "@/escape";
-import { focusDock, focusListTrigger, focusMenuTrigger, focusSelectionOrDock } from "@/focus";
+import { focusDock, focusListTrigger, focusSelectionOrDock } from "@/focus";
 import {
   iframeAtPoint,
   observeInteractionSurfaces,
@@ -116,7 +116,6 @@ export function useDocumentInteractions(options: {
           focusSelection: focusSelectionOrDock,
           focusDock,
           focusListTrigger,
-          focusMenuTrigger,
         });
         if (event.defaultPrevented || workflow.mode !== "armed") return;
         const lensUi =

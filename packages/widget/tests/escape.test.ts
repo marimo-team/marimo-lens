@@ -21,7 +21,6 @@ describe("Escape cancellation", () => {
       focusSelection,
       focusDock: vi.fn(),
       focusListTrigger: vi.fn(),
-      focusMenuTrigger: vi.fn(),
     });
 
     expect(event.defaultPrevented).toBe(true);
@@ -52,7 +51,6 @@ describe("Escape cancellation", () => {
       focusSelection: vi.fn(),
       focusDock: vi.fn(),
       focusListTrigger: vi.fn(),
-      focusMenuTrigger: vi.fn(),
     });
 
     expect(cancelDrag).toHaveBeenCalledWith(7, output);
@@ -72,7 +70,6 @@ describe("Escape cancellation", () => {
       focusSelection: vi.fn(),
       focusDock: vi.fn(),
       focusListTrigger: vi.fn(),
-      focusMenuTrigger: vi.fn(),
     });
 
     expect(event.defaultPrevented).toBe(true);
@@ -88,7 +85,5 @@ const INITIAL_IDLE_STATE: UiState = {
   busySelectionIds: [],
   clearPending: false,
   listOpen: false,
-  menuOpen: false,
-  export: { status: "idle" },
   announcement: "",
 };
