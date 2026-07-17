@@ -16,6 +16,7 @@ from anywidget_bundle import Bundle, BundledWidget
 from ._context import build_context, validate_selection_budget
 from ._images import ImageError, ImageStore
 from ._protocol import (
+    MAX_SELECTION_ID,
     MAX_SELECTIONS,
     Command,
     ProtocolError,
@@ -26,6 +27,7 @@ from ._protocol import (
 )
 from ._runtime import collect_runtime_snapshot
 from .context import LensContext, SelectionImage
+from .errors import LensError
 
 _BUNDLE = Bundle(
     static_dir=pathlib.Path(__file__).parent / "static",
@@ -33,6 +35,7 @@ _BUNDLE = Bundle(
 )
 
 _IMMUTABLE_SELECTION_FIELDS = ("label", "outputCellId", "createdAt")
+_MAX_RESOLUTION_SUMMARY = 240
 
 
 class Lens(BundledWidget):
@@ -67,11 +70,17 @@ class Lens(BundledWidget):
         self.on_msg(self._handle_lens_message)
 
     def context(self) -> LensContext:
-        """Return detached selection context from the current marimo runtime."""
+        """Return detached selection context from the current marimo runtime.
+
+        Raises:
+            LensError: The Lens is closed.
+        """
 
         with self._lock:
             if self._lens_closed:
-                raise RuntimeError("Lens is closed.")
+                raise LensError(
+                    "lens_closed", "Lens is closed.", revision=self._revision
+                )
             selections = copy.deepcopy(self._selections)
             images = self._images.snapshot(
                 [str(selection["id"]) for selection in selections]
@@ -90,6 +99,78 @@ class Lens(BundledWidget):
             text=text,
             images=images,
         )
+
+    def resolve(
+        self,
+        selection_id: str,
+        *,
+        expected_revision: int,
+        summary: str | None = None,
+    ) -> int:
+        """Remove one completed selection and return the resulting revision.
+
+        Args:
+            selection_id: Stable selection ID from ``LensContext``.
+            expected_revision: Revision used to interpret the selection.
+            summary: Brief outcome for the transient browser receipt.
+
+        Returns:
+            The selection revision after removal.
+
+        Raises:
+            TypeError: An argument has the wrong type.
+            ValueError: An argument violates its text or numeric contract.
+            LensError: The revision changed, the selection is missing, or the
+                Lens is closed.
+        """
+
+        selection_id = _selection_id(selection_id)
+        if type(expected_revision) is not int:
+            raise TypeError("expected_revision must be an integer.")
+        if expected_revision < 0:
+            raise ValueError("expected_revision must be a non-negative integer.")
+        summary = _resolution_summary(summary)
+
+        with self._lock:
+            if self._lens_closed:
+                raise LensError(
+                    "lens_closed", "Lens is closed.", revision=self._revision
+                )
+            if expected_revision != self._revision:
+                raise LensError(
+                    "revision_conflict",
+                    "Lens selections changed before this resolution was applied.",
+                    revision=self._revision,
+                )
+            selection = next(
+                (item for item in self._selections if item["id"] == selection_id),
+                None,
+            )
+            if selection is None:
+                raise LensError(
+                    "selection_not_found",
+                    "Cannot resolve an unknown Lens selection.",
+                    revision=self._revision,
+                )
+            label = str(selection["label"])
+            self._delete_selection(selection_id)
+            revision = self._revision
+            event = {
+                "protocol": "marimo-lens.event",
+                "version": 1,
+                "type": "selection.resolved",
+                "revision": revision,
+                "payload": {
+                    "selectionId": selection_id,
+                    "label": label,
+                    **({"summary": summary} if summary is not None else {}),
+                },
+            }
+            # Serialize receipts with their state mutations so concurrent
+            # resolutions reach the browser in revision order.
+            with suppress(Exception):
+                self.send(event)
+            return revision
 
     def close(self) -> None:
         """Close the widget and release its in-memory PNG captures."""
@@ -543,6 +624,43 @@ class Lens(BundledWidget):
             "currentSelectionId": self._current_selection_id,
             "selections": copy.deepcopy(self._selections),
         }
+
+
+def _selection_id(value: object) -> str:
+    if not isinstance(value, str):
+        raise TypeError("selection_id must be a string.")
+    if not value:
+        raise ValueError("selection_id must not be empty.")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ValueError("selection_id must contain valid Unicode text.") from error
+    length = len(value.encode("utf-16-le", errors="surrogatepass")) // 2
+    if length > MAX_SELECTION_ID:
+        raise ValueError(
+            f"selection_id must contain at most {MAX_SELECTION_ID} characters."
+        )
+    return value
+
+
+def _resolution_summary(value: object) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise TypeError("summary must be a string or None.")
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise ValueError("summary must contain valid Unicode text.") from error
+    length = len(value.encode("utf-16-le", errors="surrogatepass")) // 2
+    if length > _MAX_RESOLUTION_SUMMARY:
+        raise ValueError(
+            f"summary must contain at most {_MAX_RESOLUTION_SUMMARY} UTF-16 code units."
+        )
+    return value
 
 
 __all__ = ["Lens"]

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from marimo_lens import LensContext, SelectionImage
 
 
@@ -38,6 +40,27 @@ def test_context_current_is_none_when_no_selection_is_current() -> None:
     )
 
     assert context.current is None
+
+
+def test_context_revision_returns_the_captured_selection_revision() -> None:
+    context = LensContext(
+        references={"revision": 7, "currentSelectionId": None, "selections": []},
+        text="Current notebook context",
+        images=(),
+    )
+
+    assert context.revision == 7
+
+
+def test_context_revision_rejects_an_invalid_reference_packet() -> None:
+    context = LensContext(
+        references={"currentSelectionId": None, "selections": []},
+        text="Current notebook context",
+        images=(),
+    )
+
+    with pytest.raises(ValueError, match="valid revision"):
+        _ = context.revision
 
 
 def test_context_repr_summarizes_context_and_image_sizes() -> None:

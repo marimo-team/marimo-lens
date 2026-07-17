@@ -102,4 +102,4 @@ jobs:
         run: |
           uvx twine check dist/marimo_lens-*.whl dist/marimo_lens-*.tar.gz
           uv build --no-sources --wheel dist/marimo_lens-*.tar.gz --out-dir dist/from-sdist
-          uv run --no-project --with dist/from-sdist/marimo_lens-*.whl python -c "from marimo_lens import Lens, LensContext, SelectionImage; Lens()"
+          uv run --no-project --with dist/from-sdist/marimo_lens-*.whl python -c "from marimo_lens import Lens, LensContext, LensError, SelectionImage; Lens()"

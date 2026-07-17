@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,7 +37,16 @@ class LensContext:
     images: tuple[SelectionImage, ...]
 
     @property
-    def current(self) -> Mapping[str, object] | None:
+    def revision(self) -> int:
+        """Return the Lens selection revision captured by this context."""
+
+        revision = self.references.get("revision")
+        if type(revision) is not int or revision < 0:
+            raise ValueError("Lens context references do not contain a valid revision.")
+        return revision
+
+    @property
+    def current(self) -> Mapping[str, Any] | None:
         """Return the current selection reference, if one exists."""
 
         current_id = self.references.get("currentSelectionId")
@@ -46,7 +55,7 @@ class LensContext:
             return None
         for selection in selections:
             if isinstance(selection, Mapping) and selection.get("id") == current_id:
-                return cast(Mapping[str, object], selection)
+                return cast(Mapping[str, Any], selection)
         return None
 
     def __repr__(self) -> str:
