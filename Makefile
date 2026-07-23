@@ -1,15 +1,29 @@
-.PHONY: check
+.PHONY: check docs docs-serve package
 
 check:
 	uv lock --check
-	uv sync --locked --all-packages --all-groups
-	pnpm install --frozen-lockfile
 	pnpm check
 	pnpm test
 	pnpm build
-	uv run --locked --all-packages --all-groups ruff format --check .
-	uv run --locked --all-packages --all-groups ruff check .
-	uv run --locked --all-packages --all-groups ty check packages/marimo-lens workbench
-	uv run --locked --all-packages --all-groups pyrefly check --min-severity warn
-	uv run --locked --all-packages --all-groups pytest -q packages/marimo-lens/tests
+	uv run ruff format --check
+	uv run ruff check
+	uv run ty check
+	uv run pyrefly check --min-severity warn
+	uv run pytest -q
 	git diff --check
+
+docs:
+	pnpm --filter @marimo-lens/docs build
+
+docs-serve:
+	env -u BASE_PATH pnpm --filter @marimo-lens/docs dev --host 127.0.0.1
+
+package:
+	rm -rf dist
+	pnpm --filter @marimo-lens/python build
+	uv build --package marimo-lens --out-dir dist
+	uvx twine check dist/marimo_lens-*.whl dist/marimo_lens-*.tar.gz
+	mkdir -p dist/from-sdist
+	uv build --wheel dist/marimo_lens-*.tar.gz --out-dir dist/from-sdist
+	uv run --no-project --with dist/from-sdist/marimo_lens-*.whl \
+		python scripts/verify_release.py "$$(uv version --package marimo-lens --short)"

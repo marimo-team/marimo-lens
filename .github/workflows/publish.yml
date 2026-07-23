@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: publish-${{ github.ref }}
+  group: publish
   cancel-in-progress: false
 
 jobs:
@@ -18,46 +18,53 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
+          fetch-depth: 0
           persist-credentials: false
 
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
-          enable-cache: false
+          enable-cache: true
+          cache-dependency-glob: uv.lock
 
-      - uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+      - name: Install Python
+        run: uv python install "$(cat .python-version)"
+
+      - name: Set up Vite+
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
         with:
           node-version-file: .node-version
+          cache: true
           run-install: |
             - args: ["--frozen-lockfile"]
 
       - name: Check release version
+        shell: bash
         run: |
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Release tag must use final-version form vX.Y.Z: $GITHUB_REF_NAME" >&2
             exit 1
           fi
           package_version="$(uv version --package marimo-lens --short)"
-          if [[ "$GITHUB_REF_NAME" != "v$package_version" ]]; then
-            echo "Tag $GITHUB_REF_NAME must match package version v$package_version" >&2
+          tag_version="${GITHUB_REF_NAME#v}"
+          if [ "$package_version" != "$tag_version" ]; then
+            echo "Package version $package_version does not match tag $GITHUB_REF_NAME" >&2
             exit 1
           fi
+          if [ "$(git cat-file -t "$GITHUB_REF")" != tag ]; then
+            echo "Release tag $GITHUB_REF_NAME must be annotated" >&2
+            exit 1
+          fi
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
       - name: Run release checks
         run: make check
 
-      - name: Build package artifacts
-        run: |
-          rm -rf dist
-          pnpm --filter @marimo-lens/python build
-          uv build --no-sources --package marimo-lens --out-dir dist
-
-      - name: Check package artifacts
-        run: |
-          uvx twine check dist/marimo_lens-*.whl dist/marimo_lens-*.tar.gz
-          uv build --no-sources --wheel dist/marimo_lens-*.tar.gz --out-dir dist/from-sdist
-          uv run --no-project --with dist/from-sdist/marimo_lens-*.whl python -c "from marimo_lens import Lens, LensContext, LensError, SelectionImage; Lens()"
+      - name: Build and check package artifacts
+        run: make package
 
       - name: Upload package artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -74,12 +81,15 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    environment: pypi
+    environment:
+      name: pypi
+      url: https://pypi.org/project/marimo-lens/
     permissions:
       contents: read
-      id-token: write # Required for PyPI Trusted Publishing.
+      id-token: write
     steps:
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: false
 
@@ -91,3 +101,71 @@ jobs:
 
       - name: Publish package
         run: uv publish --trusted-publishing always dist/marimo_lens-*.whl dist/marimo_lens-*.tar.gz
+
+  verify-pypi:
+    name: Verify PyPI
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+
+      - name: Wait for the public PyPI index
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          wheel="marimo_lens-${version}-py3-none-any.whl"
+          sdist="marimo_lens-${version}.tar.gz"
+          for attempt in $(seq 1 18); do
+            if page="$(curl --fail --silent --show-error https://pypi.org/simple/marimo-lens/)" && \
+               grep -Fq "$wheel" <<< "$page" && grep -Fq "$sdist" <<< "$page"; then
+              exit 0
+            fi
+            printf 'PyPI index attempt %s of 18 did not find both artifacts for %s\n' \
+              "$attempt" "$version"
+            if [ "$attempt" -lt 18 ]; then
+              sleep 10
+            fi
+          done
+          echo "PyPI did not publish both artifacts for $version within three minutes" >&2
+          exit 1
+
+      - name: Verify the installed package
+        env:
+          UV_NO_CONFIG: "1"
+        run: >-
+          uv run --no-cache --no-project --isolated
+          --default-index https://pypi.org/simple
+          --with "marimo-lens==${GITHUB_REF_NAME#v}"
+          python scripts/verify_release.py "${GITHUB_REF_NAME#v}"
+
+  release-notes:
+    name: Release notes
+    needs: [publish, verify-pypi]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Update release notes
+        run: npx --yes changelogithub@14.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
