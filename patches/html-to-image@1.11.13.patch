@@ -1,25 +1,378 @@
 diff --git a/es/clone-node.js b/es/clone-node.js
-index 114cbf214f65cda237dbba67458c2b68fadf421e..8aaec57528ffc1f912c6f62ab4fbbf717cb104b2 100644
+index 114cbf214f65cda237dbba67458c2b68fadf421e..24c011543eb3a8e3d42faaa22e4e073054d1284d 100644
 --- a/es/clone-node.js
 +++ b/es/clone-node.js
-@@ -59,9 +59,8 @@ async function cloneChildren(nativeNode, clonedNode, options) {
+@@ -1,5 +1,5 @@
+ import { clonePseudoElements } from './clone-pseudos';
+-import { createImage, toArray, isInstanceOfElement, getStyleProperties, } from './util';
++import { createImage, toArray, isInstanceOfElement, getStyleProperties, setSourceBaseUrl, ownerWindow, } from './util';
+ import { getMimeType } from './mimes';
+ import { resourceToDataURL } from './dataurl';
+ async function cloneCanvasElement(canvas) {
+@@ -7,43 +7,42 @@ async function cloneCanvasElement(canvas) {
+     if (dataURL === 'data:,') {
+         return canvas.cloneNode(false);
+     }
+-    return createImage(dataURL);
++    return createImage(dataURL, canvas.ownerDocument);
+ }
+ async function cloneVideoElement(video, options) {
+     if (video.currentSrc) {
+-        const canvas = document.createElement('canvas');
++        const canvas = video.ownerDocument.createElement('canvas');
+         const ctx = canvas.getContext('2d');
+         canvas.width = video.clientWidth;
+         canvas.height = video.clientHeight;
+         ctx === null || ctx === void 0 ? void 0 : ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+         const dataURL = canvas.toDataURL();
+-        return createImage(dataURL);
++        return createImage(dataURL, video.ownerDocument);
+     }
+     const poster = video.poster;
+     const contentType = getMimeType(poster);
+     const dataURL = await resourceToDataURL(poster, contentType, options);
+-    return createImage(dataURL);
++    return createImage(dataURL, video.ownerDocument);
+ }
+ async function cloneIFrameElement(iframe, options) {
+-    var _a;
+-    try {
+-        if ((_a = iframe === null || iframe === void 0 ? void 0 : iframe.contentDocument) === null || _a === void 0 ? void 0 : _a.body) {
+-            return (await cloneNode(iframe.contentDocument.body, options, true));
+-        }
+-    }
+-    catch (_b) {
+-        // Failed to clone iframe
++    const sourceDocument = iframe === null || iframe === void 0 ? void 0 : iframe.contentDocument;
++    const body = sourceDocument === null || sourceDocument === void 0 ? void 0 : sourceDocument.body;
++    if (!body) {
++        throw new Error('Failed to clone iframe');
+     }
+-    return iframe.cloneNode(false);
++    const clone = (await cloneNode(body, options, true));
++    setSourceBaseUrl(clone, sourceDocument.baseURI);
++    return clone;
+ }
+ async function cloneSingleNode(node, options) {
+-    if (isInstanceOfElement(node, HTMLCanvasElement)) {
++    const win = ownerWindow(node);
++    if (isInstanceOfElement(node, win.HTMLCanvasElement)) {
+         return cloneCanvasElement(node);
+     }
+-    if (isInstanceOfElement(node, HTMLVideoElement)) {
++    if (isInstanceOfElement(node, win.HTMLVideoElement)) {
+         return cloneVideoElement(node, options);
+     }
+-    if (isInstanceOfElement(node, HTMLIFrameElement)) {
++    if (isInstanceOfElement(node, win.HTMLIFrameElement)) {
+         return cloneIFrameElement(node, options);
+     }
+     return node.cloneNode(isSVGElement(node));
+@@ -51,7 +50,7 @@ async function cloneSingleNode(node, options) {
+ const isSlotElement = (node) => node.tagName != null && node.tagName.toUpperCase() === 'SLOT';
+ const isSVGElement = (node) => node.tagName != null && node.tagName.toUpperCase() === 'SVG';
+ async function cloneChildren(nativeNode, clonedNode, options) {
+-    var _a, _b;
++    var _a;
+     if (isSVGElement(clonedNode)) {
+         return clonedNode;
+     }
+@@ -59,15 +58,14 @@ async function cloneChildren(nativeNode, clonedNode, options) {
      if (isSlotElement(nativeNode) && nativeNode.assignedNodes) {
          children = toArray(nativeNode.assignedNodes());
      }
 -    else if (isInstanceOfElement(nativeNode, HTMLIFrameElement) &&
 -        ((_a = nativeNode.contentDocument) === null || _a === void 0 ? void 0 : _a.body)) {
 -        children = toArray(nativeNode.contentDocument.body.childNodes);
-+    else if (isInstanceOfElement(nativeNode, HTMLIFrameElement)) {
++    else if (isInstanceOfElement(nativeNode, ownerWindow(nativeNode).HTMLIFrameElement)) {
 +        return clonedNode;
      }
      else {
-         children = toArray(((_b = nativeNode.shadowRoot) !== null && _b !== void 0 ? _b : nativeNode).childNodes);
+-        children = toArray(((_b = nativeNode.shadowRoot) !== null && _b !== void 0 ? _b : nativeNode).childNodes);
++        children = toArray(((_a = nativeNode.shadowRoot) !== null && _a !== void 0 ? _a : nativeNode).childNodes);
+     }
+     if (children.length === 0 ||
+-        isInstanceOfElement(nativeNode, HTMLVideoElement)) {
++        isInstanceOfElement(nativeNode, ownerWindow(nativeNode).HTMLVideoElement)) {
+         return clonedNode;
+     }
+     await children.reduce((deferred, child) => deferred
+@@ -84,19 +82,20 @@ function cloneCSSStyle(nativeNode, clonedNode, options) {
+     if (!targetStyle) {
+         return;
+     }
+-    const sourceStyle = window.getComputedStyle(nativeNode);
++    const win = ownerWindow(nativeNode);
++    const sourceStyle = win.getComputedStyle(nativeNode);
+     if (sourceStyle.cssText) {
+         targetStyle.cssText = sourceStyle.cssText;
+         targetStyle.transformOrigin = sourceStyle.transformOrigin;
+     }
+     else {
+-        getStyleProperties(options).forEach((name) => {
++        getStyleProperties(nativeNode, options).forEach((name) => {
+             let value = sourceStyle.getPropertyValue(name);
+             if (name === 'font-size' && value.endsWith('px')) {
+                 const reducedFont = Math.floor(parseFloat(value.substring(0, value.length - 2))) - 0.1;
+                 value = `${reducedFont}px`;
+             }
+-            if (isInstanceOfElement(nativeNode, HTMLIFrameElement) &&
++            if (isInstanceOfElement(nativeNode, win.HTMLIFrameElement) &&
+                 name === 'display' &&
+                 value === 'inline') {
+                 value = 'block';
+@@ -109,15 +108,16 @@ function cloneCSSStyle(nativeNode, clonedNode, options) {
+     }
+ }
+ function cloneInputValue(nativeNode, clonedNode) {
+-    if (isInstanceOfElement(nativeNode, HTMLTextAreaElement)) {
++    const win = ownerWindow(nativeNode);
++    if (isInstanceOfElement(nativeNode, win.HTMLTextAreaElement)) {
+         clonedNode.innerHTML = nativeNode.value;
+     }
+-    if (isInstanceOfElement(nativeNode, HTMLInputElement)) {
++    if (isInstanceOfElement(nativeNode, win.HTMLInputElement)) {
+         clonedNode.setAttribute('value', nativeNode.value);
+     }
+ }
+ function cloneSelectValue(nativeNode, clonedNode) {
+-    if (isInstanceOfElement(nativeNode, HTMLSelectElement)) {
++    if (isInstanceOfElement(nativeNode, ownerWindow(nativeNode).HTMLSelectElement)) {
+         const clonedSelect = clonedNode;
+         const selectedOption = Array.from(clonedSelect.children).find((child) => nativeNode.value === child.getAttribute('value'));
+         if (selectedOption) {
+@@ -126,7 +126,7 @@ function cloneSelectValue(nativeNode, clonedNode) {
+     }
+ }
+ function decorate(nativeNode, clonedNode, options) {
+-    if (isInstanceOfElement(clonedNode, Element)) {
++    if (isInstanceOfElement(clonedNode, ownerWindow(clonedNode).Element)) {
+         cloneCSSStyle(nativeNode, clonedNode, options);
+         clonePseudoElements(nativeNode, clonedNode, options);
+         cloneInputValue(nativeNode, clonedNode);
+@@ -145,7 +145,7 @@ async function ensureSVGSymbols(clone, options) {
+         const id = use.getAttribute('xlink:href');
+         if (id) {
+             const exist = clone.querySelector(id);
+-            const definition = document.querySelector(id);
++            const definition = clone.ownerDocument.querySelector(id);
+             if (!exist && definition && !processedDefs[id]) {
+                 // eslint-disable-next-line no-await-in-loop
+                 processedDefs[id] = (await cloneNode(definition, options, true));
+@@ -155,14 +155,14 @@ async function ensureSVGSymbols(clone, options) {
+     const nodes = Object.values(processedDefs);
+     if (nodes.length) {
+         const ns = 'http://www.w3.org/1999/xhtml';
+-        const svg = document.createElementNS(ns, 'svg');
++        const svg = clone.ownerDocument.createElementNS(ns, 'svg');
+         svg.setAttribute('xmlns', ns);
+         svg.style.position = 'absolute';
+         svg.style.width = '0';
+         svg.style.height = '0';
+         svg.style.overflow = 'hidden';
+         svg.style.display = 'none';
+-        const defs = document.createElementNS(ns, 'defs');
++        const defs = clone.ownerDocument.createElementNS(ns, 'defs');
+         svg.appendChild(defs);
+         for (let i = 0; i < nodes.length; i++) {
+             defs.appendChild(nodes[i]);
+diff --git a/es/clone-pseudos.js b/es/clone-pseudos.js
+index 6c29227122932c834e1a4a885cf49ccfa52a922b..3227b3fac075c1f1bc64e160fdf2fd755336175e 100644
+--- a/es/clone-pseudos.js
++++ b/es/clone-pseudos.js
+@@ -1,10 +1,10 @@
+-import { uuid, getStyleProperties } from './util';
++import { uuid, getStyleProperties, ownerWindow } from './util';
+ function formatCSSText(style) {
+     const content = style.getPropertyValue('content');
+     return `${style.cssText} content: '${content.replace(/'|"/g, '')}';`;
+ }
+-function formatCSSProperties(style, options) {
+-    return getStyleProperties(options)
++function formatCSSProperties(style, options, node) {
++    return getStyleProperties(node, options)
+         .map((name) => {
+         const value = style.getPropertyValue(name);
+         const priority = style.getPropertyPriority(name);
+@@ -12,15 +12,16 @@ function formatCSSProperties(style, options) {
+     })
+         .join(' ');
+ }
+-function getPseudoElementStyle(className, pseudo, style, options) {
++function getPseudoElementStyle(className, pseudo, style, options, ownerDocument) {
+     const selector = `.${className}:${pseudo}`;
+     const cssText = style.cssText
+         ? formatCSSText(style)
+-        : formatCSSProperties(style, options);
+-    return document.createTextNode(`${selector}{${cssText}}`);
++        : formatCSSProperties(style, options, ownerDocument.documentElement);
++    return ownerDocument.createTextNode(`${selector}{${cssText}}`);
+ }
+ function clonePseudoElement(nativeNode, clonedNode, pseudo, options) {
+-    const style = window.getComputedStyle(nativeNode, pseudo);
++    const win = ownerWindow(nativeNode);
++    const style = win.getComputedStyle(nativeNode, pseudo);
+     const content = style.getPropertyValue('content');
+     if (content === '' || content === 'none') {
+         return;
+@@ -32,8 +33,9 @@ function clonePseudoElement(nativeNode, clonedNode, pseudo, options) {
+     catch (err) {
+         return;
+     }
+-    const styleElement = document.createElement('style');
+-    styleElement.appendChild(getPseudoElementStyle(className, pseudo, style, options));
++    const ownerDocument = clonedNode.ownerDocument;
++    const styleElement = ownerDocument.createElement('style');
++    styleElement.appendChild(getPseudoElementStyle(className, pseudo, style, options, ownerDocument));
+     clonedNode.appendChild(styleElement);
+ }
+ export function clonePseudoElements(nativeNode, clonedNode, options) {
+diff --git a/es/embed-images.js b/es/embed-images.js
+index c3f93dc2a4e48008adc78a69dbfcc7682332e2d0..d16d19a5cbe0b05173c8bd6e7d65ea9a6404ab16 100644
+--- a/es/embed-images.js
++++ b/es/embed-images.js
+@@ -1,34 +1,39 @@
+ import { embedResources } from './embed-resources';
+-import { toArray, isInstanceOfElement } from './util';
++import { getSourceBaseUrl, isInstanceOfElement, ownerWindow, resolveUrl, toArray, } from './util';
+ import { isDataUrl, resourceToDataURL } from './dataurl';
+ import { getMimeType } from './mimes';
+-async function embedProp(propName, node, options) {
++async function embedProp(propName, node, options, baseUrl) {
+     var _a;
+     const propValue = (_a = node.style) === null || _a === void 0 ? void 0 : _a.getPropertyValue(propName);
+     if (propValue) {
+-        const cssString = await embedResources(propValue, null, options);
++        const cssString = await embedResources(propValue, baseUrl, options);
+         node.style.setProperty(propName, cssString, node.style.getPropertyPriority(propName));
+         return true;
+     }
+     return false;
+ }
+-async function embedBackground(clonedNode, options) {
++async function embedBackground(clonedNode, options, baseUrl) {
+     ;
+-    (await embedProp('background', clonedNode, options)) ||
+-        (await embedProp('background-image', clonedNode, options));
+-    (await embedProp('mask', clonedNode, options)) ||
+-        (await embedProp('-webkit-mask', clonedNode, options)) ||
+-        (await embedProp('mask-image', clonedNode, options)) ||
+-        (await embedProp('-webkit-mask-image', clonedNode, options));
++    (await embedProp('background', clonedNode, options, baseUrl)) ||
++        (await embedProp('background-image', clonedNode, options, baseUrl));
++    (await embedProp('mask', clonedNode, options, baseUrl)) ||
++        (await embedProp('-webkit-mask', clonedNode, options, baseUrl)) ||
++        (await embedProp('mask-image', clonedNode, options, baseUrl)) ||
++        (await embedProp('-webkit-mask-image', clonedNode, options, baseUrl));
+ }
+-async function embedImageNode(clonedNode, options) {
+-    const isImageElement = isInstanceOfElement(clonedNode, HTMLImageElement);
++async function embedImageNode(clonedNode, options, baseUrl) {
++    const win = ownerWindow(clonedNode);
++    const isImageElement = isInstanceOfElement(clonedNode, win.HTMLImageElement);
++    const isSvgImageElement = typeof win.SVGImageElement === 'function' &&
++        isInstanceOfElement(clonedNode, win.SVGImageElement);
+     if (!(isImageElement && !isDataUrl(clonedNode.src)) &&
+-        !(isInstanceOfElement(clonedNode, SVGImageElement) &&
+-            !isDataUrl(clonedNode.href.baseVal))) {
++        !(isSvgImageElement && !isDataUrl(clonedNode.href.baseVal))) {
+         return;
+     }
+-    const url = isImageElement ? clonedNode.src : clonedNode.href.baseVal;
++    const sourceUrl = isImageElement
++        ? clonedNode.getAttribute('src') || clonedNode.src
++        : clonedNode.href.baseVal;
++    const url = resolveUrl(sourceUrl, baseUrl);
+     const dataURL = await resourceToDataURL(url, getMimeType(url), options);
+     await new Promise((resolve, reject) => {
+         clonedNode.onload = resolve;
+@@ -58,16 +63,21 @@ async function embedImageNode(clonedNode, options) {
+         }
+     });
+ }
+-async function embedChildren(clonedNode, options) {
++async function embedChildren(clonedNode, options, baseUrl) {
+     const children = toArray(clonedNode.childNodes);
+-    const deferreds = children.map((child) => embedImages(child, options));
++    const deferreds = children.map((child) => embedImagesWithBase(child, options, baseUrl));
+     await Promise.all(deferreds).then(() => clonedNode);
+ }
+-export async function embedImages(clonedNode, options) {
+-    if (isInstanceOfElement(clonedNode, Element)) {
+-        await embedBackground(clonedNode, options);
+-        await embedImageNode(clonedNode, options);
+-        await embedChildren(clonedNode, options);
++async function embedImagesWithBase(clonedNode, options, inheritedBaseUrl) {
++    var _a, _b;
++    if (isInstanceOfElement(clonedNode, ownerWindow(clonedNode).Element)) {
++        const baseUrl = (_b = (_a = getSourceBaseUrl(clonedNode)) !== null && _a !== void 0 ? _a : inheritedBaseUrl) !== null && _b !== void 0 ? _b : clonedNode.ownerDocument.baseURI;
++        await embedBackground(clonedNode, options, baseUrl);
++        await embedImageNode(clonedNode, options, baseUrl);
++        await embedChildren(clonedNode, options, baseUrl);
+     }
+ }
++export async function embedImages(clonedNode, options) {
++    await embedImagesWithBase(clonedNode, options);
++}
+ //# sourceMappingURL=embed-images.js.map
+\ No newline at end of file
 diff --git a/es/embed-webfonts.js b/es/embed-webfonts.js
-index f6b0d96829c8a3301c142cacd07079e85b1f64fd..c0eba90427585cefadb3baab8b05e58b8115e34c 100644
+index f6b0d96829c8a3301c142cacd07079e85b1f64fd..6621e305e77e9a7d6bb4614d446e384aacc8621a 100644
 --- a/es/embed-webfonts.js
 +++ b/es/embed-webfonts.js
-@@ -153,15 +153,17 @@ async function parseWebFontRules(node, options) {
-     return getWebFontRules(cssRules);
+@@ -1,4 +1,4 @@
+-import { toArray } from './util';
++import { isInstanceOfElement, ownerWindow, toArray } from './util';
+ import { fetchAsDataURL } from './dataurl';
+ import { shouldEmbed, embedResources } from './embed-resources';
+ const cssFetchCache = {};
+@@ -73,7 +73,7 @@ function parseCSS(source) {
+     }
+     return result;
+ }
+-async function getCSSRules(styleSheets, options) {
++async function getCSSRules(styleSheets, options, ownerDocument) {
+     const ret = [];
+     const deferreds = [];
+     // First loop inlines imports
+@@ -81,7 +81,7 @@ async function getCSSRules(styleSheets, options) {
+         if ('cssRules' in sheet) {
+             try {
+                 toArray(sheet.cssRules || []).forEach((item, index) => {
+-                    if (item.type === CSSRule.IMPORT_RULE) {
++                    if (item.type === ownerWindow(ownerDocument.documentElement).CSSRule.IMPORT_RULE) {
+                         let importIndex = index + 1;
+                         const url = item.href;
+                         const deferred = fetchCSS(url)
+@@ -107,7 +107,7 @@ async function getCSSRules(styleSheets, options) {
+                 });
+             }
+             catch (e) {
+-                const inline = styleSheets.find((a) => a.href == null) || document.styleSheets[0];
++                const inline = styleSheets.find((a) => a.href == null) || ownerDocument.styleSheets[0];
+                 if (sheet.href != null) {
+                     deferreds.push(fetchCSS(sheet.href)
+                         .then((metadata) => embedFonts(metadata, options))
+@@ -139,9 +139,9 @@ async function getCSSRules(styleSheets, options) {
+         return ret;
+     });
+ }
+-function getWebFontRules(cssRules) {
++function getWebFontRules(cssRules, ownerDocument) {
+     return cssRules
+-        .filter((rule) => rule.type === CSSRule.FONT_FACE_RULE)
++        .filter((rule) => rule.type === ownerWindow(ownerDocument.documentElement).CSSRule.FONT_FACE_RULE)
+         .filter((rule) => shouldEmbed(rule.style.getPropertyValue('src')));
+ }
+ async function parseWebFontRules(node, options) {
+@@ -149,21 +149,24 @@ async function parseWebFontRules(node, options) {
+         throw new Error('Provided element is not within a Document');
+     }
+     const styleSheets = toArray(node.ownerDocument.styleSheets);
+-    const cssRules = await getCSSRules(styleSheets, options);
+-    return getWebFontRules(cssRules);
++    const cssRules = await getCSSRules(styleSheets, options, node.ownerDocument);
++    return getWebFontRules(cssRules, node.ownerDocument);
  }
  function normalizeFontFamily(font) {
 -    return font.trim().replace(/["']/g, '');
@@ -28,181 +381,1749 @@ index f6b0d96829c8a3301c142cacd07079e85b1f64fd..c0eba90427585cefadb3baab8b05e58b
  function getUsedFonts(node) {
      const fonts = new Set();
      function traverse(node) {
-         const fontFamily = node.style.fontFamily || getComputedStyle(node).fontFamily;
+-        const fontFamily = node.style.fontFamily || getComputedStyle(node).fontFamily;
 -        fontFamily.split(',').forEach((font) => {
 -            fonts.add(normalizeFontFamily(font));
 -        });
++        const win = ownerWindow(node);
++        const fontFamily = node.style.fontFamily || win.getComputedStyle(node).fontFamily;
 +        if (fontFamily) {
 +            fontFamily.split(',').forEach((font) => {
 +                fonts.add(normalizeFontFamily(font));
 +            });
 +        }
          Array.from(node.children).forEach((child) => {
-             if (child instanceof HTMLElement) {
+-            if (child instanceof HTMLElement) {
++            if (isInstanceOfElement(child, win.HTMLElement)) {
                  traverse(child);
-@@ -190,9 +192,12 @@ export async function embedWebFonts(clonedNode, options) {
+             }
+         });
+@@ -190,9 +193,12 @@ export async function embedWebFonts(clonedNode, options) {
          : options.skipFonts
              ? null
              : await getWebFontCSS(clonedNode, options);
 -    if (cssText) {
+-        const styleNode = document.createElement('style');
+-        const sytleContent = document.createTextNode(cssText);
 +    const finalCssText = options.extraStyleContent != null
 +        ? (cssText || '').concat(options.extraStyleContent)
-+        : cssText
++        : cssText;
 +    if (finalCssText) {
-         const styleNode = document.createElement('style');
--        const sytleContent = document.createTextNode(cssText);
-+        const sytleContent = document.createTextNode(finalCssText);
++        const styleNode = clonedNode.ownerDocument.createElement('style');
++        const sytleContent = clonedNode.ownerDocument.createTextNode(finalCssText);
          styleNode.appendChild(sytleContent);
          if (clonedNode.firstChild) {
              clonedNode.insertBefore(styleNode, clonedNode.firstChild);
+diff --git a/es/index.js b/es/index.js
+index 0eda9388109fc26752b7df643813f80e135c95e5..8141bd516803df02bf4798b520a443aebf35dfcb 100644
+--- a/es/index.js
++++ b/es/index.js
+@@ -2,7 +2,7 @@ import { cloneNode } from './clone-node';
+ import { embedImages } from './embed-images';
+ import { applyStyle } from './apply-style';
+ import { embedWebFonts, getWebFontCSS } from './embed-webfonts';
+-import { getImageSize, getPixelRatio, createImage, canvasToBlob, nodeToDataURL, checkCanvasDimensions, } from './util';
++import { getImageSize, getPixelRatio, createImage, canvasToBlob, nodeToDataURL, checkCanvasDimensions, ownerWindow, } from './util';
+ export async function toSvg(node, options = {}) {
+     const { width, height } = getImageSize(node, options);
+     const clonedNode = (await cloneNode(node, options, true));
+@@ -15,10 +15,11 @@ export async function toSvg(node, options = {}) {
+ export async function toCanvas(node, options = {}) {
+     const { width, height } = getImageSize(node, options);
+     const svg = await toSvg(node, options);
+-    const img = await createImage(svg);
+-    const canvas = document.createElement('canvas');
++    const ownerDocument = node.ownerDocument;
++    const img = await createImage(svg, ownerDocument);
++    const canvas = ownerDocument.createElement('canvas');
+     const context = canvas.getContext('2d');
+-    const ratio = options.pixelRatio || getPixelRatio();
++    const ratio = options.pixelRatio || getPixelRatio(ownerWindow(node));
+     const canvasWidth = options.canvasWidth || width;
+     const canvasHeight = options.canvasHeight || height;
+     canvas.width = canvasWidth * ratio;
 diff --git a/es/types.d.ts b/es/types.d.ts
-index a832baf45e95d7b3bb076ecacd46e73493f3e9ef..b487b064337bf75cb74dd530b54b7c6a1db40da4 100644
+index a832baf45e95d7b3bb076ecacd46e73493f3e9ef..25ba6f0524d77876b2de3b8fdc006dda084b5cc0 100644
 --- a/es/types.d.ts
 +++ b/es/types.d.ts
-@@ -75,6 +75,11 @@ export interface Options {
+@@ -75,6 +75,10 @@ export interface Options {
       * create embed CSS for use across multiple calls to library functions.
       */
      fontEmbedCSS?: string;
 +    /**
-+     * A CSS string to specify additional custom style content. It will be
-+     * added to the style-tag.
++     * A CSS string appended to the style element embedded in the clone.
 +     */
 +    extraStyleContent?: string;
      /**
       * A boolean to turn off auto scaling for truly massive images..
       */
+diff --git a/es/util.d.ts b/es/util.d.ts
+index 5de42c8ca9b1f76f8240007061c6083a46ac7f0f..7382f187d0b4fa3d9f84e117c825c1955a578f0c 100644
+--- a/es/util.d.ts
++++ b/es/util.d.ts
+@@ -1,17 +1,20 @@
+ import type { Options } from './types';
++export declare function ownerWindow(node: Node): Window & typeof globalThis;
++export declare function setSourceBaseUrl(node: Node, baseUrl: string): void;
++export declare function getSourceBaseUrl(node: Node): string | undefined;
+ export declare function resolveUrl(url: string, baseUrl: string | null): string;
+ export declare const uuid: () => string;
+ export declare function delay<T>(ms: number): (args: T) => Promise<T>;
+ export declare function toArray<T>(arrayLike: any): T[];
+-export declare function getStyleProperties(options?: Options): string[];
++export declare function getStyleProperties(node: Node, options?: Options): string[];
+ export declare function getImageSize(targetNode: HTMLElement, options?: Options): {
+     width: number;
+     height: number;
+ };
+-export declare function getPixelRatio(): number;
++export declare function getPixelRatio(win: Window & typeof globalThis): any;
+ export declare function checkCanvasDimensions(canvas: HTMLCanvasElement): void;
+ export declare function canvasToBlob(canvas: HTMLCanvasElement, options?: Options): Promise<Blob | null>;
+-export declare function createImage(url: string): Promise<HTMLImageElement>;
++export declare function createImage(url: string, ownerDocument: Document): Promise<HTMLImageElement>;
+ export declare function svgToDataURL(svg: SVGElement): Promise<string>;
+ export declare function nodeToDataURL(node: HTMLElement, width: number, height: number): Promise<string>;
+ export declare const isInstanceOfElement: <T extends {
+diff --git a/es/util.js b/es/util.js
+index 90a3cd19a6bcc763d98cbd476fde17f4bc0428fa..6de0072ed88d515e513717aadd39eedfb8a09e0d 100644
+--- a/es/util.js
++++ b/es/util.js
+@@ -1,3 +1,17 @@
++export function ownerWindow(node) {
++    var _a;
++    const win = (_a = node.ownerDocument) === null || _a === void 0 ? void 0 : _a.defaultView;
++    if (!win)
++        throw new Error('Provided element is not within a Document');
++    return win;
++}
++const sourceBaseUrls = new WeakMap();
++export function setSourceBaseUrl(node, baseUrl) {
++    sourceBaseUrls.set(node, baseUrl);
++}
++export function getSourceBaseUrl(node) {
++    return sourceBaseUrls.get(node);
++}
+ export function resolveUrl(url, baseUrl) {
+     // url is absolute already
+     if (url.match(/^[a-z]+:\/\//i)) {
+@@ -47,20 +61,23 @@ export function toArray(arrayLike) {
+     }
+     return arr;
+ }
+-let styleProps = null;
+-export function getStyleProperties(options = {}) {
+-    if (styleProps) {
+-        return styleProps;
+-    }
++const styleProps = new WeakMap();
++export function getStyleProperties(node, options = {}) {
+     if (options.includeStyleProperties) {
+-        styleProps = options.includeStyleProperties;
+-        return styleProps;
++        return options.includeStyleProperties;
+     }
+-    styleProps = toArray(window.getComputedStyle(document.documentElement));
+-    return styleProps;
++    const ownerDocument = node.ownerDocument;
++    if (!ownerDocument)
++        throw new Error('Provided element is not within a Document');
++    const cached = styleProps.get(ownerDocument);
++    if (cached)
++        return cached;
++    const properties = toArray(ownerWindow(node).getComputedStyle(ownerDocument.documentElement));
++    styleProps.set(ownerDocument, properties);
++    return properties;
+ }
+ function px(node, styleProperty) {
+-    const win = node.ownerDocument.defaultView || window;
++    const win = ownerWindow(node);
+     const val = win.getComputedStyle(node).getPropertyValue(styleProperty);
+     return val ? parseFloat(val.replace('px', '')) : 0;
+ }
+@@ -79,7 +96,7 @@ export function getImageSize(targetNode, options = {}) {
+     const height = options.height || getNodeHeight(targetNode);
+     return { width, height };
+ }
+-export function getPixelRatio() {
++export function getPixelRatio(win) {
+     let ratio;
+     let FINAL_PROCESS;
+     try {
+@@ -97,7 +114,7 @@ export function getPixelRatio() {
+             ratio = 1;
+         }
+     }
+-    return ratio || window.devicePixelRatio || 1;
++    return ratio || win.devicePixelRatio || 1;
+ }
+ // @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/canvas#maximum_canvas_size
+ const canvasDimensionLimit = 16384;
+@@ -132,26 +149,46 @@ export function canvasToBlob(canvas, options = {}) {
+         });
+     }
+     return new Promise((resolve) => {
+-        const binaryString = window.atob(canvas
++        const win = ownerWindow(canvas);
++        const binaryString = win.atob(canvas
+             .toDataURL(options.type ? options.type : undefined, options.quality ? options.quality : undefined)
+             .split(',')[1]);
+         const len = binaryString.length;
+-        const binaryArray = new Uint8Array(len);
++        const binaryArray = new win.Uint8Array(len);
+         for (let i = 0; i < len; i += 1) {
+             binaryArray[i] = binaryString.charCodeAt(i);
+         }
+-        resolve(new Blob([binaryArray], {
++        resolve(new win.Blob([binaryArray], {
+             type: options.type ? options.type : 'image/png',
+         }));
+     });
+ }
+-export function createImage(url) {
++export function createImage(url, ownerDocument) {
+     return new Promise((resolve, reject) => {
+-        const img = new Image();
++        const win = ownerWindow(ownerDocument.documentElement);
++        const img = new win.Image();
+         img.onload = () => {
++            if (ownerDocument.hidden) {
++                resolve(img);
++                return;
++            }
+             img.decode().then(() => {
+-                requestAnimationFrame(() => resolve(img));
+-            });
++                let settled = false;
++                let frame = 0;
++                let fallback = 0;
++                const finish = () => {
++                    if (settled)
++                        return;
++                    settled = true;
++                    win.cancelAnimationFrame(frame);
++                    win.clearTimeout(fallback);
++                    resolve(img);
++                };
++                fallback = win.setTimeout(finish, 100);
++                frame = win.requestAnimationFrame(finish);
++                if (settled)
++                    win.cancelAnimationFrame(frame);
++            }, reject);
+         };
+         img.onerror = reject;
+         img.crossOrigin = 'anonymous';
+@@ -160,15 +197,17 @@ export function createImage(url) {
+     });
+ }
+ export async function svgToDataURL(svg) {
++    const win = ownerWindow(svg);
+     return Promise.resolve()
+-        .then(() => new XMLSerializer().serializeToString(svg))
++        .then(() => new win.XMLSerializer().serializeToString(svg))
+         .then(encodeURIComponent)
+         .then((html) => `data:image/svg+xml;charset=utf-8,${html}`);
+ }
+ export async function nodeToDataURL(node, width, height) {
+     const xmlns = 'http://www.w3.org/2000/svg';
+-    const svg = document.createElementNS(xmlns, 'svg');
+-    const foreignObject = document.createElementNS(xmlns, 'foreignObject');
++    const ownerDocument = node.ownerDocument;
++    const svg = ownerDocument.createElementNS(xmlns, 'svg');
++    const foreignObject = ownerDocument.createElementNS(xmlns, 'foreignObject');
+     svg.setAttribute('width', `${width}`);
+     svg.setAttribute('height', `${height}`);
+     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 diff --git a/lib/clone-node.js b/lib/clone-node.js
-index 214f4d30a50baae7f007d2399eeac298366538c7..74d67830cf549c05c533904123a9482c2cf5314f 100644
+index 214f4d30a50baae7f007d2399eeac298366538c7..89de3df06415021c4b2b469aa880662ab32f1881 100644
 --- a/lib/clone-node.js
 +++ b/lib/clone-node.js
-@@ -134,9 +134,8 @@ function cloneChildren(nativeNode, clonedNode, options) {
+@@ -49,7 +49,7 @@ function cloneCanvasElement(canvas) {
+             if (dataURL === 'data:,') {
+                 return [2 /*return*/, canvas.cloneNode(false)];
+             }
+-            return [2 /*return*/, (0, util_1.createImage)(dataURL)];
++            return [2 /*return*/, (0, util_1.createImage)(dataURL, canvas.ownerDocument)];
+         });
+     });
+ }
+@@ -60,54 +60,56 @@ function cloneVideoElement(video, options) {
+             switch (_a.label) {
+                 case 0:
+                     if (video.currentSrc) {
+-                        canvas = document.createElement('canvas');
++                        canvas = video.ownerDocument.createElement('canvas');
+                         ctx = canvas.getContext('2d');
+                         canvas.width = video.clientWidth;
+                         canvas.height = video.clientHeight;
+                         ctx === null || ctx === void 0 ? void 0 : ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                         dataURL_1 = canvas.toDataURL();
+-                        return [2 /*return*/, (0, util_1.createImage)(dataURL_1)];
++                        return [2 /*return*/, (0, util_1.createImage)(dataURL_1, video.ownerDocument)];
+                     }
+                     poster = video.poster;
+                     contentType = (0, mimes_1.getMimeType)(poster);
+                     return [4 /*yield*/, (0, dataurl_1.resourceToDataURL)(poster, contentType, options)];
+                 case 1:
+                     dataURL = _a.sent();
+-                    return [2 /*return*/, (0, util_1.createImage)(dataURL)];
++                    return [2 /*return*/, (0, util_1.createImage)(dataURL, video.ownerDocument)];
+             }
+         });
+     });
+ }
+ function cloneIFrameElement(iframe, options) {
+-    var _a;
+     return __awaiter(this, void 0, void 0, function () {
+-        var _b;
+-        return __generator(this, function (_c) {
+-            switch (_c.label) {
++        var sourceDocument, body, clone;
++        return __generator(this, function (_a) {
++            switch (_a.label) {
+                 case 0:
+-                    _c.trys.push([0, 3, , 4]);
+-                    if (!((_a = iframe === null || iframe === void 0 ? void 0 : iframe.contentDocument) === null || _a === void 0 ? void 0 : _a.body)) return [3 /*break*/, 2];
+-                    return [4 /*yield*/, cloneNode(iframe.contentDocument.body, options, true)];
+-                case 1: return [2 /*return*/, (_c.sent())];
+-                case 2: return [3 /*break*/, 4];
+-                case 3:
+-                    _b = _c.sent();
+-                    return [3 /*break*/, 4];
+-                case 4: return [2 /*return*/, iframe.cloneNode(false)];
++                    sourceDocument = iframe === null || iframe === void 0 ? void 0 : iframe.contentDocument;
++                    body = sourceDocument === null || sourceDocument === void 0 ? void 0 : sourceDocument.body;
++                    if (!body) {
++                        throw new Error('Failed to clone iframe');
++                    }
++                    return [4 /*yield*/, cloneNode(body, options, true)];
++                case 1:
++                    clone = (_a.sent());
++                    (0, util_1.setSourceBaseUrl)(clone, sourceDocument.baseURI);
++                    return [2 /*return*/, clone];
+             }
+         });
+     });
+ }
+ function cloneSingleNode(node, options) {
+     return __awaiter(this, void 0, void 0, function () {
++        var win;
+         return __generator(this, function (_a) {
+-            if ((0, util_1.isInstanceOfElement)(node, HTMLCanvasElement)) {
++            win = (0, util_1.ownerWindow)(node);
++            if ((0, util_1.isInstanceOfElement)(node, win.HTMLCanvasElement)) {
+                 return [2 /*return*/, cloneCanvasElement(node)];
+             }
+-            if ((0, util_1.isInstanceOfElement)(node, HTMLVideoElement)) {
++            if ((0, util_1.isInstanceOfElement)(node, win.HTMLVideoElement)) {
+                 return [2 /*return*/, cloneVideoElement(node, options)];
+             }
+-            if ((0, util_1.isInstanceOfElement)(node, HTMLIFrameElement)) {
++            if ((0, util_1.isInstanceOfElement)(node, win.HTMLIFrameElement)) {
+                 return [2 /*return*/, cloneIFrameElement(node, options)];
+             }
+             return [2 /*return*/, node.cloneNode(isSVGElement(node))];
+@@ -121,11 +123,11 @@ var isSVGElement = function (node) {
+     return node.tagName != null && node.tagName.toUpperCase() === 'SVG';
+ };
+ function cloneChildren(nativeNode, clonedNode, options) {
+-    var _a, _b;
++    var _a;
+     return __awaiter(this, void 0, void 0, function () {
+         var children;
+-        return __generator(this, function (_c) {
+-            switch (_c.label) {
++        return __generator(this, function (_b) {
++            switch (_b.label) {
+                 case 0:
+                     if (isSVGElement(clonedNode)) {
+                         return [2 /*return*/, clonedNode];
+@@ -134,15 +136,14 @@ function cloneChildren(nativeNode, clonedNode, options) {
                      if (isSlotElement(nativeNode) && nativeNode.assignedNodes) {
                          children = (0, util_1.toArray)(nativeNode.assignedNodes());
                      }
 -                    else if ((0, util_1.isInstanceOfElement)(nativeNode, HTMLIFrameElement) &&
 -                        ((_a = nativeNode.contentDocument) === null || _a === void 0 ? void 0 : _a.body)) {
 -                        children = (0, util_1.toArray)(nativeNode.contentDocument.body.childNodes);
-+                    else if ((0, util_1.isInstanceOfElement)(nativeNode, HTMLIFrameElement)) {
++                    else if ((0, util_1.isInstanceOfElement)(nativeNode, (0, util_1.ownerWindow)(nativeNode).HTMLIFrameElement)) {
 +                        return [2 /*return*/, clonedNode];
                      }
                      else {
-                         children = (0, util_1.toArray)(((_b = nativeNode.shadowRoot) !== null && _b !== void 0 ? _b : nativeNode).childNodes);
+-                        children = (0, util_1.toArray)(((_b = nativeNode.shadowRoot) !== null && _b !== void 0 ? _b : nativeNode).childNodes);
++                        children = (0, util_1.toArray)(((_a = nativeNode.shadowRoot) !== null && _a !== void 0 ? _a : nativeNode).childNodes);
+                     }
+                     if (children.length === 0 ||
+-                        (0, util_1.isInstanceOfElement)(nativeNode, HTMLVideoElement)) {
++                        (0, util_1.isInstanceOfElement)(nativeNode, (0, util_1.ownerWindow)(nativeNode).HTMLVideoElement)) {
+                         return [2 /*return*/, clonedNode];
+                     }
+                     return [4 /*yield*/, children.reduce(function (deferred, child) {
+@@ -155,7 +156,7 @@ function cloneChildren(nativeNode, clonedNode, options) {
+                             });
+                         }, Promise.resolve())];
+                 case 1:
+-                    _c.sent();
++                    _b.sent();
+                     return [2 /*return*/, clonedNode];
+             }
+         });
+@@ -166,19 +167,20 @@ function cloneCSSStyle(nativeNode, clonedNode, options) {
+     if (!targetStyle) {
+         return;
+     }
+-    var sourceStyle = window.getComputedStyle(nativeNode);
++    var win = (0, util_1.ownerWindow)(nativeNode);
++    var sourceStyle = win.getComputedStyle(nativeNode);
+     if (sourceStyle.cssText) {
+         targetStyle.cssText = sourceStyle.cssText;
+         targetStyle.transformOrigin = sourceStyle.transformOrigin;
+     }
+     else {
+-        (0, util_1.getStyleProperties)(options).forEach(function (name) {
++        (0, util_1.getStyleProperties)(nativeNode, options).forEach(function (name) {
+             var value = sourceStyle.getPropertyValue(name);
+             if (name === 'font-size' && value.endsWith('px')) {
+                 var reducedFont = Math.floor(parseFloat(value.substring(0, value.length - 2))) - 0.1;
+                 value = "".concat(reducedFont, "px");
+             }
+-            if ((0, util_1.isInstanceOfElement)(nativeNode, HTMLIFrameElement) &&
++            if ((0, util_1.isInstanceOfElement)(nativeNode, win.HTMLIFrameElement) &&
+                 name === 'display' &&
+                 value === 'inline') {
+                 value = 'block';
+@@ -191,15 +193,16 @@ function cloneCSSStyle(nativeNode, clonedNode, options) {
+     }
+ }
+ function cloneInputValue(nativeNode, clonedNode) {
+-    if ((0, util_1.isInstanceOfElement)(nativeNode, HTMLTextAreaElement)) {
++    var win = (0, util_1.ownerWindow)(nativeNode);
++    if ((0, util_1.isInstanceOfElement)(nativeNode, win.HTMLTextAreaElement)) {
+         clonedNode.innerHTML = nativeNode.value;
+     }
+-    if ((0, util_1.isInstanceOfElement)(nativeNode, HTMLInputElement)) {
++    if ((0, util_1.isInstanceOfElement)(nativeNode, win.HTMLInputElement)) {
+         clonedNode.setAttribute('value', nativeNode.value);
+     }
+ }
+ function cloneSelectValue(nativeNode, clonedNode) {
+-    if ((0, util_1.isInstanceOfElement)(nativeNode, HTMLSelectElement)) {
++    if ((0, util_1.isInstanceOfElement)(nativeNode, (0, util_1.ownerWindow)(nativeNode).HTMLSelectElement)) {
+         var clonedSelect = clonedNode;
+         var selectedOption = Array.from(clonedSelect.children).find(function (child) { return nativeNode.value === child.getAttribute('value'); });
+         if (selectedOption) {
+@@ -208,7 +211,7 @@ function cloneSelectValue(nativeNode, clonedNode) {
+     }
+ }
+ function decorate(nativeNode, clonedNode, options) {
+-    if ((0, util_1.isInstanceOfElement)(clonedNode, Element)) {
++    if ((0, util_1.isInstanceOfElement)(clonedNode, (0, util_1.ownerWindow)(clonedNode).Element)) {
+         cloneCSSStyle(nativeNode, clonedNode, options);
+         (0, clone_pseudos_1.clonePseudoElements)(nativeNode, clonedNode, options);
+         cloneInputValue(nativeNode, clonedNode);
+@@ -235,7 +238,7 @@ function ensureSVGSymbols(clone, options) {
+                     id = use.getAttribute('xlink:href');
+                     if (!id) return [3 /*break*/, 3];
+                     exist = clone.querySelector(id);
+-                    definition = document.querySelector(id);
++                    definition = clone.ownerDocument.querySelector(id);
+                     if (!(!exist && definition && !processedDefs[id])) return [3 /*break*/, 3];
+                     // eslint-disable-next-line no-await-in-loop
+                     _a = processedDefs;
+@@ -252,14 +255,14 @@ function ensureSVGSymbols(clone, options) {
+                     nodes = Object.values(processedDefs);
+                     if (nodes.length) {
+                         ns = 'http://www.w3.org/1999/xhtml';
+-                        svg = document.createElementNS(ns, 'svg');
++                        svg = clone.ownerDocument.createElementNS(ns, 'svg');
+                         svg.setAttribute('xmlns', ns);
+                         svg.style.position = 'absolute';
+                         svg.style.width = '0';
+                         svg.style.height = '0';
+                         svg.style.overflow = 'hidden';
+                         svg.style.display = 'none';
+-                        defs = document.createElementNS(ns, 'defs');
++                        defs = clone.ownerDocument.createElementNS(ns, 'defs');
+                         svg.appendChild(defs);
+                         for (i = 0; i < nodes.length; i++) {
+                             defs.appendChild(nodes[i]);
+diff --git a/lib/clone-pseudos.js b/lib/clone-pseudos.js
+index fe71e3b2b5959ef9d27cadde4009aefe4156827b..0981f71ccce40f1b1162267ddb6428d45d617c32 100644
+--- a/lib/clone-pseudos.js
++++ b/lib/clone-pseudos.js
+@@ -6,8 +6,8 @@ function formatCSSText(style) {
+     var content = style.getPropertyValue('content');
+     return "".concat(style.cssText, " content: '").concat(content.replace(/'|"/g, ''), "';");
+ }
+-function formatCSSProperties(style, options) {
+-    return (0, util_1.getStyleProperties)(options)
++function formatCSSProperties(style, options, node) {
++    return (0, util_1.getStyleProperties)(node, options)
+         .map(function (name) {
+         var value = style.getPropertyValue(name);
+         var priority = style.getPropertyPriority(name);
+@@ -15,15 +15,16 @@ function formatCSSProperties(style, options) {
+     })
+         .join(' ');
+ }
+-function getPseudoElementStyle(className, pseudo, style, options) {
++function getPseudoElementStyle(className, pseudo, style, options, ownerDocument) {
+     var selector = ".".concat(className, ":").concat(pseudo);
+     var cssText = style.cssText
+         ? formatCSSText(style)
+-        : formatCSSProperties(style, options);
+-    return document.createTextNode("".concat(selector, "{").concat(cssText, "}"));
++        : formatCSSProperties(style, options, ownerDocument.documentElement);
++    return ownerDocument.createTextNode("".concat(selector, "{").concat(cssText, "}"));
+ }
+ function clonePseudoElement(nativeNode, clonedNode, pseudo, options) {
+-    var style = window.getComputedStyle(nativeNode, pseudo);
++    var win = (0, util_1.ownerWindow)(nativeNode);
++    var style = win.getComputedStyle(nativeNode, pseudo);
+     var content = style.getPropertyValue('content');
+     if (content === '' || content === 'none') {
+         return;
+@@ -35,8 +36,9 @@ function clonePseudoElement(nativeNode, clonedNode, pseudo, options) {
+     catch (err) {
+         return;
+     }
+-    var styleElement = document.createElement('style');
+-    styleElement.appendChild(getPseudoElementStyle(className, pseudo, style, options));
++    var ownerDocument = clonedNode.ownerDocument;
++    var styleElement = ownerDocument.createElement('style');
++    styleElement.appendChild(getPseudoElementStyle(className, pseudo, style, options, ownerDocument));
+     clonedNode.appendChild(styleElement);
+ }
+ function clonePseudoElements(nativeNode, clonedNode, options) {
+diff --git a/lib/embed-images.js b/lib/embed-images.js
+index c9c4e6428edb32dfc9e67f80e082ca104cb5213d..373dd48aba1783059b34638ccbce38ca206ab59a 100644
+--- a/lib/embed-images.js
++++ b/lib/embed-images.js
+@@ -41,7 +41,7 @@ var embed_resources_1 = require("./embed-resources");
+ var util_1 = require("./util");
+ var dataurl_1 = require("./dataurl");
+ var mimes_1 = require("./mimes");
+-function embedProp(propName, node, options) {
++function embedProp(propName, node, options, baseUrl) {
+     var _a;
+     return __awaiter(this, void 0, void 0, function () {
+         var propValue, cssString;
+@@ -50,7 +50,7 @@ function embedProp(propName, node, options) {
+                 case 0:
+                     propValue = (_a = node.style) === null || _a === void 0 ? void 0 : _a.getPropertyValue(propName);
+                     if (!propValue) return [3 /*break*/, 2];
+-                    return [4 /*yield*/, (0, embed_resources_1.embedResources)(propValue, null, options)];
++                    return [4 /*yield*/, (0, embed_resources_1.embedResources)(propValue, baseUrl, options)];
+                 case 1:
+                     cssString = _b.sent();
+                     node.style.setProperty(propName, cssString, node.style.getPropertyPriority(propName));
+@@ -60,42 +60,42 @@ function embedProp(propName, node, options) {
+         });
+     });
+ }
+-function embedBackground(clonedNode, options) {
++function embedBackground(clonedNode, options, baseUrl) {
+     return __awaiter(this, void 0, void 0, function () {
+         var _a, _b, _c, _d;
+         return __generator(this, function (_e) {
+             switch (_e.label) {
+                 case 0:
+                     ;
+-                    return [4 /*yield*/, embedProp('background', clonedNode, options)];
++                    return [4 /*yield*/, embedProp('background', clonedNode, options, baseUrl)];
+                 case 1:
+                     _a = (_e.sent());
+                     if (_a) return [3 /*break*/, 3];
+-                    return [4 /*yield*/, embedProp('background-image', clonedNode, options)];
++                    return [4 /*yield*/, embedProp('background-image', clonedNode, options, baseUrl)];
+                 case 2:
+                     _a = (_e.sent());
+                     _e.label = 3;
+                 case 3:
+                     _a;
+-                    return [4 /*yield*/, embedProp('mask', clonedNode, options)];
++                    return [4 /*yield*/, embedProp('mask', clonedNode, options, baseUrl)];
+                 case 4:
+                     _d = (_e.sent());
+                     if (_d) return [3 /*break*/, 6];
+-                    return [4 /*yield*/, embedProp('-webkit-mask', clonedNode, options)];
++                    return [4 /*yield*/, embedProp('-webkit-mask', clonedNode, options, baseUrl)];
+                 case 5:
+                     _d = (_e.sent());
+                     _e.label = 6;
+                 case 6:
+                     _c = _d;
+                     if (_c) return [3 /*break*/, 8];
+-                    return [4 /*yield*/, embedProp('mask-image', clonedNode, options)];
++                    return [4 /*yield*/, embedProp('mask-image', clonedNode, options, baseUrl)];
+                 case 7:
+                     _c = (_e.sent());
+                     _e.label = 8;
+                 case 8:
+                     _b = _c;
+                     if (_b) return [3 /*break*/, 10];
+-                    return [4 /*yield*/, embedProp('-webkit-mask-image', clonedNode, options)];
++                    return [4 /*yield*/, embedProp('-webkit-mask-image', clonedNode, options, baseUrl)];
+                 case 9:
+                     _b = (_e.sent());
+                     _e.label = 10;
+@@ -106,19 +106,24 @@ function embedBackground(clonedNode, options) {
+         });
+     });
+ }
+-function embedImageNode(clonedNode, options) {
++function embedImageNode(clonedNode, options, baseUrl) {
+     return __awaiter(this, void 0, void 0, function () {
+-        var isImageElement, url, dataURL;
++        var win, isImageElement, isSvgImageElement, sourceUrl, url, dataURL;
+         return __generator(this, function (_a) {
+             switch (_a.label) {
+                 case 0:
+-                    isImageElement = (0, util_1.isInstanceOfElement)(clonedNode, HTMLImageElement);
++                    win = (0, util_1.ownerWindow)(clonedNode);
++                    isImageElement = (0, util_1.isInstanceOfElement)(clonedNode, win.HTMLImageElement);
++                    isSvgImageElement = typeof win.SVGImageElement === 'function' &&
++                        (0, util_1.isInstanceOfElement)(clonedNode, win.SVGImageElement);
+                     if (!(isImageElement && !(0, dataurl_1.isDataUrl)(clonedNode.src)) &&
+-                        !((0, util_1.isInstanceOfElement)(clonedNode, SVGImageElement) &&
+-                            !(0, dataurl_1.isDataUrl)(clonedNode.href.baseVal))) {
++                        !(isSvgImageElement && !(0, dataurl_1.isDataUrl)(clonedNode.href.baseVal))) {
+                         return [2 /*return*/];
+                     }
+-                    url = isImageElement ? clonedNode.src : clonedNode.href.baseVal;
++                    sourceUrl = isImageElement
++                        ? clonedNode.getAttribute('src') || clonedNode.src
++                        : clonedNode.href.baseVal;
++                    url = (0, util_1.resolveUrl)(sourceUrl, baseUrl);
+                     return [4 /*yield*/, (0, dataurl_1.resourceToDataURL)(url, (0, mimes_1.getMimeType)(url), options)];
+                 case 1:
+                     dataURL = _a.sent();
+@@ -160,14 +165,16 @@ function embedImageNode(clonedNode, options) {
+         });
+     });
+ }
+-function embedChildren(clonedNode, options) {
++function embedChildren(clonedNode, options, baseUrl) {
+     return __awaiter(this, void 0, void 0, function () {
+         var children, deferreds;
+         return __generator(this, function (_a) {
+             switch (_a.label) {
+                 case 0:
+                     children = (0, util_1.toArray)(clonedNode.childNodes);
+-                    deferreds = children.map(function (child) { return embedImages(child, options); });
++                    deferreds = children.map(function (child) {
++                        return embedImagesWithBase(child, options, baseUrl);
++                    });
+                     return [4 /*yield*/, Promise.all(deferreds).then(function () { return clonedNode; })];
+                 case 1:
+                     _a.sent();
+@@ -176,26 +183,41 @@ function embedChildren(clonedNode, options) {
+         });
+     });
+ }
+-function embedImages(clonedNode, options) {
++function embedImagesWithBase(clonedNode, options, inheritedBaseUrl) {
++    var _a, _b;
+     return __awaiter(this, void 0, void 0, function () {
+-        return __generator(this, function (_a) {
+-            switch (_a.label) {
++        var baseUrl;
++        return __generator(this, function (_c) {
++            switch (_c.label) {
+                 case 0:
+-                    if (!(0, util_1.isInstanceOfElement)(clonedNode, Element)) return [3 /*break*/, 4];
+-                    return [4 /*yield*/, embedBackground(clonedNode, options)];
++                    if (!(0, util_1.isInstanceOfElement)(clonedNode, (0, util_1.ownerWindow)(clonedNode).Element)) return [3 /*break*/, 4];
++                    baseUrl = (_b = (_a = (0, util_1.getSourceBaseUrl)(clonedNode)) !== null && _a !== void 0 ? _a : inheritedBaseUrl) !== null && _b !== void 0 ? _b : clonedNode.ownerDocument.baseURI;
++                    return [4 /*yield*/, embedBackground(clonedNode, options, baseUrl)];
+                 case 1:
+-                    _a.sent();
+-                    return [4 /*yield*/, embedImageNode(clonedNode, options)];
++                    _c.sent();
++                    return [4 /*yield*/, embedImageNode(clonedNode, options, baseUrl)];
+                 case 2:
+-                    _a.sent();
+-                    return [4 /*yield*/, embedChildren(clonedNode, options)];
++                    _c.sent();
++                    return [4 /*yield*/, embedChildren(clonedNode, options, baseUrl)];
+                 case 3:
+-                    _a.sent();
+-                    _a.label = 4;
++                    _c.sent();
++                    _c.label = 4;
+                 case 4: return [2 /*return*/];
+             }
+         });
+     });
+ }
++function embedImages(clonedNode, options) {
++    return __awaiter(this, void 0, void 0, function () {
++        return __generator(this, function (_a) {
++            switch (_a.label) {
++                case 0: return [4 /*yield*/, embedImagesWithBase(clonedNode, options)];
++                case 1:
++                    _a.sent();
++                    return [2 /*return*/];
++            }
++        });
++    });
++}
+ exports.embedImages = embedImages;
+ //# sourceMappingURL=embed-images.js.map
+\ No newline at end of file
 diff --git a/lib/embed-webfonts.js b/lib/embed-webfonts.js
-index c91538bd9c3afa63326a91267fb7b5b9c999cccd..ca5fdedfd7904b6d99ad201d739300d4a50f451c 100644
+index c91538bd9c3afa63326a91267fb7b5b9c999cccd..f619545de87466252a96a0c3f40aa6d70fa407c4 100644
 --- a/lib/embed-webfonts.js
 +++ b/lib/embed-webfonts.js
-@@ -300,9 +300,12 @@ function embedWebFonts(clonedNode, options) {
+@@ -134,7 +134,7 @@ function parseCSS(source) {
+     }
+     return result;
+ }
+-function getCSSRules(styleSheets, options) {
++function getCSSRules(styleSheets, options, ownerDocument) {
+     return __awaiter(this, void 0, void 0, function () {
+         var ret, deferreds;
+         return __generator(this, function (_a) {
+@@ -145,7 +145,7 @@ function getCSSRules(styleSheets, options) {
+                 if ('cssRules' in sheet) {
+                     try {
+                         (0, util_1.toArray)(sheet.cssRules || []).forEach(function (item, index) {
+-                            if (item.type === CSSRule.IMPORT_RULE) {
++                            if (item.type === (0, util_1.ownerWindow)(ownerDocument.documentElement).CSSRule.IMPORT_RULE) {
+                                 var importIndex_1 = index + 1;
+                                 var url = item.href;
+                                 var deferred = fetchCSS(url)
+@@ -173,7 +173,7 @@ function getCSSRules(styleSheets, options) {
+                         });
+                     }
+                     catch (e) {
+-                        var inline_1 = styleSheets.find(function (a) { return a.href == null; }) || document.styleSheets[0];
++                        var inline_1 = styleSheets.find(function (a) { return a.href == null; }) || ownerDocument.styleSheets[0];
+                         if (sheet.href != null) {
+                             deferreds.push(fetchCSS(sheet.href)
+                                 .then(function (metadata) { return embedFonts(metadata, options); })
+@@ -209,9 +209,11 @@ function getCSSRules(styleSheets, options) {
+         });
+     });
+ }
+-function getWebFontRules(cssRules) {
++function getWebFontRules(cssRules, ownerDocument) {
+     return cssRules
+-        .filter(function (rule) { return rule.type === CSSRule.FONT_FACE_RULE; })
++        .filter(function (rule) {
++        return rule.type === (0, util_1.ownerWindow)(ownerDocument.documentElement).CSSRule.FONT_FACE_RULE;
++    })
+         .filter(function (rule) { return (0, embed_resources_1.shouldEmbed)(rule.style.getPropertyValue('src')); });
+ }
+ function parseWebFontRules(node, options) {
+@@ -224,26 +226,29 @@ function parseWebFontRules(node, options) {
+                         throw new Error('Provided element is not within a Document');
+                     }
+                     styleSheets = (0, util_1.toArray)(node.ownerDocument.styleSheets);
+-                    return [4 /*yield*/, getCSSRules(styleSheets, options)];
++                    return [4 /*yield*/, getCSSRules(styleSheets, options, node.ownerDocument)];
+                 case 1:
+                     cssRules = _a.sent();
+-                    return [2 /*return*/, getWebFontRules(cssRules)];
++                    return [2 /*return*/, getWebFontRules(cssRules, node.ownerDocument)];
+             }
+         });
+     });
+ }
+ function normalizeFontFamily(font) {
+-    return font.trim().replace(/["']/g, '');
++    return (font || '').trim().replace(/["']/g, '');
+ }
+ function getUsedFonts(node) {
+     var fonts = new Set();
+     function traverse(node) {
+-        var fontFamily = node.style.fontFamily || getComputedStyle(node).fontFamily;
+-        fontFamily.split(',').forEach(function (font) {
+-            fonts.add(normalizeFontFamily(font));
+-        });
++        var win = (0, util_1.ownerWindow)(node);
++        var fontFamily = node.style.fontFamily || win.getComputedStyle(node).fontFamily;
++        if (fontFamily) {
++            fontFamily.split(',').forEach(function (font) {
++                fonts.add(normalizeFontFamily(font));
++            });
++        }
+         Array.from(node.children).forEach(function (child) {
+-            if (child instanceof HTMLElement) {
++            if ((0, util_1.isInstanceOfElement)(child, win.HTMLElement)) {
+                 traverse(child);
+             }
+         });
+@@ -280,7 +285,7 @@ function getWebFontCSS(node, options) {
+ exports.getWebFontCSS = getWebFontCSS;
+ function embedWebFonts(clonedNode, options) {
+     return __awaiter(this, void 0, void 0, function () {
+-        var cssText, _a, _b, styleNode, sytleContent;
++        var cssText, _a, _b, finalCssText, styleNode, sytleContent;
+         return __generator(this, function (_c) {
+             switch (_c.label) {
+                 case 0:
+@@ -300,9 +305,12 @@ function embedWebFonts(clonedNode, options) {
                      _c.label = 5;
                  case 5:
                      cssText = _a;
 -                    if (cssText) {
-+                    const finalCssText = options.extraStyleContent != null
-+                        ? (cssText || '').concat(options.extraStyleContent)
-+                        : cssText
-+                    if (finalCssText) {
-                         styleNode = document.createElement('style');
+-                        styleNode = document.createElement('style');
 -                        sytleContent = document.createTextNode(cssText);
-+                        sytleContent = document.createTextNode(finalCssText);
++                    finalCssText = options.extraStyleContent != null
++                        ? (cssText || '').concat(options.extraStyleContent)
++                        : cssText;
++                    if (finalCssText) {
++                        styleNode = clonedNode.ownerDocument.createElement('style');
++                        sytleContent = clonedNode.ownerDocument.createTextNode(finalCssText);
                          styleNode.appendChild(sytleContent);
                          if (clonedNode.firstChild) {
                              clonedNode.insertBefore(styleNode, clonedNode.firstChild);
+diff --git a/lib/index.js b/lib/index.js
+index b8f1e8969373ea3b6a4217a884d129e471bbdf7c..1762665a6a28423139dbeb0a9f6a4cff0aaa7a0b 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -72,7 +72,7 @@ exports.toSvg = toSvg;
+ function toCanvas(node, options) {
+     if (options === void 0) { options = {}; }
+     return __awaiter(this, void 0, void 0, function () {
+-        var _a, width, height, svg, img, canvas, context, ratio, canvasWidth, canvasHeight;
++        var _a, width, height, svg, ownerDocument, img, canvas, context, ratio, canvasWidth, canvasHeight;
+         return __generator(this, function (_b) {
+             switch (_b.label) {
+                 case 0:
+@@ -80,12 +80,13 @@ function toCanvas(node, options) {
+                     return [4 /*yield*/, toSvg(node, options)];
+                 case 1:
+                     svg = _b.sent();
+-                    return [4 /*yield*/, (0, util_1.createImage)(svg)];
++                    ownerDocument = node.ownerDocument;
++                    return [4 /*yield*/, (0, util_1.createImage)(svg, ownerDocument)];
+                 case 2:
+                     img = _b.sent();
+-                    canvas = document.createElement('canvas');
++                    canvas = ownerDocument.createElement('canvas');
+                     context = canvas.getContext('2d');
+-                    ratio = options.pixelRatio || (0, util_1.getPixelRatio)();
++                    ratio = options.pixelRatio || (0, util_1.getPixelRatio)((0, util_1.ownerWindow)(node));
+                     canvasWidth = options.canvasWidth || width;
+                     canvasHeight = options.canvasHeight || height;
+                     canvas.width = canvasWidth * ratio;
 diff --git a/lib/types.d.ts b/lib/types.d.ts
-index a832baf45e95d7b3bb076ecacd46e73493f3e9ef..b487b064337bf75cb74dd530b54b7c6a1db40da4 100644
+index a832baf45e95d7b3bb076ecacd46e73493f3e9ef..25ba6f0524d77876b2de3b8fdc006dda084b5cc0 100644
 --- a/lib/types.d.ts
 +++ b/lib/types.d.ts
-@@ -75,6 +75,11 @@ export interface Options {
+@@ -75,6 +75,10 @@ export interface Options {
       * create embed CSS for use across multiple calls to library functions.
       */
      fontEmbedCSS?: string;
 +    /**
-+     * A CSS string to specify additional custom style content. It will be
-+     * added to the style-tag.
++     * A CSS string appended to the style element embedded in the clone.
 +     */
 +    extraStyleContent?: string;
      /**
       * A boolean to turn off auto scaling for truly massive images..
       */
+diff --git a/lib/util.d.ts b/lib/util.d.ts
+index 5de42c8ca9b1f76f8240007061c6083a46ac7f0f..7382f187d0b4fa3d9f84e117c825c1955a578f0c 100644
+--- a/lib/util.d.ts
++++ b/lib/util.d.ts
+@@ -1,17 +1,20 @@
+ import type { Options } from './types';
++export declare function ownerWindow(node: Node): Window & typeof globalThis;
++export declare function setSourceBaseUrl(node: Node, baseUrl: string): void;
++export declare function getSourceBaseUrl(node: Node): string | undefined;
+ export declare function resolveUrl(url: string, baseUrl: string | null): string;
+ export declare const uuid: () => string;
+ export declare function delay<T>(ms: number): (args: T) => Promise<T>;
+ export declare function toArray<T>(arrayLike: any): T[];
+-export declare function getStyleProperties(options?: Options): string[];
++export declare function getStyleProperties(node: Node, options?: Options): string[];
+ export declare function getImageSize(targetNode: HTMLElement, options?: Options): {
+     width: number;
+     height: number;
+ };
+-export declare function getPixelRatio(): number;
++export declare function getPixelRatio(win: Window & typeof globalThis): any;
+ export declare function checkCanvasDimensions(canvas: HTMLCanvasElement): void;
+ export declare function canvasToBlob(canvas: HTMLCanvasElement, options?: Options): Promise<Blob | null>;
+-export declare function createImage(url: string): Promise<HTMLImageElement>;
++export declare function createImage(url: string, ownerDocument: Document): Promise<HTMLImageElement>;
+ export declare function svgToDataURL(svg: SVGElement): Promise<string>;
+ export declare function nodeToDataURL(node: HTMLElement, width: number, height: number): Promise<string>;
+ export declare const isInstanceOfElement: <T extends {
+diff --git a/lib/util.js b/lib/util.js
+index 6a6ae9c8bd15b276d46773d853c2182aaba8326e..e98a1685a95f2a6877784e2b71154e4088ce1918 100644
+--- a/lib/util.js
++++ b/lib/util.js
+@@ -36,7 +36,24 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
+     }
+ };
+ Object.defineProperty(exports, "__esModule", { value: true });
+-exports.isInstanceOfElement = exports.nodeToDataURL = exports.svgToDataURL = exports.createImage = exports.canvasToBlob = exports.checkCanvasDimensions = exports.getPixelRatio = exports.getImageSize = exports.getStyleProperties = exports.toArray = exports.delay = exports.uuid = exports.resolveUrl = void 0;
++exports.isInstanceOfElement = exports.nodeToDataURL = exports.svgToDataURL = exports.createImage = exports.canvasToBlob = exports.checkCanvasDimensions = exports.getPixelRatio = exports.getImageSize = exports.getStyleProperties = exports.toArray = exports.delay = exports.uuid = exports.resolveUrl = exports.getSourceBaseUrl = exports.setSourceBaseUrl = exports.ownerWindow = void 0;
++function ownerWindow(node) {
++    var _a;
++    var win = (_a = node.ownerDocument) === null || _a === void 0 ? void 0 : _a.defaultView;
++    if (!win)
++        throw new Error('Provided element is not within a Document');
++    return win;
++}
++exports.ownerWindow = ownerWindow;
++var sourceBaseUrls = new WeakMap();
++function setSourceBaseUrl(node, baseUrl) {
++    sourceBaseUrls.set(node, baseUrl);
++}
++exports.setSourceBaseUrl = setSourceBaseUrl;
++function getSourceBaseUrl(node) {
++    return sourceBaseUrls.get(node);
++}
++exports.getSourceBaseUrl = getSourceBaseUrl;
+ function resolveUrl(url, baseUrl) {
+     // url is absolute already
+     if (url.match(/^[a-z]+:\/\//i)) {
+@@ -92,22 +109,25 @@ function toArray(arrayLike) {
+     return arr;
+ }
+ exports.toArray = toArray;
+-var styleProps = null;
+-function getStyleProperties(options) {
++var styleProps = new WeakMap();
++function getStyleProperties(node, options) {
+     if (options === void 0) { options = {}; }
+-    if (styleProps) {
+-        return styleProps;
+-    }
+     if (options.includeStyleProperties) {
+-        styleProps = options.includeStyleProperties;
+-        return styleProps;
++        return options.includeStyleProperties;
+     }
+-    styleProps = toArray(window.getComputedStyle(document.documentElement));
+-    return styleProps;
++    var ownerDocument = node.ownerDocument;
++    if (!ownerDocument)
++        throw new Error('Provided element is not within a Document');
++    var cached = styleProps.get(ownerDocument);
++    if (cached)
++        return cached;
++    var properties = toArray(ownerWindow(node).getComputedStyle(ownerDocument.documentElement));
++    styleProps.set(ownerDocument, properties);
++    return properties;
+ }
+ exports.getStyleProperties = getStyleProperties;
+ function px(node, styleProperty) {
+-    var win = node.ownerDocument.defaultView || window;
++    var win = ownerWindow(node);
+     var val = win.getComputedStyle(node).getPropertyValue(styleProperty);
+     return val ? parseFloat(val.replace('px', '')) : 0;
+ }
+@@ -128,7 +148,7 @@ function getImageSize(targetNode, options) {
+     return { width: width, height: height };
+ }
+ exports.getImageSize = getImageSize;
+-function getPixelRatio() {
++function getPixelRatio(win) {
+     var ratio;
+     var FINAL_PROCESS;
+     try {
+@@ -146,7 +166,7 @@ function getPixelRatio() {
+             ratio = 1;
+         }
+     }
+-    return ratio || window.devicePixelRatio || 1;
++    return ratio || win.devicePixelRatio || 1;
+ }
+ exports.getPixelRatio = getPixelRatio;
+ // @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/canvas#maximum_canvas_size
+@@ -184,27 +204,47 @@ function canvasToBlob(canvas, options) {
+         });
+     }
+     return new Promise(function (resolve) {
+-        var binaryString = window.atob(canvas
++        var win = ownerWindow(canvas);
++        var binaryString = win.atob(canvas
+             .toDataURL(options.type ? options.type : undefined, options.quality ? options.quality : undefined)
+             .split(',')[1]);
+         var len = binaryString.length;
+-        var binaryArray = new Uint8Array(len);
++        var binaryArray = new win.Uint8Array(len);
+         for (var i = 0; i < len; i += 1) {
+             binaryArray[i] = binaryString.charCodeAt(i);
+         }
+-        resolve(new Blob([binaryArray], {
++        resolve(new win.Blob([binaryArray], {
+             type: options.type ? options.type : 'image/png',
+         }));
+     });
+ }
+ exports.canvasToBlob = canvasToBlob;
+-function createImage(url) {
++function createImage(url, ownerDocument) {
+     return new Promise(function (resolve, reject) {
+-        var img = new Image();
++        var win = ownerWindow(ownerDocument.documentElement);
++        var img = new win.Image();
+         img.onload = function () {
++            if (ownerDocument.hidden) {
++                resolve(img);
++                return;
++            }
+             img.decode().then(function () {
+-                requestAnimationFrame(function () { return resolve(img); });
+-            });
++                var settled = false;
++                var frame = 0;
++                var fallback = 0;
++                var finish = function () {
++                    if (settled)
++                        return;
++                    settled = true;
++                    win.cancelAnimationFrame(frame);
++                    win.clearTimeout(fallback);
++                    resolve(img);
++                };
++                fallback = win.setTimeout(finish, 100);
++                frame = win.requestAnimationFrame(finish);
++                if (settled)
++                    win.cancelAnimationFrame(frame);
++            }, reject);
+         };
+         img.onerror = reject;
+         img.crossOrigin = 'anonymous';
+@@ -215,9 +255,11 @@ function createImage(url) {
+ exports.createImage = createImage;
+ function svgToDataURL(svg) {
+     return __awaiter(this, void 0, void 0, function () {
++        var win;
+         return __generator(this, function (_a) {
++            win = ownerWindow(svg);
+             return [2 /*return*/, Promise.resolve()
+-                    .then(function () { return new XMLSerializer().serializeToString(svg); })
++                    .then(function () { return new win.XMLSerializer().serializeToString(svg); })
+                     .then(encodeURIComponent)
+                     .then(function (html) { return "data:image/svg+xml;charset=utf-8,".concat(html); })];
+         });
+@@ -226,11 +268,12 @@ function svgToDataURL(svg) {
+ exports.svgToDataURL = svgToDataURL;
+ function nodeToDataURL(node, width, height) {
+     return __awaiter(this, void 0, void 0, function () {
+-        var xmlns, svg, foreignObject;
++        var xmlns, ownerDocument, svg, foreignObject;
+         return __generator(this, function (_a) {
+             xmlns = 'http://www.w3.org/2000/svg';
+-            svg = document.createElementNS(xmlns, 'svg');
+-            foreignObject = document.createElementNS(xmlns, 'foreignObject');
++            ownerDocument = node.ownerDocument;
++            svg = ownerDocument.createElementNS(xmlns, 'svg');
++            foreignObject = ownerDocument.createElementNS(xmlns, 'foreignObject');
+             svg.setAttribute('width', "".concat(width));
+             svg.setAttribute('height', "".concat(height));
+             svg.setAttribute('viewBox', "0 0 ".concat(width, " ").concat(height));
 diff --git a/src/clone-node.ts b/src/clone-node.ts
-index 5dfcd117a1dd3d3d5cfb7c98ead3eb828085337a..e0cd29915bd053ad31c1460ead1cb3556a23a79e 100644
+index 5dfcd117a1dd3d3d5cfb7c98ead3eb828085337a..f7a8e24e329559602449cb65d2fc3d87e0e23adb 100644
 --- a/src/clone-node.ts
 +++ b/src/clone-node.ts
-@@ -89,10 +89,9 @@ async function cloneChildren<T extends HTMLElement>(
+@@ -5,6 +5,8 @@ import {
+   toArray,
+   isInstanceOfElement,
+   getStyleProperties,
++  setSourceBaseUrl,
++  ownerWindow,
+ } from './util'
+ import { getMimeType } from './mimes'
+ import { resourceToDataURL } from './dataurl'
+@@ -14,55 +16,51 @@ async function cloneCanvasElement(canvas: HTMLCanvasElement) {
+   if (dataURL === 'data:,') {
+     return canvas.cloneNode(false) as HTMLCanvasElement
+   }
+-  return createImage(dataURL)
++  return createImage(dataURL, canvas.ownerDocument)
+ }
+
+ async function cloneVideoElement(video: HTMLVideoElement, options: Options) {
+   if (video.currentSrc) {
+-    const canvas = document.createElement('canvas')
++    const canvas = video.ownerDocument.createElement('canvas')
+     const ctx = canvas.getContext('2d')
+     canvas.width = video.clientWidth
+     canvas.height = video.clientHeight
+     ctx?.drawImage(video, 0, 0, canvas.width, canvas.height)
+     const dataURL = canvas.toDataURL()
+-    return createImage(dataURL)
++    return createImage(dataURL, video.ownerDocument)
+   }
+
+   const poster = video.poster
+   const contentType = getMimeType(poster)
+   const dataURL = await resourceToDataURL(poster, contentType, options)
+-  return createImage(dataURL)
++  return createImage(dataURL, video.ownerDocument)
+ }
+
+ async function cloneIFrameElement(iframe: HTMLIFrameElement, options: Options) {
+-  try {
+-    if (iframe?.contentDocument?.body) {
+-      return (await cloneNode(
+-        iframe.contentDocument.body,
+-        options,
+-        true,
+-      )) as HTMLBodyElement
+-    }
+-  } catch {
+-    // Failed to clone iframe
++  const sourceDocument = iframe?.contentDocument
++  const body = sourceDocument?.body
++  if (!body) {
++    throw new Error('Failed to clone iframe')
+   }
+-
+-  return iframe.cloneNode(false) as HTMLIFrameElement
++  const clone = (await cloneNode(body, options, true)) as HTMLBodyElement
++  setSourceBaseUrl(clone, sourceDocument.baseURI)
++  return clone
+ }
+
+ async function cloneSingleNode<T extends HTMLElement>(
+   node: T,
+   options: Options,
+ ): Promise<HTMLElement> {
+-  if (isInstanceOfElement(node, HTMLCanvasElement)) {
++  const win = ownerWindow(node)
++  if (isInstanceOfElement(node, win.HTMLCanvasElement)) {
+     return cloneCanvasElement(node)
+   }
+
+-  if (isInstanceOfElement(node, HTMLVideoElement)) {
++  if (isInstanceOfElement(node, win.HTMLVideoElement)) {
+     return cloneVideoElement(node, options)
+   }
+
+-  if (isInstanceOfElement(node, HTMLIFrameElement)) {
++  if (isInstanceOfElement(node, win.HTMLIFrameElement)) {
+     return cloneIFrameElement(node, options)
+   }
+
+@@ -89,17 +87,16 @@ async function cloneChildren<T extends HTMLElement>(
    if (isSlotElement(nativeNode) && nativeNode.assignedNodes) {
      children = toArray<T>(nativeNode.assignedNodes())
    } else if (
 -    isInstanceOfElement(nativeNode, HTMLIFrameElement) &&
 -    nativeNode.contentDocument?.body
-+    isInstanceOfElement(nativeNode, HTMLIFrameElement)
++    isInstanceOfElement(nativeNode, ownerWindow(nativeNode).HTMLIFrameElement)
    ) {
 -    children = toArray<T>(nativeNode.contentDocument.body.childNodes)
 +    return clonedNode
    } else {
      children = toArray<T>((nativeNode.shadowRoot ?? nativeNode).childNodes)
    }
+
+   if (
+     children.length === 0 ||
+-    isInstanceOfElement(nativeNode, HTMLVideoElement)
++    isInstanceOfElement(nativeNode, ownerWindow(nativeNode).HTMLVideoElement)
+   ) {
+     return clonedNode
+   }
+@@ -129,12 +126,13 @@ function cloneCSSStyle<T extends HTMLElement>(
+     return
+   }
+
+-  const sourceStyle = window.getComputedStyle(nativeNode)
++  const win = ownerWindow(nativeNode)
++  const sourceStyle = win.getComputedStyle(nativeNode)
+   if (sourceStyle.cssText) {
+     targetStyle.cssText = sourceStyle.cssText
+     targetStyle.transformOrigin = sourceStyle.transformOrigin
+   } else {
+-    getStyleProperties(options).forEach((name) => {
++    getStyleProperties(nativeNode, options).forEach((name) => {
+       let value = sourceStyle.getPropertyValue(name)
+       if (name === 'font-size' && value.endsWith('px')) {
+         const reducedFont =
+@@ -143,7 +141,7 @@ function cloneCSSStyle<T extends HTMLElement>(
+       }
+
+       if (
+-        isInstanceOfElement(nativeNode, HTMLIFrameElement) &&
++        isInstanceOfElement(nativeNode, win.HTMLIFrameElement) &&
+         name === 'display' &&
+         value === 'inline'
+       ) {
+@@ -164,17 +162,18 @@ function cloneCSSStyle<T extends HTMLElement>(
+ }
+
+ function cloneInputValue<T extends HTMLElement>(nativeNode: T, clonedNode: T) {
+-  if (isInstanceOfElement(nativeNode, HTMLTextAreaElement)) {
++  const win = ownerWindow(nativeNode)
++  if (isInstanceOfElement(nativeNode, win.HTMLTextAreaElement)) {
+     clonedNode.innerHTML = nativeNode.value
+   }
+
+-  if (isInstanceOfElement(nativeNode, HTMLInputElement)) {
++  if (isInstanceOfElement(nativeNode, win.HTMLInputElement)) {
+     clonedNode.setAttribute('value', nativeNode.value)
+   }
+ }
+
+ function cloneSelectValue<T extends HTMLElement>(nativeNode: T, clonedNode: T) {
+-  if (isInstanceOfElement(nativeNode, HTMLSelectElement)) {
++  if (isInstanceOfElement(nativeNode, ownerWindow(nativeNode).HTMLSelectElement)) {
+     const clonedSelect = clonedNode as any as HTMLSelectElement
+     const selectedOption = Array.from(clonedSelect.children).find(
+       (child) => nativeNode.value === child.getAttribute('value'),
+@@ -191,7 +190,7 @@ function decorate<T extends HTMLElement>(
+   clonedNode: T,
+   options: Options,
+ ): T {
+-  if (isInstanceOfElement(clonedNode, Element)) {
++  if (isInstanceOfElement(clonedNode, ownerWindow(clonedNode).Element)) {
+     cloneCSSStyle(nativeNode, clonedNode, options)
+     clonePseudoElements(nativeNode, clonedNode, options)
+     cloneInputValue(nativeNode, clonedNode)
+@@ -216,7 +215,7 @@ async function ensureSVGSymbols<T extends HTMLElement>(
+     const id = use.getAttribute('xlink:href')
+     if (id) {
+       const exist = clone.querySelector(id)
+-      const definition = document.querySelector(id) as HTMLElement
++      const definition = clone.ownerDocument.querySelector(id) as HTMLElement
+       if (!exist && definition && !processedDefs[id]) {
+         // eslint-disable-next-line no-await-in-loop
+         processedDefs[id] = (await cloneNode(definition, options, true))!
+@@ -227,7 +226,7 @@ async function ensureSVGSymbols<T extends HTMLElement>(
+   const nodes = Object.values(processedDefs)
+   if (nodes.length) {
+     const ns = 'http://www.w3.org/1999/xhtml'
+-    const svg = document.createElementNS(ns, 'svg')
++    const svg = clone.ownerDocument.createElementNS(ns, 'svg')
+     svg.setAttribute('xmlns', ns)
+     svg.style.position = 'absolute'
+     svg.style.width = '0'
+@@ -235,7 +234,7 @@ async function ensureSVGSymbols<T extends HTMLElement>(
+     svg.style.overflow = 'hidden'
+     svg.style.display = 'none'
+
+-    const defs = document.createElementNS(ns, 'defs')
++    const defs = clone.ownerDocument.createElementNS(ns, 'defs')
+     svg.appendChild(defs)
+
+     for (let i = 0; i < nodes.length; i++) {
+diff --git a/src/clone-pseudos.ts b/src/clone-pseudos.ts
+index b5af1edcf9b856894ccc1935436d75bb1e6102f4..6f7c65c76df778bb6e806d0f8ae717dc9cddcd18 100644
+--- a/src/clone-pseudos.ts
++++ b/src/clone-pseudos.ts
+@@ -1,5 +1,5 @@
+ import type { Options } from './types'
+-import { uuid, getStyleProperties } from './util'
++import { uuid, getStyleProperties, ownerWindow } from './util'
+
+ type Pseudo = ':before' | ':after'
+
+@@ -8,8 +8,12 @@ function formatCSSText(style: CSSStyleDeclaration) {
+   return `${style.cssText} content: '${content.replace(/'|"/g, '')}';`
+ }
+
+-function formatCSSProperties(style: CSSStyleDeclaration, options: Options) {
+-  return getStyleProperties(options)
++function formatCSSProperties(
++  style: CSSStyleDeclaration,
++  options: Options,
++  node: Node,
++) {
++  return getStyleProperties(node, options)
+     .map((name) => {
+       const value = style.getPropertyValue(name)
+       const priority = style.getPropertyPriority(name)
+@@ -24,13 +28,14 @@ function getPseudoElementStyle(
+   pseudo: Pseudo,
+   style: CSSStyleDeclaration,
+   options: Options,
++  ownerDocument: Document,
+ ): Text {
+   const selector = `.${className}:${pseudo}`
+   const cssText = style.cssText
+     ? formatCSSText(style)
+-    : formatCSSProperties(style, options)
++    : formatCSSProperties(style, options, ownerDocument.documentElement)
+
+-  return document.createTextNode(`${selector}{${cssText}}`)
++  return ownerDocument.createTextNode(`${selector}{${cssText}}`)
+ }
+
+ function clonePseudoElement<T extends HTMLElement>(
+@@ -39,7 +44,8 @@ function clonePseudoElement<T extends HTMLElement>(
+   pseudo: Pseudo,
+   options: Options,
+ ) {
+-  const style = window.getComputedStyle(nativeNode, pseudo)
++  const win = ownerWindow(nativeNode)
++  const style = win.getComputedStyle(nativeNode, pseudo)
+   const content = style.getPropertyValue('content')
+   if (content === '' || content === 'none') {
+     return
+@@ -52,9 +58,16 @@ function clonePseudoElement<T extends HTMLElement>(
+     return
+   }
+
+-  const styleElement = document.createElement('style')
++  const ownerDocument = clonedNode.ownerDocument
++  const styleElement = ownerDocument.createElement('style')
+   styleElement.appendChild(
+-    getPseudoElementStyle(className, pseudo, style, options),
++    getPseudoElementStyle(
++      className,
++      pseudo,
++      style,
++      options,
++      ownerDocument,
++    ),
+   )
+   clonedNode.appendChild(styleElement)
+ }
+diff --git a/src/embed-images.ts b/src/embed-images.ts
+index 0d7b51ad485bca1cae5b0571605b7405119ce71b..05d21d374ad46fffa0c0aeb5d2819b45fbb92e5e 100644
+--- a/src/embed-images.ts
++++ b/src/embed-images.ts
+@@ -1,6 +1,12 @@
+ import { Options } from './types'
+ import { embedResources } from './embed-resources'
+-import { toArray, isInstanceOfElement } from './util'
++import {
++  getSourceBaseUrl,
++  isInstanceOfElement,
++  ownerWindow,
++  resolveUrl,
++  toArray,
++} from './util'
+ import { isDataUrl, resourceToDataURL } from './dataurl'
+ import { getMimeType } from './mimes'
+
+@@ -8,10 +14,11 @@ async function embedProp(
+   propName: string,
+   node: HTMLElement,
+   options: Options,
++  baseUrl: string,
+ ) {
+   const propValue = node.style?.getPropertyValue(propName)
+   if (propValue) {
+-    const cssString = await embedResources(propValue, null, options)
++    const cssString = await embedResources(propValue, baseUrl, options)
+     node.style.setProperty(
+       propName,
+       cssString,
+@@ -25,32 +32,38 @@ async function embedProp(
+ async function embedBackground<T extends HTMLElement>(
+   clonedNode: T,
+   options: Options,
++  baseUrl: string,
+ ) {
+-  ;(await embedProp('background', clonedNode, options)) ||
+-    (await embedProp('background-image', clonedNode, options))
+-  ;(await embedProp('mask', clonedNode, options)) ||
+-    (await embedProp('-webkit-mask', clonedNode, options)) ||
+-    (await embedProp('mask-image', clonedNode, options)) ||
+-    (await embedProp('-webkit-mask-image', clonedNode, options))
++  ;(await embedProp('background', clonedNode, options, baseUrl)) ||
++    (await embedProp('background-image', clonedNode, options, baseUrl))
++  ;(await embedProp('mask', clonedNode, options, baseUrl)) ||
++    (await embedProp('-webkit-mask', clonedNode, options, baseUrl)) ||
++    (await embedProp('mask-image', clonedNode, options, baseUrl)) ||
++    (await embedProp('-webkit-mask-image', clonedNode, options, baseUrl))
+ }
+
+ async function embedImageNode<T extends HTMLElement | SVGImageElement>(
+   clonedNode: T,
+   options: Options,
++  baseUrl: string,
+ ) {
+-  const isImageElement = isInstanceOfElement(clonedNode, HTMLImageElement)
++  const win = ownerWindow(clonedNode)
++  const isImageElement = isInstanceOfElement(clonedNode, win.HTMLImageElement)
++  const isSvgImageElement =
++    typeof win.SVGImageElement === 'function' &&
++    isInstanceOfElement(clonedNode, win.SVGImageElement)
+
+   if (
+     !(isImageElement && !isDataUrl(clonedNode.src)) &&
+-    !(
+-      isInstanceOfElement(clonedNode, SVGImageElement) &&
+-      !isDataUrl(clonedNode.href.baseVal)
+-    )
++    !(isSvgImageElement && !isDataUrl(clonedNode.href.baseVal))
+   ) {
+     return
+   }
+
+-  const url = isImageElement ? clonedNode.src : clonedNode.href.baseVal
++  const sourceUrl = isImageElement
++    ? clonedNode.getAttribute('src') || clonedNode.src
++    : clonedNode.href.baseVal
++  const url = resolveUrl(sourceUrl, baseUrl)
+
+   const dataURL = await resourceToDataURL(url, getMimeType(url), options)
+   await new Promise((resolve, reject) => {
+@@ -86,19 +99,34 @@ async function embedImageNode<T extends HTMLElement | SVGImageElement>(
+ async function embedChildren<T extends HTMLElement>(
+   clonedNode: T,
+   options: Options,
++  baseUrl: string,
+ ) {
+   const children = toArray<HTMLElement>(clonedNode.childNodes)
+-  const deferreds = children.map((child) => embedImages(child, options))
++  const deferreds = children.map((child) =>
++    embedImagesWithBase(child, options, baseUrl),
++  )
+   await Promise.all(deferreds).then(() => clonedNode)
+ }
+
+-export async function embedImages<T extends HTMLElement>(
++async function embedImagesWithBase<T extends HTMLElement>(
+   clonedNode: T,
+   options: Options,
++  inheritedBaseUrl?: string,
+ ) {
+-  if (isInstanceOfElement(clonedNode, Element)) {
+-    await embedBackground(clonedNode, options)
+-    await embedImageNode(clonedNode, options)
+-    await embedChildren(clonedNode, options)
++  if (isInstanceOfElement(clonedNode, ownerWindow(clonedNode).Element)) {
++    const baseUrl =
++      getSourceBaseUrl(clonedNode) ??
++      inheritedBaseUrl ??
++      clonedNode.ownerDocument.baseURI
++    await embedBackground(clonedNode, options, baseUrl)
++    await embedImageNode(clonedNode, options, baseUrl)
++    await embedChildren(clonedNode, options, baseUrl)
+   }
+ }
++
++export async function embedImages<T extends HTMLElement>(
++  clonedNode: T,
++  options: Options,
++) {
++  await embedImagesWithBase(clonedNode, options)
++}
 diff --git a/src/embed-webfonts.ts b/src/embed-webfonts.ts
-index a84a699d37aeaaea19b9b31e0e98710f1e30da3c..83e33eade74c61a5f2ff56952535292c158f9cbb 100644
+index a84a699d37aeaaea19b9b31e0e98710f1e30da3c..fd8b418c54ecef78a677f595146ffb05d499a4c3 100644
 --- a/src/embed-webfonts.ts
 +++ b/src/embed-webfonts.ts
-@@ -203,7 +203,7 @@ async function parseWebFontRules<T extends HTMLElement>(
+@@ -1,5 +1,5 @@
+ import type { Options } from './types'
+-import { toArray } from './util'
++import { isInstanceOfElement, ownerWindow, toArray } from './util'
+ import { fetchAsDataURL } from './dataurl'
+ import { shouldEmbed, embedResources } from './embed-resources'
+
+@@ -104,6 +104,7 @@ function parseCSS(source: string) {
+ async function getCSSRules(
+   styleSheets: CSSStyleSheet[],
+   options: Options,
++  ownerDocument: Document,
+ ): Promise<CSSStyleRule[]> {
+   const ret: CSSStyleRule[] = []
+   const deferreds: Promise<number | void>[] = []
+@@ -113,7 +114,7 @@ async function getCSSRules(
+     if ('cssRules' in sheet) {
+       try {
+         toArray<CSSRule>(sheet.cssRules || []).forEach((item, index) => {
+-          if (item.type === CSSRule.IMPORT_RULE) {
++          if (item.type === ownerWindow(ownerDocument.documentElement).CSSRule.IMPORT_RULE) {
+             let importIndex = index + 1
+             const url = (item as CSSImportRule).href
+             const deferred = fetchCSS(url)
+@@ -144,7 +145,7 @@ async function getCSSRules(
+         })
+       } catch (e) {
+         const inline =
+-          styleSheets.find((a) => a.href == null) || document.styleSheets[0]
++          styleSheets.find((a) => a.href == null) || ownerDocument.styleSheets[0]
+         if (sheet.href != null) {
+           deferreds.push(
+             fetchCSS(sheet.href)
+@@ -182,9 +183,15 @@ async function getCSSRules(
+   })
  }
- 
+
+-function getWebFontRules(cssRules: CSSStyleRule[]): CSSStyleRule[] {
++function getWebFontRules(
++  cssRules: CSSStyleRule[],
++  ownerDocument: Document,
++): CSSStyleRule[] {
+   return cssRules
+-    .filter((rule) => rule.type === CSSRule.FONT_FACE_RULE)
++    .filter(
++      (rule) =>
++        rule.type === ownerWindow(ownerDocument.documentElement).CSSRule.FONT_FACE_RULE,
++    )
+     .filter((rule) => shouldEmbed(rule.style.getPropertyValue('src')))
+ }
+
+@@ -197,26 +204,29 @@ async function parseWebFontRules<T extends HTMLElement>(
+   }
+
+   const styleSheets = toArray<CSSStyleSheet>(node.ownerDocument.styleSheets)
+-  const cssRules = await getCSSRules(styleSheets, options)
++  const cssRules = await getCSSRules(styleSheets, options, node.ownerDocument)
+
+-  return getWebFontRules(cssRules)
++  return getWebFontRules(cssRules, node.ownerDocument)
+ }
+
  function normalizeFontFamily(font: string) {
 -  return font.trim().replace(/["']/g, '')
 +  return (font || '').trim().replace(/["']/g, '')
  }
- 
+
  function getUsedFonts(node: HTMLElement) {
-@@ -211,9 +211,11 @@ function getUsedFonts(node: HTMLElement) {
+   const fonts = new Set<string>()
    function traverse(node: HTMLElement) {
++    const win = ownerWindow(node)
      const fontFamily =
-       node.style.fontFamily || getComputedStyle(node).fontFamily
+-      node.style.fontFamily || getComputedStyle(node).fontFamily
 -    fontFamily.split(',').forEach((font) => {
 -      fonts.add(normalizeFontFamily(font))
 -    })
++      node.style.fontFamily || win.getComputedStyle(node).fontFamily
 +    if (fontFamily) {
 +      fontFamily.split(',').forEach((font) => {
 +        fonts.add(normalizeFontFamily(font))
 +      })
 +    }
- 
+
      Array.from(node.children).forEach((child) => {
-       if (child instanceof HTMLElement) {
-@@ -258,9 +260,13 @@ export async function embedWebFonts<T extends HTMLElement>(
+-      if (child instanceof HTMLElement) {
++      if (isInstanceOfElement(child, win.HTMLElement)) {
+         traverse(child)
+       }
+     })
+@@ -258,9 +268,13 @@ export async function embedWebFonts<T extends HTMLElement>(
        ? null
        : await getWebFontCSS(clonedNode, options)
- 
+
 -  if (cssText) {
+-    const styleNode = document.createElement('style')
+-    const sytleContent = document.createTextNode(cssText)
 +  const finalCssText = options.extraStyleContent != null
 +    ? (cssText || '').concat(options.extraStyleContent)
 +    : cssText
 +
 +  if (finalCssText) {
-     const styleNode = document.createElement('style')
--    const sytleContent = document.createTextNode(cssText)
-+    const sytleContent = document.createTextNode(finalCssText)
- 
++    const styleNode = clonedNode.ownerDocument.createElement('style')
++    const sytleContent = clonedNode.ownerDocument.createTextNode(finalCssText)
+
      styleNode.appendChild(sytleContent)
- 
+
+diff --git a/src/index.ts b/src/index.ts
+index 2de59a306256a7f190afbaf9bd672c51c7f7341f..2fa049bd154f25d7b7557bc4600abf5810399cb0 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -10,6 +10,7 @@ import {
+   canvasToBlob,
+   nodeToDataURL,
+   checkCanvasDimensions,
++  ownerWindow,
+ } from './util'
+
+ export async function toSvg<T extends HTMLElement>(
+@@ -31,11 +32,12 @@ export async function toCanvas<T extends HTMLElement>(
+ ): Promise<HTMLCanvasElement> {
+   const { width, height } = getImageSize(node, options)
+   const svg = await toSvg(node, options)
+-  const img = await createImage(svg)
++  const ownerDocument = node.ownerDocument
++  const img = await createImage(svg, ownerDocument)
+
+-  const canvas = document.createElement('canvas')
++  const canvas = ownerDocument.createElement('canvas')
+   const context = canvas.getContext('2d')!
+-  const ratio = options.pixelRatio || getPixelRatio()
++  const ratio = options.pixelRatio || getPixelRatio(ownerWindow(node))
+   const canvasWidth = options.canvasWidth || width
+   const canvasHeight = options.canvasHeight || height
+
 diff --git a/src/types.ts b/src/types.ts
-index 6023c3c2def1cb3ce83112c4c902997617582f59..ef40283ab6e47c98c7f8ea477c3ae29671682d98 100644
+index 6023c3c2def1cb3ce83112c4c902997617582f59..5955524f667c0e9e04debc2296d02fd2ff6f5db4 100644
 --- a/src/types.ts
 +++ b/src/types.ts
-@@ -76,12 +76,18 @@ export interface Options {
-     | 'embedded-opentype'
-     | 'svg'
-     | string
-+
-   /**
-    * A CSS string to specify for font embeds. If specified only this CSS will
-    * be present in the resulting image. Use with `getFontEmbedCSS()` to
+@@ -82,6 +82,10 @@ export interface Options {
     * create embed CSS for use across multiple calls to library functions.
     */
    fontEmbedCSS?: string
 +  /**
-+   * A CSS string to specify additional custom style content. It will be
-+   * added to the style-tag.
++   * A CSS string appended to the style element embedded in the clone.
 +   */
 +  extraStyleContent?: string
    /**
     * A boolean to turn off auto scaling for truly massive images..
     */
+diff --git a/src/util.ts b/src/util.ts
+index 3d430c8f33948972f8991c3b3d5ebcf234662c21..b27f8e3ce552172ea98d8bc2a3d8e3299d4b46eb 100644
+--- a/src/util.ts
++++ b/src/util.ts
+@@ -1,5 +1,21 @@
+ import type { Options } from './types'
+
++export function ownerWindow(node: Node): Window & typeof globalThis {
++  const win = node.ownerDocument?.defaultView
++  if (!win) throw new Error('Provided element is not within a Document')
++  return win
++}
++
++const sourceBaseUrls = new WeakMap<Node, string>()
++
++export function setSourceBaseUrl(node: Node, baseUrl: string): void {
++  sourceBaseUrls.set(node, baseUrl)
++}
++
++export function getSourceBaseUrl(node: Node): string | undefined {
++  return sourceBaseUrls.get(node)
++}
++
+ export function resolveUrl(url: string, baseUrl: string | null): string {
+   // url is absolute already
+   if (url.match(/^[a-z]+:\/\//i)) {
+@@ -65,24 +81,27 @@ export function toArray<T>(arrayLike: any): T[] {
+   return arr
+ }
+
+-let styleProps: string[] | null = null
+-export function getStyleProperties(options: Options = {}): string[] {
+-  if (styleProps) {
+-    return styleProps
+-  }
+-
++const styleProps = new WeakMap<Document, string[]>()
++export function getStyleProperties(
++  node: Node,
++  options: Options = {},
++): string[] {
+   if (options.includeStyleProperties) {
+-    styleProps = options.includeStyleProperties
+-    return styleProps
++    return options.includeStyleProperties
+   }
+-
+-  styleProps = toArray(window.getComputedStyle(document.documentElement))
+-
+-  return styleProps
++  const ownerDocument = node.ownerDocument
++  if (!ownerDocument) throw new Error('Provided element is not within a Document')
++  const cached = styleProps.get(ownerDocument)
++  if (cached) return cached
++  const properties = toArray<string>(
++    ownerWindow(node).getComputedStyle(ownerDocument.documentElement),
++  )
++  styleProps.set(ownerDocument, properties)
++  return properties
+ }
+
+ function px(node: HTMLElement, styleProperty: string) {
+-  const win = node.ownerDocument.defaultView || window
++  const win = ownerWindow(node)
+   const val = win.getComputedStyle(node).getPropertyValue(styleProperty)
+   return val ? parseFloat(val.replace('px', '')) : 0
+ }
+@@ -106,7 +125,7 @@ export function getImageSize(targetNode: HTMLElement, options: Options = {}) {
+   return { width, height }
+ }
+
+-export function getPixelRatio() {
++export function getPixelRatio(win: Window & typeof globalThis) {
+   let ratio
+
+   let FINAL_PROCESS
+@@ -126,7 +145,7 @@ export function getPixelRatio() {
+       ratio = 1
+     }
+   }
+-  return ratio || window.devicePixelRatio || 1
++  return ratio || win.devicePixelRatio || 1
+ }
+
+ // @see https://developer.mozilla.org/en-US/docs/Web/HTML/Element/canvas#maximum_canvas_size
+@@ -173,7 +192,8 @@ export function canvasToBlob(
+   }
+
+   return new Promise((resolve) => {
+-    const binaryString = window.atob(
++    const win = ownerWindow(canvas)
++    const binaryString = win.atob(
+       canvas
+         .toDataURL(
+           options.type ? options.type : undefined,
+@@ -182,27 +202,47 @@ export function canvasToBlob(
+         .split(',')[1],
+     )
+     const len = binaryString.length
+-    const binaryArray = new Uint8Array(len)
++    const binaryArray = new win.Uint8Array(len)
+
+     for (let i = 0; i < len; i += 1) {
+       binaryArray[i] = binaryString.charCodeAt(i)
+     }
+
+     resolve(
+-      new Blob([binaryArray], {
++      new win.Blob([binaryArray], {
+         type: options.type ? options.type : 'image/png',
+       }),
+     )
+   })
+ }
+
+-export function createImage(url: string): Promise<HTMLImageElement> {
++export function createImage(
++  url: string,
++  ownerDocument: Document,
++): Promise<HTMLImageElement> {
+   return new Promise((resolve, reject) => {
+-    const img = new Image()
++    const win = ownerWindow(ownerDocument.documentElement)
++    const img = new win.Image()
+     img.onload = () => {
++      if (ownerDocument.hidden) {
++        resolve(img)
++        return
++      }
+       img.decode().then(() => {
+-        requestAnimationFrame(() => resolve(img))
+-      })
++        let settled = false
++        let frame = 0
++        let fallback = 0
++        const finish = () => {
++          if (settled) return
++          settled = true
++          win.cancelAnimationFrame(frame)
++          win.clearTimeout(fallback)
++          resolve(img)
++        }
++        fallback = win.setTimeout(finish, 100)
++        frame = win.requestAnimationFrame(finish)
++        if (settled) win.cancelAnimationFrame(frame)
++      }, reject)
+     }
+     img.onerror = reject
+     img.crossOrigin = 'anonymous'
+@@ -212,8 +252,9 @@ export function createImage(url: string): Promise<HTMLImageElement> {
+ }
+
+ export async function svgToDataURL(svg: SVGElement): Promise<string> {
++  const win = ownerWindow(svg)
+   return Promise.resolve()
+-    .then(() => new XMLSerializer().serializeToString(svg))
++    .then(() => new win.XMLSerializer().serializeToString(svg))
+     .then(encodeURIComponent)
+     .then((html) => `data:image/svg+xml;charset=utf-8,${html}`)
+ }
+@@ -224,8 +265,9 @@ export async function nodeToDataURL(
+   height: number,
+ ): Promise<string> {
+   const xmlns = 'http://www.w3.org/2000/svg'
+-  const svg = document.createElementNS(xmlns, 'svg')
+-  const foreignObject = document.createElementNS(xmlns, 'foreignObject')
++  const ownerDocument = node.ownerDocument
++  const svg = ownerDocument.createElementNS(xmlns, 'svg')
++  const foreignObject = ownerDocument.createElementNS(xmlns, 'foreignObject')
+
+   svg.setAttribute('width', `${width}`)
+   svg.setAttribute('height', `${height}`)

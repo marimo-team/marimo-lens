@@ -1,5 +1,6 @@
 {
   "name": "@marimo-lens/python",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,7 +13,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "anywidget-bundle": "0.0.1",
-    "vite": "catalog:",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
     "vite-plus": "catalog:"
   }
 }

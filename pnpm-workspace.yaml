@@ -1,4 +1,5 @@
 packages:
+  - apps/*
   - packages/*
 
 patchedDependencies:
@@ -9,21 +10,27 @@ catalogMode: prefer
 catalog:
   "@anywidget/react": ^0.2.2
   "@anywidget/types": ^0.4.0
+  "@marimo-team/mdx-marimo": 0.0.1
+  "@types/markdown-it": 14.1.2
   "@types/node": ^22.20.1
   "@types/react": ^19.2.17
   "@types/react-dom": ^19.2.3
   html-to-image: 1.11.13
   jsdom: 29.1.1
   lucide-react: 1.24.0
+  markdown-it: 14.3.0
   react: ^19.2.7
   react-dom: ^19.2.7
   typescript: ^6.0.3
   valibot: 1.4.2
   vite: npm:@voidzero-dev/vite-plus-core@0.2.4
   vite-plus: 0.2.4
+  vitepress: ^1.6.3
+  vue: ^3.5.13
 
 overrides:
   vite: "catalog:"
+  vitepress>vite: ^5.4.0
 
 peerDependencyRules:
   allowAny:
@@ -32,6 +39,7 @@ peerDependencyRules:
     vite: "*"
 
 allowBuilds:
+  "@manzt/uv": true
   esbuild: true
 
 minimumReleaseAge: 2880

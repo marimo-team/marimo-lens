@@ -1,17 +1,15 @@
 import type { AnyWidget } from "@anywidget/types";
 
-import { createRender, useModel } from "@anywidget/react";
+import { createRender } from "@anywidget/react";
 
-import { LensErrorBoundary } from "@/components/lens-error-boundary";
-import { LensViewOwner } from "@/components/lens-view-owner";
-import { MarimoLensContent } from "@/components/marimo-lens-content";
+import { LensErrorBoundary } from "@/app/lens-error-boundary";
+import { LensViewOwner } from "@/app/lens-view-owner";
+import { MarimoLensContent } from "@/app/marimo-lens-content";
 import "@/widget.css";
 
 function MarimoLens() {
-  const model = useModel();
-
   return (
-    <LensViewOwner model={model}>
+    <LensViewOwner>
       <LensErrorBoundary>
         <MarimoLensContent />
       </LensErrorBoundary>
@@ -19,7 +17,7 @@ function MarimoLens() {
   );
 }
 
-const render = createRender(MarimoLens);
+export const render = createRender(MarimoLens);
 const widget: AnyWidget = { render };
 
 export default widget;

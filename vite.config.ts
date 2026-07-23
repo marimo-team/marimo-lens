@@ -59,7 +59,7 @@ export default defineConfig({
         },
       },
       {
-        files: ["packages/widget/**"],
+        files: ["packages/protocol/**", "packages/image-capture/**", "packages/widget/**"],
         rules: {
           "no-restricted-imports": [
             "error",

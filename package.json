@@ -1,20 +1,25 @@
 {
   "name": "marimo-lens-workspace",
+  "version": "0.0.1",
   "private": true,
   "scripts": {
     "build": "vp run -r build",
-    "check": "vp check --no-error-on-unmatched-pattern development_docs packages workbench \"*.json\" \"*.md\" \"*.toml\" \"*.ts\" \"*.yaml\" \"*.yml\"",
+    "check": "vp check --no-error-on-unmatched-pattern .github apps/docs/.vitepress apps/docs/README.md apps/docs/package.json apps/docs/tsconfig.json development_docs docs examples packages scripts \"*.json\" \"*.md\" \"*.toml\" \"*.ts\" \"*.yaml\" \"*.yml\" && vp run -r typecheck",
     "dev": "vp run @marimo-lens/python#dev",
+    "docs:build": "vp run @marimo-lens/docs#build",
+    "docs:dev": "vp run @marimo-lens/docs#dev",
+    "docs:preview": "vp run @marimo-lens/docs#preview",
     "test": "vp run -r test"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
+    "vite-plus": "catalog:",
+    "vue": "catalog:"
   },
   "engines": {
     "node": ">=22.18.0"
   },
-  "packageManager": "pnpm@11.13.0+sha512.88d94724d8f2e6c186744a5584c6e59ecac869ec7ba15e9cb4cd628e8dc7066820b2481d8ee3b51ea8da323a7378068aa58c556a3720d32b7c20a051d088363a"
+  "packageManager": "pnpm@11.15.1+sha512.81350b07e53c9538a02f1f2303b4290fa2d7be04e56e2a970c4cc4b417dc761de196edabd49d55c7dc9580db81007c44143e4e3d7e462b3000d23c255122d065"
 }
