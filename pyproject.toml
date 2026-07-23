@@ -1,65 +1,16 @@
-[build-system]
-requires = [
-  "hatchling",
-]
-build-backend = "hatchling.build"
-
-[project]
-name = "marimo-lens"
-version = "0.0.0"
-description = "Agent-ready feedback collection for live marimo notebooks"
-requires-python = ">=3.11,<3.15"
-readme = "README.md"
-license = "MIT"
-classifiers = [
-  "Programming Language :: Python :: 3.11",
-  "Programming Language :: Python :: 3.12",
-  "Programming Language :: Python :: 3.13",
-  "Programming Language :: Python :: 3.14",
-]
-dependencies = [
-  "anywidget",
-  "marimo>=0.23.0",
-  "traitlets",
-]
+[tool.uv.workspace]
+members = ["packages/marimo-lens"]
 
 [dependency-groups]
-dev = [
-  # dev
-  "hatchling>=1.29",
-  "pytest>=9",
-  "ruff>=0.15",
-  "ty>=0.0.37",
-  "watchfiles",
-  # workbench
-  "marimo[recommended]",
-  "matplotlib",
-  "plotly",
-  "vega-datasets",
-]
+dev = ["pyrefly>=1", "pytest>=9.0.3", "ruff>=0.15.14", "ty>=0.0.39"]
 
 [tool.uv]
 exclude-newer = "3 days"
 
-[tool.hatch.build]
-only-packages = true
-artifacts = [
-  "src/marimo_lens/static/*",
-]
+[tool.pyrefly]
+project-includes = ["packages/marimo-lens", "examples", "scripts"]
+search-path = ["packages/marimo-lens/src", "packages/marimo-lens"]
 
-[tool.hatch.build.targets.sdist]
-include = [
-  "src/marimo_lens",
-  "README.md",
-  "pyproject.toml",
-  "scripts/hatch_build.py",
-]
-
-[tool.hatch.build.targets.sdist.force-include]
-"scripts/hatch_build.py" = "scripts/hatch_build.py"
-
-[tool.hatch.build.hooks.custom]
-path = "scripts/hatch_build.py"
-
-[tool.marimo.runtime]
-output_max_bytes = 10_000_000_000
+[tool.pyrefly.errors]
+# Boundary normalizers intentionally coerce values after runtime narrowing.
+unnecessary-type-conversion = "ignore"

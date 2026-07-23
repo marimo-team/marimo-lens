@@ -1,126 +1,131 @@
-# marimo-lens
+<p align="center">
+  <a href="https://marimo-team.github.io/marimo-lens/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://marimo-team.github.io/marimo-lens/brand/marimo-lens-lockup-horizontal-dark.svg">
+      <img alt="marimo-lens" src="https://marimo-team.github.io/marimo-lens/brand/marimo-lens-lockup-horizontal-light.svg" width="620">
+    </picture>
+  </a>
+</p>
 
-Agent-ready feedback for live marimo notebooks.
+<p align="center">
+  <a href="https://pypi.org/project/marimo-lens/"><img alt="PyPI" src="https://img.shields.io/pypi/v/marimo-lens.svg"></a>
+  <a href="https://spdx.org/licenses/Apache-2.0.html"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
+</p>
 
-`marimo-lens` is an anywidget overlay for collecting precise notebook feedback:
-click a rendered table, chart, widget, cell output, or DOM region; write the note;
-copy a packet that an agent can use to make the edit in the right marimo cells.
+**Let Pair see what you see.**
 
-Add it to your marimo notebook with:
+Point at a notebook result and ask [marimo Pair](https://marimo.io/pair) about
+“this” without copying cell IDs, code, or screenshots. Pair starts with the
+selected cell and related notebook structure, then loads an image of your
+selection when needed.
+
+Pair can inspect the related code, show where it is working, and bring the
+verified result back into view.
+
+[Read the documentation](https://marimo-team.github.io/marimo-lens/) for the
+complete notebook and Pair workflow.
+
+## Quickstart
+
+`marimo-lens` supports Python 3.11 through 3.14.
+
+```sh
+uv pip install marimo-lens
+```
+
+Open a marimo notebook:
+
+```sh
+marimo edit notebook.py
+```
+
+Add a small output in one cell:
 
 ```python
 import marimo as mo
+
+revenue = {"January": 42, "February": 58, "March": 39}
+mo.md("\n".join(f"- {month}: **{value}**" for month, value in revenue.items()))
+```
+
+Mount one Lens in another cell:
+
+```python
 from marimo_lens import Lens
 
 lens = mo.ui.anywidget(Lens())
 lens
 ```
 
-To see Lens against many output types, run the workbench:
+The Lens dock appears at the bottom of the notebook. Press **Select**, then
+click a point or drag a region inside any rendered output. The selection is
+ready when you release the pointer.
 
-```sh
-uv run marimo edit workbench/demo.py
-```
+Run the notebook with `marimo run` or `marimo edit` so Lens stays connected to
+the Python kernel.
 
-`Lens()` scans the active marimo runtime, dataflow graph, globals, display cells,
-UI controls, anywidgets, traitlets state, and visible notebook targets. It is
-designed for trusted notebooks on trusted local machines; collected context is
-not redacted.
+## Use with Pair
 
-## Install
+[Connect Pair](https://marimo.io/pair) to the same running notebook, then:
 
-Install from a checkout:
+1. Select the output you want Pair to inspect.
+2. Add a note when the request needs more detail.
+3. Ask Pair about the selection, for example: “Why did revenue drop here?”
 
-```sh
-uv sync --dev
-uv pip install -e .
-pnpm install
-pnpm run build
-```
+Pair starts from the current selection when a request refers to “this” or
+“here.” It reads the selected cell and related notebook context as needed.
+While Pair works, Lens can mark the active cell. After verification, Pair can
+reveal the result and mark the selection **Addressed**. Addressed selections
+move to **History** with Pair's completion summary. Select **Reopen** to restore
+the original cell, note, and location for another pass.
 
-## Feedback
+## What a selection keeps
 
-Lens exports the same feedback in two forms:
+Each selection records:
 
-```python
-feedback = lens.pair_feedback  # JSON-safe packet
-prompt = lens.pair_prompt  # paste-ready marimo-pair prompt
-```
+- The notebook output cell
+- A point or region within that output
+- An optional note
+- A marked PNG when browser capture succeeds
 
-The packet includes:
+Addressing a selection keeps its cell, point or region, note, timestamps, and
+optional completion summary in **History**. Its marked PNG is released.
+Reopening the item starts a fresh marked PNG capture from the current output.
 
-- selected target cells, related cells, defs, and refs
-- selected chart parts, table columns, widget controls, or DOM evidence
-- current marimo UI values, anywidget traits, and graph state
-- suggested edit boundaries for a marimo-pair agent
+The selection stays available if its output temporarily disappears and
+reattaches when the same cell returns. Cross-origin images and external
+iframes can block PNG capture. The cell reference and note remain available in
+that case.
 
-Copying feedback asks Python for a fresh context scan first, so the packet tracks
-current controls, widget state, and graph lineage.
+## Python API
 
-If you add a new marimo cell after mounting Lens, press the refresh/rescan
-button in the Lens dock so Lens rescans the notebook graph before you capture
-feedback.
+Agent integrations use four workflow methods:
 
-## Targeting
+| Method                                                            | Behavior                                                         |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `lens.context()`                                                  | Returns detached selection context with lazy notebook text       |
+| `lens.activity(cell_id, *, label=None, message=None)`             | Marks the agent's current work until its result is ready         |
+| `lens.reveal(cell_id, *, message=None)`                           | Brings one verified or explanatory cell into view                |
+| `lens.resolve(selection_ids, *, expected_revision, summary=None)` | Moves one or more selections to History in one guarded operation |
 
-Built-in selection covers explicit Lens markers, marimo output cells, semantic
-tables and grids, Altair/Vega, Plotly, Matplotlib, generic SVG charts, visual
-surfaces, media, documents, interactive controls, and open shadow roots.
-
-Use the public extension points when the defaults need domain knowledge:
-
-- `include`, `exclude`, `targets`, and `target(...)` for narrowing or anchoring
-  targets
-- `EntityInspector` for custom Python objects
-- `ChartInspector`, `chart_adapter(...)`, and `chart_part(...)` for custom chart
-  libraries
-
-The collection pipeline is internal. Keep integrations on the public API above.
-
-## Agent Receipts
-
-Agents can report work back through the same widget:
-
-```python
-from marimo_lens import find_lens
-
-lens = find_lens(required=False)
-if lens is not None:
-    run_id = lens.agent_started(label="marimo-pair")
-    lens.mark_cells(["cell-a"], kind="edited", run_id=run_id)
-    lens.resolve_annotation("ml-123", status="addressed", run_id=run_id)
-    lens.agent_finished("Updated the chart filter.", run_id=run_id)
-```
-
-Use `lens.export_pair_result()` or `lens.export_pair_result_prompt()` to retrieve
-the machine-readable result packet.
+Read the [Python API reference](https://marimo-team.github.io/marimo-lens/api)
+for return values, errors, limits, and lifecycle behavior.
 
 ## Development
 
-```sh
-uv sync --dev
-pnpm install
-uv run marimo run workbench/demo.py --port 28889 --headless
-pnpm run dev
-```
+The [example notebook](examples/lens.py) provides a small workflow for local
+testing. Read the [user documentation](https://marimo-team.github.io/marimo-lens/),
+[Development](development_docs/development.md) for setup, checks, packaging,
+and release, and
+[Architecture](development_docs/architecture.md) for package ownership and
+internal boundaries.
 
-Run the full local gate before handing off changes:
-
-```sh
-uv run ruff format
-uv run ruff check
-uv run ty check
-uv run pytest
-pnpm run fmt
-pnpm run qa
-pnpm dlx react-doctor@latest . --verbose --diff
-```
-
-`pnpm run qa` formats/checks the frontend, runs TypeScript and Vitest, rebuilds
-the bundled widget assets. Use `pnpm run qa:package` for the slower wheel and
-sdist artifact check.
+Report bugs through
+[GitHub Issues](https://github.com/marimo-team/marimo-lens/issues). Report
+security vulnerabilities through the [security policy](SECURITY.md).
+`marimo-lens` is available under the [Apache License 2.0](LICENSE).
 
 ## Acknowledgements
 
-marimo-lens was inspired by
+`marimo-lens` was inspired by
 [Agentation](https://github.com/benjitaylor/agentation).

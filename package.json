@@ -1,49 +1,25 @@
 {
-  "name": "marimo-lens",
+  "name": "marimo-lens-workspace",
+  "version": "0.0.1",
   "private": true,
   "scripts": {
-    "dev": "esbuild js/widget.tsx --format=esm --bundle --alias:@=./js --outdir=src/marimo_lens/static --sourcemap=inline --watch",
-    "build": "esbuild js/widget.tsx --minify --format=esm --bundle --alias:@=./js --outdir=src/marimo_lens/static",
-    "typecheck": "tsc --noEmit",
-    "lint": "oxlint js",
-    "lint:fix": "oxlint js --fix",
-    "test": "vitest run --environment jsdom",
-    "fmt": "oxfmt js package.json tsconfig.json vitest.config.ts pyproject.toml README.md AGENTS.md .oxlintrc.json .oxfmtrc.json",
-    "fmt:check": "oxfmt --check js package.json tsconfig.json vitest.config.ts pyproject.toml README.md AGENTS.md .oxlintrc.json .oxfmtrc.json",
-    "qa:package": "MARIMO_LENS_RUN_PACKAGE_ARTIFACTS=1 uv run pytest tests/test_package_artifacts.py",
-    "qa": "pnpm run fmt:check && pnpm run lint && pnpm run typecheck && pnpm run test && pnpm run build"
-  },
-  "dependencies": {
-    "@anywidget/react": "^0.2.1",
-    "lucide-react": "1.16.0",
-    "react": "^19.2.4",
-    "react-dom": "^19.2.4",
-    "valibot": "1.4.0",
-    "zustand": "5.0.13"
+    "build": "vp run -r build",
+    "check": "vp check --no-error-on-unmatched-pattern .github apps/docs/.vitepress apps/docs/README.md apps/docs/package.json apps/docs/tsconfig.json development_docs docs examples packages scripts \"*.json\" \"*.md\" \"*.toml\" \"*.ts\" \"*.yaml\" \"*.yml\" && vp run -r typecheck",
+    "dev": "vp run @marimo-lens/python#dev",
+    "docs:build": "vp run @marimo-lens/docs#build",
+    "docs:dev": "vp run @marimo-lens/docs#dev",
+    "docs:preview": "vp run @marimo-lens/docs#preview",
+    "test": "vp run -r test"
   },
   "devDependencies": {
-    "@types/react": "^19.2.9",
-    "@types/react-dom": "^19.2.3",
-    "esbuild": "^0.28.0",
-    "jsdom": "29.1.1",
-    "oxfmt": "0.50.0",
-    "oxlint": "1.65.0",
-    "typescript": "^6.0.2",
-    "vitest": "4.1.6"
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
+    "vite-plus": "catalog:",
+    "vue": "catalog:"
   },
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": "24.14.1",
-      "onFail": "download"
-    }
+  "engines": {
+    "node": ">=22.18.0"
   },
-  "packageManager": "pnpm@11.1.3+sha512.c85357fe17ca12dd23dd7071822666dfd7e3cb76fe214e3370b5ea2fb34f2a231185509b63e717f3cd0acb38dd3f8d82bcd5e8172400ae678b70ea4fbed0896d",
-  "reactDoctor": {
-    "ignore": {
-      "files": [
-        "src/marimo_lens/static/**"
-      ]
-    }
-  }
+  "packageManager": "pnpm@11.15.1+sha512.81350b07e53c9538a02f1f2303b4290fa2d7be04e56e2a970c4cc4b417dc761de196edabd49d55c7dc9580db81007c44143e4e3d7e462b3000d23c255122d065"
 }
