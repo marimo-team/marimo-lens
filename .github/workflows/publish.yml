@@ -41,6 +41,9 @@ jobs:
           run-install: |
             - args: ["--frozen-lockfile"]
 
+      - name: Enable pnpm
+        run: corepack enable
+
       - name: Check release version
         shell: bash
         run: |

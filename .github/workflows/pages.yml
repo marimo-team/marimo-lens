@@ -35,6 +35,9 @@ jobs:
           run-install: |
             - args: ["--frozen-lockfile"]
 
+      - name: Enable pnpm
+        run: corepack enable
+
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         id: pages

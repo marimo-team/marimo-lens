@@ -40,6 +40,9 @@ jobs:
           run-install: |
             - args: ["--frozen-lockfile"]
 
+      - name: Enable pnpm
+        run: corepack enable
+
       - name: Check JavaScript formatting, linting, and types
         run: pnpm check
 
@@ -86,6 +89,9 @@ jobs:
           run-install: |
             - args: ["--frozen-lockfile"]
 
+      - name: Enable pnpm
+        run: corepack enable
+
       - name: Build browser assets
         run: pnpm --filter @marimo-lens/python build
 
@@ -111,6 +117,9 @@ jobs:
           cache: true
           run-install: |
             - args: ["--frozen-lockfile"]
+
+      - name: Enable pnpm
+        run: corepack enable
 
       - name: Run JavaScript tests
         run: pnpm test
@@ -144,6 +153,9 @@ jobs:
           cache: true
           run-install: |
             - args: ["--frozen-lockfile"]
+
+      - name: Enable pnpm
+        run: corepack enable
 
       - name: Build and check package artifacts
         run: make package
