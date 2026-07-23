@@ -5,20 +5,20 @@ from dataclasses import replace
 
 import pytest
 
-from marimo_lens._context import (
-    MAX_CONTEXT_REFERENCES_BYTES,
-    MAX_CONTEXT_TEXT_CHARACTERS,
-    build_context,
-    validate_selection_budget,
-)
-from marimo_lens._runtime import (
+from marimo_lens._context import build_context
+from marimo_lens._control_state import (
     MAX_CONTROL_CHARACTERS,
     MAX_CONTROLS,
     RuntimeControl,
-    RuntimeSnapshot,
     serialize_controls,
 )
-
+from marimo_lens._runtime import RuntimeSnapshot
+from marimo_lens._references import MAX_CONTEXT_REFERENCES_BYTES
+from marimo_lens._selection_state import (
+    MAX_SELECTION_STATE_BYTES,
+    validate_selection_admission,
+)
+from marimo_lens._text_context import MAX_CONTEXT_TEXT_CHARACTERS
 from tests.support.factories import cell, selection, snapshot
 
 
@@ -67,16 +67,12 @@ def test_references_are_compact_and_text_is_standalone() -> None:
     compact = json.dumps(references, ensure_ascii=False, separators=(",", ":"))
 
     assert set(references) == {
-        "protocol",
-        "version",
         "revision",
         "generatedAt",
         "notebook",
         "currentSelectionId",
         "selections",
     }
-    assert references["protocol"] == "marimo-lens.context"
-    assert references["version"] == 1
     assert references["revision"] == 7
     assert references["currentSelectionId"] == "selection-1"
     assert references["notebook"] == {
@@ -380,6 +376,79 @@ def test_context_enforces_independent_reference_and_text_budgets() -> None:
     assert all(f"### S{index + 1}" in text for index in range(9))
 
 
+def test_reference_budget_fits_maximal_valid_selection_state() -> None:
+    selections = []
+    for index in range(64):
+        item = selection(
+            selection_id=f"selection-{index}",
+            label=f"S{index + 1}",
+            output_cell_id=f"cell-{index}",
+        )
+        item.pop("domHint")
+        selections.append(item)
+
+    def selection_bytes() -> int:
+        return len(
+            json.dumps(
+                selections,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+
+    remaining = MAX_SELECTION_STATE_BYTES - selection_bytes() - 1
+    pairs, remainder = divmod(remaining, 2 * len(selections))
+    for item in selections:
+        item["note"] = "é" * pairs
+    for item in selections[: remainder // 2]:
+        item["note"] += "é"
+    if remainder % 2:
+        selections[0]["note"] += "x"
+
+    assert selection_bytes() == MAX_SELECTION_STATE_BYTES - 1
+    source_notes = {str(item["id"]): str(item["note"]) for item in selections}
+    runtime = replace(
+        snapshot(*(cell(f"cell-{index}") for index in range(64))),
+        filename="é" * 1_024,
+    )
+
+    references, text = build_context(
+        runtime,
+        selections,
+        revision=64,
+        current_selection_id="selection-0",
+    )
+
+    assert (
+        len(
+            json.dumps(
+                references,
+                ensure_ascii=False,
+                allow_nan=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        )
+        <= MAX_CONTEXT_REFERENCES_BYTES
+    )
+    assert references["currentSelectionId"] == "selection-0"
+    assert len(references["selections"]) == len(selections)
+    for source, reference in zip(selections, references["selections"], strict=True):
+        assert reference["id"] == source["id"]
+        assert reference["label"] == source["label"]
+        assert reference["outputCellId"] == source["outputCellId"]
+        assert reference["anchor"] == source["anchor"]
+        assert reference["cellStatus"] == "available"
+        assert reference["snapshot"] == {"status": "pending"}
+
+    assert all(
+        reference["note"] == source_notes[str(reference["id"])]
+        for reference in references["selections"]
+    )
+    assert f"- Note: {'é' * 50}" in text
+    assert f"- Path: `{'é' * 100}" in text
+
+
 def test_context_rejects_aggregate_selection_growth() -> None:
     selections = [
         selection(
@@ -391,7 +460,43 @@ def test_context_rejects_aggregate_selection_growth() -> None:
     ]
 
     with pytest.raises(ValueError, match="shared 40,000-byte limit"):
-        validate_selection_budget(selections)
+        validate_selection_admission(selections)
+
+
+def test_context_accepts_dense_identity_state_within_selection_budget() -> None:
+    selections = []
+    for index in range(63):
+        prefix = f"{index}-"
+        selection_id = prefix + "漢" * (80 - len(prefix))
+        output_cell_id = prefix + "界" * (80 - len(prefix))
+        selections.append(
+            {
+                "id": selection_id,
+                "label": f"S{index + 1}",
+                "note": "",
+                "outputCellId": output_cell_id,
+                "createdAt": "2026-01-01T00:00:00+00:00",
+                "anchor": {"kind": "point", "x": 0.5, "y": 0.5},
+                "snapshot": {"status": "pending"},
+            }
+        )
+
+    selection_bytes = len(
+        json.dumps(
+            selections,
+            ensure_ascii=False,
+            allow_nan=False,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    assert selection_bytes == 39_974
+    assert all(
+        len(str(item["id"]).encode("utf-16-le")) // 2 == 80
+        and len(str(item["outputCellId"]).encode("utf-16-le")) // 2 == 80
+        for item in selections
+    )
+
+    validate_selection_admission(selections)
 
 
 def test_text_uses_a_fence_longer_than_source_backticks() -> None:

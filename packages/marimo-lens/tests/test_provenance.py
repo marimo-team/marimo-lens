@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+from typing import Any, cast
+
 from marimo_lens._provenance import resolve_provenance
 
 from tests.support.factories import cell, snapshot
@@ -105,3 +109,30 @@ def test_provenance_bounds_reported_omissions_and_keeps_full_relevance() -> None
     assert provenance.omitted_cell_count == 999
     assert len(provenance.referenced_names) == 1_000
     assert "value-0" in provenance.referenced_names
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("max_cells", 0),
+        ("max_cells", True),
+        ("max_cells", 1.0),
+        ("max_source_characters", -1),
+        ("max_source_characters", False),
+        ("max_source_characters", 1.0),
+    ],
+)
+def test_provenance_requires_strict_integer_bounds(field: str, value: object) -> None:
+    with pytest.raises(ValidationError):
+        if field == "max_cells":
+            resolve_provenance(
+                snapshot(cell("cell-1")),
+                ["cell-1"],
+                max_cells=cast(Any, value),
+            )
+        else:
+            resolve_provenance(
+                snapshot(cell("cell-1")),
+                ["cell-1"],
+                max_source_characters=cast(Any, value),
+            )

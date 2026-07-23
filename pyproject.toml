@@ -3,27 +3,14 @@ members = ["packages/marimo-lens"]
 
 [dependency-groups]
 dev = ["pyrefly>=1", "pytest>=9.0.3", "ruff>=0.15.14", "ty>=0.0.39"]
-workbench = [
-  "altair",
-  "anywidget",
-  "marimo[recommended]>=0.23.0",
-  "matplotlib",
-  "plotly",
-  "polars",
-  "traitlets",
-]
 
 [tool.uv]
 exclude-newer = "3 days"
-exclude-newer-package = { anywidget-bundle = "2026-07-15T17:43:30Z" }
 
 [tool.pyrefly]
-project-includes = ["packages/marimo-lens", "workbench"]
+project-includes = ["packages/marimo-lens", "examples", "scripts"]
 search-path = ["packages/marimo-lens/src", "packages/marimo-lens"]
 
 [tool.pyrefly.errors]
 # Boundary normalizers intentionally coerce values after runtime narrowing.
 unnecessary-type-conversion = "ignore"
-
-[tool.marimo.runtime]
-output_max_bytes = 10_000_000_000

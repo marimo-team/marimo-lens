@@ -1,32 +1,60 @@
-"""The public marimo Lens anywidget."""
+"""The public marimo-lens anywidget."""
 
 from __future__ import annotations
 
-import copy
-import json
+import logging
 import pathlib
 import threading
+import weakref
 from collections.abc import Mapping, Sequence
 from contextlib import suppress
-from typing import Any, cast
+from datetime import datetime, timezone
+from typing import Any, Literal, cast
 
 import traitlets
 from anywidget_bundle import Bundle, BundledWidget
+from pydantic import TypeAdapter, ValidationError
 
-from ._context import build_context, validate_selection_budget
-from ._images import ImageError, ImageStore
+from ._context import build_lens_context
+from ._images import ImageError
+from ._marimo_runtime import MarimoRuntimeAdapter
+from ._output_capture import OutputCaptureMailbox, OutputCaptureResult
 from ._protocol import (
-    MAX_SELECTION_ID,
-    MAX_SELECTIONS,
     Command,
     ProtocolError,
+    cell_activity_event,
+    cell_reveal_event,
     error_response,
+    is_response_envelope,
+    mutation_ack_response,
+    parse_capture_browser_event,
     parse_command,
     request_id_from,
-    success_response,
+    selection_put_response,
+    selection_resolved_event,
+    snapshot_response,
 )
-from ._runtime import collect_runtime_snapshot
-from .context import LensContext, SelectionImage
+from ._protocol_models import (
+    CELL_ID_ADAPTER,
+    MAX_SELECTIONS,
+    OPTIONAL_ATTENTION_TEXT_ADAPTER,
+    OPTIONAL_ACTIVITY_LABEL_ADAPTER,
+    REQUEST_ID_ADAPTER,
+    REVISION_ADAPTER,
+    SELECTION_ID_ADAPTER,
+)
+from ._selection_state import (
+    SelectionStore,
+    activate_selection,
+    apply_selection_put,
+    clear_history,
+    clear_selections,
+    plan_selection_put,
+    remove_selection,
+    reopen_selection,
+    resolve_selections,
+)
+from .context import LensContext
 from .errors import LensError
 
 _BUNDLE = Bundle(
@@ -34,8 +62,7 @@ _BUNDLE = Bundle(
     dev_server_env="MARIMO_LENS_VITE_DEV_SERVER",
 )
 
-_IMMUTABLE_SELECTION_FIELDS = ("label", "outputCellId", "createdAt")
-_MAX_RESOLUTION_SUMMARY = 240
+_LOGGER = logging.getLogger(__name__)
 
 
 class Lens(BundledWidget):
@@ -44,29 +71,31 @@ class Lens(BundledWidget):
     _marimo_lens_widget = True
     bundle = _BUNDLE
 
-    _lens_css = traitlets.Unicode("").tag(sync=True)
     _state = traitlets.Dict(
         default_value={
             "revision": 0,
             "nextLabel": "S1",
             "currentSelectionId": None,
             "selections": [],
+            "history": [],
         }
     ).tag(sync=True)
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._lens_closed = False
-        self._revision = 0
-        self._next_label = 1
-        self._current_selection_id: str | None = None
-        self._activation_order: list[str] = []
-        self._selections: list[dict[str, Any]] = []
-        self._images = ImageStore()
-        super().__init__(_state=self._state_payload())
-        self._lens_css = self.bundle.read_style()
-        # BundledWidget owns bundle module messages. Lens adds an independent
-        # callback on the same comm after the bundle callback is registered.
+        self._selection_store = SelectionStore()
+        self._runtime = MarimoRuntimeAdapter()
+        super().__init__(_state=self._selection_store.state.payload())
+        self._output_captures = OutputCaptureMailbox(
+            lock=self._lock,
+            send=self.send,
+            revision=lambda: self._selection_store.state.revision,
+            cell_status=self._runtime.cell_status,
+        )
+        self._bind_comm_close()
+        # BundledWidget already owns resource messages on this comm. Lens adds
+        # its protocol callback after the bundle callback is registered.
         self.on_msg(self._handle_lens_message)
 
     def context(self) -> LensContext:
@@ -77,100 +106,122 @@ class Lens(BundledWidget):
         """
 
         with self._lock:
-            if self._lens_closed:
+            self._require_open()
+            state = self._selection_store.state
+        runtime = self._runtime.snapshot(
+            tuple(str(record.selection["outputCellId"]) for record in state.records)
+        )
+        return build_lens_context(runtime, state)
+
+    def reveal(self, cell_id: str, *, message: str | None = None) -> None:
+        """Reveal one exact notebook cell through the displayed Lens."""
+
+        self._send_cell_attention("reveal", cell_id, message)
+
+    def activity(
+        self,
+        cell_id: str,
+        *,
+        label: str | None = None,
+        message: str | None = None,
+    ) -> None:
+        """Mark one exact notebook cell as the agent's active work target."""
+
+        self._send_cell_attention("activity", cell_id, message, label=label)
+
+    def _send_cell_attention(
+        self,
+        kind: Literal["activity", "reveal"],
+        cell_id: str,
+        message: str | None,
+        *,
+        label: str | None = None,
+    ) -> None:
+        cell_id = _cell_id(cell_id)
+        message = _attention_message(message)
+        activity_label = _activity_label(label) if kind == "activity" else None
+        with self._lock:
+            self._require_open()
+        cell_status = self._runtime.cell_status(cell_id)
+        with self._lock:
+            self._require_open()
+            revision = self._selection_store.state.revision
+            if cell_status == "unavailable":
                 raise LensError(
-                    "lens_closed", "Lens is closed.", revision=self._revision
+                    "runtime_unavailable",
+                    "Lens cannot inspect the active marimo runtime.",
+                    revision=revision,
                 )
-            selections = copy.deepcopy(self._selections)
-            images = self._images.snapshot(
-                [str(selection["id"]) for selection in selections]
-            )
-            revision = self._revision
-            current_selection_id = self._current_selection_id
-        runtime = collect_runtime_snapshot()
-        references, text = build_context(
-            runtime,
-            selections,
-            revision=revision,
-            current_selection_id=current_selection_id,
-        )
-        return LensContext(
-            references=references,
-            text=text,
-            images=images,
-        )
+            if cell_status == "missing":
+                raise LensError(
+                    "cell_not_found",
+                    "The active marimo dataflow graph has no cell with this ID.",
+                    revision=revision,
+                )
+            if kind == "activity":
+                event = cell_activity_event(
+                    cell_id=cell_id,
+                    label=activity_label,
+                    message=message,
+                    revision=revision,
+                )
+            else:
+                event = cell_reveal_event(
+                    cell_id=cell_id,
+                    message=message,
+                    revision=revision,
+                )
+            with suppress(Exception):
+                self.send(event)
 
     def resolve(
         self,
-        selection_id: str,
+        selection_ids: str | Sequence[str],
         *,
         expected_revision: int,
         summary: str | None = None,
     ) -> int:
-        """Remove one completed selection and return the resulting revision.
+        """Move completed selections into History and return the new revision."""
 
-        Args:
-            selection_id: Stable selection ID from ``LensContext``.
-            expected_revision: Revision used to interpret the selection.
-            summary: Brief outcome for the transient browser receipt.
-
-        Returns:
-            The selection revision after removal.
-
-        Raises:
-            TypeError: An argument has the wrong type.
-            ValueError: An argument violates its text or numeric contract.
-            LensError: The revision changed, the selection is missing, or the
-                Lens is closed.
-        """
-
-        selection_id = _selection_id(selection_id)
-        if type(expected_revision) is not int:
-            raise TypeError("expected_revision must be an integer.")
-        if expected_revision < 0:
-            raise ValueError("expected_revision must be a non-negative integer.")
+        normalized_ids = _selection_ids(selection_ids)
+        expected_revision = _expected_revision(expected_revision)
         summary = _resolution_summary(summary)
 
         with self._lock:
-            if self._lens_closed:
-                raise LensError(
-                    "lens_closed", "Lens is closed.", revision=self._revision
+            self._require_open()
+            current = self._selection_store.state
+            try:
+                next_state, _removed, addressed = resolve_selections(
+                    current,
+                    normalized_ids,
+                    expected_revision=expected_revision,
+                    addressed_at=datetime.now(timezone.utc).isoformat(),
+                    summary=summary,
                 )
-            if expected_revision != self._revision:
+            except ProtocolError as error:
                 raise LensError(
-                    "revision_conflict",
-                    "Lens selections changed before this resolution was applied.",
-                    revision=self._revision,
-                )
-            selection = next(
-                (item for item in self._selections if item["id"] == selection_id),
-                None,
+                    error.code,
+                    str(error),
+                    revision=current.revision,
+                ) from error
+            self._selection_store.commit(next_state, self._publish_state)
+            event = selection_resolved_event(
+                selections=tuple(
+                    {
+                        "selectionId": receipt.selection_id,
+                        "label": receipt.receipt["label"],
+                        "resolutionRevision": receipt.resolution_revision,
+                    }
+                    for receipt in addressed
+                ),
+                summary=summary,
+                revision=next_state.revision,
             )
-            if selection is None:
-                raise LensError(
-                    "selection_not_found",
-                    "Cannot resolve an unknown Lens selection.",
-                    revision=self._revision,
-                )
-            label = str(selection["label"])
-            self._delete_selection(selection_id)
-            revision = self._revision
-            event = {
-                "protocol": "marimo-lens.event",
-                "version": 1,
-                "type": "selection.resolved",
-                "revision": revision,
-                "payload": {
-                    "selectionId": selection_id,
-                    "label": label,
-                    **({"summary": summary} if summary is not None else {}),
-                },
-            }
-            # Serialize receipts with their state mutations so concurrent
+            # Serialize presentation events with their mutations so concurrent
             # resolutions reach the browser in revision order.
             with suppress(Exception):
                 self.send(event)
-            return revision
+            return next_state.revision
 
     def close(self) -> None:
         """Close the widget and release its in-memory PNG captures."""
@@ -179,15 +230,79 @@ class Lens(BundledWidget):
             if self._lens_closed:
                 return
             self._lens_closed = True
-            self._images.clear()
+            self._output_captures.close()
+            self._selection_store.release()
         super().close()
+
+    def _start_output_capture(self, cell_id: str) -> str:
+        """Start one transient capture for an agent integration."""
+
+        cell_id = _cell_id(cell_id)
+        with self._lock:
+            self._require_open()
+            selections = tuple(
+                {
+                    "selectionId": record.id,
+                    "label": record.selection["label"],
+                    "anchor": record.detached_selection()["anchor"],
+                }
+                for record in self._selection_store.state.records
+                if record.selection["outputCellId"] == cell_id
+            )
+        return self._output_captures.start(cell_id, selections=selections)
+
+    def _read_output_capture(self, request_id: str) -> OutputCaptureResult:
+        """Read or consume one transient agent capture."""
+
+        return self._output_captures.read(
+            _validated_identifier(REQUEST_ID_ADAPTER, request_id, name="request_id")
+        )
+
+    def _bind_comm_close(self) -> None:
+        """Route direct comm disposal through the widget close lifecycle."""
+
+        comm = self.comm
+        if comm is None:
+            return
+        comm_type = type(comm)
+        original_close = comm_type.close
+        lens_ref = weakref.ref(self)
+        comm_ref = weakref.ref(comm)
+        pending_close: tuple[tuple[object, ...], dict[str, object]] | None = None
+
+        def close_comm(*args: object, **kwargs: object) -> object:
+            nonlocal pending_close
+            lens = lens_ref()
+            bound_comm = comm_ref()
+            if bound_comm is None:
+                return None
+            if lens is not None:
+                with lens._lock:
+                    if not lens._lens_closed:
+                        pending_close = (args, dict(kwargs))
+                        try:
+                            lens.close()
+                        finally:
+                            pending_close = None
+                        return None
+                    if pending_close is not None:
+                        forwarded_args, forwarded_kwargs = pending_close
+                        pending_close = None
+                        return original_close(
+                            bound_comm,
+                            *forwarded_args,
+                            **forwarded_kwargs,
+                        )
+            return original_close(bound_comm, *args, **kwargs)
+
+        comm.close = close_comm
 
     @traitlets.observe("_state")
     def _keep_state_authoritative(self, change: traitlets.Bunch) -> None:
-        if not hasattr(self, "_lock"):
+        if not hasattr(self, "_lock") or not hasattr(self, "_selection_store"):
             return
         with self._lock:
-            canonical = self._state_payload()
+            canonical = self._selection_store.state.payload()
             if change.get("new") != canonical:
                 self.set_trait("_state", canonical)
 
@@ -198,12 +313,27 @@ class Lens(BundledWidget):
         buffers: Sequence[bytes | bytearray | memoryview],
     ) -> None:
         try:
+            capture_event = parse_capture_browser_event(content, buffers)
+        except ProtocolError:
+            return
+        if capture_event is not None:
+            self._output_captures.set_browser_ready(capture_event == "ready")
+            return
+        if is_response_envelope(content):
+            if isinstance(content, Mapping):
+                self._output_captures.accept_response(
+                    cast(Mapping[str, Any], content),
+                    buffers,
+                )
+            return
+
+        try:
             command = parse_command(content, buffers)
         except ProtocolError as error:
             self.send(
                 error_response(
                     request_id=request_id_from(content),
-                    revision=self._revision,
+                    revision=self._selection_store.state.revision,
                     code=error.code,
                     message=str(error),
                 )
@@ -218,449 +348,244 @@ class Lens(BundledWidget):
         except (ProtocolError, ImageError) as error:
             response = error_response(
                 request_id=command.request_id,
-                revision=self._revision,
+                revision=self._selection_store.state.revision,
                 code=error.code,
                 message=str(error),
             )
-        except Exception as error:
+        except Exception:
+            _LOGGER.exception("Lens command failed")
             response = error_response(
                 request_id=command.request_id,
-                revision=self._revision,
+                revision=self._selection_store.state.revision,
                 code="internal_error",
-                message=f"{type(error).__name__}: {error}",
+                message="Lens could not apply this command.",
             )
-        self.send(response, buffers=response_buffers)
+        self.send(response, buffers=list(response_buffers))
 
     def _execute(
         self,
         command: Command,
         buffers: Sequence[bytes | bytearray | memoryview],
     ) -> tuple[dict[str, Any], tuple[bytes, ...]]:
-        if command.type == "context.export":
-            context = self.context()
-            return (
-                success_response(
-                    request_id=command.request_id,
-                    revision=cast(int, context.references["revision"]),
-                    payload={
-                        "text": self._context_export_text(
-                            context,
-                            str(command.payload["format"]),
-                        )
-                    },
-                ),
-                (),
-            )
-
         if command.type == "snapshot.get":
-            with self._lock:
-                if self._lens_closed:
-                    raise ProtocolError("lens_closed", "Lens is closed.")
-                selection_id = str(command.payload["selectionId"])
-                image = self._images.get(selection_id)
-                if image is None:
-                    raise ProtocolError(
-                        "snapshot_not_found",
-                        "The selection has no stored snapshot.",
-                    )
-                return (
-                    success_response(
-                        request_id=command.request_id,
-                        revision=self._revision,
-                        payload={
-                            "selectionId": selection_id,
-                            "snapshot": self._snapshot_payload(image),
-                        },
-                    ),
-                    (image.data,),
-                )
+            return self._snapshot_response(command)
+        if command.type == "selection.put":
+            return self._selection_put_response(command, buffers), ()
 
         with self._lock:
-            if self._lens_closed:
-                raise ProtocolError("lens_closed", "Lens is closed.")
-            expected_revision = command.payload["expectedRevision"]
-            if expected_revision != self._revision:
-                raise ProtocolError(
-                    "revision_conflict",
-                    "Lens selections changed before this command was applied.",
-                )
-            if command.type == "selection.put":
-                selection = self._put_selection(command.payload, buffers)
-                payload: Mapping[str, Any] = {"selection": selection}
-            elif command.type == "selection.activate":
+            self._require_protocol_open()
+            current = self._selection_store.state
+            if command.type == "selection.activate":
                 selection_id = str(command.payload["selectionId"])
-                self._activate_selection(selection_id)
-                payload = {"selectionId": selection_id}
+                next_state = activate_selection(
+                    current,
+                    selection_id,
+                    expected_revision=int(command.payload["expectedRevision"]),
+                )
+                response_selection_id: str | None = selection_id
             elif command.type == "selection.delete":
                 selection_id = str(command.payload["selectionId"])
-                self._delete_selection(selection_id)
-                payload = {"selectionId": selection_id}
+                next_state, _removed = remove_selection(
+                    current,
+                    selection_id,
+                    expected_revision=int(command.payload["expectedRevision"]),
+                )
+                response_selection_id = selection_id
+            elif command.type == "selection.reopen":
+                selection_id = str(command.payload["selectionId"])
+                next_state, _selection = reopen_selection(
+                    current,
+                    selection_id,
+                    int(command.payload["resolutionRevision"]),
+                    expected_revision=int(command.payload["expectedRevision"]),
+                )
+                response_selection_id = selection_id
             elif command.type == "selections.clear":
-                self._clear_selections()
-                payload = {}
+                next_state = clear_selections(
+                    current,
+                    expected_revision=int(command.payload["expectedRevision"]),
+                )
+                response_selection_id = None
+            elif command.type == "history.clear":
+                next_state = clear_history(
+                    current,
+                    expected_revision=int(command.payload["expectedRevision"]),
+                )
+                response_selection_id = None
             else:
                 raise ProtocolError(
                     "unsupported_command",
                     "Lens command type is not supported.",
                 )
-
+            self._selection_store.commit(next_state, self._publish_state)
             return (
-                success_response(
+                mutation_ack_response(
                     request_id=command.request_id,
-                    revision=self._revision,
-                    payload=payload,
+                    revision=next_state.revision,
+                    selection_id=response_selection_id,
                 ),
                 (),
             )
 
-    @staticmethod
-    def _context_export_text(context: LensContext, export_format: str) -> str:
-        if export_format == "text":
-            return context.text
-        if export_format == "references":
-            value: object = context.references
-        elif export_format == "current":
-            value = context.current
-            if value is None:
-                raise ProtocolError(
-                    "selection_not_found",
-                    "Lens has no current selection to copy.",
-                )
-        else:
-            raise ProtocolError(
-                "invalid_export_format",
-                "Context export format must be current, references, or text.",
-            )
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-
-    @staticmethod
-    def _snapshot_payload(image: SelectionImage) -> dict[str, object]:
-        return {
-            "status": "outdated" if image.outdated else "available",
-            "id": image.id,
-            "mediaType": image.media_type,
-            "width": image.width,
-            "height": image.height,
-            "sha256": image.sha256,
-            "capturedAt": image.captured_at,
-        }
-
-    def _put_selection(
+    def _selection_put_response(
         self,
-        payload: Mapping[str, Any],
+        command: Command,
         buffers: Sequence[bytes | bytearray | memoryview],
     ) -> dict[str, Any]:
-        selection = copy.deepcopy(dict(payload["selection"]))
-        selection_id = str(selection["id"])
-        image_action = str(payload["imageAction"])
-        existing_index = next(
-            (
-                index
-                for index, item in enumerate(self._selections)
-                if item["id"] == selection_id
-            ),
-            None,
-        )
-        existing = (
-            self._selections[existing_index] if existing_index is not None else None
-        )
-
-        if existing is None and len(self._selections) >= MAX_SELECTIONS:
-            raise ProtocolError(
-                "selection_limit_reached",
-                f"Lens supports up to {MAX_SELECTIONS} selections.",
+        with self._lock:
+            self._require_protocol_open()
+            plan = plan_selection_put(
+                self._selection_store.state,
+                command.payload,
             )
-        if existing is None and selection["label"] != f"S{self._next_label}":
-            raise ProtocolError(
-                "selection_label_conflict",
-                f"The next Lens selection label is S{self._next_label}.",
+            image_buffer = buffers[0] if plan.image_action == "replace" else None
+            next_state, committed = apply_selection_put(
+                self._selection_store.state,
+                plan,
+                image_buffer,
+                max_total_image_bytes=self._selection_store.max_total_image_bytes,
             )
-        if existing is not None:
-            for field in _IMMUTABLE_SELECTION_FIELDS:
-                if selection[field] != existing[field]:
-                    raise ProtocolError(
-                        "selection_identity_changed",
-                        f"Selection {field} cannot change after creation.",
-                    )
-        elif image_action == "preserve":
-            raise ProtocolError(
-                "selection_not_found",
-                "A new selection cannot preserve an image.",
+            self._selection_store.commit(next_state, self._publish_state)
+            return selection_put_response(
+                request_id=command.request_id,
+                revision=next_state.revision,
+                selection=committed,
             )
 
-        outdated_transition = False
-        if existing is not None and image_action == "preserve":
-            outdated_transition = self._validate_preserved_snapshot(
-                selection_id,
-                existing["snapshot"],
-                selection["snapshot"],
-            )
-            if not outdated_transition and any(
-                selection.get(field) != existing.get(field)
-                for field in ("anchor", "domHint")
-            ):
+    def _snapshot_response(
+        self,
+        command: Command,
+    ) -> tuple[dict[str, Any], tuple[bytes, ...]]:
+        with self._lock:
+            self._require_protocol_open()
+            state = self._selection_store.state
+            selection_id = str(command.payload["selectionId"])
+            record = state.record(selection_id)
+            image = record.image if record is not None else None
+            if image is None:
                 raise ProtocolError(
-                    "selection_capture_changed",
-                    "Changing selection geometry must mark its retained snapshot outdated.",
+                    "snapshot_not_found",
+                    "The selection has no stored snapshot.",
                 )
-
-        if image_action == "replace":
-            snapshot_metadata = selection["snapshot"]
-            prepared_image = self._images.prepare(
-                selection_id,
-                snapshot_metadata,
-                buffers[0],
-            )
-        else:
-            prepared_image = None
-
-        next_selections = copy.deepcopy(self._selections)
-        if existing_index is None:
-            next_selections.append(selection)
-        else:
-            next_selections[existing_index] = selection
-
-        should_activate = existing is None or (
-            existing is not None and self._selection_edit_activates(existing, selection)
-        )
-        next_current_selection_id = self._current_selection_id
-        next_activation_order = list(self._activation_order)
-        if should_activate:
-            next_current_selection_id, next_activation_order = self._activated_state(
-                selection_id,
-                next_activation_order,
+            return snapshot_response(
+                request_id=command.request_id,
+                revision=state.revision,
+                selection_id=selection_id,
+                image=image,
             )
 
-        previous_image = self._images.get(selection_id)
-        if prepared_image is not None:
-            self._images.replace(prepared_image)
-        elif image_action == "clear":
-            self._images.remove(selection_id)
-        elif outdated_transition:
-            self._images.mark_outdated(selection_id)
-        try:
-            self._commit_selections(
-                next_selections,
-                current_selection_id=next_current_selection_id,
-                activation_order=next_activation_order,
-                advance_label=existing is None,
-            )
-        except Exception:
-            self._restore_image(selection_id, previous_image)
-            raise
-        return copy.deepcopy(selection)
+    def _publish_state(self, payload: dict[str, Any]) -> None:
+        self.set_trait("_state", payload)
 
-    def _validate_preserved_snapshot(
-        self,
-        selection_id: str,
-        existing: Mapping[str, Any],
-        incoming: Mapping[str, Any],
-    ) -> bool:
-        if incoming == existing and incoming.get("status") != "outdated":
-            return False
-        existing_status = existing.get("status")
-        if existing_status not in {"available", "outdated"}:
-            raise ProtocolError(
-                "selection_capture_changed",
-                "A pending or failed snapshot cannot be marked outdated.",
-            )
-        if incoming.get("status") != "outdated":
-            raise ProtocolError(
-                "selection_capture_changed",
-                "Preserving an image cannot replace its snapshot metadata.",
-            )
-        expected = dict(existing)
-        expected["status"] = "outdated"
-        if incoming != expected or self._images.get(selection_id) is None:
-            raise ProtocolError(
-                "selection_capture_changed",
-                "An outdated snapshot must retain its original image metadata and bytes.",
-            )
-        return True
-
-    @staticmethod
-    def _selection_edit_activates(
-        existing: Mapping[str, Any],
-        selection: Mapping[str, Any],
-    ) -> bool:
-        return any(
-            existing.get(field) != selection.get(field)
-            for field in ("note", "anchor", "domHint")
-        )
-
-    def _activate_selection(self, selection_id: str) -> None:
-        if not any(item["id"] == selection_id for item in self._selections):
-            raise ProtocolError(
-                "selection_not_found",
-                "Cannot activate an unknown Lens selection.",
-            )
-        current_selection_id, activation_order = self._activated_state(
-            selection_id,
-            list(self._activation_order),
-        )
-        self._commit_selections(
-            copy.deepcopy(self._selections),
-            current_selection_id=current_selection_id,
-            activation_order=activation_order,
-        )
-
-    def _delete_selection(self, selection_id: str) -> None:
-        if not any(item["id"] == selection_id for item in self._selections):
-            raise ProtocolError(
-                "selection_not_found",
-                "Cannot delete an unknown Lens selection.",
-            )
-        previous_image = self._images.get(selection_id)
-        next_selections = [
-            item for item in self._selections if item["id"] != selection_id
-        ]
-        next_activation_order = [
-            item for item in self._activation_order if item != selection_id
-        ]
-        next_current_selection_id = self._current_selection_id
-        if next_current_selection_id == selection_id:
-            next_current_selection_id = (
-                next_activation_order[-1] if next_activation_order else None
-            )
-        self._images.remove(selection_id)
-        try:
-            self._commit_selections(
-                next_selections,
-                current_selection_id=next_current_selection_id,
-                activation_order=next_activation_order,
-            )
-        except Exception:
-            self._restore_image(selection_id, previous_image)
-            raise
-
-    def _clear_selections(self) -> None:
-        previous_images = self._images.snapshot(
-            [str(selection["id"]) for selection in self._selections]
-        )
-        self._images.clear()
-        try:
-            self._commit_selections(
-                [],
-                current_selection_id=None,
-                activation_order=[],
-            )
-        except Exception:
-            for image in previous_images:
-                self._images.replace(image)
-            raise
-
-    def _commit_selections(
-        self,
-        selections: list[dict[str, Any]],
-        *,
-        current_selection_id: str | None,
-        activation_order: list[str],
-        advance_label: bool = False,
-    ) -> None:
-        try:
-            validate_selection_budget(selections)
-        except ValueError as error:
-            raise ProtocolError("selection_context_limit", str(error)) from error
-
-        selection_ids = [str(selection["id"]) for selection in selections]
-        selection_id_set = set(selection_ids)
-        if len(selection_ids) != len(selection_id_set):
-            raise RuntimeError("Selection ids must be unique.")
-        if (
-            current_selection_id is not None
-            and current_selection_id not in selection_id_set
-        ):
-            raise RuntimeError("The current selection must exist in Lens state.")
-        if (
-            len(activation_order) != len(set(activation_order))
-            or set(activation_order) != selection_id_set
-        ):
-            raise RuntimeError(
-                "Selection activation order must cover Lens state exactly."
+    def _require_open(self) -> None:
+        if self._lens_closed:
+            raise LensError(
+                "lens_closed",
+                "Lens is closed.",
+                revision=self._selection_store.state.revision,
             )
 
-        previous_selections = self._selections
-        previous_revision = self._revision
-        previous_next_label = self._next_label
-        previous_current_selection_id = self._current_selection_id
-        previous_activation_order = self._activation_order
-        self._selections = copy.deepcopy(selections)
-        self._revision += 1
-        if advance_label:
-            self._next_label += 1
-        self._current_selection_id = current_selection_id
-        self._activation_order = list(activation_order)
-        try:
-            self.set_trait("_state", self._state_payload())
-        except Exception:
-            self._selections = previous_selections
-            self._revision = previous_revision
-            self._next_label = previous_next_label
-            self._current_selection_id = previous_current_selection_id
-            self._activation_order = previous_activation_order
-            with suppress(Exception):
-                self.set_trait("_state", self._state_payload())
-            raise
-
-    @staticmethod
-    def _activated_state(
-        selection_id: str,
-        activation_order: list[str],
-    ) -> tuple[str, list[str]]:
-        return selection_id, [
-            item for item in activation_order if item != selection_id
-        ] + [selection_id]
-
-    def _restore_image(self, selection_id: str, image: Any) -> None:
-        if image is None:
-            self._images.remove(selection_id)
-        else:
-            self._images.replace(image)
-
-    def _state_payload(self) -> dict[str, Any]:
-        return {
-            "revision": self._revision,
-            "nextLabel": f"S{self._next_label}",
-            "currentSelectionId": self._current_selection_id,
-            "selections": copy.deepcopy(self._selections),
-        }
+    def _require_protocol_open(self) -> None:
+        if self._lens_closed:
+            raise ProtocolError("lens_closed", "Lens is closed.")
 
 
 def _selection_id(value: object) -> str:
-    if not isinstance(value, str):
-        raise TypeError("selection_id must be a string.")
-    if not value:
-        raise ValueError("selection_id must not be empty.")
-    try:
-        value.encode("utf-8")
-    except UnicodeEncodeError as error:
-        raise ValueError("selection_id must contain valid Unicode text.") from error
-    length = len(value.encode("utf-16-le", errors="surrogatepass")) // 2
-    if length > MAX_SELECTION_ID:
+    return _validated_identifier(SELECTION_ID_ADAPTER, value, name="selection_id")
+
+
+def _selection_ids(value: object) -> tuple[str, ...]:
+    if isinstance(value, str):
+        values: Sequence[object] = (value,)
+    elif isinstance(value, Sequence) and not isinstance(
+        value,
+        (bytes, bytearray, memoryview),
+    ):
+        values = value
+    else:
+        raise TypeError("selection_ids must be a string or a sequence of strings.")
+    if not values:
+        raise ValueError("selection_ids must contain at least one selection ID.")
+    if len(values) > MAX_SELECTIONS:
         raise ValueError(
-            f"selection_id must contain at most {MAX_SELECTION_ID} characters."
+            f"selection_ids must contain at most {MAX_SELECTIONS} selection IDs."
         )
-    return value
+    selection_ids = tuple(_selection_id(item) for item in values)
+    if len(selection_ids) != len(set(selection_ids)):
+        raise ValueError("selection_ids must not contain duplicates.")
+    return selection_ids
+
+
+def _cell_id(value: object) -> str:
+    return _validated_identifier(CELL_ID_ADAPTER, value, name="cell_id")
+
+
+def _validated_identifier(
+    adapter: TypeAdapter[str],
+    value: object,
+    *,
+    name: str,
+) -> str:
+    try:
+        return adapter.validate_python(value)
+    except ValidationError as error:
+        error_type, message = _validation_detail(error)
+        if error_type == "string_type":
+            raise TypeError(f"{name} must be a string.") from None
+        raise ValueError(f"{name} {message}.") from None
+
+
+def _expected_revision(value: object) -> int:
+    try:
+        return REVISION_ADAPTER.validate_python(value)
+    except ValidationError as error:
+        error_type, _ = _validation_detail(error)
+        if error_type == "int_type":
+            raise TypeError("expected_revision must be an integer.") from None
+        raise ValueError(
+            "expected_revision must be a non-negative integer within JSON's safe range."
+        ) from None
 
 
 def _resolution_summary(value: object) -> str | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise TypeError("summary must be a string or None.")
-    value = value.strip()
-    if not value:
-        return None
+    return _optional_transient_text(value, name="summary")
+
+
+def _attention_message(value: object) -> str | None:
+    return _optional_transient_text(value, name="message")
+
+
+def _activity_label(value: object) -> str | None:
     try:
-        value.encode("utf-8")
-    except UnicodeEncodeError as error:
-        raise ValueError("summary must contain valid Unicode text.") from error
-    length = len(value.encode("utf-16-le", errors="surrogatepass")) // 2
-    if length > _MAX_RESOLUTION_SUMMARY:
-        raise ValueError(
-            f"summary must contain at most {_MAX_RESOLUTION_SUMMARY} UTF-16 code units."
-        )
-    return value
+        return OPTIONAL_ACTIVITY_LABEL_ADAPTER.validate_python(value)
+    except ValidationError as error:
+        error_type, message = _validation_detail(error)
+        if error_type in {"string_type", "none_required"}:
+            raise TypeError("label must be a string or None.") from None
+        raise ValueError(f"label {message}.") from None
+
+
+def _optional_transient_text(
+    value: object,
+    *,
+    name: str,
+) -> str | None:
+    try:
+        return OPTIONAL_ATTENTION_TEXT_ADAPTER.validate_python(value)
+    except ValidationError as error:
+        error_type, message = _validation_detail(error)
+        if error_type in {"string_type", "none_required"}:
+            raise TypeError(f"{name} must be a string or None.") from None
+        raise ValueError(f"{name} {message}.") from None
+
+
+def _validation_detail(error: ValidationError) -> tuple[str, str]:
+    detail = error.errors(
+        include_url=False,
+        include_context=False,
+        include_input=False,
+    )[0]
+    return str(detail["type"]), str(detail["msg"])
 
 
 __all__ = ["Lens"]

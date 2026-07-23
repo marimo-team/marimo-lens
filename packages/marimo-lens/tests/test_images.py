@@ -8,7 +8,11 @@ from collections.abc import Callable
 
 import pytest
 
-from marimo_lens._images import ImageError, ImageStore
+from marimo_lens._images import (
+    ImageError,
+    prepare_output_image,
+    prepare_selection_image,
+)
 
 from tests.support.factories import png, snapshot_metadata
 
@@ -42,13 +46,15 @@ def _chunk(kind: bytes, data: bytes) -> bytes:
     )
 
 
-def test_image_store_validates_png_and_returns_raw_bytes() -> None:
+def test_selection_image_validation_returns_raw_bytes() -> None:
     data = png(3, 2)
     metadata = snapshot_metadata(data, width=3, height=2)
-    store = ImageStore()
-
-    image = store.prepare("selection-1", metadata, memoryview(data))
-    store.replace(image)
+    image = prepare_selection_image(
+        "selection-1",
+        metadata,
+        memoryview(data),
+        other_bytes=0,
+    )
 
     assert image.data == data
     assert image.width == 3
@@ -56,20 +62,6 @@ def test_image_store_validates_png_and_returns_raw_bytes() -> None:
     assert image.sha256 == hashlib.sha256(data).hexdigest()
     assert image.captured_at == "2026-07-14T11:58:00Z"
     assert image.outdated is False
-    assert store.snapshot(["selection-1"]) == (image,)
-
-
-def test_image_store_marks_retained_bytes_outdated() -> None:
-    data = png()
-    store = ImageStore()
-    image = store.prepare("selection-1", snapshot_metadata(data), data)
-    store.replace(image)
-
-    store.mark_outdated("selection-1")
-
-    outdated = store.snapshot(["selection-1"])[0]
-    assert outdated.data == data
-    assert outdated.outdated is True
 
 
 @pytest.mark.parametrize(
@@ -79,7 +71,7 @@ def test_image_store_marks_retained_bytes_outdated() -> None:
         (lambda metadata: metadata.update(sha256="0" * 64), "image_metadata_mismatch"),
     ],
 )
-def test_image_store_rejects_metadata_that_does_not_match_png(
+def test_selection_image_rejects_metadata_that_does_not_match_png(
     mutate: Callable[[dict[str, object]], None],
     code: str,
 ) -> None:
@@ -88,18 +80,18 @@ def test_image_store_rejects_metadata_that_does_not_match_png(
     mutate(metadata)
 
     with pytest.raises(ImageError) as raised:
-        ImageStore().prepare("selection-1", metadata, data)
+        prepare_selection_image("selection-1", metadata, data, other_bytes=0)
 
     assert raised.value.code == code
 
 
-def test_image_store_rejects_corrupt_png_checksum() -> None:
+def test_selection_image_rejects_corrupt_png_checksum() -> None:
     data = bytearray(png())
     data[-1] ^= 1
     metadata = snapshot_metadata(bytes(data))
 
     with pytest.raises(ImageError) as raised:
-        ImageStore().prepare("selection-1", metadata, data)
+        prepare_selection_image("selection-1", metadata, data, other_bytes=0)
 
     assert raised.value.code == "invalid_png"
 
@@ -115,20 +107,21 @@ def test_image_store_rejects_corrupt_png_checksum() -> None:
         ),
     ],
 )
-def test_image_store_rejects_png_data_that_cannot_be_decoded(
+def test_selection_image_rejects_png_data_that_cannot_be_decoded(
     image_data: bytes,
 ) -> None:
     with pytest.raises(ImageError) as raised:
-        ImageStore().prepare(
+        prepare_selection_image(
             "selection-1",
             snapshot_metadata(image_data),
             image_data,
+            other_bytes=0,
         )
 
     assert raised.value.code == "invalid_png"
 
 
-def test_image_store_rejects_declared_dimensions_before_decompression() -> None:
+def test_selection_image_rejects_declared_dimensions_before_decompression() -> None:
     image_data = _png_with_image_data(
         b"not a zlib stream",
         width=2049,
@@ -136,40 +129,48 @@ def test_image_store_rejects_declared_dimensions_before_decompression() -> None:
     )
 
     with pytest.raises(ImageError) as raised:
-        ImageStore().prepare(
+        prepare_selection_image(
             "selection-1",
             snapshot_metadata(image_data, width=2049, height=1),
             image_data,
+            other_bytes=0,
         )
 
     assert raised.value.code == "image_dimensions_exceeded"
 
 
-def test_image_store_measures_typed_memoryviews_in_bytes() -> None:
+def test_selection_image_measures_typed_memoryviews_in_bytes() -> None:
     data = png()
     assert len(data) % 2 == 0
     typed_buffer = memoryview(array("B", data)).cast("H")
     assert len(typed_buffer) < typed_buffer.nbytes
 
     with pytest.raises(ImageError) as raised:
-        ImageStore(max_image_bytes=len(data) - 1).prepare(
+        prepare_selection_image(
             "selection-1",
             snapshot_metadata(data),
             typed_buffer,
+            other_bytes=0,
+            max_image_bytes=len(data) - 1,
         )
 
     assert raised.value.code == "image_too_large"
 
 
-def test_image_store_enforces_total_budget_before_replacing_state() -> None:
+def test_selection_image_enforces_total_budget() -> None:
     first_data = png(2, 2)
     second_data = png(3, 3)
-    store = ImageStore(max_total_bytes=len(first_data) + len(second_data) - 1)
-    first = store.prepare("selection-1", snapshot_metadata(first_data), first_data)
-    store.replace(first)
+    limit = len(first_data) + len(second_data) - 1
+    first = prepare_selection_image(
+        "selection-1",
+        snapshot_metadata(first_data),
+        first_data,
+        other_bytes=0,
+        max_total_bytes=limit,
+    )
 
     with pytest.raises(ImageError) as raised:
-        store.prepare(
+        prepare_selection_image(
             "selection-2",
             snapshot_metadata(
                 second_data,
@@ -178,21 +179,58 @@ def test_image_store_enforces_total_budget_before_replacing_state() -> None:
                 height=3,
             ),
             second_data,
+            other_bytes=len(first.data),
+            max_total_bytes=limit,
         )
 
     assert raised.value.code == "image_store_full"
-    assert store.snapshot(["selection-1", "selection-2"]) == (first,)
+    assert first.data == first_data
 
 
-def test_remove_and_clear_release_image_bytes() -> None:
+def test_output_image_is_a_detached_validated_transfer() -> None:
+    data = png(3, 3)
+    image = prepare_output_image(
+        "request-1",
+        "cell-view",
+        _output_metadata(data, request_id="request-1", width=3, height=3),
+        data,
+    )
+
+    assert image.request_id == "request-1"
+    assert image.cell_id == "cell-view"
+    assert image.data == data
+    assert image.width == 3
+    assert image.height == 3
+    assert image.sha256 == hashlib.sha256(data).hexdigest()
+
+
+def test_output_image_rejects_another_request_identity() -> None:
     data = png()
-    store = ImageStore()
-    image = store.prepare("selection-1", snapshot_metadata(data), data)
-    store.replace(image)
-    store.remove("selection-1")
 
-    assert store.total_bytes == 0
+    with pytest.raises(ImageError) as raised:
+        prepare_output_image(
+            "request-1",
+            "cell-view",
+            _output_metadata(data, request_id="request-2", width=2, height=2),
+            data,
+        )
 
-    store.replace(image)
-    store.clear()
-    assert store.snapshot(["selection-1"]) == ()
+    assert raised.value.code == "invalid_image"
+
+
+def _output_metadata(
+    data: bytes,
+    *,
+    request_id: str,
+    width: int,
+    height: int,
+) -> dict[str, object]:
+    return {
+        "status": "available",
+        "id": f"image:{request_id}",
+        "mediaType": "image/png",
+        "width": width,
+        "height": height,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "capturedAt": "2026-07-18T12:00:00Z",
+    }

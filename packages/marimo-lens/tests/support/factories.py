@@ -76,6 +76,9 @@ def cell(
     defs: tuple[str, ...] = (),
     refs: tuple[str, ...] = (),
     upstream: tuple[str, ...] = (),
+    runtime_state: str | None = "idle",
+    run_result_status: str | None = "success",
+    stale: bool | None = False,
 ) -> RuntimeCell:
     return RuntimeCell(
         id=cell_id,
@@ -84,6 +87,9 @@ def cell(
         refs=refs,
         upstream_cell_ids=upstream,
         language="python",
+        runtime_state=runtime_state,
+        run_result_status=run_result_status,
+        stale=stale,
     )
 
 

@@ -1,52 +1,74 @@
-"""Strict browser command protocol for Lens selections and context."""
+"""Validated browser transport for Lens selections and image capture."""
 
 from __future__ import annotations
 
-import math
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
 
-COMMAND_PROTOCOL = "marimo-lens.command"
-RESPONSE_PROTOCOL = "marimo-lens.response"
-PROTOCOL_VERSION = 1
+from pydantic import TypeAdapter, ValidationError
 
-MAX_SELECTIONS = 64
-MAX_SELECTION_ID = 128
-MAX_NOTE = 4_000
-MAX_DOM_TEXT = 240
-MAX_DOM_FIELD = 240
-MAX_ERROR = 500
+from ._protocol_models import (
+    CAPTURE_BROWSER_EVENT_ADAPTER,
+    CAPTURE_RESPONSE_ADAPTER,
+    COMMAND_ADAPTER,
+    COMMAND_PROTOCOL,
+    EVENT_PROTOCOL,
+    MAX_HISTORY,
+    MAX_ERROR,
+    MAX_SELECTIONS,
+    PROTOCOL_VERSION,
+    REQUEST_ID_ADAPTER,
+    RESPONSE_PROTOCOL,
+    SELECTION_ADAPTER,
+    SELECTION_ID_ADAPTER,
+    AvailableSnapshot,
+    CellActivityEvent,
+    CellActivityPayload,
+    CellRevealEvent,
+    CellRevealPayload,
+    ErrorDetail,
+    FailureResponse,
+    OutdatedSnapshot,
+    OutputCaptureCommand,
+    OutputCaptureFailure,
+    OutputCapturePayload,
+    OutputCaptureReady,
+    OutputCaptureSelection,
+    OutputCaptureSuccess,
+    PutSelectionCommand,
+    ResolvedSelection,
+    SelectionResolvedEvent,
+    SelectionResolvedPayload,
+    SnapshotResponsePayload,
+    SuccessResponse,
+    dump_model,
+)
+
+if TYPE_CHECKING:
+    from .context import SelectionImage
 
 CommandType = Literal[
     "selection.put",
     "selection.activate",
     "selection.delete",
+    "selection.reopen",
     "selections.clear",
-    "context.export",
+    "history.clear",
     "snapshot.get",
 ]
-ContextExportFormat = Literal["current", "references", "text"]
-ImageAction = Literal["preserve", "replace", "clear"]
+CaptureBrowserEvent = Literal["ready", "unready"]
 
-_COMMAND_TYPES = {
-    "selection.put",
-    "selection.activate",
-    "selection.delete",
-    "selections.clear",
-    "context.export",
-    "snapshot.get",
+_CUSTOM_ERROR_CODES = {
+    "invalid_image",
+    "invalid_image_action",
+    "invalid_selection",
 }
-_CONTEXT_EXPORT_FORMATS = {"current", "references", "text"}
-_IMAGE_ACTIONS = {"preserve", "replace", "clear"}
-_LABEL = re.compile(r"S[1-9][0-9]*\Z")
-_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
+_ModelT = TypeVar("_ModelT")
 
 
 class ProtocolError(ValueError):
-    """Raised when a browser command violates the command contract."""
+    """Raised when a browser message violates the transport contract."""
 
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
@@ -60,6 +82,36 @@ class Command:
     payload: dict[str, Any]
 
 
+@dataclass(frozen=True, slots=True)
+class CaptureResponse:
+    """One validated browser reply to a cell output capture request."""
+
+    cell_id: str
+    image: dict[str, Any] | None
+    error_code: str | None
+    error: str | None
+
+
+def parse_capture_browser_event(
+    content: object,
+    buffers: Sequence[bytes | bytearray | memoryview],
+) -> CaptureBrowserEvent | None:
+    """Parse the private browser readiness signal for reverse capture."""
+
+    if not isinstance(content, Mapping) or content.get("protocol") != EVENT_PROTOCOL:
+        return None
+    event_type = content.get("type")
+    if event_type not in {"output.capture.ready", "output.capture.unready"}:
+        return None
+    _require_no_buffers(buffers)
+    event = _validate_model(
+        CAPTURE_BROWSER_EVENT_ADAPTER,
+        content,
+        context="Lens readiness event",
+    )
+    return "ready" if isinstance(event, OutputCaptureReady) else "unready"
+
+
 def parse_command(
     content: object,
     buffers: Sequence[bytes | bytearray | memoryview],
@@ -68,95 +120,247 @@ def parse_command(
 
     if not isinstance(content, Mapping) or content.get("protocol") != COMMAND_PROTOCOL:
         return None
-    command_mapping = cast(Mapping[str, Any], content)
-
-    _exact_keys(
-        command_mapping,
-        required={"protocol", "version", "requestId", "type", "payload"},
-        field="command",
-    )
-    if (
-        type(content.get("version")) is not int
-        or content.get("version") != PROTOCOL_VERSION
-    ):
-        raise ProtocolError(
-            "unsupported_version",
-            f"Lens command protocol version must be {PROTOCOL_VERSION}.",
-        )
-
-    request_id = _string(
-        content.get("requestId"),
-        field="requestId",
-        maximum=256,
-    )
-    raw_type = content.get("type")
-    if not isinstance(raw_type, str) or raw_type not in _COMMAND_TYPES:
-        raise ProtocolError(
-            "unsupported_command",
-            "Lens command type is not supported.",
-        )
-    command_type = cast(CommandType, raw_type)
-    payload = _object(content.get("payload"), field="payload")
-
-    if command_type == "selection.put":
-        canonical_payload = _parse_put(payload, buffers)
-    elif command_type in {"selection.activate", "selection.delete"}:
-        _require_no_buffers(buffers)
-        _exact_keys(
-            payload,
-            required={"selectionId", "expectedRevision"},
-            field="payload",
-        )
-        canonical_payload = {
-            "selectionId": _string(
-                payload.get("selectionId"),
-                field="selectionId",
-                maximum=MAX_SELECTION_ID,
-            ),
-            "expectedRevision": _revision(payload.get("expectedRevision")),
-        }
-    elif command_type == "selections.clear":
-        _require_no_buffers(buffers)
-        _exact_keys(payload, required={"expectedRevision"}, field="payload")
-        canonical_payload = {
-            "expectedRevision": _revision(payload.get("expectedRevision"))
-        }
-    elif command_type == "context.export":
-        _require_no_buffers(buffers)
-        _exact_keys(payload, required={"format"}, field="payload")
-        export_format = payload.get("format")
-        if (
-            not isinstance(export_format, str)
-            or export_format not in _CONTEXT_EXPORT_FORMATS
-        ):
-            raise ProtocolError(
-                "invalid_export_format",
-                "Context export format must be current, references, or text.",
-            )
-        canonical_payload = {
-            "format": cast(ContextExportFormat, export_format),
-        }
-    elif command_type == "snapshot.get":
-        _require_no_buffers(buffers)
-        _exact_keys(payload, required={"selectionId"}, field="payload")
-        canonical_payload = {
-            "selectionId": _string(
-                payload.get("selectionId"),
-                field="selectionId",
-                maximum=MAX_SELECTION_ID,
-            )
-        }
+    command = _validate_model(COMMAND_ADAPTER, content, context="Lens command")
+    if isinstance(command, PutSelectionCommand):
+        if command.payload.image_action == "replace":
+            if len(buffers) != 1:
+                raise ProtocolError(
+                    "invalid_buffers",
+                    "Replacing a selection image requires exactly one PNG buffer.",
+                )
+        else:
+            _require_no_buffers(buffers)
     else:
-        raise ProtocolError(
-            "unsupported_command",
-            "Lens command type is not supported.",
-        )
+        _require_no_buffers(buffers)
 
     return Command(
-        request_id=request_id,
-        type=command_type,
-        payload=canonical_payload,
+        request_id=command.request_id,
+        type=cast(CommandType, command.type),
+        payload=dump_model(command.payload),
     )
+
+
+def capture_command(
+    *,
+    request_id: str,
+    cell_id: str,
+    selections: Sequence[Mapping[str, Any]] = (),
+) -> dict[str, Any]:
+    """Build one browser request for a cell's current rendered output."""
+
+    try:
+        command = OutputCaptureCommand(
+            protocol=COMMAND_PROTOCOL,
+            version=PROTOCOL_VERSION,
+            request_id=request_id,
+            type="output.capture",
+            payload=OutputCapturePayload(
+                output_cell_id=cell_id,
+                selections=tuple(
+                    OutputCaptureSelection.model_validate(selection)
+                    for selection in selections
+                ),
+            ),
+        )
+    except ValidationError as error:
+        raise _protocol_error(error, context="Output capture command") from None
+    return dump_model(command)
+
+
+def is_response_envelope(content: object) -> bool:
+    """Return whether a message belongs to the Lens response transport."""
+
+    return isinstance(content, Mapping) and content.get("protocol") == RESPONSE_PROTOCOL
+
+
+def cell_reveal_event(
+    *,
+    cell_id: str,
+    message: str | None,
+    revision: int,
+) -> dict[str, Any]:
+    """Build one transient request to reveal an exact notebook cell."""
+
+    try:
+        event = CellRevealEvent(
+            revision=revision,
+            payload=CellRevealPayload(cell_id=cell_id, message=message),
+        )
+    except ValidationError as error:
+        raise _protocol_error(error, context="Cell reveal event") from None
+    return dump_model(event)
+
+
+def cell_activity_event(
+    *,
+    cell_id: str,
+    label: str | None,
+    message: str | None,
+    revision: int,
+) -> dict[str, Any]:
+    """Build one transient request to mark active work on a notebook cell."""
+
+    try:
+        event = CellActivityEvent(
+            revision=revision,
+            payload=CellActivityPayload(
+                cell_id=cell_id,
+                label=label,
+                message=message,
+            ),
+        )
+    except ValidationError as error:
+        raise _protocol_error(error, context="Cell activity event") from None
+    return dump_model(event)
+
+
+def selection_resolved_event(
+    *,
+    selections: Sequence[Mapping[str, Any]],
+    summary: str | None,
+    revision: int,
+) -> dict[str, Any]:
+    """Build one transient receipt for one atomic resolution."""
+
+    try:
+        event = SelectionResolvedEvent(
+            revision=revision,
+            payload=SelectionResolvedPayload(
+                selections=tuple(
+                    ResolvedSelection.model_validate(selection)
+                    for selection in selections
+                ),
+                summary=summary,
+            ),
+        )
+    except ValidationError as error:
+        raise _protocol_error(error, context="Selection resolution event") from None
+    return dump_model(event)
+
+
+def parse_capture_response(
+    content: object,
+    buffers: Sequence[bytes | bytearray | memoryview],
+) -> CaptureResponse:
+    """Parse one browser capture reply."""
+
+    if not isinstance(content, Mapping) or content.get("protocol") != RESPONSE_PROTOCOL:
+        raise ProtocolError(
+            "invalid_request",
+            "Cell capture response must use the Lens response transport.",
+        )
+    response = _validate_model(
+        CAPTURE_RESPONSE_ADAPTER,
+        content,
+        context="Cell capture response",
+    )
+    if isinstance(response, OutputCaptureSuccess):
+        if len(buffers) != 1:
+            raise ProtocolError(
+                "invalid_buffers",
+                "A successful cell capture requires exactly one PNG buffer.",
+            )
+        return CaptureResponse(
+            cell_id=response.payload.output_cell_id,
+            image=dump_model(response.payload.image),
+            error_code=None,
+            error=None,
+        )
+
+    assert isinstance(response, OutputCaptureFailure)
+    _require_no_buffers(buffers)
+    return CaptureResponse(
+        cell_id=response.payload.output_cell_id,
+        image=None,
+        error_code=response.error.code,
+        error=response.error.message,
+    )
+
+
+def mutation_ack_response(
+    *,
+    request_id: str,
+    revision: int,
+    selection_id: str | None = None,
+) -> dict[str, Any]:
+    """Build an acknowledgement for a committed selection mutation."""
+
+    payload: dict[str, str] = {}
+    if selection_id is not None:
+        try:
+            payload["selectionId"] = SELECTION_ID_ADAPTER.validate_python(selection_id)
+        except ValidationError as error:
+            raise _protocol_error(error, context="Selection response") from None
+    return success_response(
+        request_id=request_id,
+        revision=revision,
+        payload=payload,
+    )
+
+
+def selection_put_response(
+    *,
+    request_id: str,
+    revision: int,
+    selection: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Build the committed selection returned by ``selection.put``."""
+
+    try:
+        selected = SELECTION_ADAPTER.validate_python(selection)
+    except ValidationError as error:
+        raise _protocol_error(error, context="Selection response") from None
+    return success_response(
+        request_id=request_id,
+        revision=revision,
+        payload={"selection": dump_model(selected)},
+    )
+
+
+def snapshot_metadata(image: SelectionImage) -> dict[str, object]:
+    """Project retained selection image metadata for browser transport."""
+
+    try:
+        values = {
+            "id": image.id,
+            "media_type": image.media_type,
+            "width": image.width,
+            "height": image.height,
+            "sha256": image.sha256,
+            "captured_at": image.captured_at,
+        }
+        snapshot = (
+            OutdatedSnapshot(status="outdated", **values)
+            if image.outdated
+            else AvailableSnapshot(status="available", **values)
+        )
+    except ValidationError as error:
+        raise _protocol_error(error, context="Selection snapshot") from None
+    return dump_model(snapshot)
+
+
+def snapshot_response(
+    *,
+    request_id: str,
+    revision: int,
+    selection_id: str,
+    image: SelectionImage,
+) -> tuple[dict[str, Any], tuple[bytes, ...]]:
+    """Build a snapshot response and its exact retained PNG buffer."""
+
+    metadata = snapshot_metadata(image)
+    try:
+        payload = SnapshotResponsePayload.model_validate(
+            {"selectionId": selection_id, "snapshot": metadata}
+        )
+    except ValidationError as error:
+        raise _protocol_error(error, context="Snapshot response") from None
+    response = success_response(
+        request_id=request_id,
+        revision=revision,
+        payload=dump_model(payload),
+    )
+    return response, (image.data,)
 
 
 def success_response(
@@ -165,14 +369,15 @@ def success_response(
     revision: int,
     payload: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
-        "protocol": RESPONSE_PROTOCOL,
-        "version": PROTOCOL_VERSION,
-        "requestId": request_id,
-        "ok": True,
-        "revision": revision,
-        "payload": dict(payload or {}),
-    }
+    try:
+        response = SuccessResponse(
+            request_id=request_id,
+            revision=revision,
+            payload=dict(payload or {}),
+        )
+    except ValidationError as error:
+        raise _protocol_error(error, context="Lens response") from None
+    return dump_model(response)
 
 
 def error_response(
@@ -183,339 +388,68 @@ def error_response(
     message: str,
     payload: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    return {
-        "protocol": RESPONSE_PROTOCOL,
-        "version": PROTOCOL_VERSION,
-        "requestId": _response_text(request_id, 256),
-        "ok": False,
-        "revision": revision,
-        "payload": dict(payload or {}),
-        "error": {
-            "code": _response_text(code, 128),
-            "message": _response_text(message, MAX_ERROR),
-        },
-    }
+    try:
+        response = FailureResponse(
+            request_id=_response_text(request_id, 256),
+            revision=revision,
+            payload=dict(payload or {}),
+            error=ErrorDetail(
+                code=_response_text(code, 128),
+                message=_response_text(message, MAX_ERROR),
+            ),
+        )
+    except ValidationError as error:
+        raise _protocol_error(error, context="Lens error response") from None
+    return dump_model(response)
 
 
 def request_id_from(content: object) -> str:
     if not isinstance(content, Mapping):
         return ""
     try:
-        return _string(content.get("requestId"), field="requestId", maximum=256)
-    except ProtocolError:
+        return REQUEST_ID_ADAPTER.validate_python(content.get("requestId"))
+    except ValidationError:
         return ""
 
 
-def _parse_put(
-    payload: Mapping[str, Any],
-    buffers: Sequence[bytes | bytearray | memoryview],
-) -> dict[str, Any]:
-    _exact_keys(
-        payload,
-        required={"selection", "expectedRevision", "imageAction"},
-        field="payload",
-    )
-    expected_revision = _revision(payload.get("expectedRevision"))
-    image_action = payload.get("imageAction")
-    if not isinstance(image_action, str) or image_action not in _IMAGE_ACTIONS:
-        raise ProtocolError(
-            "invalid_image_action",
-            "imageAction must be preserve, replace, or clear.",
-        )
-    if image_action == "replace":
-        if len(buffers) != 1:
-            raise ProtocolError(
-                "invalid_buffers",
-                "Replacing a selection image requires exactly one PNG buffer.",
-            )
-    else:
-        _require_no_buffers(buffers)
-
-    selection = _parse_selection(_object(payload.get("selection"), field="selection"))
-    snapshot_status = selection["snapshot"]["status"]
-    if image_action == "replace" and snapshot_status != "available":
-        raise ProtocolError(
-            "invalid_image_action",
-            "Replacing a selection image requires available snapshot metadata.",
-        )
-    if image_action == "clear" and snapshot_status not in {"pending", "failed"}:
-        raise ProtocolError(
-            "invalid_image_action",
-            "Clearing a selection image requires pending or failed metadata.",
-        )
-    return {
-        "selection": selection,
-        "expectedRevision": expected_revision,
-        "imageAction": image_action,
-    }
-
-
-def _parse_selection(value: Mapping[str, Any]) -> dict[str, Any]:
-    _exact_keys(
-        value,
-        required={
-            "id",
-            "label",
-            "note",
-            "outputCellId",
-            "createdAt",
-            "anchor",
-            "snapshot",
-        },
-        optional={"domHint"},
-        field="selection",
-    )
-    selection_id = _string(
-        value.get("id"),
-        field="selection.id",
-        maximum=MAX_SELECTION_ID,
-    )
-    label = _string(value.get("label"), field="selection.label", maximum=16)
-    if _LABEL.fullmatch(label) is None:
-        raise ProtocolError(
-            "invalid_selection",
-            "Selection label must use the S1, S2, S3 format.",
-        )
-    note = _string(
-        value.get("note"),
-        field="selection.note",
-        maximum=MAX_NOTE,
-        allow_empty=True,
-    )
-
-    result: dict[str, Any] = {
-        "id": selection_id,
-        "label": label,
-        "note": note,
-        "outputCellId": _string(
-            value.get("outputCellId"),
-            field="selection.outputCellId",
-            maximum=128,
-        ),
-        "createdAt": _timestamp(value.get("createdAt"), field="selection.createdAt"),
-        "anchor": _anchor(_object(value.get("anchor"), field="selection.anchor")),
-        "snapshot": _snapshot(
-            _object(value.get("snapshot"), field="selection.snapshot")
-        ),
-    }
-    if "domHint" in value:
-        result["domHint"] = _dom_hint(
-            _object(value.get("domHint"), field="selection.domHint")
-        )
-    snapshot = result["snapshot"]
-    if (
-        snapshot["status"] in {"available", "outdated"}
-        and snapshot["id"] != f"image:{selection_id}"
-    ):
-        raise ProtocolError(
-            "invalid_image",
-            "Selection image id must be image:<selection-id>.",
-        )
-    return result
-
-
-def _anchor(value: Mapping[str, Any]) -> dict[str, Any]:
-    kind = value.get("kind")
-    if kind == "point":
-        _exact_keys(value, required={"kind", "x", "y"}, field="anchor")
-        return {
-            "kind": "point",
-            "x": _unit(value.get("x"), field="anchor.x"),
-            "y": _unit(value.get("y"), field="anchor.y"),
-        }
-    if kind == "rect":
-        _exact_keys(
-            value,
-            required={"kind", "x", "y", "width", "height"},
-            field="anchor",
-        )
-        x = _unit(value.get("x"), field="anchor.x")
-        y = _unit(value.get("y"), field="anchor.y")
-        width = _positive_unit(value.get("width"), field="anchor.width")
-        height = _positive_unit(value.get("height"), field="anchor.height")
-        if x + width > 1 or y + height > 1:
-            raise ProtocolError(
-                "invalid_selection",
-                "Selection rectangle must stay inside its output.",
-            )
-        return {
-            "kind": "rect",
-            "x": x,
-            "y": y,
-            "width": width,
-            "height": height,
-        }
-    raise ProtocolError(
-        "invalid_selection",
-        "Selection anchor kind must be point or rect.",
-    )
-
-
-def _dom_hint(value: Mapping[str, Any]) -> dict[str, Any]:
-    string_fields = {"tag", "role", "ariaLabel", "title", "text", "path"}
-    _exact_keys(
-        value,
-        required={"tag"},
-        optional=(string_fields - {"tag"}) | {"bounds"},
-        field="domHint",
-    )
-    result: dict[str, Any] = {}
-    for field in string_fields:
-        if field not in value:
-            continue
-        maximum = MAX_DOM_TEXT if field == "text" else MAX_DOM_FIELD
-        result[field] = _string(
-            value.get(field),
-            field=f"domHint.{field}",
-            maximum=maximum,
-            allow_empty=field != "tag",
-        )
-    if "bounds" in value:
-        bounds = _object(value.get("bounds"), field="domHint.bounds")
-        _exact_keys(
-            bounds,
-            required={"x", "y", "width", "height"},
-            field="domHint.bounds",
-        )
-        x = _unit(bounds.get("x"), field="domHint.bounds.x")
-        y = _unit(bounds.get("y"), field="domHint.bounds.y")
-        width = _unit(bounds.get("width"), field="domHint.bounds.width")
-        height = _unit(bounds.get("height"), field="domHint.bounds.height")
-        if x + width > 1 or y + height > 1:
-            raise ProtocolError(
-                "invalid_selection",
-                "DOM hint bounds must stay inside their output.",
-            )
-        result["bounds"] = {
-            "x": x,
-            "y": y,
-            "width": width,
-            "height": height,
-        }
-    return result
-
-
-def _snapshot(value: Mapping[str, Any]) -> dict[str, Any]:
-    status = value.get("status")
-    if status in {"available", "outdated"}:
-        _exact_keys(
-            value,
-            required={
-                "status",
-                "id",
-                "mediaType",
-                "width",
-                "height",
-                "sha256",
-                "capturedAt",
-            },
-            field="snapshot",
-        )
-        if value.get("mediaType") != "image/png":
-            raise ProtocolError(
-                "invalid_image",
-                "Selection image mediaType must be image/png.",
-            )
-        width = _positive_integer(value.get("width"), field="snapshot.width")
-        height = _positive_integer(value.get("height"), field="snapshot.height")
-        digest = _string(value.get("sha256"), field="snapshot.sha256", maximum=64)
-        if _SHA256.fullmatch(digest) is None:
-            raise ProtocolError(
-                "invalid_image",
-                "Selection image sha256 must be a lowercase hexadecimal digest.",
-            )
-        return {
-            "status": status,
-            "id": _string(
-                value.get("id"),
-                field="snapshot.id",
-                maximum=len("image:") + MAX_SELECTION_ID,
-            ),
-            "mediaType": "image/png",
-            "width": width,
-            "height": height,
-            "sha256": digest,
-            "capturedAt": _timestamp(
-                value.get("capturedAt"), field="snapshot.capturedAt"
-            ),
-        }
-    if status == "failed":
-        _exact_keys(
-            value,
-            required={"status", "capturedAt"},
-            optional={"error"},
-            field="snapshot",
-        )
-        result = {
-            "status": "failed",
-            "capturedAt": _timestamp(
-                value.get("capturedAt"), field="snapshot.capturedAt"
-            ),
-        }
-        if "error" in value:
-            result["error"] = _string(
-                value.get("error"),
-                field="snapshot.error",
-                maximum=MAX_ERROR,
-                allow_empty=True,
-            )
-        return result
-    if status == "pending":
-        _exact_keys(value, required={"status"}, field="snapshot")
-        return {"status": status}
-    raise ProtocolError(
-        "invalid_image",
-        "Selection snapshot status must be pending, available, failed, or outdated.",
-    )
-
-
-def _object(value: object, *, field: str) -> Mapping[str, Any]:
-    if not isinstance(value, Mapping) or any(not isinstance(key, str) for key in value):
-        raise ProtocolError("invalid_request", f"{field} must be an object.")
-    return cast(Mapping[str, Any], value)
-
-
-def _exact_keys(
-    value: Mapping[str, Any],
-    *,
-    required: set[str],
-    field: str,
-    optional: set[str] | None = None,
-) -> None:
-    keys = set(value)
-    allowed = required | (optional or set())
-    if not required <= keys or not keys <= allowed:
-        raise ProtocolError(
-            "invalid_request",
-            f"{field} fields do not match the protocol contract.",
-        )
-
-
-def _string(
+def _validate_model(
+    adapter: TypeAdapter[_ModelT],
     value: object,
     *,
-    field: str,
-    maximum: int,
-    allow_empty: bool = False,
-) -> str:
-    if not isinstance(value, str):
-        raise ProtocolError("invalid_request", f"{field} must be a string.")
-    if not allow_empty and not value:
-        raise ProtocolError("invalid_request", f"{field} must not be empty.")
+    context: str,
+) -> _ModelT:
     try:
-        value.encode("utf-8")
-    except UnicodeEncodeError as error:
-        raise ProtocolError(
-            "invalid_request",
-            f"{field} must contain valid Unicode text.",
-        ) from error
-    length = len(value.encode("utf-16-le", errors="surrogatepass")) // 2
-    if length > maximum:
-        raise ProtocolError(
-            "invalid_request",
-            f"{field} must not exceed {maximum} characters.",
-        )
-    return value
+        return adapter.validate_python(value)
+    except ValidationError as error:
+        raise _protocol_error(error, context=context) from None
+
+
+def _protocol_error(error: ValidationError, *, context: str) -> ProtocolError:
+    detail = error.errors(
+        include_url=False,
+        include_context=False,
+        include_input=False,
+    )[0]
+    location = tuple(str(part) for part in detail.get("loc", ()))
+    error_type = str(detail.get("type", ""))
+    if error_type in _CUSTOM_ERROR_CODES:
+        code = error_type
+    elif "version" in location and error_type != "missing":
+        code = "unsupported_version"
+    elif error_type == "union_tag_invalid" and not location:
+        code = "unsupported_command"
+    elif "imageAction" in location:
+        code = "invalid_image_action"
+    elif "snapshot" in location or "image" in location:
+        code = "invalid_image"
+    elif "anchor" in location or "label" in location:
+        code = "invalid_selection"
+    else:
+        code = "invalid_request"
+    field = ".".join(location)
+    prefix = f"{field} " if field else f"{context} "
+    message = f"{prefix}{detail['msg']}"
+    return ProtocolError(code, message[0].upper() + message[1:] + ".")
 
 
 def _response_text(value: str, maximum: int) -> str:
@@ -537,79 +471,35 @@ def _response_text(value: str, maximum: int) -> str:
     return "".join(result)
 
 
-def _timestamp(value: object, *, field: str) -> str:
-    timestamp = _string(value, field=field, maximum=64)
-    try:
-        parsed = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    except ValueError as error:
-        raise ProtocolError(
-            "invalid_request",
-            f"{field} must be an ISO 8601 timestamp.",
-        ) from error
-    if parsed.tzinfo is None:
-        raise ProtocolError(
-            "invalid_request",
-            f"{field} must include a UTC offset.",
-        )
-    return timestamp
-
-
-def _unit(value: object, *, field: str) -> float:
-    number = _number(value, field=field)
-    if number < 0 or number > 1:
-        raise ProtocolError("invalid_selection", f"{field} must be between 0 and 1.")
-    return number
-
-
-def _positive_unit(value: object, *, field: str) -> float:
-    number = _unit(value, field=field)
-    if number <= 0:
-        raise ProtocolError("invalid_selection", f"{field} must be positive.")
-    return number
-
-
-def _number(value: object, *, field: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise ProtocolError("invalid_request", f"{field} must be a number.")
-    try:
-        number = float(value)
-    except OverflowError as error:
-        raise ProtocolError("invalid_request", f"{field} must be finite.") from error
-    if not math.isfinite(number):
-        raise ProtocolError("invalid_request", f"{field} must be finite.")
-    return number
-
-
-def _positive_integer(value: object, *, field: str) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
-        raise ProtocolError("invalid_request", f"{field} must be a positive integer.")
-    return value
-
-
-def _revision(value: object) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ProtocolError(
-            "invalid_request",
-            "expectedRevision must be a non-negative integer.",
-        )
-    return value
-
-
 def _require_no_buffers(
     buffers: Sequence[bytes | bytearray | memoryview],
 ) -> None:
     if buffers:
         raise ProtocolError(
             "invalid_buffers",
-            "This Lens command does not accept binary buffers.",
+            "This Lens message does not accept binary buffers.",
         )
 
 
 __all__ = [
+    "CaptureResponse",
     "Command",
+    "MAX_HISTORY",
+    "MAX_SELECTIONS",
     "ProtocolError",
+    "capture_command",
+    "cell_activity_event",
+    "cell_reveal_event",
     "error_response",
+    "is_response_envelope",
+    "mutation_ack_response",
+    "parse_capture_browser_event",
+    "parse_capture_response",
     "parse_command",
     "request_id_from",
+    "selection_put_response",
+    "selection_resolved_event",
+    "snapshot_metadata",
+    "snapshot_response",
     "success_response",
 ]

@@ -9,13 +9,16 @@ from typing import Any, cast
 
 import marimo_lens
 import pytest
-from marimo_lens import Lens, LensContext, LensError, SelectionImage
+from marimo_lens import (
+    Lens,
+    LensContext,
+    LensError,
+    SelectionImage,
+)
 
 from tests.support.factories import (
-    cell,
     png,
     selection,
-    snapshot,
     snapshot_metadata,
 )
 
@@ -87,7 +90,7 @@ def test_public_api_exposes_context_and_resolution_contracts() -> None:
     resolve_parameters = inspect.signature(Lens.resolve).parameters
     assert list(resolve_parameters) == [
         "self",
-        "selection_id",
+        "selection_ids",
         "expected_revision",
         "summary",
     ]
@@ -95,19 +98,270 @@ def test_public_api_exposes_context_and_resolution_contracts() -> None:
         resolve_parameters["expected_revision"].kind is inspect.Parameter.KEYWORD_ONLY
     )
     assert resolve_parameters["summary"].default is None
+    reveal_parameters = inspect.signature(Lens.reveal).parameters
+    assert list(reveal_parameters) == ["self", "cell_id", "message"]
+    assert reveal_parameters["message"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert reveal_parameters["message"].default is None
+    activity_parameters = inspect.signature(Lens.activity).parameters
+    assert list(activity_parameters) == ["self", "cell_id", "label", "message"]
+    assert activity_parameters["label"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert activity_parameters["label"].default is None
+    assert activity_parameters["message"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert activity_parameters["message"].default is None
     assert LensContext.__module__ == "marimo_lens.context"
     assert LensError.__module__ == "marimo_lens.errors"
     assert SelectionImage.__module__ == "marimo_lens.context"
 
     lens = RecordingLens()
+    assert not hasattr(lens, "images")
 
     assert _state(lens) == {
         "revision": 0,
         "nextLabel": "S1",
         "currentSelectionId": None,
         "selections": [],
+        "history": [],
     }
-    assert lens._lens_css == lens.bundle.read_style()
+
+
+def test_reveal_sends_one_transient_event_without_changing_selection_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    monkeypatch.setattr(
+        MarimoRuntimeAdapter,
+        "cell_status",
+        lambda _self, _cell_id: "available",
+    )
+    lens = RecordingLens()
+    _put(lens, revision=0, selection_value=selection())
+    before = copy.deepcopy(_state(lens))
+
+    result = lens.reveal(
+        "cell-view",
+        message="  Updated the aggregation used by the chart.  ",
+    )
+
+    assert result is None
+    assert lens.sent[-1] == (
+        {
+            "protocol": "marimo-lens.event",
+            "version": 1,
+            "type": "cell.reveal",
+            "revision": 1,
+            "payload": {
+                "cellId": "cell-view",
+                "message": "Updated the aggregation used by the chart.",
+            },
+        },
+        [],
+    )
+    assert _state(lens) == before
+    context = lens.context()
+    assert "reveal" not in json.dumps(context.references)
+    assert "Updated the aggregation" not in context.text
+    assert lens.resolve("selection-1", expected_revision=1) == 2
+
+
+def test_activity_sends_one_transient_event_without_changing_selection_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    monkeypatch.setattr(
+        MarimoRuntimeAdapter,
+        "cell_status",
+        lambda _self, _cell_id: "available",
+    )
+    lens = RecordingLens()
+    _put(lens, revision=0, selection_value=selection())
+    before = copy.deepcopy(_state(lens))
+
+    assert (
+        lens.activity(
+            "cell-view",
+            label="  On it  ",
+            message="  Updating the aggregation.  ",
+        )
+        is None
+    )
+
+    assert lens.sent[-1] == (
+        {
+            "protocol": "marimo-lens.event",
+            "version": 1,
+            "type": "cell.activity",
+            "revision": 1,
+            "payload": {
+                "cellId": "cell-view",
+                "label": "On it",
+                "message": "Updating the aggregation.",
+            },
+        },
+        [],
+    )
+    assert _state(lens) == before
+    context = lens.context()
+    assert "activity" not in json.dumps(context.references)
+    assert "Updating the aggregation" not in context.text
+
+
+@pytest.mark.parametrize("action", ["activity", "reveal"])
+def test_cell_attention_omits_an_empty_message_and_tolerates_delivery_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    monkeypatch.setattr(
+        MarimoRuntimeAdapter,
+        "cell_status",
+        lambda _self, _cell_id: "available",
+    )
+    lens = FailingEventLens()
+
+    assert getattr(lens, action)("cell-view", message="  ") is None
+    assert _state(lens)["revision"] == 0
+
+
+@pytest.mark.parametrize(
+    ("status", "code"),
+    [
+        ("missing", "cell_not_found"),
+        ("unavailable", "runtime_unavailable"),
+    ],
+)
+@pytest.mark.parametrize("action", ["activity", "reveal"])
+def test_cell_attention_requires_an_exact_runtime_cell(
+    monkeypatch: pytest.MonkeyPatch,
+    status: str,
+    code: str,
+    action: str,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    monkeypatch.setattr(
+        MarimoRuntimeAdapter,
+        "cell_status",
+        lambda _self, _cell_id: status,
+    )
+    lens = RecordingLens()
+    sent_before = len(lens.sent)
+
+    with pytest.raises(LensError) as raised:
+        getattr(lens, action)("cell-view")
+
+    assert raised.value.code == code
+    assert raised.value.revision == 0
+    assert len(lens.sent) == sent_before
+
+
+@pytest.mark.parametrize(
+    ("cell_id", "message", "error_type", "error_message"),
+    [
+        (1, None, TypeError, "cell_id must be a string"),
+        ("", None, ValueError, "cell_id must not be empty"),
+        ("x" * 129, None, ValueError, "at most 128 UTF-16 code units"),
+        ("cell-view", 1, TypeError, "message must be a string or None"),
+        (
+            "cell-view",
+            "x" * 241,
+            ValueError,
+            "at most 240 UTF-16 code units",
+        ),
+        (
+            "cell-view",
+            "\U0001f642" * 121,
+            ValueError,
+            "at most 240 UTF-16 code units",
+        ),
+        ("cell-view", "\ud800", ValueError, "valid Unicode text"),
+    ],
+)
+@pytest.mark.parametrize("action", ["activity", "reveal"])
+def test_cell_attention_validates_arguments_before_runtime_access(
+    monkeypatch: pytest.MonkeyPatch,
+    cell_id: Any,
+    message: Any,
+    error_type: type[Exception],
+    error_message: str,
+    action: str,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    runtime_accessed = False
+
+    def access_runtime(_self: object, _cell_id: str) -> str:
+        nonlocal runtime_accessed
+        runtime_accessed = True
+        return "available"
+
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
+    lens = RecordingLens()
+
+    with pytest.raises(error_type, match=error_message):
+        getattr(lens, action)(cell_id, message=message)
+
+    assert not runtime_accessed
+
+
+@pytest.mark.parametrize(
+    ("label", "error_type", "message"),
+    [
+        (1, TypeError, "label must be a string or None"),
+        ("x" * 41, ValueError, "at most 40 UTF-16 code units"),
+        ("\U0001f642" * 21, ValueError, "at most 40 UTF-16 code units"),
+        ("\ud800", ValueError, "valid Unicode text"),
+    ],
+)
+def test_activity_validates_its_label_before_runtime_access(
+    monkeypatch: pytest.MonkeyPatch,
+    label: Any,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    runtime_accessed = False
+
+    def access_runtime(_self: object, _cell_id: str) -> str:
+        nonlocal runtime_accessed
+        runtime_accessed = True
+        return "available"
+
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
+    lens = RecordingLens()
+
+    with pytest.raises(error_type, match=message):
+        lens.activity("cell-view", label=label)
+
+    assert not runtime_accessed
+
+
+@pytest.mark.parametrize("action", ["activity", "reveal"])
+def test_cell_attention_rejects_a_closed_lens_before_runtime_access(
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    runtime_accessed = False
+
+    def access_runtime(_self: object, _cell_id: str) -> str:
+        nonlocal runtime_accessed
+        runtime_accessed = True
+        return "available"
+
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
+    lens = RecordingLens()
+    lens.close()
+
+    with pytest.raises(LensError) as raised:
+        getattr(lens, action)("cell-view")
+
+    assert raised.value.code == "lens_closed"
+    assert not runtime_accessed
 
 
 def test_pointer_release_selection_exists_before_image_capture() -> None:
@@ -176,6 +430,7 @@ def test_synced_state_is_a_python_owned_projection() -> None:
         "nextLabel": "S1",
         "currentSelectionId": None,
         "selections": [],
+        "history": [],
     }
 
 
@@ -192,7 +447,7 @@ def test_close_releases_images_and_rejects_later_context_and_commands() -> None:
 
     lens.close()
 
-    assert lens._images.total_bytes == 0
+    assert lens._selection_store.state.image_bytes == 0
     with pytest.raises(LensError, match="Lens is closed") as error:
         lens.context()
     assert error.value.code == "lens_closed"
@@ -255,6 +510,35 @@ def test_selection_growth_is_rejected_before_state_changes() -> None:
     assert lens.context().images == ()
 
 
+def test_identifier_heavy_growth_is_rejected_before_state_changes() -> None:
+    lens = RecordingLens()
+    response: dict[str, Any] = {}
+    for index in range(63):
+        prefix = f"{index}-"
+        selection_value = selection(
+            selection_id=prefix + "漢" * (80 - len(prefix)),
+            label=f"S{index + 1}",
+            output_cell_id=prefix + "界" * (80 - len(prefix)),
+        )
+        selection_value.pop("domHint")
+        response = _put(
+            lens,
+            revision=index,
+            selection_value=selection_value,
+        )
+        if index < 62:
+            assert response["ok"] is True
+
+    assert response["ok"] is False
+    assert response["error"]["code"] == "selection_context_limit"
+    assert _state(lens)["revision"] == 62
+    assert _state(lens)["nextLabel"] == "S63"
+    assert len(_selections(lens)) == 62
+    projected = lens.context().references["selections"]
+    assert isinstance(projected, list)
+    assert len(projected) == 62
+
+
 def test_new_labels_are_server_checked_and_never_reused() -> None:
     lens = RecordingLens()
     _put(lens, revision=0, selection_value=selection())
@@ -281,6 +565,7 @@ def test_new_labels_are_server_checked_and_never_reused() -> None:
         "nextLabel": "S3",
         "currentSelectionId": None,
         "selections": [],
+        "history": [],
     }
 
 
@@ -308,6 +593,24 @@ def test_resolve_removes_selection_and_image_and_preserves_label_allocation() ->
     assert _state(lens)["nextLabel"] == "S3"
     assert _state(lens)["currentSelectionId"] == "selection-2"
     assert [item["id"] for item in _selections(lens)] == ["selection-2"]
+    assert _state(lens)["history"][0] == {
+        "selectionId": "selection-1",
+        "label": "S1",
+        "note": "",
+        "outputCellId": "cell-view",
+        "createdAt": "2026-07-14T11:58:00Z",
+        "addressedAt": _state(lens)["history"][0]["addressedAt"],
+        "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
+        "domHint": {
+            "tag": "svg",
+            "role": "img",
+            "ariaLabel": "Sales by category",
+            "text": "",
+            "path": "div > svg",
+            "bounds": {"x": 0.1, "y": 0.2, "width": 0.7, "height": 0.6},
+        },
+        "resolutionRevision": 4,
+    }
     assert lens.context().images == ()
 
     created = _put(
@@ -337,14 +640,141 @@ def test_resolve_emits_one_transient_resolution_receipt() -> None:
         "type": "selection.resolved",
         "revision": 2,
         "payload": {
-            "selectionId": "selection-1",
-            "label": "S1",
+            "selections": [
+                {
+                    "selectionId": "selection-1",
+                    "label": "S1",
+                    "resolutionRevision": 2,
+                }
+            ],
             "summary": "Updated the aggregation cell and reran the chart.",
         },
     }
     assert buffers == []
+    assert _state(lens)["history"][0]["summary"] == (
+        "Updated the aggregation cell and reran the chart."
+    )
     assert "resolved" not in _state(lens)
     assert "resolved" not in lens.context().references
+    assert "history" not in lens.context().references
+
+
+def test_resolve_commits_multiple_selections_atomically() -> None:
+    lens = RecordingLens()
+    _put(lens, revision=0, selection_value=selection())
+    _put(
+        lens,
+        revision=1,
+        selection_value=selection(selection_id="selection-2", label="S2"),
+    )
+    _put(
+        lens,
+        revision=2,
+        selection_value=selection(selection_id="selection-3", label="S3"),
+    )
+
+    revision = lens.resolve(
+        ["selection-3", "selection-1"],
+        expected_revision=3,
+        summary="Updated and verified both requests.",
+    )
+
+    assert revision == 4
+    assert [item["id"] for item in _selections(lens)] == ["selection-2"]
+    assert _state(lens)["currentSelectionId"] == "selection-2"
+    assert [item["selectionId"] for item in _state(lens)["history"]] == [
+        "selection-3",
+        "selection-1",
+    ]
+    assert {item["resolutionRevision"] for item in _state(lens)["history"]} == {4}
+    event = lens.sent[-1][0]
+    assert event["revision"] == 4
+    assert event["payload"]["selections"] == [
+        {
+            "selectionId": "selection-3",
+            "label": "S3",
+            "resolutionRevision": 4,
+        },
+        {
+            "selectionId": "selection-1",
+            "label": "S1",
+            "resolutionRevision": 4,
+        },
+    ]
+
+
+def test_browser_reopens_addressed_selection_and_clears_history() -> None:
+    lens = RecordingLens()
+    selected = selection(note="Please align this label.")
+    _put(lens, revision=0, selection_value=selected)
+    lens.resolve(
+        selected["id"],
+        expected_revision=1,
+        summary="Aligned the label and verified the chart.",
+    )
+
+    reopened = _reopen(
+        lens,
+        revision=2,
+        selection_id=selected["id"],
+        resolution_revision=2,
+    )
+
+    assert reopened["ok"] is True
+    assert reopened["revision"] == 3
+    assert reopened["payload"] == {"selectionId": selected["id"]}
+    assert _state(lens)["history"][0]["summary"] == (
+        "Aligned the label and verified the chart."
+    )
+    restored = _selections(lens)[0]
+    assert restored["id"] == selected["id"]
+    assert restored["label"] == selected["label"]
+    assert restored["note"] == selected["note"]
+    assert restored["outputCellId"] == selected["outputCellId"]
+    assert restored["anchor"] == selected["anchor"]
+    assert restored["snapshot"] == {"status": "pending"}
+    assert restored["previousResolution"] == {
+        "addressedAt": _state(lens)["history"][0]["addressedAt"],
+        "summary": "Aligned the label and verified the chart.",
+    }
+    assert _state(lens)["currentSelectionId"] == selected["id"]
+    context = lens.context()
+    assert context.current is not None
+    assert context.current["previousResolution"] == {
+        "addressedAt": _state(lens)["history"][0]["addressedAt"],
+        "summary": "Aligned the label and verified the chart.",
+    }
+    assert "history" not in context.references
+
+    cleared = _clear_history(lens, revision=3)
+    assert cleared["ok"] is True
+    assert cleared["revision"] == 4
+    assert _state(lens)["history"] == []
+    active = _selections(lens)
+    assert len(active) == 1
+    assert "previousResolution" not in active[0]
+    assert {
+        key: value for key, value in active[0].items() if key != "previousResolution"
+    } == {key: value for key, value in restored.items() if key != "previousResolution"}
+
+
+def test_browser_reopen_requires_the_retained_receipt_revision() -> None:
+    lens = RecordingLens()
+    _put(lens, revision=0, selection_value=selection())
+    lens.resolve("selection-1", expected_revision=1)
+
+    response = _reopen(
+        lens,
+        revision=2,
+        selection_id="selection-1",
+        resolution_revision=99,
+    )
+
+    assert response["ok"] is False
+    assert response["error"]["code"] == "history_not_found"
+    assert _state(lens)["revision"] == 2
+    assert _state(lens)["selections"] == []
+    assert len(_state(lens)["history"]) == 1
 
 
 def test_resolve_omits_an_empty_summary() -> None:
@@ -354,8 +784,13 @@ def test_resolve_omits_an_empty_summary() -> None:
     lens.resolve("selection-1", expected_revision=1, summary="  ")
 
     assert lens.sent[-1][0]["payload"] == {
-        "selectionId": "selection-1",
-        "label": "S1",
+        "selections": [
+            {
+                "selectionId": "selection-1",
+                "label": "S1",
+                "resolutionRevision": 2,
+            }
+        ],
     }
 
 
@@ -370,7 +805,7 @@ def test_resolve_preserves_the_exact_protocol_selection_id() -> None:
 
     lens.resolve(selection_id, expected_revision=1)
 
-    assert lens.sent[-1][0]["payload"]["selectionId"] == selection_id
+    assert lens.sent[-1][0]["payload"]["selections"][0]["selectionId"] == selection_id
     assert _selections(lens) == []
 
 
@@ -414,8 +849,28 @@ def test_resolve_rejects_unknown_selection_without_changing_state() -> None:
     ("selection_id", "revision", "summary", "error_type", "message"),
     [
         ("", 1, None, ValueError, "selection_id must not be empty"),
-        (1, 1, None, TypeError, "selection_id must be a string"),
-        ("x" * 129, 1, None, ValueError, "at most 128 characters"),
+        (
+            1,
+            1,
+            None,
+            TypeError,
+            "selection_ids must be a string or a sequence of strings",
+        ),
+        ([], 1, None, ValueError, "at least one selection ID"),
+        (
+            ["selection-1", "selection-1"],
+            1,
+            None,
+            ValueError,
+            "must not contain duplicates",
+        ),
+        (
+            "x" * 129,
+            1,
+            None,
+            ValueError,
+            "at most 128 UTF-16 code units",
+        ),
         ("\ud800", 1, None, ValueError, "valid Unicode text"),
         ("selection-1", -1, None, ValueError, "non-negative integer"),
         ("selection-1", True, None, TypeError, "must be an integer"),
@@ -472,12 +927,12 @@ def test_resolution_receipt_failure_does_not_roll_back_resolution() -> None:
     revision = lens.resolve("selection-1", expected_revision=1)
 
     assert revision == 2
-    assert _state(lens) == {
-        "revision": 2,
-        "nextLabel": "S2",
-        "currentSelectionId": None,
-        "selections": [],
-    }
+    assert _state(lens)["revision"] == 2
+    assert _state(lens)["nextLabel"] == "S2"
+    assert _state(lens)["currentSelectionId"] is None
+    assert _state(lens)["selections"] == []
+    assert _state(lens)["history"][0]["selectionId"] == "selection-1"
+    assert _state(lens)["history"][0]["resolutionRevision"] == 2
 
 
 def test_concurrent_resolutions_emit_receipts_in_revision_order() -> None:
@@ -708,6 +1163,7 @@ def test_trait_publish_failure_rolls_back_selection_current_mru_and_image() -> N
         "nextLabel": "S1",
         "currentSelectionId": None,
         "selections": [],
+        "history": [],
     }
     assert lens.context().images == ()
 
@@ -727,54 +1183,6 @@ def test_trait_publish_failure_rolls_back_selection_current_mru_and_image() -> N
 
     _delete(lens, revision=3, selection_id="selection-3")
     assert _state(lens)["currentSelectionId"] == "selection-2"
-
-
-def test_context_export_uses_one_runtime_and_selection_revision(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo_lens.widget as widget_module
-
-    runtime = snapshot(
-        cell("cell-data", code="chart = make_chart()", defs=("chart",)),
-        cell(
-            "cell-view",
-            code="chart",
-            refs=("chart",),
-            upstream=("cell-data",),
-        ),
-    )
-    monkeypatch.setattr(widget_module, "collect_runtime_snapshot", lambda: runtime)
-    lens = RecordingLens()
-    _put(lens, revision=0, selection_value=selection())
-
-    _send(lens, "context.export", {"format": "text"})
-    response = lens.sent[-1][0]
-
-    assert response["ok"] is True
-    assert response["revision"] == 1
-    assert "chart = make_chart()" in response["payload"]["text"]
-    assert "Cell `cell-view`" in response["payload"]["text"]
-    context = lens.context()
-    references = cast(dict[str, Any], context.references)
-    assert references["selections"][0]["outputCellId"] == "cell-view"
-    assert "cells" not in references
-    assert references["revision"] == response["revision"]
-
-
-def test_context_export_projects_current_and_all_references() -> None:
-    lens = RecordingLens()
-    _put(lens, revision=0, selection_value=selection(note="Inspect this value"))
-
-    _send(lens, "context.export", {"format": "current"})
-    current = json.loads(lens.sent[-1][0]["payload"]["text"])
-    _send(lens, "context.export", {"format": "references"})
-    references = json.loads(lens.sent[-1][0]["payload"]["text"])
-
-    assert current["id"] == "selection-1"
-    assert current["outputCellId"] == "cell-view"
-    assert "source" not in current
-    assert references["currentSelectionId"] == "selection-1"
-    assert references["selections"] == [current]
 
 
 def test_snapshot_get_returns_the_exact_stored_png() -> None:
@@ -852,6 +1260,30 @@ def _delete(
 
 def _clear(lens: RecordingLens, *, revision: int) -> dict[str, Any]:
     _send(lens, "selections.clear", {"expectedRevision": revision})
+    return lens.sent[-1][0]
+
+
+def _reopen(
+    lens: RecordingLens,
+    *,
+    revision: int,
+    selection_id: str,
+    resolution_revision: int,
+) -> dict[str, Any]:
+    _send(
+        lens,
+        "selection.reopen",
+        {
+            "selectionId": selection_id,
+            "resolutionRevision": resolution_revision,
+            "expectedRevision": revision,
+        },
+    )
+    return lens.sent[-1][0]
+
+
+def _clear_history(lens: RecordingLens, *, revision: int) -> dict[str, Any]:
+    _send(lens, "history.clear", {"expectedRevision": revision})
     return lens.sent[-1][0]
 
 

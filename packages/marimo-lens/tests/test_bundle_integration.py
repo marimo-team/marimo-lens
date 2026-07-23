@@ -43,9 +43,9 @@ def test_lens_serves_its_built_app_and_handles_lens_messages() -> None:
         {
             "protocol": "marimo-lens.command",
             "version": 1,
-            "requestId": "context-request",
-            "type": "context.export",
-            "payload": {"format": "text"},
+            "requestId": "clear-request",
+            "type": "selections.clear",
+            "payload": {"expectedRevision": 0},
         },
         [],
     )
@@ -62,6 +62,7 @@ def test_lens_serves_its_built_app_and_handles_lens_messages() -> None:
 
     lens_response, lens_buffers = lens.sent[1]
     assert lens_response["protocol"] == "marimo-lens.response"
-    assert lens_response["requestId"] == "context-request"
+    assert lens_response["requestId"] == "clear-request"
     assert lens_response["ok"] is True
+    assert lens_response["payload"] == {}
     assert lens_buffers == []
