@@ -1,14 +1,14 @@
 # Development
 
-Use the Node version declared in `.node-version` and the Corepack-managed pnpm
-version declared in `package.json`.
+Use the Node version in `.node-version` and the Corepack-managed pnpm version
+declared in `package.json`.
 
 ```sh
-uv sync --locked --all-packages --all-groups
+uv sync --locked
 pnpm install --frozen-lockfile
 ```
 
-Build the widget resource graph:
+Build the browser resource graph before running Python tests:
 
 ```sh
 pnpm --filter @marimo-lens/python build
@@ -16,183 +16,121 @@ pnpm --filter @marimo-lens/python build
 
 ## Watch mode
 
-Start Vite in one shell:
+Start the browser build in one shell:
 
 ```sh
 pnpm dev
 ```
 
-Start the workbench in another shell:
+Start the example notebook in another:
 
 ```sh
 MARIMO_LENS_VITE_DEV_SERVER=http://localhost:5173 \
-  uv run --all-packages --group workbench \
-  marimo run workbench/demo.py --port 28889 --headless
+  uv run marimo run examples/lens.py --port 28889 --headless
 ```
 
-Development CSS is injected by Vite. Production CSS comes from the generated
-resource graph and is synchronized for the portal mounted under
-`document.body`.
+Development mode injects CSS from Vite. Production mode loads the generated
+stylesheet and module graph from the packaged AnyWidget manifest.
+
+## Documentation
+
+Start the VitePress site with live reload:
+
+```sh
+make docs-serve
+```
+
+The local server uses `/` as its base path. `make docs` reads `BASE_PATH` when
+GitHub Pages builds the site under a repository path.
+
+Build the static site:
+
+```sh
+make docs
+```
+
+`apps/docs` owns VitePress configuration, theme code, and public brand assets.
+User-facing source pages live in `docs/`.
 
 ## Checks
 
-Run the complete local gate:
+Run the repository gate before handoff:
 
 ```sh
 make check
 ```
 
-Use package commands while iterating:
+The Make target checks the lockfile, checks and tests the TypeScript workspace,
+builds browser and documentation assets, checks Python format and types, runs
+Python tests, and checks whitespace.
+
+Use a package filter while iterating:
 
 ```sh
-pnpm --filter @marimo-lens/widget test
-pnpm --filter @marimo-lens/python build
-uv run --locked --all-packages --all-groups \
-  pytest -q packages/marimo-lens/tests
+pnpm --filter @marimo-lens/protocol check
+pnpm --filter @marimo-lens/image-capture test
+pnpm --filter @marimo-lens/widget build
 ```
 
-Frontend changes also require:
+Build the Python resource graph before focused Python tests:
 
 ```sh
-pnpm dlx react-doctor@latest . --verbose --scope changed
+pnpm --filter @marimo-lens/python build
+uv run pytest -q
+```
+
+Run the CI shell check after changing release scripts:
+
+```sh
+shellcheck scripts/*.sh
 ```
 
 ## Packaging
 
-Build browser assets before Python distributions:
+Build and validate both Python distribution formats:
 
 ```sh
-pnpm --filter @marimo-lens/python build
-uv build --no-sources --package marimo-lens --out-dir dist
+make package
 ```
 
-Validate the archive boundary:
+The target builds the browser resources, creates the wheel and source
+distribution, checks their metadata, builds a wheel from the source
+distribution, and imports the public package from that rebuilt wheel.
 
-```sh
-uvx twine check dist/marimo_lens-*.whl dist/marimo_lens-*.tar.gz
-uv build --no-sources --wheel dist/marimo_lens-*.tar.gz --out-dir dist/from-sdist
-uv run --no-project --with dist/from-sdist/marimo_lens-*.whl \
-  python -c "from marimo_lens import Lens, LensContext, LensError, SelectionImage; Lens()"
-```
-
-The sdist build uses its packaged browser assets. Hatch reports each required
-manifest artifact when the graph is incomplete.
+Hatch validates the AnyWidget manifest, bootstrap, application module,
+stylesheet, and module allowlist. The source distribution must carry the
+browser graph needed to build its wheel.
 
 ## Release
 
-Create a release commit and annotated tag from a clean `main` branch:
+Complete these checks before changing the package version:
+
+- `make check`
+- `make package`
+- A clean install of the built wheel
+
+Update the version in the release-bearing pull request:
 
 ```sh
-./scripts/release.sh minor
+uv version --package marimo-lens --bump patch
 ```
 
-Use `major`, `minor`, or `patch` for a final-version bump. Use `stable` to
-finish a prerelease. The script runs `make check`, updates the package version
-and `uv.lock`, creates the release commit and `vX.Y.Z` tag, then prints the
-exact push command.
+Use `major`, `minor`, or `patch` for the planned release. Commit the package
+metadata and `uv.lock`, merge the pull request, and wait for CI on `main`.
 
-Pushing the tag starts `.github/workflows/publish.yml`. The workflow checks the
-tag against the package version, rebuilds and validates the wheel and sdist,
-then publishes through PyPI Trusted Publishing in the `pypi` environment.
-
-## Browser checks
-
-Start a fresh production-mode server:
+From a clean local `main` that matches `origin/main`, verify the release:
 
 ```sh
-env -u MARIMO_LENS_VITE_DEV_SERVER \
-  uv run --locked --all-packages --all-groups \
-  marimo run workbench/demo.py --port 28889 --headless
+./scripts/release.sh --dry-run
 ```
 
-Use one isolated browser session:
+Start the release:
 
 ```sh
-agent-browser --session marimo-lens-e2e open http://127.0.0.1:28889
-agent-browser --session marimo-lens-e2e snapshot -i
+./scripts/release.sh
 ```
 
-Exercise these contracts:
-
-- Expanded and collapsed bottom-center dock states with selection, list, and
-  collapse controls
-- Stable dock geometry on hover
-- Point selection on text, table, SVG, canvas, chart, and widget outputs
-- Region selection on a nested layout
-- Immediate commit on pointer release with an empty note
-- One-shot return to the resting dock
-- Stable `S<n>` label in the captured image
-- Marker-local note add and edit with image preservation
-- Exact stored PNG preview from a marker and selection row
-- Anchor move and resize with replacement capture
-- Selection activation with output reveal, delete, clear, and current-selection
-  fallback
-- Output removal with `Output unavailable`, retained actions and snapshot, and
-  exact-ID marker reconnection
-- Output rerun with fresh text context and retained capture-time images
-- Agent resolution with row, marker, image, and count removal plus a transient
-  receipt in the active dock surface
-- Resolution while the selection sheet or note editor is open
-- Keyboard selection and Escape cancellation
-- Narrow viewport and coarse-pointer placement
-- Light, dark, and reduced-motion settings
-- Explicit snapshot failure for an external iframe
-
-Inspect console and page errors after the flow. Capture desktop and narrow
-viewport screenshots. Close the session and stop the server:
-
-```sh
-agent-browser --session marimo-lens-e2e close
-```
-
-## Live Pair check
-
-Start a fresh edit-mode server so marimo-pair can use the same kernel as the
-browser:
-
-```sh
-env -u MARIMO_LENS_VITE_DEV_SERVER \
-  uv run --locked --all-packages --all-groups \
-  marimo edit workbench/demo.py \
-  --host 127.0.0.1 --port 28889 --headless --no-token
-```
-
-Open that server with `agent-browser`, create one successful selection and one
-external iframe selection, then evaluate `lens.context()` through marimo-pair's
-scratchpad execution path. The scratchpad may use `marimo._code_mode` to inspect
-the live cell collection. Project code and notebook cells must use public
-marimo APIs.
-
-For each selection with `cellStatus: "available"`, verify that `outputCellId`
-resolves through `ctx.graph.cells[outputCellId]`. Compare
-`ctx.graph.ancestors(outputCellId)` with the selected cell plus the bounded,
-topologically ordered ancestor subset rendered in `context.text`.
-For a `missing` selection, verify that its stored selection ID, note, DOM hint,
-and snapshot remain readable and that the helper can resolve it after the
-notebook change is verified.
-
-Assert these contracts:
-
-- References have `protocol`, `version`, `revision`, `generatedAt`, `notebook`,
-  `currentSelectionId`, and `selections` as their complete top-level shape.
-- `currentSelectionId` identifies the most recently created, explicitly
-  activated, or edited selection.
-- References contain no cell source, control state, PNG bytes, or scratchpad
-  caller identity.
-- Text contains each output cell reference, selected source, upstream source,
-  DAG edges, and relevant current control values when notes and images are
-  absent.
-- A failed image capture still produces complete references and text.
-- `LensContext.images` contains successful captures in selection order.
-- Resolving by stable selection ID and captured revision removes the selection
-  and image, increments the revision, and returns a compact helper receipt.
-- A stale helper revision returns `revision-conflict` and preserves the
-  selection.
-- A detached selection keeps `cellStatus: "missing"` and resolves after the
-  selected output cell is deleted.
-- Selection state stays at or below 40,000 bytes, references at or below 45,000
-  bytes, and text at or below 64,000 characters.
-
-Record compact references bytes and text characters. The workbench
-single-selection references object must remain below 2 KiB. Close the browser
-and stop the edit server after the check.
+The script requires successful CI for the current commit and pushes an
+annotated `vX.Y.Z` tag. The publish workflow rebuilds and validates the
+archives, publishes through PyPI Trusted Publishing, verifies the public
+installation, and creates GitHub release notes.
