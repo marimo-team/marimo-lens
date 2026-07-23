@@ -42,6 +42,11 @@ allowBuilds:
   "@manzt/uv": true
   esbuild: true
 
-minimumReleaseAge: 2880
+minimumReleaseAge: 20160
+verifyDepsBeforeRun: install
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
 minimumReleaseAgeExclude:
+  - "@marimo-team/*"
   - anywidget-bundle@0.0.1
+onlyBuiltDependencies: []
