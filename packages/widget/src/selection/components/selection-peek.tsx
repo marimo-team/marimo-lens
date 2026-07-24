@@ -5,6 +5,7 @@ import { MessageSquarePlus, Pencil, Trash2 } from "lucide-react";
 
 import type { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
 
+import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
 import { SnapshotPreviewButton } from "@/selection/components/selection-snapshot-preview";
 import { useAnchoredSurface, type AnchoredSurfaceAnchor } from "@/ui/anchored-surface";
 
@@ -56,12 +57,13 @@ export function SelectionPeek({
       onPointerLeave={onPointerLeave}
     >
       <header className="ml-selection-peek__header">
-        <span className="ml-label">{selection.label}</span>
-        <span>
-          Cell <span className="ml-code">{selection.outputCellId}</span>
-          <span aria-hidden="true"> · </span>
-          {selection.anchor.kind === "point" ? "Point" : "Region"}
+        <span className="ml-selection-peek__target">
+          <span className="ml-label">{selection.label}</span>
+          <span className="ml-selection-peek__cell">
+            Cell <span className="ml-code">{selection.outputCellId}</span>
+          </span>
         </span>
+        <SelectionKindMark kind={selection.anchor.kind} />
       </header>
 
       {selection.note ? <p>{selection.note}</p> : null}
@@ -82,25 +84,23 @@ export function SelectionPeek({
           )}
           {selection.note ? "Edit note" : "Add note"}
         </button>
-        <div className="ml-selection-peek__secondary-actions">
-          <SnapshotPreviewButton
-            selection={selection}
-            capturing={capturing}
-            snapshotLoader={snapshotLoader}
-          />
-          <button
-            className="ml-icon-button ml-icon-button--danger"
-            type="button"
-            onClick={() => {
-              onClose();
-              onDelete(selection);
-            }}
-            aria-label={`Remove selection ${selection.label}`}
-            title="Remove selection"
-          >
-            <Trash2 size={14} aria-hidden="true" />
-          </button>
-        </div>
+        <SnapshotPreviewButton
+          selection={selection}
+          capturing={capturing}
+          snapshotLoader={snapshotLoader}
+        />
+        <button
+          className="ml-icon-button ml-icon-button--danger"
+          type="button"
+          onClick={() => {
+            onClose();
+            onDelete(selection);
+          }}
+          aria-label={`Remove selection ${selection.label}`}
+          title="Remove selection"
+        >
+          <Trash2 size={14} aria-hidden="true" />
+        </button>
       </footer>
     </section>
   );
