@@ -46,7 +46,7 @@ mo.md("\n".join(f"- {month}: **{value}**" for month, value in revenue.items()))
 Mount one Lens in another cell:
 
 ```python
-lens = mo.ui.anywidget(Lens())
+lens = Lens()
 lens
 ```
 

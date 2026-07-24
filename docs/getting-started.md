@@ -35,7 +35,7 @@ Mount Lens in another cell:
 ```python
 from marimo_lens import Lens
 
-lens = mo.ui.anywidget(Lens())
+lens = Lens()
 lens
 ```
 

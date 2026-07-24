@@ -10,10 +10,9 @@ The package exports `Lens`, `LensContext`, `SelectionImage`, and `LensError`.
 Mount one `Lens` through marimo:
 
 ```python
-import marimo as mo
 from marimo_lens import Lens
 
-lens = mo.ui.anywidget(Lens())
+lens = Lens()
 lens
 ```
 

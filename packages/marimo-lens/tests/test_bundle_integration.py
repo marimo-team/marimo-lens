@@ -23,6 +23,18 @@ class RecordingLens(Lens):
         self.sent.append((content, [bytes(buffer) for buffer in buffers or []]))
 
 
+def test_exported_lens_renders_directly_in_marimo() -> None:
+    from marimo._output.formatting import try_format
+
+    lens = Lens()
+
+    formatted = try_format(lens)
+
+    assert formatted.mimetype == "text/html"
+    assert "marimo-anywidget" in formatted.data
+    lens.close()
+
+
 def test_lens_serves_its_built_app_and_handles_lens_messages() -> None:
     static_dir = pathlib.Path(__file__).parents[1] / "src" / "marimo_lens" / "static"
     manifest = json.loads((static_dir / "anywidget.json").read_text(encoding="utf-8"))

@@ -97,8 +97,8 @@ def _(filtered_sales, mo, region):
 
 
 @app.cell(hide_code=True)
-def _(Lens, mo):
-    lens = mo.ui.anywidget(Lens())
+def _(Lens):
+    lens = Lens()
     lens
     return
 
