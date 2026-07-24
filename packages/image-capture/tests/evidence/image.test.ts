@@ -357,6 +357,29 @@ describe("selection snapshot capture", () => {
     });
   });
 
+  test("derives marker bounds in layout pixels when the output is scaled", () => {
+    const output = document.createElement("div");
+    const detail = document.createElement("div");
+    output.appendChild(detail);
+    Object.defineProperties(output, {
+      offsetWidth: { configurable: true, value: 300 },
+      offsetHeight: { configurable: true, value: 160 },
+      scrollWidth: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 200 },
+      scrollLeft: { configurable: true, value: 20 },
+      scrollTop: { configurable: true, value: 10 },
+    });
+    output.getBoundingClientRect = () => new DOMRect(100, 50, 240, 128);
+    detail.getBoundingClientRect = () => new DOMRect(180, 82, 80, 40);
+
+    expect(relativeOutputBounds(detail, output)).toEqual({
+      x: 0.3,
+      y: 0.25,
+      width: 0.25,
+      height: 0.25,
+    });
+  });
+
   test("captures detail first and keeps the pre-capture target bounds", async () => {
     class LoadedImage extends EventTarget {
       naturalWidth = 640;

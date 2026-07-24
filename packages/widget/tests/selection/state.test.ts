@@ -120,4 +120,23 @@ describe("selection workflow", () => {
     });
     expect(rectangle.kind === "rect" ? rectangle.width : 0).toBeCloseTo(0.35);
   });
+
+  test("normalizes a drag from viewport pixels into scaled output coordinates", () => {
+    const output = document.createElement("div");
+    output.getBoundingClientRect = () => new DOMRect(100, 50, 200, 100);
+    Object.defineProperties(output, {
+      offsetWidth: { value: 400 },
+      offsetHeight: { value: 200 },
+      scrollWidth: { value: 400 },
+      scrollHeight: { value: 200 },
+    });
+
+    expect(gestureAnchor(output, { x: 150, y: 75 }, { x: 250, y: 125 })).toEqual({
+      kind: "rect",
+      x: 0.25,
+      y: 0.25,
+      width: 0.5,
+      height: 0.5,
+    });
+  });
 });

@@ -10,6 +10,8 @@ import {
 function outputElement(): HTMLElement {
   const output = document.createElement("div");
   Object.defineProperties(output, {
+    offsetWidth: { configurable: true, value: 200 },
+    offsetHeight: { configurable: true, value: 150 },
     scrollWidth: { configurable: true, value: 400 },
     scrollHeight: { configurable: true, value: 300 },
     scrollLeft: { configurable: true, value: 40, writable: true },
@@ -25,6 +27,26 @@ describe("selection anchor geometry", () => {
       kind: "point",
       x: 260,
       y: 170,
+    });
+  });
+
+  test("maps saved coordinates back through output scaling", () => {
+    const output = outputElement();
+    output.getBoundingClientRect = () => new DOMRect(100, 50, 100, 75);
+
+    expect(anchorToViewport(output, { kind: "point", x: 0.5, y: 0.5 })).toEqual({
+      kind: "point",
+      x: 180,
+      y: 110,
+    });
+    expect(
+      translateAnchor(output, { kind: "rect", x: 0.2, y: 0.2, width: 0.2, height: 0.2 }, 40, 30),
+    ).toEqual({
+      kind: "rect",
+      x: 0.4,
+      y: 0.4,
+      width: 0.2,
+      height: 0.2,
     });
   });
 

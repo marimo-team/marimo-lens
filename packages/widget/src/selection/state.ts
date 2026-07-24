@@ -1,5 +1,7 @@
 import type { Selection, SelectionAnchor } from "@marimo-lens/protocol";
 
+import { outputContentMetrics } from "@marimo-lens/image-capture";
+
 import type { OutputCell, ViewportPoint } from "@/notebook/types";
 
 export type SelectionMotion = "animate" | "instant";
@@ -304,12 +306,18 @@ export function gestureAnchor(
 }
 
 export function normalizedPoint(output: HTMLElement, point: ViewportPoint): ViewportPoint {
-  const rect = output.getBoundingClientRect();
-  const width = Math.max(output.scrollWidth, rect.width, 1);
-  const height = Math.max(output.scrollHeight, rect.height, 1);
+  const metrics = outputContentMetrics(output);
   return {
-    x: clamp((point.x - rect.left + output.scrollLeft) / width, 0, 1),
-    y: clamp((point.y - rect.top + output.scrollTop) / height, 0, 1),
+    x: clamp(
+      ((point.x - metrics.bounds.left) / metrics.scaleX + metrics.scrollLeft) / metrics.width,
+      0,
+      1,
+    ),
+    y: clamp(
+      ((point.y - metrics.bounds.top) / metrics.scaleY + metrics.scrollTop) / metrics.height,
+      0,
+      1,
+    ),
   };
 }
 
