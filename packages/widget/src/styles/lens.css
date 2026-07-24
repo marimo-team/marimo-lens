@@ -5,7 +5,8 @@
   pointer-events: none;
 }
 
-html[data-marimo-lens-armed="true"] [id^="output-"] {
+html[data-marimo-lens-armed="true"]
+  :is([id^="output-"], [data-marimo-lens-output-cell-id], marimo-island[data-cell-id]) {
   cursor: crosshair !important;
 }
 

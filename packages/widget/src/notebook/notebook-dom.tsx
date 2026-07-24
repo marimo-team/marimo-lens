@@ -163,11 +163,7 @@ export class NotebookDomAdapter {
     const observedOutputs = new Set<HTMLElement>();
     const syncOutputs = () => {
       if (!resizeObserver) return;
-      const outputs = new Set(
-        [...this.document.querySelectorAll<HTMLElement>('[id^="output-"]')].filter(
-          (element) => !element.closest("[data-marimo-lens-ui]"),
-        ),
-      );
+      const outputs = new Set(this.listOutputCells().map((output) => output.element));
       for (const output of observedOutputs) {
         if (outputs.has(output)) continue;
         resizeObserver.unobserve(output);

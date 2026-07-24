@@ -177,6 +177,13 @@ batch. Event delivery failure never rolls back the committed selections.
 `ownerDocument`. It owns output lookup, portals, focus restoration, viewport
 work, cell attention, and layout observation.
 
+`output-root-rules.ts` maps each supported host root to an exact cell ID and a
+rendered element. The built-in rules cover `#output-<cell-id>`,
+`marimo-island[data-cell-id]`, and
+`[data-marimo-lens-output-cell-id="<cell-id>"]`. Selection, capture, output
+availability, layout observation, and transient cell attention consume the
+same resolved element.
+
 Gesture targeting attaches to the active document, same-origin iframe
 documents, and open shadow roots. One shared layout subscription coordinates
 scroll, resize, output resize, and output-tree changes. Anchored surfaces use

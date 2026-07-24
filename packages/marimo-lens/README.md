@@ -352,6 +352,17 @@ Keyboard users can move between eligible outputs and press Enter to create a
 centered point. Escape cancels an armed gesture. Lens follows reduced-motion
 preferences for scrolling and transitions.
 
+Standard notebook outputs and `marimo-island[data-cell-id]` elements are
+eligible automatically. A custom host can expose another rendered output by
+putting its exact marimo cell ID on the visible output element:
+
+```html
+<section data-marimo-lens-output-cell-id="MJUe">...</section>
+```
+
+The cell ID must exist in the active marimo graph for runtime context, activity,
+reveal, and resolution.
+
 ## Project
 
 - [Documentation](https://marimo-team.github.io/marimo-lens/)

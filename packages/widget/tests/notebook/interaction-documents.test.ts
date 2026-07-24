@@ -97,4 +97,25 @@ describe("interaction documents", () => {
     expect(detachOwner).toHaveBeenCalledOnce();
     expect(detachFrame).toHaveBeenCalledOnce();
   });
+
+  test("locks the resolved surface of a marimo island while selection is armed", () => {
+    const island = document.createElement("marimo-island");
+    island.setAttribute("data-cell-id", "island-cell");
+    const output = document.createElement("div");
+    output.className = "output";
+    output.getBoundingClientRect = () => new DOMRect(0, 0, 320, 4);
+    const content = document.createElement("div");
+    content.getBoundingClientRect = () => new DOMRect(0, 0, 320, 180);
+    output.appendChild(content);
+    island.appendChild(output);
+    document.body.appendChild(island);
+
+    const dispose = observeInteractionSurfaces(document, true, () => () => {});
+
+    expect(content.style.getPropertyValue("touch-action")).toBe("none");
+    expect(content.style.getPropertyPriority("touch-action")).toBe("important");
+
+    dispose();
+    expect(content.style.getPropertyValue("touch-action")).toBe("");
+  });
 });
