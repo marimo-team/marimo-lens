@@ -62,11 +62,17 @@ def _(region):
 @app.cell(hide_code=True)
 def _(filtered_sales, mo, region):
     _maximum = max(_row["revenue"] for _row in filtered_sales)
+    _point_colors = {
+        ("North", "Jan"): "#22c55e",
+        ("North", "Feb"): "#22c55e",
+        ("South", "Jan"): "#ef4444",
+        ("West", "Feb"): "#a855f7",
+    }
     _bars = "".join(
         f"""
         <div style="display:grid;grid-template-columns:72px 1fr 42px;align-items:center;gap:12px">
           <span>{_row["month"]}</span>
-          <span style="display:block;height:20px;width:{(_row["revenue"] / _maximum) * 100:.1f}%;background:#0880ea"></span>
+          <span style="display:block;height:20px;width:{(_row["revenue"] / _maximum) * 100:.1f}%;background:{_point_colors.get((_row["region"], _row["month"]), "#0880ea")}"></span>
           <strong>{_row["revenue"]}</strong>
         </div>
         """

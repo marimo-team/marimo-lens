@@ -7,7 +7,9 @@ const repository = "https://github.com/marimo-team/marimo-lens";
 const siteUrl = "https://marimo-team.github.io/marimo-lens/";
 const description =
   "Select a point or region in a live marimo output and give marimo Pair the context behind it.";
-const socialImage = `${siteUrl}brand/marimo-lens-lockup-horizontal-light.png`;
+const socialDescription =
+  "Select a notebook result. Pair starts with your selection, note, and the cells behind it.";
+const socialImage = `${siteUrl}brand/marimo-lens-og.png`;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
@@ -39,15 +41,23 @@ export default defineConfig({
     ],
     ["meta", { content: "website", property: "og:type" }],
     ["meta", { content: "marimo-lens", property: "og:title" }],
-    ["meta", { content: description, property: "og:description" }],
+    ["meta", { content: socialDescription, property: "og:description" }],
     ["meta", { content: siteUrl, property: "og:url" }],
     ["meta", { content: socialImage, property: "og:image" }],
+    ["meta", { content: "image/png", property: "og:image:type" }],
+    ["meta", { content: "2400", property: "og:image:width" }],
+    ["meta", { content: "1260", property: "og:image:height" }],
     ["meta", { content: "marimo-lens", property: "og:image:alt" }],
     ["meta", { content: "summary_large_image", name: "twitter:card" }],
     ["meta", { content: socialImage, name: "twitter:image" }],
     ["meta", { content: "marimo-lens", name: "twitter:image:alt" }],
   ],
   lastUpdated: true,
+  markdown: {
+    languageAlias: {
+      "marimo-config": "toml",
+    },
+  },
   srcDir: "../../docs",
   themeConfig: {
     editLink: {
