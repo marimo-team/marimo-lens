@@ -7,14 +7,11 @@
     "build": "vitepress build",
     "dev": "vitepress dev",
     "preview": "vitepress preview",
-    "test": "vp test run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@marimo-team/mdx-marimo": "catalog:",
-    "@types/markdown-it": "catalog:",
     "@types/node": "catalog:",
-    "markdown-it": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:",
     "vitepress": "catalog:",

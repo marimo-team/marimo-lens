@@ -1,7 +1,6 @@
 import { fileURLToPath } from "node:url";
+import { marimoVitePress } from "@marimo-team/mdx-marimo/vitepress";
 import { defineConfig } from "vitepress";
-
-import { marimoVitePress } from "./plugins/marimo";
 
 const repository = "https://github.com/marimo-team/marimo-lens";
 const siteUrl = "https://marimo-team.github.io/marimo-lens/";
