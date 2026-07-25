@@ -1,7 +1,7 @@
 # Getting started
 
 Mount Lens in a live marimo notebook, create one selection, and keep that
-selection ready for Pair.
+selection ready for a notebook agent.
 
 Lens supports Python 3.11 through 3.14.
 
@@ -47,7 +47,7 @@ to create selections and read notebook context.
 1. Press **Select** in the dock at the bottom of the notebook.
 2. Click one revenue value, or drag across several values.
 3. Release the pointer to create the selection.
-4. Add a note when Pair needs a specific question or constraint.
+4. Add a note when the agent needs a specific question or constraint.
 
 Lens assigns the first selection the stable label `S1` and makes it current.
 The selection sheet lists the output cell, note, marked image status, and
@@ -64,7 +64,8 @@ should stay read-only:
 marimo run notebook.py
 ```
 
-The Python kernel must remain connected while Lens and Pair read or update the
-selection workflow.
+The Python kernel must remain connected while Lens and the agent read or update
+the selection workflow.
 
-Next, [connect Pair to the same notebook](./pair).
+For a ready-made agent workflow, connect [marimo Pair](https://marimo.io/pair)
+and follow [the integration guide](./pair).

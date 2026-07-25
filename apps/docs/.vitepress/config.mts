@@ -5,9 +5,9 @@ import { defineConfig } from "vitepress";
 const repository = "https://github.com/marimo-team/marimo-lens";
 const siteUrl = "https://marimo-team.github.io/marimo-lens/";
 const description =
-  "Select a point or region in a live marimo output and give marimo Pair the context behind it.";
+  "Select a point or region in a live marimo output and give your notebook agent the context behind it.";
 const socialDescription =
-  "Select a notebook result. Pair starts with your selection, note, and the cells behind it.";
+  "Select a notebook result. Your agent starts with the selection, note, and cells behind it.";
 const socialImage = `${siteUrl}brand/marimo-lens-og.png`;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
@@ -73,10 +73,10 @@ export default defineConfig({
     },
     nav: [
       { text: "Getting started", link: "/getting-started" },
-      { text: "Use with Pair", link: "/pair" },
       { text: "Selections", link: "/selections" },
       { text: "How it works", link: "/how-it-works" },
       { text: "Python API", link: "/api" },
+      { text: "Pair integration", link: "/pair" },
     ],
     outline: [2, 3],
     search: { provider: "local" },
@@ -86,10 +86,10 @@ export default defineConfig({
         items: [
           { text: "Overview", link: "/" },
           { text: "Getting started", link: "/getting-started" },
-          { text: "Use with Pair", link: "/pair" },
           { text: "Selections", link: "/selections" },
           { text: "How it works", link: "/how-it-works" },
           { text: "Python API", link: "/api" },
+          { text: "Pair integration", link: "/pair" },
         ],
       },
     ],

@@ -153,9 +153,9 @@ terminal result. The request snapshots every open selection on that cell. The
 browser draws those point and region markers into one overview raster.
 
 The browser transport resolves the displayed Lens handler, enforces its raster
-deadline, and replies with a validated PNG buffer or bounded failure. Pair
-writes consumed bytes to a task-scoped temporary directory and removes that
-directory after inspection.
+deadline, and replies with a validated PNG buffer or bounded failure. The
+consuming integration owns any temporary file it creates from the returned
+bytes.
 
 ## Agent feedback
 

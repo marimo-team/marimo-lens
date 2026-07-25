@@ -35,9 +35,9 @@ state.
    text with cell source and relevant control values when `context.text` is
    first read.
 
-## Pair loads evidence as needed
+## An agent loads evidence as needed
 
-Pair runs against the same notebook kernel and starts from the current
+An agent runs against the same notebook kernel and starts from the current
 selection:
 
 1. The selection reference identifies the cell, point or region, and optional
@@ -48,12 +48,12 @@ selection:
    the task depends on what was rendered.
 
 These layers have separate limits. Images stay outside compact references and
-text, so Pair can begin with notebook structure and load pixels when they affect
-the task.
+text, so the agent can begin with notebook structure and load pixels when they
+affect the task.
 
 ## Results return to the notebook
 
-Pair and other integrations work through four Python methods:
+Notebook agents work through four Python methods:
 
 - `context()` reads the current selections and notebook context.
 - `activity()` marks the cell being changed or checked.
@@ -66,4 +66,5 @@ active kernel. The browser adapter finds rendered output roots and keeps
 markers attached as outputs change.
 
 The [Python API](./api) defines the public methods, lifecycle, errors, and
-limits used by Pair and other integrations.
+limits used by agent integrations. The [Pair integration guide](./pair) shows
+the workflow with [marimo Pair](https://marimo.io/pair).

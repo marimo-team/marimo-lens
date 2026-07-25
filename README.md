@@ -12,18 +12,18 @@
   <a href="https://spdx.org/licenses/Apache-2.0.html"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
 </p>
 
-**Let Pair see what you see.**
+**Let your notebook agent see what you see.**
 
-Point at a notebook result and ask [marimo Pair](https://marimo.io/pair) about
-“this” without copying cell IDs, code, or screenshots. Pair starts with the
-selected cell and related notebook structure, then loads an image of your
-selection when needed.
+Point at a notebook result and ask your agent about “this” without copying cell
+IDs, code, or screenshots. Lens connects the mark and optional note to the
+producing cell and related notebook context, then provides a marked image when
+visual detail affects the task.
 
-Pair can inspect the related code, show where it is working, and bring the
-verified result back into view.
+Your agent can inspect related code, show which cell it is changing or checking,
+reveal the result for review, and move completed requests to **History**.
 
 [Read the documentation](https://marimo-team.github.io/marimo-lens/) for the
-complete notebook and Pair workflow.
+complete notebook-agent workflow.
 
 ## Quickstart
 
@@ -64,20 +64,24 @@ ready when you release the pointer.
 Run the notebook with `marimo run` or `marimo edit` so Lens stays connected to
 the Python kernel.
 
-## Use with Pair
+## Use with a notebook agent
 
-[Connect Pair](https://marimo.io/pair) to the same running notebook, then:
+Connect a notebook agent to the same running notebook. For a ready-made path,
+use [marimo Pair](https://marimo.io/pair). Then:
 
-1. Select the output you want Pair to inspect.
+1. Select the output you want the agent to inspect.
 2. Add a note when the request needs more detail.
-3. Ask Pair about the selection, for example: “Why did revenue drop here?”
+3. Ask the agent about the selection, for example: “Why did revenue drop here?”
 
-Pair starts from the current selection when a request refers to “this” or
+The agent starts from the current selection when a request refers to “this” or
 “here.” It reads the selected cell and related notebook context as needed.
-While Pair works, Lens can mark the active cell. After verification, Pair can
-reveal the result and mark the selection **Addressed**. Addressed selections
-move to **History** with Pair's completion summary. Select **Reopen** to restore
-the original cell, note, and location for another pass.
+While the agent works, Lens can mark the active cell. After verification, the
+agent can reveal the result and mark the selection **Addressed**. Addressed
+selections move to **History** with the agent's completion summary. Select
+**Reopen** to restore the original cell, note, and location for another pass.
+
+The [integration guide](https://marimo-team.github.io/marimo-lens/pair) covers
+setup with marimo Pair.
 
 ## What a selection keeps
 

@@ -1,8 +1,8 @@
 # Selections
 
 A Lens selection marks one rendered output cell. A point or rectangle narrows
-attention within that output, and an optional note records what you want Pair
-to inspect.
+attention within that output, and an optional note records what you want an
+agent to inspect or change.
 
 ## Point and region selections
 
@@ -50,9 +50,9 @@ cell reference and note remain available when image capture fails.
 
 ## Addressed history
 
-Pair can mark a selection **Addressed** after completing the request. The open
-selection moves to **History** with its cell, note, point or region, timestamps,
-and optional completion summary. Lens releases its marked PNG.
+An agent can mark a selection **Addressed** after completing the request. The
+open selection moves to **History** with its cell, note, point or region,
+timestamps, and optional completion summary. Lens releases its marked PNG.
 
 Several selections completed by the same verified change can move to History
 together. They share one completion summary and resolution revision.
@@ -72,4 +72,4 @@ show **Lens is already active** until the owner closes. A Lens in another
 same-origin document has its own owner.
 
 [Python API](./api) describes the context, activity, reveal, and resolution
-methods used by Pair and other integrations.
+methods used by agent integrations.

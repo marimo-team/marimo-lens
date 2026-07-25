@@ -12,15 +12,15 @@
   <a href="https://spdx.org/licenses/Apache-2.0.html"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
 </p>
 
-**Let Pair see what you see.**
+**Let your notebook agent see what you see.**
 
-Point at a notebook result and ask [marimo Pair](https://marimo.io/pair) about
-“this” without copying cell IDs, code, or screenshots. Pair starts with the
-selected cell and related notebook structure, then loads an image of your
-selection when needed.
+Point at a notebook result and ask your agent about “this” without copying cell
+IDs, code, or screenshots. Lens connects the mark and optional note to the
+producing cell and related notebook context, then provides a marked image when
+visual detail affects the task.
 
 [Read the user guide](https://marimo-team.github.io/marimo-lens/) for the
-notebook and Pair workflow.
+notebook-agent workflow.
 
 ## Install
 
@@ -57,23 +57,25 @@ Press **Select**, then click a point or drag a region inside any rendered
 output. Pointer release creates the selection and makes it current. Add a note
 when the request needs more detail.
 
-## Work with Pair
+## Work with a notebook agent
 
-Connect Pair to the same running notebook. Pair starts from the current
+Connect an agent to the same running notebook. The agent starts from the current
 selection, reads the selected cell and related notebook context as needed, and
 can request visual evidence when pixels affect the task.
 
-Pair follows the user’s request. A selection identifies the output, while its
-note adds context. Pair can mark its primary working cell, reveal one result
-after verification, and mark the completed selection **Addressed**.
+A selection identifies the output, while its note records the user's request.
+The agent can mark its primary working cell, reveal one result after
+verification, and mark the completed selection **Addressed**.
 
-Addressed selections move to the **History** tab with Pair's completion
+Addressed selections move to the **History** tab with the agent's completion
 summary. Select **Reopen** to restore the original cell, note, and point or
 region as the current selection. Lens starts a fresh marked PNG capture from
-the current output. The prior completion summary remains available to Pair for
-the next pass.
+the current output. The prior completion summary remains available to the agent
+for the next pass.
 
-Agent integrations use the Python API to implement the same workflow.
+For a ready-made path, use [marimo Pair](https://marimo.io/pair) and follow
+[the integration guide](https://marimo-team.github.io/marimo-lens/pair). Agent
+integrations use the Python API to implement the same workflow.
 
 ## API reference
 

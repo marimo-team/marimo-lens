@@ -23,8 +23,10 @@
 }
 
 :root {
-  --vp-font-family-base: "PT Sans", "Avenir Next", "Segoe UI", ui-sans-serif, sans-serif;
-  --vp-font-family-mono: "Fira Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --vp-font-family-base:
+    "PT Sans", "Avenir Next", "Segoe UI", ui-sans-serif, sans-serif;
+  --vp-font-family-mono:
+    "Fira Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --lens-font-family-heading:
     "Rubik", "PT Sans", "Avenir Next", "Segoe UI", ui-sans-serif, sans-serif;
   --vp-c-bg: #ffffff;
@@ -57,6 +59,7 @@
   --vp-code-block-bg: #ffffff;
   --vp-code-bg: #edf6ff;
   --lens-index-color: #0b68cb;
+  --lens-selection-color: #0880ea;
 }
 
 .dark {
@@ -137,6 +140,93 @@ body {
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1.12;
+}
+
+.VPHomeHero .lens-hero-focus {
+  position: relative;
+  display: inline-block;
+  margin-right: 0.14em;
+  white-space: nowrap;
+  cursor: crosshair;
+}
+
+.VPHomeHero .lens-hero-focus::after {
+  position: absolute;
+  right: 0;
+  bottom: -0.08em;
+  left: 0;
+  height: 3px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--lens-selection-color) 0 14px,
+    transparent 14px 24px
+  );
+  clip-path: inset(0 100% 0 0);
+  content: "";
+  animation: lens-hero-selection 1200ms cubic-bezier(0.22, 1, 0.36, 1) 350ms
+    forwards;
+  transition: opacity 140ms ease;
+}
+
+.VPHomeHero .lens-hero-selection-box {
+  position: absolute;
+  z-index: 1;
+  inset: 0.15em -0.08em -0.08em -0.14em;
+  background:
+    linear-gradient(var(--lens-selection-color) 0 0) top left / 8px 8px
+      no-repeat,
+    linear-gradient(var(--lens-selection-color) 0 0) top right / 8px 8px
+      no-repeat,
+    linear-gradient(var(--lens-selection-color) 0 0) bottom right / 8px 8px
+      no-repeat,
+    linear-gradient(var(--lens-selection-color) 0 0) bottom left / 8px 8px
+      no-repeat,
+    repeating-linear-gradient(
+        90deg,
+        var(--lens-selection-color) 0 14px,
+        transparent 14px 24px
+      )
+      top left / 100% 2px no-repeat,
+    repeating-linear-gradient(
+        90deg,
+        var(--lens-selection-color) 0 14px,
+        transparent 14px 24px
+      )
+      bottom left / 100% 2px no-repeat,
+    repeating-linear-gradient(
+        180deg,
+        var(--lens-selection-color) 0 14px,
+        transparent 14px 24px
+      )
+      top left / 2px 100% no-repeat,
+    repeating-linear-gradient(
+        180deg,
+        var(--lens-selection-color) 0 14px,
+        transparent 14px 24px
+      )
+      top right / 2px 100% no-repeat;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.96);
+  transform-origin: center;
+  transition:
+    opacity 160ms ease,
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.VPHomeHero .lens-hero-focus:hover::after {
+  opacity: 0;
+}
+
+.VPHomeHero .lens-hero-focus:hover .lens-hero-selection-box {
+  opacity: 1;
+  transform: scale(1);
+}
+
+@keyframes lens-hero-selection {
+  to {
+    clip-path: inset(0);
+  }
 }
 
 .VPHomeHero .tagline {
@@ -307,8 +397,9 @@ body {
 
 .lens-demo-steps {
   display: grid;
-  grid-template-columns: max-content max-content minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(4, max-content);
+  justify-content: space-between;
+  gap: 16px;
   margin-top: 24px;
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
@@ -479,6 +570,15 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .VPHomeHero .lens-hero-focus::after {
+    clip-path: inset(0);
+    animation: none;
+  }
+
+  .VPHomeHero .lens-hero-selection-box {
+    transition: none;
+  }
+
   *,
   *::before,
   *::after {

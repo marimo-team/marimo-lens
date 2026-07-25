@@ -1,7 +1,7 @@
 # Python API
 
-The Python API lets Pair and other integrations read the current selection,
-show their work in the notebook, reveal a result, and complete a request.
+The Python API lets notebook agents read the current selection, show their work
+in the notebook, reveal a result, and complete a request.
 
 The package exports `Lens`, `LensContext`, `SelectionImage`, and `LensError`.
 

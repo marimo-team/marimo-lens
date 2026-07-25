@@ -1,4 +1,4 @@
-# Use with Pair
+# marimo Pair integration
 
 Point at a notebook result and ask [marimo Pair](https://marimo.io/pair) about
 “this” without copying cell IDs, code, or screenshots. Pair starts with the
