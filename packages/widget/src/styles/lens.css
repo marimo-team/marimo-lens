@@ -864,17 +864,23 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   gap: 2px;
 }
 
-.ml-selection-list__details strong,
+.ml-selection-list__note,
 .ml-selection-list__details small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ml-selection-list__details strong {
+.ml-selection-list__note {
   color: var(--ml-foreground);
   font-size: 13px;
   font-weight: 600;
+}
+
+.ml-selection-list__note[data-empty="true"] {
+  color: var(--ml-muted-foreground);
+  font-style: italic;
+  font-weight: 400;
 }
 
 .ml-selection-list__details small {

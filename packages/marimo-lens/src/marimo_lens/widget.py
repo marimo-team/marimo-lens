@@ -11,8 +11,8 @@ from contextlib import suppress
 from datetime import datetime, timezone
 from typing import Any, Literal, cast
 
+import anywidget
 import traitlets
-from anywidget_bundle import Bundle, BundledWidget
 from pydantic import TypeAdapter, ValidationError
 
 from ._context import build_lens_context
@@ -57,19 +57,16 @@ from ._selection_state import (
 from .context import LensContext
 from .errors import LensError
 
-_BUNDLE = Bundle(
-    static_dir=pathlib.Path(__file__).parent / "static",
-    dev_server_env="MARIMO_LENS_VITE_DEV_SERVER",
-)
-
 _LOGGER = logging.getLogger(__name__)
+_STATIC = pathlib.Path(__file__).parent / "static"
 
 
-class Lens(BundledWidget):
+class Lens(anywidget.AnyWidget):
     """Collect cell-grounded selections from rendered marimo outputs."""
 
     _marimo_lens_widget = True
-    bundle = _BUNDLE
+    _esm = _STATIC / "widget.js"
+    _css = _STATIC / "widget.css"
 
     _state = traitlets.Dict(
         default_value={
@@ -94,8 +91,6 @@ class Lens(BundledWidget):
             cell_status=self._runtime.cell_status,
         )
         self._bind_comm_close()
-        # BundledWidget already owns resource messages on this comm. Lens adds
-        # its protocol callback after the bundle callback is registered.
         self.on_msg(self._handle_lens_message)
 
     def context(self) -> LensContext:

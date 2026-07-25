@@ -58,17 +58,6 @@ export default defineConfig({
           "typescript/unbound-method": "off",
         },
       },
-      {
-        files: ["packages/protocol/**", "packages/image-capture/**", "packages/widget/**"],
-        rules: {
-          "no-restricted-imports": [
-            "error",
-            {
-              patterns: ["anywidget-bundle", "anywidget-bundle/*"],
-            },
-          ],
-        },
-      },
     ],
   },
   run: {

@@ -1,13 +1,8 @@
 import type { CSSProperties } from "react";
 
-const darkMark = new URL(
-  "../../../../../apps/docs/public/brand/marimo-lens-mark-dark.svg",
-  import.meta.url,
-).href;
-const lightMark = new URL(
-  "../../../../../apps/docs/public/brand/marimo-lens-mark-light.svg",
-  import.meta.url,
-).href;
+import darkMark from "../../../../../apps/docs/public/brand/marimo-lens-mark-dark.svg";
+import lightMark from "../../../../../apps/docs/public/brand/marimo-lens-mark-light.svg";
+
 const markStyle = {
   "--ml-lens-mark-light": `url("${lightMark}")`,
   "--ml-lens-mark-dark": `url("${darkMark}")`,

@@ -62,17 +62,18 @@ export function SelectionList({
                   onActivate(selection, event.detail === 0 ? "instant" : "smooth")
                 }
                 aria-current={current ? "true" : undefined}
-                aria-label={`${current ? "Current selection" : "Activate selection"} ${selection.label}, ${selection.note || `cell ${selection.outputCellId}`}${outputAvailable ? "" : ", Output unavailable"}`}
+                aria-label={`${current ? "Current selection" : "Activate selection"} ${selection.label}, ${selection.note || "no note added"}, cell ${selection.outputCellId}${outputAvailable ? "" : ", Output unavailable"}`}
               >
                 <span className="ml-label">{selection.label}</span>
                 <span className="ml-selection-list__details">
-                  <strong>{selection.note || `Cell ${selection.outputCellId}`}</strong>
+                  <span
+                    className="ml-selection-list__note"
+                    data-empty={selection.note ? undefined : "true"}
+                  >
+                    {selection.note || "No note added"}
+                  </span>
                   <small>
-                    {selection.note ? (
-                      <>
-                        Cell <span className="ml-code">{selection.outputCellId}</span>
-                      </>
-                    ) : null}
+                    Cell <span className="ml-code">{selection.outputCellId}</span>
                     <SelectionKindMark kind={selection.anchor.kind} />
                     {!outputAvailable ? (
                       <>

@@ -14,6 +14,7 @@ catalog:
   "@types/node": ^22.20.1
   "@types/react": ^19.2.17
   "@types/react-dom": ^19.2.3
+  esbuild: ^0.28.0
   html-to-image: 1.11.13
   jsdom: 29.1.1
   lucide-react: 1.24.0
@@ -49,5 +50,4 @@ trustPolicyExclude:
   - vite@5.4.21
 minimumReleaseAgeExclude:
   - "@marimo-team/*"
-  - anywidget-bundle@0.0.1
 onlyBuiltDependencies: []

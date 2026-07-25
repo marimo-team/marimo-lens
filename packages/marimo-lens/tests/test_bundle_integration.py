@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import pathlib
 from collections.abc import Sequence
 from typing import Any
@@ -35,22 +34,12 @@ def test_exported_lens_renders_directly_in_marimo() -> None:
     lens.close()
 
 
-def test_lens_serves_its_built_app_and_handles_lens_messages() -> None:
+def test_lens_loads_esbuild_assets_and_handles_lens_messages() -> None:
     static_dir = pathlib.Path(__file__).parents[1] / "src" / "marimo_lens" / "static"
-    manifest = json.loads((static_dir / "anywidget.json").read_text(encoding="utf-8"))
-    app_path = str(manifest["app"])
-    app_source = static_dir.joinpath(*app_path.split("/")).read_bytes()
+    widget_source = (static_dir / "widget.js").read_text(encoding="utf-8")
+    widget_css = (static_dir / "widget.css").read_text(encoding="utf-8")
     lens = RecordingLens()
 
-    lens._handle_custom_msg(
-        {
-            "type": "anywidget-bundle:request",
-            "version": 1,
-            "id": "bundle-request",
-            "path": app_path,
-        },
-        [],
-    )
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.command",
@@ -62,19 +51,13 @@ def test_lens_serves_its_built_app_and_handles_lens_messages() -> None:
         [],
     )
 
-    assert len(lens.sent) == 2
-    bundle_response, bundle_buffers = lens.sent[0]
-    assert bundle_response == {
-        "type": "anywidget-bundle:response",
-        "version": 1,
-        "id": "bundle-request",
-        "path": app_path,
-    }
-    assert bundle_buffers == [app_source]
-
-    lens_response, lens_buffers = lens.sent[1]
+    assert lens._esm == widget_source
+    assert lens._css == widget_css
+    assert len(lens.sent) == 1
+    lens_response, lens_buffers = lens.sent[0]
     assert lens_response["protocol"] == "marimo-lens.response"
     assert lens_response["requestId"] == "clear-request"
     assert lens_response["ok"] is True
     assert lens_response["payload"] == {}
     assert lens_buffers == []
+    lens.close()

@@ -204,8 +204,8 @@ def test_mutations_and_snapshot_use_object_payloads() -> None:
     assert snapshot.payload == {"selectionId": "selection-1"}
 
 
-def test_command_ignores_envelopes_owned_by_bundle_transport() -> None:
-    assert parse_command({"type": "anywidget-bundle:request"}, []) is None
+def test_command_ignores_unrelated_envelopes() -> None:
+    assert parse_command({"type": "host.status"}, []) is None
 
 
 @pytest.mark.parametrize(
