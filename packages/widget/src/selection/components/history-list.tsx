@@ -1,6 +1,6 @@
 import type { AddressedSelection } from "@marimo-lens/protocol";
 
-import { ChevronDown, LoaderCircle, RotateCcw } from "lucide-react";
+import { Bot, ChevronDown, LoaderCircle, RotateCcw, UserRound } from "lucide-react";
 
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
 
@@ -37,7 +37,6 @@ export function HistoryList({
       {[...history].reverse().map((receipt) => {
         const busy = busySelectionIds.has(receipt.selectionId);
         const open = openSelectionIds.has(receipt.selectionId);
-        const description = receipt.summary ?? (receipt.note || "Addressed");
         return (
           <li
             key={`${receipt.selectionId}:${receipt.resolutionRevision}`}
@@ -51,9 +50,8 @@ export function HistoryList({
                   Cell <span className="ml-code">{receipt.outputCellId}</span>
                   <SelectionKindMark kind={receipt.anchor.kind} />
                 </span>
-                <span className="ml-history-list__summary">{description}</span>
                 <time
-                  className="ml-history-list__time"
+                  className="ml-history-list__date"
                   dateTime={receipt.addressedAt}
                   title={`Addressed ${formatAddressedAt(receipt.addressedAt)}`}
                 >
@@ -64,13 +62,21 @@ export function HistoryList({
               <div className="ml-history-list__details">
                 {receipt.note ? (
                   <div>
-                    <span>Request</span>
+                    <span className="ml-history-list__author" aria-label="Request" title="Request">
+                      <UserRound size={14} aria-hidden="true" />
+                    </span>
                     <p>{receipt.note}</p>
                   </div>
                 ) : null}
                 {receipt.summary ? (
                   <div>
-                    <span>Addressed</span>
+                    <span
+                      className="ml-history-list__author"
+                      aria-label="Addressed"
+                      title="Addressed"
+                    >
+                      <Bot size={14} aria-hidden="true" />
+                    </span>
                     <p>{receipt.summary}</p>
                   </div>
                 ) : null}

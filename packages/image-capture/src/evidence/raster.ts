@@ -162,8 +162,8 @@ export function elementCaptureGeometry(
       style: { maxHeight: "none", overflow: "visible" },
     };
   }
-  const viewportWidth = Math.max(metrics.bounds.width, 1);
-  const viewportHeight = Math.max(metrics.bounds.height, 1);
+  const viewportWidth = Math.max(metrics.bounds.width / metrics.scaleX, 1);
+  const viewportHeight = Math.max(metrics.bounds.height / metrics.scaleY, 1);
   return {
     width: viewportWidth,
     height: viewportHeight,

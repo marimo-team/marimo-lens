@@ -22,6 +22,20 @@ function visibleOutput(id: string): HTMLElement {
   return output;
 }
 
+function visibleIsland(id: string): { island: HTMLElement; content: HTMLElement } {
+  const island = document.createElement("marimo-island");
+  island.setAttribute("data-cell-id", id);
+  const output = document.createElement("div");
+  output.className = "output";
+  output.getBoundingClientRect = () => new DOMRect(0, 0, 320, 4);
+  const content = document.createElement("div");
+  content.getBoundingClientRect = () => new DOMRect(0, 0, 320, 180);
+  output.appendChild(content);
+  island.appendChild(output);
+  document.body.appendChild(island);
+  return { island, content };
+}
+
 describe("marimo output resolution", () => {
   test("resolves the canonical output id across an open shadow root", () => {
     const output = visibleOutput("chart-cell");
@@ -53,6 +67,61 @@ describe("marimo output resolution", () => {
     expect(getOutputCell(document, "lens-cell")).toMatchObject({
       id: "lens-cell",
       element: lensOutput,
+    });
+  });
+
+  test("resolves a hydrated marimo island to its rendered output surface", () => {
+    const { island, content } = visibleIsland("island-cell");
+
+    expect(outputCellFromElement(content)).toEqual({ id: "island-cell", element: content });
+    expect(getOutputCell(document, "island-cell")).toEqual({
+      id: "island-cell",
+      element: content,
+    });
+    expect(listOutputCells(document)).toEqual([{ id: "island-cell", element: content }]);
+
+    const release = registerLensHostOutput(content);
+    expect(outputCellFromElement(island)).toBeNull();
+    expect(listOutputCells(document)).toEqual([]);
+    release();
+  });
+
+  test("resolves a marimo island before hydration", () => {
+    const island = document.createElement("marimo-island");
+    island.setAttribute("data-cell-id", "static-cell");
+    const output = document.createElement("marimo-cell-output");
+    output.getBoundingClientRect = () => new DOMRect(0, 0, 320, 180);
+    island.appendChild(output);
+    document.body.appendChild(island);
+
+    expect(outputCellFromElement(output)).toEqual({ id: "static-cell", element: output });
+  });
+
+  test("keeps a display-contents island wrapper inside the output surface", () => {
+    const island = document.createElement("marimo-island");
+    island.setAttribute("data-cell-id", "widget-cell");
+    const output = document.createElement("div");
+    output.className = "output";
+    output.getBoundingClientRect = () => new DOMRect(0, 0, 320, 180);
+    const wrapper = document.createElement("marimo-ui-element");
+    wrapper.style.display = "contents";
+    output.appendChild(wrapper);
+    island.appendChild(output);
+    document.body.appendChild(island);
+
+    expect(outputCellFromElement(wrapper)).toEqual({ id: "widget-cell", element: output });
+  });
+
+  test("resolves a host-configured output element", () => {
+    const output = document.createElement("article");
+    output.setAttribute("data-marimo-lens-output-cell-id", "embedded-cell");
+    output.getBoundingClientRect = () => new DOMRect(0, 0, 320, 180);
+    document.body.appendChild(output);
+
+    expect(outputCellFromElement(output)).toEqual({ id: "embedded-cell", element: output });
+    expect(getOutputCell(document, "embedded-cell")).toEqual({
+      id: "embedded-cell",
+      element: output,
     });
   });
 

@@ -13,11 +13,8 @@ catalogs:
       specifier: ^0.4.0
       version: 0.4.0
     '@marimo-team/mdx-marimo':
-      specifier: 0.0.1
-      version: 0.0.1
-    '@types/markdown-it':
-      specifier: 14.1.2
-      version: 14.1.2
+      specifier: 0.0.2
+      version: 0.0.2
     '@types/node':
       specifier: ^22.20.1
       version: 22.20.1
@@ -36,9 +33,6 @@ catalogs:
     lucide-react:
       specifier: 1.24.0
       version: 1.24.0
-    markdown-it:
-      specifier: 14.3.0
-      version: 14.3.0
     react:
       specifier: ^19.2.7
       version: 19.2.7
@@ -92,16 +86,10 @@ importers:
     devDependencies:
       '@marimo-team/mdx-marimo':
         specifier: 'catalog:'
-        version: 0.0.1
-      '@types/markdown-it':
-        specifier: 'catalog:'
-        version: 14.1.2
+        version: 0.0.2
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
-      markdown-it:
-        specifier: 'catalog:'
-        version: 14.3.0
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -621,8 +609,8 @@ packages:
     resolution: {integrity: sha512-pT6kFOg55G65QqZC9Wf84Jh/tDJFvQEPbrJD5rER/YLIB6teLqO8Oxj88hdhvkUzDDBP5pxxzQ7b69gKot1l2g==}
     hasBin: true
 
-  '@marimo-team/mdx-marimo@0.0.1':
-    resolution: {integrity: sha512-sWAcMiulBvdaWx5iH1AvimwRxY3R4wOd92EK1M/RYxCMR3e7BKJ53NHqYw0XKONIyHUajpbwpRS+eGxnJcAiNw==}
+  '@marimo-team/mdx-marimo@0.0.2':
+    resolution: {integrity: sha512-K9/rKsKjYUPIVS3UuK+BAPV7pM6sbh+BAwJ3eT3oKAKs5r0gWKVY3kmu3U6jY3nK5aQIDgUxVCX31lrHF1W3Zw==}
     peerDependencies:
       react: ^18.3.0 || ^19.0.0
     peerDependenciesMeta:
@@ -2451,11 +2439,12 @@ snapshots:
       '@manzt/uv-win32-ia32': 0.8.13
       '@manzt/uv-win32-x64': 0.8.13
 
-  '@marimo-team/mdx-marimo@0.0.1':
+  '@marimo-team/mdx-marimo@0.0.2':
     dependencies:
       '@manzt/uv': 0.8.13
       '@types/mdast': 4.0.4
       acorn: 8.17.0
+      markdown-it: 14.3.0
       smol-toml: 1.7.0
       unified: 11.0.5
       unist-util-visit: 5.1.0

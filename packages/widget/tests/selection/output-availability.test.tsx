@@ -108,6 +108,9 @@ describe("output availability", () => {
       ),
     );
     expect(marker(selection)).not.toBeNull();
+    expect(
+      document.querySelector('.ml-selection-list__details [aria-label="Point selection"]'),
+    ).not.toBeNull();
     expect(document.querySelector(".ml-selection-list__availability")).toBeNull();
 
     await mutateDocument(() => output.remove());

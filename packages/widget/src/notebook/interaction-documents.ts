@@ -1,6 +1,6 @@
 import type { OutputCell, ViewportPoint } from "@/notebook/types";
 
-import { outputCellFromElement } from "@/notebook/output-root";
+import { isOutputRoot, outputCellFromElement, outputCellFromRoot } from "@/notebook/output-root";
 
 export type InteractionSurface = {
   document: Document;
@@ -165,9 +165,9 @@ function scanOpenTree(root: ParentNode): {
   const visit = (tree: ParentNode) => {
     for (const element of tree.querySelectorAll("*")) {
       if (isIFrameElement(element)) frames.push(element);
-      if (element.id.startsWith("output-")) {
-        const output = outputCellFromElement(element);
-        if (output?.element === element) outputs.push(output.element);
+      if (isOutputRoot(element)) {
+        const output = outputCellFromRoot(element);
+        if (output) outputs.push(output.element);
       }
       if (!element.shadowRoot) continue;
       shadows.push(element.shadowRoot);

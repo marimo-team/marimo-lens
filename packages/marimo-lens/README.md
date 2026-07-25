@@ -46,7 +46,7 @@ mo.md("\n".join(f"- {month}: **{value}**" for month, value in revenue.items()))
 Mount one Lens in another cell:
 
 ```python
-lens = mo.ui.anywidget(Lens())
+lens = Lens()
 lens
 ```
 
@@ -351,6 +351,17 @@ another same-origin document has an independent owner.
 Keyboard users can move between eligible outputs and press Enter to create a
 centered point. Escape cancels an armed gesture. Lens follows reduced-motion
 preferences for scrolling and transitions.
+
+Standard notebook outputs and `marimo-island[data-cell-id]` elements are
+eligible automatically. A custom host can expose another rendered output by
+putting its exact marimo cell ID on the visible output element:
+
+```html
+<section data-marimo-lens-output-cell-id="MJUe">...</section>
+```
+
+The cell ID must exist in the active marimo graph for runtime context, activity,
+reveal, and resolution.
 
 ## Project
 

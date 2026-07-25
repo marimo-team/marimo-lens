@@ -99,7 +99,10 @@ describe("Lens dock", () => {
   });
 
   test("keeps the dock focused on selecting and opening selections", () => {
-    renderDock({ selections: [selectionFixture()], currentSelectionId: "selection-1" });
+    renderDock({
+      selections: [selectionFixture()],
+      currentSelectionId: "selection-1",
+    });
 
     expect(
       Array.from(document.querySelectorAll<HTMLButtonElement>(".ml-dockbar button")).map((button) =>
@@ -142,12 +145,13 @@ describe("Lens dock", () => {
     expect(document.querySelector(".ml-history-list__target")?.textContent).toContain(
       `Cell ${receipt.outputCellId}`,
     );
-    expect(document.querySelector(".ml-history-list__summary")?.textContent).toBe(receipt.summary);
     expect(document.querySelector('[aria-label="Point selection"]')).not.toBeNull();
 
     const disclosure = document.querySelector<HTMLDetailsElement>(".ml-history-list__disclosure")!;
     const trigger = document.querySelector<HTMLElement>(".ml-history-list__row")!;
     expect(disclosure.open).toBe(false);
+    expect(trigger.textContent).not.toContain(receipt.summary);
+    expect(trigger.querySelector("time")?.dateTime).toBe(receipt.addressedAt);
     act(() => trigger.click());
     expect(disclosure.open).toBe(true);
     expect(document.querySelector(".ml-history-list__details")?.textContent).toContain(
@@ -156,12 +160,15 @@ describe("Lens dock", () => {
     expect(document.querySelector(".ml-history-list__details")?.textContent).toContain(
       receipt.summary,
     );
+    expect(document.querySelector('[aria-label="Request"]')?.getAttribute("title")).toBe("Request");
+    expect(document.querySelector('[aria-label="Addressed"]')?.getAttribute("title")).toBe(
+      "Addressed",
+    );
     act(() => trigger.click());
     expect(disclosure.open).toBe(false);
 
     act(() => findButton("Reopen S1")?.click());
     expect(onReopenSelection).toHaveBeenCalledWith(receipt);
-    expect(disclosure.open).toBe(false);
     act(() => findButton("Clear history")?.click());
     expect(onClearHistory).toHaveBeenCalledOnce();
   });

@@ -108,6 +108,36 @@ describe("selection overlay", () => {
     expect(onActivate).toHaveBeenCalledWith(selection);
   });
 
+  test.each([
+    {
+      anchor: { kind: "point", x: 0.5, y: 0.5 } satisfies SelectionAnchor,
+      label: "Point selection",
+    },
+    {
+      anchor: {
+        kind: "rect",
+        x: 0.2,
+        y: 0.2,
+        width: 0.4,
+        height: 0.3,
+      } satisfies SelectionAnchor,
+      label: "Region selection",
+    },
+  ])("shows the $label mark in marker actions", ({ anchor, label }) => {
+    setupOutput();
+    const selection = selectionFixture({ anchor });
+    renderOverlay([selection], selection.id);
+
+    const marker = document.querySelector<HTMLButtonElement>(
+      '[data-marimo-lens-selection-id="selection-1"]',
+    );
+    act(() => marker?.focus());
+    const peek = document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`);
+    const kindMark = peek?.querySelector(`[aria-label="${label}"]`);
+    expect(kindMark).not.toBeNull();
+    expect(kindMark?.getAttribute("title")).toBe(label);
+  });
+
   test("opens note editing next to a focused marker", () => {
     setupOutput();
     const selection = selectionFixture({ note: "" });

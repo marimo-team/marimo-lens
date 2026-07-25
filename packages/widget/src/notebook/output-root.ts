@@ -1,24 +1,25 @@
 import type { OutputCell } from "@/notebook/types";
 
-const OUTPUT_ID_PREFIX = "output-";
+import { OUTPUT_ROOT_SELECTOR, resolveOutputRoot } from "@/notebook/output-root-rules";
+
 const LENS_OUTPUT_REGISTRY = Symbol.for("marimo-lens.output-registry.v1");
 
 type LensOutputRegistry = WeakMap<HTMLElement, number>;
 
 export function registerLensHostOutput(host: Element): () => void {
-  const output = owningOutputRoot(host);
-  if (!output) return () => {};
+  const root = owningOutputRoot(host);
+  if (!root) return () => {};
 
-  const registry = lensOutputRegistry(output.ownerDocument);
-  registry.set(output, (registry.get(output) ?? 0) + 1);
+  const registry = lensOutputRegistry(root.ownerDocument);
+  registry.set(root, (registry.get(root) ?? 0) + 1);
 
   let released = false;
   return () => {
     if (released) return;
     released = true;
-    const owners = registry.get(output) ?? 0;
-    if (owners <= 1) registry.delete(output);
-    else registry.set(output, owners - 1);
+    const owners = registry.get(root) ?? 0;
+    if (owners <= 1) registry.delete(root);
+    else registry.set(root, owners - 1);
   };
 }
 
@@ -44,16 +45,31 @@ export function outputCellFromEvent(event: Event): OutputCell | null {
 }
 
 export function getOutputCell(ownerDocument: Document, outputCellId: string): OutputCell | null {
-  const element = ownerDocument.getElementById(`${OUTPUT_ID_PREFIX}${outputCellId}`);
-  if (!isHTMLElement(element)) return null;
-  const cell = outputCellFromRoot(element);
-  return cell && isVisible(cell.element) ? cell : null;
+  for (const root of ownerDocument.querySelectorAll(OUTPUT_ROOT_SELECTOR)) {
+    const cell = outputCellFromRoot(root);
+    if (cell?.id === outputCellId && isVisible(cell.element)) return cell;
+  }
+  return null;
 }
 
 export function listOutputCells(ownerDocument: Document): OutputCell[] {
-  return Array.from(ownerDocument.querySelectorAll<HTMLElement>(`[id^="${OUTPUT_ID_PREFIX}"]`))
+  return listOutputRoots(ownerDocument).filter((cell) => isVisible(cell.element));
+}
+
+export function listOutputRoots(ownerDocument: Document): OutputCell[] {
+  return Array.from(ownerDocument.querySelectorAll(OUTPUT_ROOT_SELECTOR))
     .map(outputCellFromRoot)
-    .filter((cell): cell is OutputCell => cell !== null && isVisible(cell.element));
+    .filter((cell): cell is OutputCell => cell !== null);
+}
+
+export function outputCellFromRoot(element: Element): OutputCell | null {
+  const resolved = resolveOutputRoot(element);
+  if (!resolved || containsLensHost(resolved.root)) return null;
+  return { id: resolved.id, element: resolved.element };
+}
+
+export function isOutputRoot(element: Element): boolean {
+  return element.matches(OUTPUT_ROOT_SELECTOR);
 }
 
 export function deepestElementAtPoint(
@@ -79,22 +95,16 @@ export function deepestElementFromEvent(event: Event, output: HTMLElement): Elem
   return output;
 }
 
-function outputCellFromRoot(element: Element): OutputCell | null {
-  if (!isHTMLElement(element) || !element.id.startsWith(OUTPUT_ID_PREFIX)) return null;
-  if (containsLensHost(element)) return null;
-  const id = element.id.slice(OUTPUT_ID_PREFIX.length);
-  return id.length > 0 ? { id, element } : null;
-}
-
-function containsLensHost(output: HTMLElement): boolean {
-  const registry: unknown = Reflect.get(output.ownerDocument, LENS_OUTPUT_REGISTRY);
-  return registry instanceof WeakMap && registry.has(output);
+function containsLensHost(root: HTMLElement): boolean {
+  const registry: unknown = Reflect.get(root.ownerDocument, LENS_OUTPUT_REGISTRY);
+  return registry instanceof WeakMap && registry.has(root);
 }
 
 function owningOutputRoot(element: Element): HTMLElement | null {
   let current: Element | null = element;
   while (current) {
-    if (isHTMLElement(current) && current.id.startsWith(OUTPUT_ID_PREFIX)) return current;
+    const resolved = resolveOutputRoot(current);
+    if (resolved) return resolved.root;
     const root = current.getRootNode();
     current = current.parentElement ?? (isShadowRoot(root) ? root.host : null);
   }
@@ -153,12 +163,6 @@ function isVisible(element: HTMLElement): boolean {
   return (
     style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
   );
-}
-
-function isHTMLElement(element: Element | null): element is HTMLElement {
-  if (!element) return false;
-  const ownerWindow = element.ownerDocument.defaultView;
-  return ownerWindow !== null && element instanceof ownerWindow.HTMLElement;
 }
 
 function isElement(value: unknown): value is Element {

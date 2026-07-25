@@ -5,6 +5,7 @@ import { LoaderCircle, MessageSquare, Pencil, Trash2 } from "lucide-react";
 import type { RevealMotion } from "@/selection/reveal";
 import type { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
 
+import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
 import { SnapshotPreviewButton } from "@/selection/components/selection-snapshot-preview";
 
 type SelectionListProps = {
@@ -45,7 +46,6 @@ export function SelectionList({
           const current = selection.id === currentSelectionId;
           const busy = busySelectionIds.has(selection.id);
           const outputAvailable = availableOutputCellIds.has(selection.outputCellId);
-          const kind = selection.anchor.kind === "point" ? "Point" : "Region";
           return (
             <li
               key={selection.id}
@@ -71,10 +71,9 @@ export function SelectionList({
                     {selection.note ? (
                       <>
                         Cell <span className="ml-code">{selection.outputCellId}</span>
-                        <span aria-hidden="true"> · </span>
                       </>
                     ) : null}
-                    {kind}
+                    <SelectionKindMark kind={selection.anchor.kind} />
                     {!outputAvailable ? (
                       <>
                         <span aria-hidden="true"> · </span>

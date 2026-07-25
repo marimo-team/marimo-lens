@@ -19,6 +19,6 @@ def test_root_readme_python_examples_execute() -> None:
     for example in examples:
         exec(compile(example, str(readme), "exec"), namespace)
 
-    widget = namespace["lens"].widget
-    assert isinstance(widget, Lens)
-    widget.close()
+    lens = namespace["lens"]
+    assert isinstance(lens, Lens)
+    lens.close()

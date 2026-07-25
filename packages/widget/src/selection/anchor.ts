@@ -10,15 +10,15 @@ export type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 export function anchorToViewport(output: HTMLElement, anchor: SelectionAnchor): ViewportAnchor {
   const metrics = outputContentMetrics(output);
-  const x = metrics.bounds.left + anchor.x * metrics.width - metrics.scrollLeft;
-  const y = metrics.bounds.top + anchor.y * metrics.height - metrics.scrollTop;
+  const x = metrics.bounds.left + (anchor.x * metrics.width - metrics.scrollLeft) * metrics.scaleX;
+  const y = metrics.bounds.top + (anchor.y * metrics.height - metrics.scrollTop) * metrics.scaleY;
   if (anchor.kind === "point") return { kind: "point", x, y };
   return {
     kind: "rect",
     x,
     y,
-    width: anchor.width * metrics.width,
-    height: anchor.height * metrics.height,
+    width: anchor.width * metrics.width * metrics.scaleX,
+    height: anchor.height * metrics.height * metrics.scaleY,
   };
 }
 
@@ -51,8 +51,8 @@ export function translateAnchor(
   deltaY: number,
 ): SelectionAnchor {
   const metrics = outputContentMetrics(output);
-  const dx = deltaX / metrics.width;
-  const dy = deltaY / metrics.height;
+  const dx = deltaX / metrics.scaleX / metrics.width;
+  const dy = deltaY / metrics.scaleY / metrics.height;
   if (anchor.kind === "point") {
     return {
       kind: "point",
@@ -75,8 +75,8 @@ export function resizeRectAnchor(
   deltaY: number,
 ): RectAnchor {
   const metrics = outputContentMetrics(output);
-  const dx = deltaX / metrics.width;
-  const dy = deltaY / metrics.height;
+  const dx = deltaX / metrics.scaleX / metrics.width;
+  const dy = deltaY / metrics.scaleY / metrics.height;
   let left = anchor.x;
   let right = anchor.x + anchor.width;
   let top = anchor.y;

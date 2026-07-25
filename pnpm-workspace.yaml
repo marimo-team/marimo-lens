@@ -10,15 +10,13 @@ catalogMode: prefer
 catalog:
   "@anywidget/react": ^0.2.2
   "@anywidget/types": ^0.4.0
-  "@marimo-team/mdx-marimo": 0.0.1
-  "@types/markdown-it": 14.1.2
+  "@marimo-team/mdx-marimo": 0.0.2
   "@types/node": ^22.20.1
   "@types/react": ^19.2.17
   "@types/react-dom": ^19.2.3
   html-to-image: 1.11.13
   jsdom: 29.1.1
   lucide-react: 1.24.0
-  markdown-it: 14.3.0
   react: ^19.2.7
   react-dom: ^19.2.7
   typescript: ^6.0.3

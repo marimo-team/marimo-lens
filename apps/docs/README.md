@@ -36,5 +36,6 @@ dependencies = ["numpy"]
 ```
 ````
 
-The VitePress plugin compiles the page during the Vite build. `MarimoCell`
-mounts each visible result in the browser and follows the VitePress color mode.
+`marimoVitePress()` compiles the page during the Vite build and emits one
+`marimo-mdx-island` for each visible result. The theme entry registers the
+custom element and maps VitePress color tokens into its islands.

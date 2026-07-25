@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
 afterEach(() => {
+  document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -94,6 +95,29 @@ describe("notebook DOM layout subscriptions", () => {
 
     expect(query).toHaveBeenCalledTimes(2);
     expect(listener).toHaveBeenCalledOnce();
+    release();
+  });
+
+  test("observes hidden output roots so a CSS reveal updates layout", () => {
+    const output = document.createElement("div");
+    output.id = "output-hidden-cell";
+    output.style.display = "none";
+    document.body.appendChild(output);
+
+    const observe = vi.fn();
+    const ResizeObserverStub = vi.fn(
+      class {
+        observe = observe;
+        unobserve = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+    const dom = new NotebookDomAdapter(document);
+
+    const release = dom.subscribeLayout(() => {});
+
+    expect(observe).toHaveBeenCalledWith(output);
     release();
   });
 });
