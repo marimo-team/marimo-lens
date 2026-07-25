@@ -53,9 +53,13 @@ export function getOutputCell(ownerDocument: Document, outputCellId: string): Ou
 }
 
 export function listOutputCells(ownerDocument: Document): OutputCell[] {
+  return listOutputRoots(ownerDocument).filter((cell) => isVisible(cell.element));
+}
+
+export function listOutputRoots(ownerDocument: Document): OutputCell[] {
   return Array.from(ownerDocument.querySelectorAll(OUTPUT_ROOT_SELECTOR))
     .map(outputCellFromRoot)
-    .filter((cell): cell is OutputCell => cell !== null && isVisible(cell.element));
+    .filter((cell): cell is OutputCell => cell !== null);
 }
 
 export function outputCellFromRoot(element: Element): OutputCell | null {
