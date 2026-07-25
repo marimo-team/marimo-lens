@@ -124,6 +124,32 @@ describe("Lens dock", () => {
     expect(onClearSelections).toHaveBeenCalledOnce();
   });
 
+  test("keeps selection rows uniform when a note has not been added", () => {
+    const noted = selectionFixture({ note: "Make this red" });
+    const unnoted = selectionFixture({
+      id: "selection-2",
+      label: "S2",
+      note: "",
+    });
+    renderDock({
+      selections: [noted, unnoted],
+      currentSelectionId: noted.id,
+      listOpen: true,
+    });
+
+    const notedRow = document.querySelector<HTMLElement>(
+      `[data-marimo-lens-selection-focus="${noted.id}"]`,
+    )!;
+    const unnotedRow = document.querySelector<HTMLElement>(
+      `[data-marimo-lens-selection-focus="${unnoted.id}"]`,
+    )!;
+
+    expect(notedRow.textContent).toContain(noted.note);
+    expect(notedRow.textContent).toContain(`Cell ${noted.outputCellId}`);
+    expect(unnotedRow.textContent).toContain("No note added");
+    expect(unnotedRow.textContent).toContain(`Cell ${unnoted.outputCellId}`);
+  });
+
   test("keeps history accessible when no selections remain", () => {
     const receipt = addressedSelectionFixture({
       note: "Keep the complete original request visible in history.",
