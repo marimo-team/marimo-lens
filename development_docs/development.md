@@ -8,7 +8,7 @@ uv sync --locked
 pnpm install --frozen-lockfile
 ```
 
-Build the browser resource graph before running Python tests:
+Build the browser assets before running Python tests:
 
 ```sh
 pnpm --filter @marimo-lens/python build
@@ -25,12 +25,11 @@ pnpm dev
 Start the example notebook in another:
 
 ```sh
-MARIMO_LENS_VITE_DEV_SERVER=http://localhost:5173 \
-  uv run marimo run examples/lens.py --port 28889 --headless
+uv run marimo run examples/lens.py --port 28889 --headless
 ```
 
-Development mode injects CSS from Vite. Production mode loads the generated
-stylesheet and module graph from the packaged AnyWidget manifest.
+esbuild writes `widget.js` and `widget.css` after each source change. AnyWidget
+watches both files and reloads the displayed widget.
 
 ## Documentation
 
@@ -72,7 +71,7 @@ pnpm --filter @marimo-lens/image-capture test
 pnpm --filter @marimo-lens/widget build
 ```
 
-Build the Python resource graph before focused Python tests:
+Build the Python browser assets before focused Python tests:
 
 ```sh
 pnpm --filter @marimo-lens/python build
@@ -97,9 +96,8 @@ The target builds the browser resources, creates the wheel and source
 distribution, checks their metadata, builds a wheel from the source
 distribution, and imports the public package from that rebuilt wheel.
 
-Hatch validates the AnyWidget manifest, bootstrap, application module,
-stylesheet, and module allowlist. The source distribution must carry the
-browser graph needed to build its wheel.
+Hatch validates the generated ESM and stylesheet. The source distribution must
+carry both files into its wheel.
 
 ## Release
 

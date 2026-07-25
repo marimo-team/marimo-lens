@@ -227,10 +227,10 @@ Python API and the remaining transport contracts.
 
 ## Artifact boundary
 
-`packages/marimo-lens/src/marimo_lens/static/anywidget.json` is the packaged
-browser resource contract. It names the bootstrap, stylesheet, application
-module, and complete module allowlist.
+`packages/marimo-lens/src/marimo_lens/static/widget.js` and `widget.css` are the
+packaged browser resource contract. esbuild bundles the widget and its
+dependencies into the ESM file. Hatch validates and packages both files into
+the wheel and source distribution.
 
-`anywidget-bundle` builds that graph. Hatch validates and packages it into the
-wheel and source distribution. A wheel built from the source distribution must
-load the browser resources carried by that archive.
+A wheel built from the source distribution must load the browser resources
+carried by that archive.

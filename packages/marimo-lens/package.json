@@ -4,16 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vp build",
-    "dev": "vp dev"
+    "build": "node build.mjs",
+    "dev": "node build.mjs --watch"
   },
   "dependencies": {
     "@marimo-lens/widget": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "catalog:",
-    "anywidget-bundle": "0.0.1",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
-    "vite-plus": "catalog:"
+    "esbuild": "catalog:"
   }
 }

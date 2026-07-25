@@ -10,6 +10,9 @@ export default defineConfig({
   pack: {
     dts: true,
     entry: ["src/widget.tsx"],
+    loader: {
+      ".svg": "dataurl",
+    },
   },
   test: {
     environment: "jsdom",

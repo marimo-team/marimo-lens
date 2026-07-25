@@ -23,7 +23,7 @@ Use the Node version in `.node-version` and the pnpm version declared in
 | Run local gate         | `make check`                     | Repository checks pass in order |
 
 Build the browser assets before Python tests. `Lens` loads the generated
-AnyWidget manifest when its model is created.
+`widget.js` and `widget.css` files when its model is created.
 
 ## Architecture in five rules
 
@@ -38,8 +38,8 @@ AnyWidget manifest when its model is created.
 - Marimo runtime access stays in `_marimo_runtime.py` and
   `_marimo_control_state.py`. Notebook DOM access stays in
   `packages/widget/src/notebook/`.
-- `anywidget-bundle` builds the browser module graph. Hatch packages that graph
-  into the wheel and source distribution.
+- esbuild bundles the widget into one ESM file and one stylesheet. Hatch
+  packages both files into the wheel and source distribution.
 
 Read [Architecture](development_docs/architecture.md) before changing an
 ownership boundary.
