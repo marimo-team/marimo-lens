@@ -108,7 +108,12 @@ export default defineConfig({
   },
   title: "marimo-lens",
   vite: {
-    plugins: [marimoVitePress({ cwd: repositoryRoot })],
+    plugins: [
+      marimoVitePress({
+        compiler: { cacheDir: false, uvCommand: "uv" },
+        cwd: repositoryRoot,
+      }),
+    ],
     publicDir,
   },
   vue: {
