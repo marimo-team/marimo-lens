@@ -1,36 +1,55 @@
 # Getting started
 
-Mount Lens in a live marimo notebook, create one selection, and keep that
-selection ready for a notebook agent.
+Launch a marimo notebook with Lens, create one visual request, and inspect what
+a notebook agent can read.
 
-Lens supports Python 3.11 through 3.14.
-
-## Install Lens
-
-Install `marimo-lens` in the environment that runs your notebook:
-
-```sh
-uv pip install marimo-lens
+```marimo-config
+requires-python = ">=3.11"
+dependencies = [
+    "marimo",
+    "marimo-lens",
+]
 ```
 
-Open an existing notebook or create a new one:
+## Start a notebook
+
+Open `notebook.py` with marimo and Lens available:
 
 ```sh
-marimo edit notebook.py
+uvx --with marimo-lens marimo edit --no-token notebook.py
 ```
 
-## Add a selectable output
+[`uvx`](https://docs.astral.sh/uv/guides/tools/) creates and reuses an isolated
+environment for this command. The notebook can import `marimo_lens`
+immediately. `--no-token` lets [marimo Pair](https://marimo.io/pair) discover
+this local notebook.
 
-Render a small result in one cell:
+::: details Use an existing uv project
+
+Add Lens to the project, then run marimo in that environment:
+
+```sh
+uv add marimo-lens
+uv run marimo edit --no-token notebook.py
+```
+
+:::
+
+## Make notebook results selectable
+
+Render a result in the first cell:
 
 ```python
 import marimo as mo
 
 revenue = {"January": 42, "February": 58, "March": 39}
-mo.md("\n".join(f"- {month}: **{value}**" for month, value in revenue.items()))
+rows = "\n".join(
+    f"| {month} | {value} |" for month, value in revenue.items()
+)
+mo.md(f"| Month | Revenue |\n| --- | ---: |\n{rows}")
 ```
 
-Mount Lens in another cell:
+Mount Lens in the second cell:
 
 ```python
 from marimo_lens import Lens
@@ -39,33 +58,143 @@ lens = Lens()
 lens
 ```
 
-Keep the Lens cell mounted while you work. Lens needs the live notebook kernel
-to create selections and read notebook context.
+Keep the Lens cell mounted while you work. Its dock appears at the bottom of
+the notebook.
 
-## Create the first selection
+## Create a selection
 
-1. Press **Select** in the dock at the bottom of the notebook.
-2. Click one revenue value, or drag across several values.
-3. Release the pointer to create the selection.
-4. Add a note when the agent needs a specific question or constraint.
+<div class="lens-doc-demo">
 
-Lens assigns the first selection the stable label `S1` and makes it current.
-The selection sheet lists the output cell, note, marked image status, and
-available actions.
+<div class="lens-doc-demo-steps" aria-label="Create a Lens request in four steps">
+  <span><strong>1</strong> Press Select</span>
+  <span><strong>2</strong> Click a value</span>
+  <span><strong>3</strong> Add a note</span>
+  <span><strong>4</strong> Review the request</span>
+</div>
 
-Selection mode is one-shot. Press **Select** again for each new point or region.
+```python marimo output=false
+from html import escape
 
-## Keep the notebook live
+import marimo as mo
+from marimo_lens import Lens
 
-Use `marimo edit` while changing the notebook or `marimo run` when the notebook
-should stay read-only:
-
-```sh
-marimo run notebook.py
+get_starter_revision, set_starter_revision = mo.state(0)
 ```
 
-The Python kernel must remain connected while Lens and the agent read or update
-the selection workflow.
+<div class="lens-doc-demo-mount">
 
-For a ready-made agent workflow, connect [marimo Pair](https://marimo.io/pair)
-and follow [the integration guide](./pair).
+```python marimo
+starter_lens = Lens()
+
+def _sync_starter_revision(change):
+    set_starter_revision(int(change["new"]["revision"]))
+
+starter_lens.observe(_sync_starter_revision, names="_state")
+starter_lens
+```
+
+</div>
+
+<div class="lens-doc-demo-output lens-starter-output">
+
+```python marimo
+_starter_revenue = {
+    "January": 42,
+    "February": 58,
+    "March": 39,
+}
+_starter_rows = "\n".join(
+    f"| {_month} | {_value} |"
+    for _month, _value in _starter_revenue.items()
+)
+mo.md(
+    "| Month | Revenue |\n"
+    "| --- | ---: |\n"
+    f"{_starter_rows}"
+)
+```
+
+</div>
+
+<div class="lens-doc-demo-status">
+
+```python marimo
+_starter_revision = get_starter_revision()
+_starter_context = starter_lens.context()
+_starter_current = _starter_context.current
+_starter_open_count = len(
+    _starter_context.references.get("selections", [])
+)
+
+if _starter_current is None:
+    _starter_state = "empty"
+    _starter_title = "No request yet"
+    _starter_body = (
+        "Select a revenue value and add a note such as "
+        "“Make these values easier to compare.”"
+    )
+else:
+    _starter_state = "ready"
+    _starter_id = str(_starter_current.get("id", ""))
+    _starter_label = escape(
+        str(_starter_current.get("label", "Selection"))
+    )
+    _starter_note = (
+        escape(str(_starter_current.get("note", "")).strip())
+        or "No note added"
+    )
+    _starter_cell = escape(str(_starter_current["outputCellId"]))
+    _starter_images = {
+        str(_image.selection_id)
+        for _image in _starter_context.images
+    }
+    _starter_snapshot = _starter_current.get("snapshot", {})
+    _starter_image_status = (
+        "Ready"
+        if _starter_id in _starter_images
+        else escape(
+            str(_starter_snapshot.get("status", "pending"))
+            .replace("_", " ")
+            .title()
+        )
+    )
+    _starter_title = f"{_starter_label} is ready for an agent"
+    _starter_body = f"""
+      <dl class="lens-doc-demo-context">
+        <div><dt>Requested change</dt><dd>{_starter_note}</dd></div>
+        <div><dt>Producing cell</dt><dd><code>{_starter_cell}</code></dd></div>
+        <div><dt>Marked image</dt><dd>{_starter_image_status}</dd></div>
+        <div><dt>Open requests</dt><dd>{_starter_open_count}</dd></div>
+      </dl>
+    """
+
+mo.Html(
+    f"""
+    <aside
+      data-starter-demo-state="{escape(_starter_state)}"
+      data-starter-demo-open-count="{_starter_open_count}"
+      aria-live="polite"
+    >
+      <span class="lens-doc-demo-eyebrow">What the agent receives</span>
+      <strong>{_starter_title}</strong>
+      <div>{_starter_body}</div>
+    </aside>
+    """
+)
+```
+
+</div>
+
+</div>
+
+Press **Select** again to add another point or region.
+
+## Connect an agent
+
+[marimo Pair](https://marimo.io/pair) provides a notebook-agent workflow.
+Follow the [Pair integration guide](./pair) to connect it to this notebook and
+complete the first request.
+
+For another notebook agent, [How it works](./how-it-works) explains the context
+and feedback loop. The [Python API](./api) provides the methods an integration
+calls to read a request, show activity, complete it, and return the result.

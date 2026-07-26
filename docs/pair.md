@@ -1,47 +1,55 @@
 # marimo Pair integration
 
-Point at a notebook result and ask [marimo Pair](https://marimo.io/pair) about
-“this” without copying cell IDs, code, or screenshots. Pair starts with the
-selected cell and related notebook structure, then loads an image of your
-selection when needed.
+[marimo Pair](https://marimo.io/pair) connects an agent to a live marimo
+notebook. With Lens mounted, Pair can start from the result you marked, inspect
+the cells behind it, and return the verified result to the notebook.
 
-Connect Pair to the same live notebook that contains Lens.
+Create a request in [Getting Started](./getting-started) before connecting an
+agent.
 
-## Ask about a selected result
+## Install and connect Pair
+
+Install or update Pair using the
+[marimo Pair installation guide](https://github.com/marimo-team/marimo-pair#install).
+It covers [Agent Skills](https://agentskills.io/) clients and the Claude Code
+plugin.
+
+The Getting Started command runs marimo with `--no-token`, so Pair can discover
+the local session. Open the notebook UI before asking Pair to connect. For an
+authenticated server, follow Pair's
+[prerequisites](https://github.com/marimo-team/marimo-pair#prerequisites).
+
+## Send the first request
 
 1. Select the output you want Pair to inspect.
-2. Add a note when the visual mark needs more context.
-3. Ask Pair about the selection.
+2. Add a note such as “Make the bars blue.”
+3. Ask Pair to resolve the Lens request.
 
 For example:
 
-> Why did revenue drop here?
-
-> Check whether this region matches the filter I selected.
-
-> Update the aggregation behind this result and verify the chart.
+```text
+Resolve my Lens request.
+```
 
 The selection identifies the exact output cell, point or region, and optional
-note. Pair can read related notebook cells or request image evidence as the
-task requires. When several open selections point into one output, the
-requested cell image shows every point and region in one raster.
+note. Pair reads related notebook cells and opens a marked image when the task
+depends on visual detail.
 
-## Follow Pair's work
+## Pair workflow
 
-Pair can use Lens to keep the notebook workflow visible:
+Pair uses Lens to keep the work visible in the notebook:
 
-- **Working** marks the cell Pair is changing or checking. Pair can choose a
-  short task label such as **On it** or **Checking**.
-- **Reveal** brings one verified or explanatory result into view.
-- **Addressed** completes the selected request and moves it into **History**.
+1. An activity label marks the cell Pair is changing or checking.
+2. Pair edits and runs the notebook through the live kernel.
+3. Pair checks that the affected cells completed successfully.
+4. Lens moves the completed selection into **History**.
+5. Lens brings the verified result into view.
 
 Working marks never scroll the notebook. Reveal scrolls once and keeps keyboard
 focus in place. The working mark stays present while Pair applies, runs, and
-verifies the requested changes. Pair resolves all selections completed by the
-same verified change in one operation, then reveals the primary result as its
-final notebook action.
+verifies the requested change.
 
-## Reopen a completed selection
+## Reopen a selection
 
 Open **History** from the selection sheet, choose an addressed item, then press
 **Reopen**.
@@ -51,16 +59,16 @@ selection. It starts a fresh marked image capture from the current output.
 Pair can also see the prior completion time and summary while working on the
 reopened selection.
 
-Use **Clear History** after you finish with the History items. Open selections
-and their marked images stay in place.
-
-## Guide Pair to another selection
+## Multiple selections
 
 When several selections are open, select the row you want to make current.
-Pair starts from that current selection on the next request.
+Pair treats that selection as the likely focus of the next request.
 
 Add or edit the note when the mark alone could support several interpretations.
-The note stays with the selection across output rerenders and reopen.
+When one verified change addresses several selections, Pair can complete them
+together with one summary. A current cell image can show every open point and
+region on the same output.
 
 [Selections](./selections) covers point and region behavior, marked images,
-keyboard use, and output changes.
+keyboard use, and output changes. Pair setup and troubleshooting remain in the
+[marimo Pair repository](https://github.com/marimo-team/marimo-pair).

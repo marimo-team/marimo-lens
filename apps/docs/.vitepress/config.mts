@@ -64,7 +64,8 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     footer: {
-      message: "Cell-backed selections for live marimo notebooks.",
+      message:
+        "Point to a result. Lens gives your agent its notebook context. Review what comes back.",
     },
     logo: {
       alt: "marimo-lens",
@@ -73,24 +74,35 @@ export default defineConfig({
     },
     nav: [
       { text: "Getting started", link: "/getting-started" },
+      { text: "Pair integration", link: "/pair" },
       { text: "Selections", link: "/selections" },
       { text: "How it works", link: "/how-it-works" },
       { text: "Python API", link: "/api" },
-      { text: "Pair integration", link: "/pair" },
     ],
     outline: [2, 3],
     search: { provider: "local" },
     sidebar: [
       {
-        text: "marimo-lens",
+        text: "Start",
         items: [
           { text: "Overview", link: "/" },
           { text: "Getting started", link: "/getting-started" },
+        ],
+      },
+      {
+        text: "Use Lens",
+        items: [{ text: "Pair integration", link: "/pair" }],
+      },
+      {
+        text: "Learn",
+        items: [
           { text: "Selections", link: "/selections" },
           { text: "How it works", link: "/how-it-works" },
-          { text: "Python API", link: "/api" },
-          { text: "Pair integration", link: "/pair" },
         ],
+      },
+      {
+        text: "Reference",
+        items: [{ text: "Python API", link: "/api" }],
       },
     ],
     siteTitle: false,
