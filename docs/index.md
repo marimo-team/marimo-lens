@@ -1,5 +1,7 @@
 ---
 layout: home
+title: "marimo-lens: Visual grounding for your notebook agent"
+titleTemplate: false
 
 hero:
   text: 'Let your notebook agent see <span class="lens-hero-focus">what you see<span class="lens-hero-selection-box" aria-hidden="true"></span></span>.'

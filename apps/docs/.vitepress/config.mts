@@ -6,7 +6,8 @@ const repository = "https://github.com/marimo-team/marimo-lens";
 const siteUrl = "https://marimo-team.github.io/marimo-lens/";
 const description =
   "Point to a marimo notebook result and say what should change. Lens grounds your agent's work in the producing cell, related context, and an annotated image.";
-const socialDescription = description;
+const socialDescription =
+  "Mark a result. Lens grounds your agent in the cells behind it.";
 const socialImage = `${siteUrl}brand/marimo-lens-og.png`;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
@@ -37,18 +38,31 @@ export default defineConfig({
         type: "image/svg+xml",
       },
     ],
-    ["meta", { content: "website", property: "og:type" }],
-    ["meta", { content: "marimo-lens", property: "og:title" }],
-    ["meta", { content: socialDescription, property: "og:description" }],
-    ["meta", { content: siteUrl, property: "og:url" }],
-    ["meta", { content: socialImage, property: "og:image" }],
-    ["meta", { content: "image/png", property: "og:image:type" }],
-    ["meta", { content: "2400", property: "og:image:width" }],
-    ["meta", { content: "1260", property: "og:image:height" }],
-    ["meta", { content: "marimo-lens", property: "og:image:alt" }],
-    ["meta", { content: "summary_large_image", name: "twitter:card" }],
-    ["meta", { content: socialImage, name: "twitter:image" }],
-    ["meta", { content: "marimo-lens", name: "twitter:image:alt" }],
+    ["meta", { property: "og:type", content: "website" }],
+    ["meta", { property: "og:site_name", content: "marimo-lens" }],
+    [
+      "meta",
+      {
+        property: "og:title",
+        content: "Visual grounding for your notebook agent",
+      },
+    ],
+    ["meta", { property: "og:description", content: socialDescription }],
+    ["meta", { property: "og:url", content: siteUrl }],
+    ["meta", { property: "og:image", content: socialImage }],
+    ["meta", { property: "og:image:type", content: "image/png" }],
+    ["meta", { property: "og:image:width", content: "2400" }],
+    ["meta", { property: "og:image:height", content: "1260" }],
+    [
+      "meta",
+      {
+        property: "og:image:alt",
+        content: "marimo-lens. Let your agent see what you see.",
+      },
+    ],
+    ["meta", { name: "twitter:card", content: "summary_large_image" }],
+    ["meta", { name: "twitter:image", content: socialImage }],
+    ["meta", { name: "twitter:image:alt", content: "marimo-lens" }],
   ],
   lastUpdated: true,
   markdown: {
