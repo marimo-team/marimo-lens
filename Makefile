@@ -13,9 +13,11 @@ check:
 	git diff --check
 
 docs:
+	pnpm --filter @marimo-lens/python build
 	pnpm --filter @marimo-lens/docs build
 
 docs-serve:
+	pnpm --filter @marimo-lens/python build
 	env -u BASE_PATH pnpm --filter @marimo-lens/docs dev --host 127.0.0.1
 
 package:
