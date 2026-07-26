@@ -131,7 +131,7 @@ if _starter_current is None:
     _starter_title = "No request yet"
     _starter_body = (
         "Select a revenue value and add a note such as "
-        "“Make these values easier to compare.”"
+        '"Make these values easier to compare."'
     )
 else:
     _starter_state = "ready"
@@ -192,9 +192,10 @@ Press **Select** again to add another point or region.
 ## Connect an agent
 
 [marimo Pair](https://marimo.io/pair) provides a notebook-agent workflow.
-Follow the [Pair integration guide](./pair) to connect it to this notebook and
+Follow [Use with marimo Pair](./pair) to connect it to this notebook and
 complete the first request.
 
-For another notebook agent, [How it works](./how-it-works) explains the context
-and feedback loop. The [Python API](./api) provides the methods an integration
-calls to read a request, show activity, complete it, and return the result.
+For another notebook agent, the [Overview](./overview) explains the context
+and feedback loop. The [Python API reference](./api) defines the methods an
+integration calls to read a request, show activity, complete it, and return the
+result.

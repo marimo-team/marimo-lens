@@ -31,7 +31,7 @@ features:
 
   - icon: 🔌
     title: Connect your notebook agent
-    details: Use Lens with marimo Pair or another agent that can call the Lens Python API in a marimo notebook.
+    details: Use Lens with <a href="https://marimo.io/pair">marimo Pair</a> or another agent that can call the Lens Python API in a marimo notebook.
 ---
 
 ```marimo-config
@@ -51,7 +51,7 @@ Select part of the chart, add a note, and see what your notebook agent receives.
 <div class="lens-demo-steps" aria-label="Try Lens in four steps">
   <span><strong>1</strong> Press Select</span>
   <span><strong>2</strong> Click a bar</span>
-  <span><strong>3</strong> Add “Make bars blue”</span>
+  <span><strong>3</strong> Add "Make bars blue"</span>
   <span><strong>4</strong> Mark another</span>
 </div>
 
@@ -501,7 +501,7 @@ if _verified_request is not None:
             _verified_summary = (
                 "This demo can recolor the bars. "
                 "Add a color to one request, such as "
-                "“Make bars blue.”"
+                '"Make bars blue."'
             )
         _verification_message = (
             "Checking the updated chart before returning it."

@@ -72,36 +72,35 @@ export default defineConfig({
       light: "/brand/marimo-lens-lockup-horizontal-light.svg",
     },
     nav: [
-      { text: "Getting started", link: "/getting-started" },
-      { text: "Pair integration", link: "/pair" },
-      { text: "Selections", link: "/selections" },
-      { text: "How it works", link: "/how-it-works" },
-      { text: "Python API", link: "/api" },
+      { text: "Overview", link: "/overview" },
+      {
+        text: "Guide",
+        items: [
+          { text: "Getting started", link: "/getting-started" },
+          { text: "Use with marimo Pair", link: "/pair" },
+          { text: "Selections", link: "/selections" },
+        ],
+      },
+      { text: "Reference", link: "/api" },
     ],
     outline: [2, 3],
     search: { provider: "local" },
     sidebar: [
       {
-        text: "Start",
+        text: "Overview",
+        link: "/overview",
+      },
+      {
+        text: "Guide",
         items: [
-          { text: "Overview", link: "/" },
           { text: "Getting started", link: "/getting-started" },
-        ],
-      },
-      {
-        text: "Use Lens",
-        items: [{ text: "Pair integration", link: "/pair" }],
-      },
-      {
-        text: "Learn",
-        items: [
+          { text: "Use with marimo Pair", link: "/pair" },
           { text: "Selections", link: "/selections" },
-          { text: "How it works", link: "/how-it-works" },
         ],
       },
       {
         text: "Reference",
-        items: [{ text: "Python API", link: "/api" }],
+        link: "/api",
       },
     ],
     siteTitle: false,

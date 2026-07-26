@@ -62,8 +62,8 @@ After selecting an output and adding a note, ask the agent:
 Resolve my Lens request.
 ```
 
-The [Pair integration guide](https://marimo-team.github.io/marimo-lens/pair)
-covers the ready-made workflow. [How it works](https://marimo-team.github.io/marimo-lens/how-it-works)
+The [marimo Pair guide](https://marimo-team.github.io/marimo-lens/pair)
+covers the ready-made workflow. [Overview](https://marimo-team.github.io/marimo-lens/overview)
 shows how another agent can read the request, show its activity, return a
 result, and keep completed feedback available for another pass.
 

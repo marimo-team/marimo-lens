@@ -1,10 +1,15 @@
-# marimo Pair integration
+---
+title: Use with marimo Pair
+description: Connect marimo Pair to a Lens request and return the result for review.
+---
+
+# Use with marimo Pair
 
 [marimo Pair](https://marimo.io/pair) connects an agent to a live marimo
 notebook. With Lens mounted, Pair can start from the result you marked, inspect
 the cells behind it, and return the verified result to the notebook.
 
-Create a request in [Getting Started](./getting-started) before connecting an
+Create a request in [Getting started](./getting-started) before connecting an
 agent.
 
 ## Install and connect Pair
@@ -22,7 +27,7 @@ authenticated server, follow Pair's
 ## Send the first request
 
 1. Select the output you want Pair to inspect.
-2. Add a note such as “Make the bars blue.”
+2. Add a note such as "Make the bars blue."
 3. Ask Pair to resolve the Lens request.
 
 For example:

@@ -186,8 +186,8 @@ makes it current.
 Press **Select** again to add another point or region. Every open selection
 keeps its own stable label, note, producing cell, and annotated image.
 
-The current selection is the likely focus when a request refers to “this” or
-“here.” Select another row to change that focus before asking the agent.
+The current selection is the likely focus when a request refers to "this" or
+"here." Select another row to change that focus before asking the agent.
 
 Several selections can describe one change. An agent can resolve them together
 after one verified result addresses every supplied selection. When those
@@ -242,5 +242,5 @@ The first displayed Lens in a document owns interaction. Additional Lens views
 show **Lens is already active** until the owner closes. A Lens in another
 same-origin document has its own owner.
 
-[Python API](./api) describes the context, activity, reveal, and resolution
-methods used by agent integrations.
+The [Python API reference](./api) describes the context, activity, reveal, and
+resolution methods used by agent integrations.

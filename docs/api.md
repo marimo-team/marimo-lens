@@ -1,4 +1,9 @@
-# Python API
+---
+title: Python API reference
+description: Python API contracts for reading Lens requests and returning agent work for review.
+---
+
+# Python API reference
 
 The Python API lets notebook agents read the current selection, show their work
 in the notebook, reveal a result, and complete a request.
@@ -348,7 +353,7 @@ mo.Html(
 
 These controls call the feedback methods. An agent integration edits, runs, and
 verifies notebook code between `context()` and `resolve()`. See
-[How it works](./how-it-works) for the complete workflow.
+the [Overview](./overview) for the complete workflow.
 
 ## `Lens`
 
