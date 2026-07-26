@@ -5,9 +5,8 @@ import { defineConfig } from "vitepress";
 const repository = "https://github.com/marimo-team/marimo-lens";
 const siteUrl = "https://marimo-team.github.io/marimo-lens/";
 const description =
-  "Select a point or region in a live marimo output and give marimo Pair the context behind it.";
-const socialDescription =
-  "Select a notebook result. Pair starts with your selection, note, and the cells behind it.";
+  "Point to a marimo notebook result and say what should change. Lens grounds your agent's work in the producing cell, related context, and an annotated image.";
+const socialDescription = description;
 const socialImage = `${siteUrl}brand/marimo-lens-og.png`;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
@@ -64,7 +63,8 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     footer: {
-      message: "Cell-backed selections for live marimo notebooks.",
+      copyright:
+        "Released under the Apache 2.0 License. Copyright © 2026-Present marimo-lens maintainers.",
     },
     logo: {
       alt: "marimo-lens",
@@ -72,25 +72,35 @@ export default defineConfig({
       light: "/brand/marimo-lens-lockup-horizontal-light.svg",
     },
     nav: [
-      { text: "Getting started", link: "/getting-started" },
-      { text: "Use with Pair", link: "/pair" },
-      { text: "Selections", link: "/selections" },
-      { text: "How it works", link: "/how-it-works" },
-      { text: "Python API", link: "/api" },
+      { text: "Overview", link: "/overview" },
+      {
+        text: "Guide",
+        items: [
+          { text: "Getting started", link: "/getting-started" },
+          { text: "Use with marimo Pair", link: "/pair" },
+          { text: "Selections", link: "/selections" },
+        ],
+      },
+      { text: "Reference", link: "/api" },
     ],
     outline: [2, 3],
     search: { provider: "local" },
     sidebar: [
       {
-        text: "marimo-lens",
+        text: "Overview",
+        link: "/overview",
+      },
+      {
+        text: "Guide",
         items: [
-          { text: "Overview", link: "/" },
           { text: "Getting started", link: "/getting-started" },
-          { text: "Use with Pair", link: "/pair" },
+          { text: "Use with marimo Pair", link: "/pair" },
           { text: "Selections", link: "/selections" },
-          { text: "How it works", link: "/how-it-works" },
-          { text: "Python API", link: "/api" },
         ],
+      },
+      {
+        text: "Reference",
+        link: "/api",
       },
     ],
     siteTitle: false,

@@ -48,7 +48,7 @@ describe("selection snapshot preview", () => {
       "blob:marimo-lens-snapshot",
     );
     expect(document.body.textContent).toContain(
-      "This annotated image is available to image-capable agents.",
+      "This annotated image is available to vision-capable agents.",
     );
     expect(createObjectURL).toHaveBeenCalledOnce();
 

@@ -334,7 +334,7 @@ function SnapshotPreviewDialog({
         )}
       </div>
       <footer className="ml-snapshot-preview__caption" aria-live="polite">
-        <span>This annotated image is available to image-capable agents.</span>
+        <span>This annotated image is available to vision-capable agents.</span>
         {snapshot.status === "outdated" ? (
           <strong>Captured before this selection moved.</strong>
         ) : null}
