@@ -5,9 +5,8 @@ import { defineConfig } from "vitepress";
 const repository = "https://github.com/marimo-team/marimo-lens";
 const siteUrl = "https://marimo-team.github.io/marimo-lens/";
 const description =
-  "Point to a marimo notebook result and say what should change. Lens gives your agent the producing cell, related context, and an annotated image.";
-const socialDescription =
-  "Point to a notebook result and say what should change. Lens gives your agent the producing cell, related context, and an annotated image.";
+  "Point to a marimo notebook result and say what should change. Lens grounds your agent's work in the producing cell, related context, and an annotated image.";
+const socialDescription = description;
 const socialImage = `${siteUrl}brand/marimo-lens-og.png`;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
@@ -64,8 +63,8 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     footer: {
-      message:
-        "Point to a result, give your agent the notebook context, and review what comes back.",
+      copyright:
+        "Released under the Apache 2.0 License. Copyright © 2026-Present marimo-lens maintainers.",
     },
     logo: {
       alt: "marimo-lens",

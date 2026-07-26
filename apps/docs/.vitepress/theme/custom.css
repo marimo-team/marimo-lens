@@ -666,7 +666,6 @@ body {
 
 .lens-demo {
   scroll-margin-top: 88px;
-  border-top: 1px solid var(--vp-c-divider);
   padding: 56px 0 72px;
 }
 

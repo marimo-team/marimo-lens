@@ -15,8 +15,8 @@
 **Let your notebook agent see what you see.**
 
 Point to a notebook result and say what should change. Lens gives your agent
-the producing cell, related notebook context, and an annotated image of your
-selection.
+the producing cell, related notebook context, and an annotated image to ground
+its work in the result you marked.
 
 While the agent works, Lens can show which cell it is changing or checking,
 bring the result into view for review, and keep completed requests in

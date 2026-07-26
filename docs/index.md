@@ -3,7 +3,7 @@ layout: home
 
 hero:
   text: 'Let your notebook agent see <span class="lens-hero-focus">what you see<span class="lens-hero-selection-box" aria-hidden="true"></span></span>.'
-  tagline: Point to a notebook result and say what should change. Lens gives your agent the producing cell, related notebook context, and an annotated image of your selection.
+  tagline: Point to a notebook result and say what should change. Lens gives your agent the producing cell, related notebook context, and an annotated image to ground its work in the result you marked.
   image:
     light: /brand/marimo-lens-lockup-stacked-light.svg
     dark: /brand/marimo-lens-lockup-stacked-dark.svg
@@ -17,14 +17,21 @@ hero:
       link: ./getting-started
 
 features:
-  - title: 🎯 Mark what you mean
+  - icon: 🎯
+    title: Mark what you mean
     details: Point to a value or drag across a region. Add a note with what you noticed or want changed.
 
-  - title: 🔗 Give the agent context
+  - icon: 🔗
+    title: Ground the agent's work
     details: Lens links your selection to the producing cell, relevant controls, upstream code, and an annotated image.
 
-  - title: 🔍 Review the result
+  - icon: 🔍
+    title: Review the result
     details: See where your agent is working, review the result it brings into view, and reopen the request for another pass.
+
+  - icon: 🔌
+    title: Connect your notebook agent
+    details: Use Lens with marimo Pair or another agent that can call the Lens Python API in a marimo notebook.
 ---
 
 ```marimo-config

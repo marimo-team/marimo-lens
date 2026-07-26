@@ -1,14 +1,15 @@
 ---
 title: How it works
-description: How marimo-lens connects a browser selection to live notebook context.
+description: How marimo-lens grounds an agent's work in the notebook context behind a visual selection.
 ---
 
 # How it works
 
 `marimo-lens` connects a point or region on a rendered output to the
-[marimo](https://marimo.io/) cell that produced it. Lens uses
-[anywidget](https://anywidget.dev/) to connect its browser interface to a
-Python model in the notebook kernel.
+[marimo](https://marimo.io/) cell that produced it. The producing cell, related
+notebook context, and annotated image ground the agent's work in the result the
+user marked. Lens uses [anywidget](https://anywidget.dev/) to connect its
+browser interface to a Python model in the notebook kernel.
 
 <ol class="lens-context-flow" aria-label="Lens human-agent workflow">
   <li>
@@ -55,8 +56,8 @@ state.
    read, it adds cell source and relevant control values within a fixed size
    limit.
 
-The note and cell context give the agent text it can read. The annotated PNG
-keeps the visual focus that motivated the request. An integration can load
+The note tells the agent what should change. The cell context and annotated PNG
+ground that request in the code and visual result. An integration can load
 either form independently.
 
 ## What an agent receives

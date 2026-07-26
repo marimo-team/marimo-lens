@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "marimo-lens"
 version = "0.0.2"
-description = "Give notebook agents the code and context behind visual feedback in marimo"
+description = "Ground your agent's work in the code and context behind the result you select in a marimo notebook"
 requires-python = ">=3.11,<3.15"
 readme = "README.md"
 license = "Apache-2.0"
