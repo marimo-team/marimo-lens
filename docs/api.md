@@ -305,7 +305,7 @@ elif _api_demo_kind == "context":
         <div><dt>Requested change</dt><dd>{_api_demo_note}</dd></div>
         <div><dt>Producing cell</dt><dd><code>{_api_demo_cell}</code></dd></div>
         <div><dt>Related notebook context</dt><dd>{int(_api_demo_result["textLength"]):,} characters</dd></div>
-        <div><dt>Marked image</dt><dd>{_api_demo_image_status}</dd></div>
+        <div><dt>Annotated image</dt><dd>{_api_demo_image_status}</dd></div>
       </dl>
     """
 elif _api_demo_kind == "activity":
@@ -379,7 +379,7 @@ if selection is not None:
 A `LensContext` does not update. Call `lens.context()` again after the notebook
 or its selections change.
 
-Compact references and marked images are ready when `context()` returns.
+Compact references and annotated images are ready when `context()` returns.
 Standalone text renders and caches when `context.text` is first read from the
 captured runtime snapshot.
 
@@ -437,7 +437,7 @@ and `lens_closed`.
 ### `lens.resolve(selection_ids, *, expected_revision, summary=None) -> int`
 
 Moves one or more selections into addressed History against the revision
-captured by `context()`, releases their marked PNGs, and returns the resulting
+captured by `context()`, releases their annotated PNGs, and returns the resulting
 revision.
 
 ```python
@@ -473,8 +473,8 @@ Expected `LensError.code` values are `lens_closed`, `revision_conflict`, and
 
 ### `lens.close() -> None`
 
-Closes Lens, cancels pending full-cell capture, and releases Lens-owned marked
-images. Calling `close()` more than once has no effect.
+Closes Lens, cancels pending full-cell capture, and releases Lens-owned
+annotated images. Calling `close()` more than once has no effect.
 
 Later calls to `context()`, `activity()`, `reveal()`, and `resolve()` raise
 `LensError(code="lens_closed")`.
@@ -492,7 +492,8 @@ Later calls to `context()`, `activity()`, `reveal()`, and `resolve()` raise
 | `images`     | Tuple of successful `SelectionImage` values in selection order    |
 
 Each compact selection reference includes its stable ID and label, note, exact
-`outputCellId`, point or region, marked image status, and runtime `cellStatus`.
+`outputCellId`, point or region, annotated image status, and runtime
+`cellStatus`.
 
 `cellStatus` is:
 
@@ -507,8 +508,8 @@ and opaque state render as `[redacted]` or `[unavailable]`.
 
 ## `SelectionImage`
 
-`context.images` contains successful marked PNG captures. Match an image to a
-selection with `SelectionImage.selection_id`.
+`context.images` contains successful annotated PNG captures. Match an image to
+a selection with `SelectionImage.selection_id`.
 
 | Attribute      | Value                                          |
 | -------------- | ---------------------------------------------- |
@@ -560,13 +561,9 @@ Lens operation begins.
 | Relevant runtime cells               | 64                                         |
 | Reported omitted cell IDs            | 16 plus the exact omitted count            |
 | Controls included in standalone text | 16                                         |
-| One marked PNG                       | 8 MiB, 2,048 pixels per edge, 4 megapixels |
-| Stored marked PNG bytes per Lens     | 64 MiB                                     |
+| One annotated PNG                    | 8 MiB, 2,048 pixels per edge, 4 megapixels |
+| Stored annotated PNG bytes per Lens  | 64 MiB                                     |
 
 A mutation that cannot fit the synchronized selection state or required
 reference fields raises `LensError(code="selection_context_limit")` before the
 state changes.
-
-The [package README](https://github.com/marimo-team/marimo-lens/tree/main/packages/marimo-lens)
-contains the complete field and lifecycle reference used by integration
-authors.

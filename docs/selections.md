@@ -175,7 +175,7 @@ mo.Html(
 
 Releasing the pointer creates the selection and returns Lens to rest. Add an
 optional note in the selection sheet. Moving or resizing a selection keeps its
-stable `S<n>` label and starts a fresh marked image capture.
+stable `S<n>` label and starts a fresh annotated image capture.
 
 ## Selection focus
 
@@ -184,7 +184,7 @@ immediately. Activating a row, editing its note, moving it, or resizing it also
 makes it current.
 
 Press **Select** again to add another point or region. Every open selection
-keeps its own stable label, note, producing cell, and marked image.
+keeps its own stable label, note, producing cell, and annotated image.
 
 The current selection is the likely focus when a request refers to “this” or
 “here.” Select another row to change that focus before asking the agent.
@@ -202,13 +202,13 @@ recently active open selection. Stable labels are never reused.
 Each selection stores the exact marimo output cell ID.
 
 When an output rerenders, Lens reconnects the selection to the current output.
-When the output temporarily disappears, the selection, note, and marked image
+When the output temporarily disappears, the selection, note, and annotated image
 remain available. Returning the same cell ID reconnects it to the notebook.
 
-## Marked images
+## Annotated images
 
-Lens attempts to capture a marked PNG for each selection. The PNG helps when
-pixels, layout, or a chart region affects the task.
+Lens attempts to capture an annotated PNG for each selection. An agent can
+inspect the PNG when pixels, layout, or a chart region affects the task.
 
 Moving or resizing a selection marks its current PNG as outdated until the
 replacement capture succeeds. A failed replacement keeps the prior image and
@@ -221,13 +221,13 @@ cell reference and note remain available when image capture fails.
 
 An agent can mark a selection **Addressed** after completing the request. The
 open selection moves to **History** with its cell, note, point or region,
-timestamps, and optional completion summary. Lens releases its marked PNG.
+timestamps, and optional completion summary. Lens releases its annotated PNG.
 
 Several selections completed by the same verified change can move to History
 together. They share one completion summary and resolution revision.
 
 Reopening a history item restores it as the current selection and starts a
-fresh marked image capture. The History item remains available for the next
+fresh annotated image capture. The History item remains available for the next
 pass.
 
 ## Keyboard

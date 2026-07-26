@@ -1,7 +1,7 @@
 # Getting started
 
-Launch a marimo notebook with Lens, create one visual request, and inspect what
-a notebook agent can read.
+Start a marimo notebook with Lens, create one visual request, and inspect what
+your notebook agent receives.
 
 ```marimo-config
 requires-python = ">=3.11"
@@ -163,7 +163,7 @@ else:
       <dl class="lens-doc-demo-context">
         <div><dt>Requested change</dt><dd>{_starter_note}</dd></div>
         <div><dt>Producing cell</dt><dd><code>{_starter_cell}</code></dd></div>
-        <div><dt>Marked image</dt><dd>{_starter_image_status}</dd></div>
+        <div><dt>Annotated image</dt><dd>{_starter_image_status}</dd></div>
         <div><dt>Open requests</dt><dd>{_starter_open_count}</dd></div>
       </dl>
     """

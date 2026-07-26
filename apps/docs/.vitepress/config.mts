@@ -5,9 +5,9 @@ import { defineConfig } from "vitepress";
 const repository = "https://github.com/marimo-team/marimo-lens";
 const siteUrl = "https://marimo-team.github.io/marimo-lens/";
 const description =
-  "Select a point or region in a live marimo output and give your notebook agent the context behind it.";
+  "Point to a marimo notebook result and say what should change. Lens gives your agent the producing cell, related context, and an annotated image.";
 const socialDescription =
-  "Select a notebook result. Your agent starts with the selection, note, and cells behind it.";
+  "Point to a notebook result and say what should change. Lens gives your agent the producing cell, related context, and an annotated image.";
 const socialImage = `${siteUrl}brand/marimo-lens-og.png`;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
@@ -65,7 +65,7 @@ export default defineConfig({
     },
     footer: {
       message:
-        "Point to a result. Lens gives your agent its notebook context. Review what comes back.",
+        "Point to a result, give your agent the notebook context, and review what comes back.",
     },
     logo: {
       alt: "marimo-lens",

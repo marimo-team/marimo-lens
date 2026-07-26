@@ -17,7 +17,7 @@ Python model in the notebook kernel.
   </li>
   <li>
     <strong>Connect to the notebook</strong>
-    <span>Lens links the mark to its cell, related cells, and image.</span>
+    <span>Lens links the mark to its cell, related cells, and annotated image.</span>
   </li>
   <li>
     <strong>Revise the code</strong>
@@ -25,7 +25,7 @@ Python model in the notebook kernel.
   </li>
   <li>
     <strong>Review the result</strong>
-    <span>Lens shows progress and returns the result to the notebook.</span>
+    <span>Lens shows progress and brings the result into view for review.</span>
   </li>
 </ol>
 
@@ -35,7 +35,7 @@ Python model in the notebook kernel.
 | ------------------------------------------------------------ | ------------------------------------------------------------- |
 | Finds rendered outputs and handles pointer or keyboard input | Stores open selections and completed History items            |
 | Positions markers, the selection sheet, and agent feedback   | Reads the live marimo runtime and builds `LensContext`        |
-| Captures marked images of selected outputs                   | Validates selection changes, activity, reveal, and resolution |
+| Captures annotated images of selected outputs                | Validates selection changes, activity, reveal, and resolution |
 
 The two sides exchange compact selection records and explicit commands through
 the widget connection. PNG bytes travel separately from ordinary selection
@@ -46,8 +46,8 @@ state.
 1. Pointer release records the exact output cell ID and a normalized point or
    rectangle. The cell ID keeps the selection attached when the output
    rerenders.
-2. Python validates and stores the selection. The browser captures a marked PNG
-   separately when the output can be captured.
+2. Python validates and stores the selection. The browser captures an annotated
+   PNG separately when the output can be captured.
 3. `lens.context()` reads one snapshot from the marimo kernel.
    marimo already tracks which cells depend on which other cells, so Lens can
    gather the selected cell and its relevant upstream cells.
@@ -55,9 +55,9 @@ state.
    read, it adds cell source and relevant control values within a fixed size
    limit.
 
-The note and cell context give the agent text it can read. The marked PNG keeps
-the visual focus that motivated the request. An integration can load either
-form independently.
+The note and cell context give the agent text it can read. The annotated PNG
+keeps the visual focus that motivated the request. An integration can load
+either form independently.
 
 ## What an agent receives
 
@@ -68,8 +68,8 @@ selection:
    note.
 2. The notebook context supplies the selected cell and related upstream
    structure.
-3. An image of the selection or current output supplies pixel-level detail when
-   the task depends on what was rendered.
+3. An annotated selection image or current cell image supplies pixel-level
+   detail when the task depends on what was rendered.
 
 Images stay outside the text context. The agent can start with notebook
 structure and load pixels when visual detail affects the task.

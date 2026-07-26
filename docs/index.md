@@ -288,7 +288,7 @@ else:
               </span>
               <span style="color:var(--marimo-island-muted-foreground,#64748b);font-size:0.75rem">
                 Cell <code data-demo-cell>{_item_cell}</code>
-                · Marked image
+                · Annotated image
                 <span data-demo-image-status>{_item_image_status}</span>
               </span>
             </li>

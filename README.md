@@ -14,41 +14,26 @@
 
 **Let your notebook agent see what you see.**
 
-Point at a notebook result and ask your agent about “this” without copying cell
-IDs, code, or screenshots. Lens connects the mark and optional note to the
-producing cell and related notebook context, then provides a marked image when
-visual detail affects the task.
+Point to a notebook result and say what should change. Lens gives your agent
+the producing cell, related notebook context, and an annotated image of your
+selection.
 
-Your agent can inspect related code, show which cell it is changing or checking,
-reveal the result for review, and move completed requests to **History**.
+While the agent works, Lens can show which cell it is changing or checking,
+bring the result into view for review, and keep completed requests in
+**History** for another pass.
 
-[Read the documentation](https://marimo-team.github.io/marimo-lens/) for the
-complete notebook-agent workflow.
+[Read the user guide](https://marimo-team.github.io/marimo-lens/) for the
+notebook-agent workflow.
 
-## Quickstart
+## Quick start
 
-`marimo-lens` supports Python 3.11 through 3.14.
-
-```sh
-uv pip install marimo-lens
-```
-
-Open a marimo notebook:
+Open a local marimo notebook with Lens available:
 
 ```sh
-marimo edit notebook.py
+uvx --with marimo-lens marimo edit --no-token notebook.py
 ```
 
-Add a small output in one cell:
-
-```python
-import marimo as mo
-
-revenue = {"January": 42, "February": 58, "March": 39}
-mo.md("\n".join(f"- {month}: **{value}**" for month, value in revenue.items()))
-```
-
-Mount one Lens in another cell:
+Mount Lens in one notebook cell:
 
 ```python
 from marimo_lens import Lens
@@ -57,53 +42,35 @@ lens = Lens()
 lens
 ```
 
-The Lens dock appears at the bottom of the notebook. Press **Select**, then
-click a point or drag a region inside any rendered output. The selection is
-ready when you release the pointer.
+Keep the cell mounted. Press **Select**, then click a point or drag a region
+inside a rendered output. Add a note with what you want the agent to inspect or
+change.
 
-Run the notebook with `marimo run` or `marimo edit` so Lens stays connected to
-the Python kernel.
+`--no-token` lets [marimo Pair](https://marimo.io/pair) discover this local
+notebook. [Getting started](https://marimo-team.github.io/marimo-lens/getting-started)
+covers existing projects and includes a live selection example.
 
-## Use with a notebook agent
+## Connect an agent
 
-Connect a notebook agent to the same running notebook. For a ready-made path,
-use [marimo Pair](https://marimo.io/pair). Then:
+Connect a notebook agent that can call the Lens Python API to the same running
+notebook. [marimo Pair](https://marimo.io/pair) provides a ready-made
+integration.
 
-1. Select the output you want the agent to inspect.
-2. Add a note when the request needs more detail.
-3. Ask the agent about the selection, for example: “Why did revenue drop here?”
+After selecting an output and adding a note, ask the agent:
 
-The agent starts from the current selection when a request refers to “this” or
-“here.” It reads the selected cell and related notebook context as needed.
-While the agent works, Lens can mark the active cell. After verification, the
-agent can reveal the result and mark the selection **Addressed**. Addressed
-selections move to **History** with the agent's completion summary. Select
-**Reopen** to restore the original cell, note, and location for another pass.
+```text
+Resolve my Lens request.
+```
 
-The [integration guide](https://marimo-team.github.io/marimo-lens/pair) covers
-setup with marimo Pair.
-
-## What a selection keeps
-
-Each selection records:
-
-- The notebook output cell
-- A point or region within that output
-- An optional note
-- A marked PNG when browser capture succeeds
-
-Addressing a selection keeps its cell, point or region, note, timestamps, and
-optional completion summary in **History**. Its marked PNG is released.
-Reopening the item starts a fresh marked PNG capture from the current output.
-
-The selection stays available if its output temporarily disappears and
-reattaches when the same cell returns. Cross-origin images and external
-iframes can block PNG capture. The cell reference and note remain available in
-that case.
+The [Pair integration guide](https://marimo-team.github.io/marimo-lens/pair)
+covers the ready-made workflow. [How it works](https://marimo-team.github.io/marimo-lens/how-it-works)
+shows how another agent can read the request, show its activity, return a
+result, and keep completed feedback available for another pass.
 
 ## Python API
 
-Agent integrations use four workflow methods:
+The package exports `Lens`, `LensContext`, `LensError`, and `SelectionImage`.
+Agent integrations use four methods:
 
 | Method                                                            | Behavior                                                         |
 | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -112,8 +79,8 @@ Agent integrations use four workflow methods:
 | `lens.reveal(cell_id, *, message=None)`                           | Brings one verified or explanatory cell into view                |
 | `lens.resolve(selection_ids, *, expected_revision, summary=None)` | Moves one or more selections to History in one guarded operation |
 
-Read the [Python API reference](https://marimo-team.github.io/marimo-lens/api)
-for return values, errors, limits, and lifecycle behavior.
+The [Python API reference](https://marimo-team.github.io/marimo-lens/api)
+documents return values, errors, limits, and lifecycle behavior.
 
 ## Development
 

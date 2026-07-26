@@ -32,8 +32,8 @@ Resolve my Lens request.
 ```
 
 The selection identifies the exact output cell, point or region, and optional
-note. Pair reads related notebook cells and opens a marked image when the task
-depends on visual detail.
+note. Pair reads related notebook cells and opens an annotated image when the
+task depends on visual detail.
 
 ## Pair workflow
 
@@ -55,7 +55,7 @@ Open **History** from the selection sheet, choose an addressed item, then press
 **Reopen**.
 
 Lens restores the original cell, note, and point or region as the current
-selection. It starts a fresh marked image capture from the current output.
+selection. It starts a fresh annotated image capture from the current output.
 Pair can also see the prior completion time and summary while working on the
 reopened selection.
 
@@ -69,6 +69,6 @@ When one verified change addresses several selections, Pair can complete them
 together with one summary. A current cell image can show every open point and
 region on the same output.
 
-[Selections](./selections) covers point and region behavior, marked images,
+[Selections](./selections) covers point and region behavior, annotated images,
 keyboard use, and output changes. Pair setup and troubleshooting remain in the
 [marimo Pair repository](https://github.com/marimo-team/marimo-pair).
