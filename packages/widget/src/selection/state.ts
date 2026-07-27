@@ -136,7 +136,11 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
     case "selectionQueued":
       return {
         ...state,
-        workflow: { mode: "idle" },
+        workflow: {
+          mode: "editingNote",
+          selectionId: action.pending.selection.id,
+          motion: "animate",
+        },
         pendingSelections: [...state.pendingSelections, action.pending],
         optimisticCurrentSelectionId: action.pending.selection.id,
         announcement: `${action.pending.selection.label} selected.`,

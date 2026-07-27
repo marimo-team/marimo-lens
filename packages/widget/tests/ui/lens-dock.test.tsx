@@ -31,6 +31,17 @@ describe("Lens dock", () => {
 
     act(() => findButton("Collapse Lens")?.click());
     expect(findButton("Open Lens")).not.toBeNull();
+    const logoImages = Array.from(
+      document.querySelectorAll<HTMLImageElement>(".ml-dock-tab__logo-image"),
+    );
+    const logoSources = logoImages.map((image) => image.getAttribute("src") ?? "");
+    expect(logoImages).toHaveLength(2);
+    expect(
+      logoSources.every(
+        (source) => source.includes(".svg") || source.startsWith("data:image/svg+xml"),
+      ),
+    ).toBe(true);
+    expect(new Set(logoSources).size).toBe(2);
     act(() => {
       findButton("Open Lens")?.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }));
     });

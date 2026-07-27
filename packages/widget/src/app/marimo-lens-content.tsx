@@ -230,8 +230,6 @@ export function MarimoLensContent() {
           releaseAdjustment={releaseAdjustment}
           onActivate={(selection) => actions.activateSelection(selection.id)}
           onEditNote={(selection, motion) => actions.openNote(selection.id, motion)}
-          onDelete={actions.deleteSelection}
-          snapshotLoader={snapshotLoader}
           onReposition={actions.repositionSelection}
         />
 

@@ -5,7 +5,6 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { SelectionOverlay } from "@/selection/components/selection-overlay";
-import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
 
 import { selectionFixture } from "../../support/fixtures";
 import { NotebookDomTestProvider } from "../../support/notebook-dom";
@@ -76,129 +75,20 @@ describe("selection overlay", () => {
     expect(document.querySelector(".ml-resize-handle")).toBeNull();
   });
 
-  test("activates a marker without opening note editing", () => {
+  test("opens note editing when a marker is activated", () => {
     setupOutput();
     const selection = selectionFixture();
-    const onActivate = vi.fn();
-    renderOverlay([selection], null, { onActivate });
-
-    const marker = document.querySelector<HTMLButtonElement>(
-      '[data-marimo-lens-selection-id="selection-1"]',
-    );
-    act(() => marker?.click());
-    expect(onActivate).toHaveBeenCalledWith(selection);
-  });
-
-  test("opens marker actions on focus without changing the current selection", () => {
-    setupOutput();
-    const selection = selectionFixture();
-    const onActivate = vi.fn();
-    renderOverlay([selection], null, { onActivate });
-
-    const marker = document.querySelector<HTMLButtonElement>(
-      '[data-marimo-lens-selection-id="selection-1"]',
-    );
-    act(() => marker?.focus());
-    expect(onActivate).not.toHaveBeenCalled();
-    expect(
-      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
-    ).not.toBeNull();
-
-    act(() => marker?.click());
-    expect(onActivate).toHaveBeenCalledWith(selection);
-  });
-
-  test.each([
-    {
-      anchor: { kind: "point", x: 0.5, y: 0.5 } satisfies SelectionAnchor,
-      label: "Point selection",
-    },
-    {
-      anchor: {
-        kind: "rect",
-        x: 0.2,
-        y: 0.2,
-        width: 0.4,
-        height: 0.3,
-      } satisfies SelectionAnchor,
-      label: "Region selection",
-    },
-  ])("shows the $label mark in marker actions", ({ anchor, label }) => {
-    setupOutput();
-    const selection = selectionFixture({ anchor });
-    renderOverlay([selection], selection.id);
-
-    const marker = document.querySelector<HTMLButtonElement>(
-      '[data-marimo-lens-selection-id="selection-1"]',
-    );
-    act(() => marker?.focus());
-    const peek = document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`);
-    const kindMark = peek?.querySelector(`[aria-label="${label}"]`);
-    expect(kindMark).not.toBeNull();
-    expect(kindMark?.getAttribute("title")).toBe(label);
-  });
-
-  test("opens note editing next to a focused marker", () => {
-    setupOutput();
-    const selection = selectionFixture({ note: "" });
     const onEditNote = vi.fn();
-    renderOverlay([selection], selection.id, { onEditNote });
+    renderOverlay([selection], null, { onEditNote });
 
     const marker = document.querySelector<HTMLButtonElement>(
       '[data-marimo-lens-selection-id="selection-1"]',
     );
     act(() => marker?.focus());
-    const addNote = Array.from(document.querySelectorAll("button")).find(
-      (button) => button.textContent === "Add note",
-    );
-    act(() => addNote?.click());
+    expect(onEditNote).not.toHaveBeenCalled();
 
+    act(() => marker?.click());
     expect(onEditNote).toHaveBeenCalledWith(selection, "instant");
-  });
-
-  test("removes a selection from its marker actions", () => {
-    setupOutput();
-    const selection = selectionFixture();
-    const onDelete = vi.fn();
-    renderOverlay([selection], selection.id, { onDelete });
-
-    const marker = document.querySelector<HTMLButtonElement>(
-      '[data-marimo-lens-selection-id="selection-1"]',
-    );
-    act(() => marker?.focus());
-    const remove = document.querySelector<HTMLButtonElement>(
-      'button[aria-label="Remove selection S1"]',
-    );
-    act(() => remove?.click());
-
-    expect(onDelete).toHaveBeenCalledWith(selection);
-    expect(
-      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
-    ).toBeNull();
-  });
-
-  test("keeps marker actions closed after an output reattaches", () => {
-    setupOutput();
-    const selection = selectionFixture();
-    const rerender = renderOverlay([selection], selection.id);
-
-    const marker = document.querySelector<HTMLButtonElement>(
-      '[data-marimo-lens-selection-id="selection-1"]',
-    );
-    act(() => marker?.focus());
-    expect(
-      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
-    ).not.toBeNull();
-
-    rerender({ availableOutputCellIds: new Set() });
-    expect(
-      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
-    ).toBeNull();
-
-    rerender({ availableOutputCellIds: new Set([selection.outputCellId]) });
-    expect(
-      document.querySelector(`[data-marimo-lens-selection-peek="${selection.id}"]`),
-    ).toBeNull();
   });
 
   test("commits keyboard resizing once", () => {
@@ -260,12 +150,6 @@ function renderOverlay(
             capturingSelectionIds={new Set()}
             onActivate={() => {}}
             onEditNote={() => {}}
-            onDelete={() => {}}
-            snapshotLoader={
-              new SelectionSnapshotLoader(async () => {
-                throw new Error("Snapshot loading is not expected in this test");
-              })
-            }
             onReposition={() => {}}
             registerAdjustment={() => {}}
             releaseAdjustment={() => {}}

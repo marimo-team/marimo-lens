@@ -210,8 +210,6 @@ function AvailabilitySurface({ selection }: { selection: Selection }) {
         capturingSelectionIds={new Set()}
         onActivate={() => {}}
         onEditNote={() => {}}
-        onDelete={() => {}}
-        snapshotLoader={snapshotLoader}
         onReposition={() => {}}
         registerAdjustment={() => {}}
         releaseAdjustment={() => {}}
