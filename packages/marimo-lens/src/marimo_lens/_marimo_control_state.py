@@ -200,9 +200,12 @@ def _capture_ui_value(
         value_budget.opaque = True
         return None, value_budget, True
     frontend_value: Any = _MISSING
-    # Reading frontend state can invoke application-defined descriptors.
+    # Frontend state can invoke application code while being read or normalized.
     try:
-        frontend_value = _read_frontend_value(value)
+        frontend_value, safe_value = _read_safe_frontend_value(
+            value,
+            budget=value_budget,
+        )
     except _ControlReadError as error:
         value_budget.opaque = True
         source_error = error.__cause__
@@ -214,8 +217,6 @@ def _capture_ui_value(
             },
             budget=value_budget,
         )
-    else:
-        safe_value = _safe_value(frontend_value, budget=value_budget)
 
     value_complete = not value_budget.truncated and not value_budget.opaque
     can_show = (
@@ -226,9 +227,14 @@ def _capture_ui_value(
     return safe_value if can_show else None, value_budget, not can_show
 
 
-def _read_frontend_value(value: Any) -> Any:
+def _read_safe_frontend_value(
+    value: Any,
+    *,
+    budget: _ValueBudget,
+) -> tuple[Any, Any]:
     try:
-        return value._value_frontend
+        frontend_value = value._value_frontend
+        return frontend_value, _safe_value(frontend_value, budget=budget)
     except Exception as error:
         raise _ControlReadError from error
 

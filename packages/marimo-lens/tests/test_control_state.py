@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import datetime as dt
 from collections.abc import Iterator, Mapping
 from types import SimpleNamespace
 from typing import Any
@@ -109,6 +110,25 @@ def test_control_never_falls_back_to_arbitrary_backend_values(
     assert runtime.controls[0].sensitive is True
     assert "backend-only-secret" not in packet
     assert "[redacted]" in text
+
+
+def test_frontend_sanitization_failure_marks_control_opaque(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo_lens._marimo_control_state as control_state_module
+
+    control = _ExplodingFrontendControl()
+    context = _control_context("date", control)
+    _install_context(monkeypatch, context)
+    monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
+
+    runtime = collect_runtime_snapshot(("cell-view",))
+
+    assert runtime.available is True
+    assert len(runtime.controls) == 1
+    assert runtime.controls[0].value is None
+    assert runtime.controls[0].sensitive is True
+    assert runtime.controls[0].complete is False
 
 
 def test_native_date_range_is_canonical_in_current_context(
@@ -556,6 +576,26 @@ class _CustomScalarControl:
     def _value_frontend(self) -> str:
         self.frontend_reads += 1
         return self._frontend_value
+
+
+class _ExplodingDate(dt.date):
+    def isoformat(self) -> str:
+        raise RuntimeError("sanitization failed")
+
+
+class _ExplodingFrontendControl:
+    __module__ = "marimo._plugins.ui._core.test"
+
+    def __init__(self) -> None:
+        self._args = SimpleNamespace(
+            component_name="marimo-date",
+            label="Date",
+            args={},
+        )
+
+    @property
+    def _value_frontend(self) -> dt.date:
+        return _ExplodingDate(2026, 7, 27)
 
 
 class _BackendOnlyControl:
