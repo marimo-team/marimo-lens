@@ -192,5 +192,5 @@ You can use any AI agent to work with this notebook including Claude Code, OpenC
 [marimo pair](https://marimo.io/pair) is a skill that teaches your agent on how to work with marimo notebooks.
 Follow the [instructions](./pair) to connect to this notebook and complete the first request.
 
-The [overview section](./overview) explains the mechanism and feedback loop of Lens and the [Python reference](./api) 
+The [overview section](./overview) explains the mechanism and feedback loop of Lens and the [Python reference](./api)
 defines the methods to read a request, show the activity, complete it, and return a result.
