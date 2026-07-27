@@ -40,8 +40,16 @@ uv run marimo edit --no-token notebook.py
 import marimo as mo
 
 revenue = {"January": 42, "February": 58, "March": 39}
-rows = "\n".join(f"| {month} | {value} |" for month, value in revenue.items())
-mo.md(f"| Month | Revenue |\n| --- | ---: |\n{rows}")
+rows = [f"| {month} | {value} |" for month, value in revenue.items()]
+mo.md(
+    "\n".join(
+        [
+            "| Month | Revenue |",
+            "| --- | ---: |",
+            *rows,
+        ]
+    )
+)
 ```
 
 2. Mount Lens in the second cell
@@ -99,10 +107,18 @@ _starter_revenue = {
     "February": 58,
     "March": 39,
 }
-_starter_rows = "\n".join(
+_starter_rows = [
     f"| {_month} | {_value} |" for _month, _value in _starter_revenue.items()
+]
+mo.md(
+    "\n".join(
+        [
+            "| Month | Revenue |",
+            "| --- | ---: |",
+            *_starter_rows,
+        ]
+    )
 )
-mo.md(f"| Month | Revenue |\n| --- | ---: |\n{_starter_rows}")
 ```
 
 </div>

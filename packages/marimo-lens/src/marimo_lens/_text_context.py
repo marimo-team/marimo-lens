@@ -184,7 +184,8 @@ def _render_selection_block(
     anchor = f"- Attention: {_anchor_text(selection.get('anchor'))}"
     snapshot = f"- Snapshot: {snapshot_text}"
     note_prefix = "- Note: "
-    fixed = len(f"{header}\n{note_prefix}\n{anchor}\n{snapshot}")
+    fixed_lines = [header, note_prefix, anchor, snapshot]
+    fixed = len("\n".join(fixed_lines))
     note_text, note_truncated = _truncate_text(
         note or "none",
         max(1, quota - fixed),
