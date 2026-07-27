@@ -14,12 +14,12 @@ from ._images import MAX_TOTAL_IMAGE_BYTES, prepare_selection_image
 from ._protocol import MAX_HISTORY, MAX_SELECTIONS, ProtocolError
 from ._protocol_models import (
     ADDRESSED_SELECTION_ADAPTER,
-    AvailableSnapshot,
-    OutdatedSnapshot,
     POSITIVE_SAFE_INTEGER_ADAPTER,
     REVISION_ADAPTER,
     SELECTION_ADAPTER,
     SELECTION_LABEL_ADAPTER,
+    AvailableSnapshot,
+    OutdatedSnapshot,
 )
 from ._references import validate_reference_capacity
 from .context import SelectionImage
@@ -217,7 +217,8 @@ class SelectionStore:
             self._state = previous
             try:
                 publish(previous.payload())
-            except Exception:
+            except Exception:  # noqa: BLE001, S110
+                # Preserve the original publication error after restoring state.
                 pass
             raise
 
@@ -872,11 +873,11 @@ def _thaw(value: Any) -> Any:
 
 
 __all__ = [
-    "AddressedSelectionRecord",
     "MAX_HISTORY_STATE_BYTES",
     "MAX_SELECTION_STATE_BYTES",
-    "SelectionRecord",
+    "AddressedSelectionRecord",
     "SelectionPutPlan",
+    "SelectionRecord",
     "SelectionState",
     "SelectionStore",
     "activate_selection",

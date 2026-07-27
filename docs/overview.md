@@ -90,8 +90,10 @@ context panel reads the same Lens state available to a notebook agent.
 ```python marimo
 overview_lens = Lens()
 
+
 def _sync_overview_revision(change):
     set_overview_revision(int(change["new"]["revision"]))
+
 
 overview_lens.observe(
     _sync_overview_revision,
@@ -163,39 +165,25 @@ _overview_current = _overview_context.current
 if _overview_current is None:
     _overview_state = "empty"
     _overview_title = "Mark the chart"
-    _overview_body = (
-        "Press Select, mark one bar, and add a note."
-    )
+    _overview_body = "Press Select, mark one bar, and add a note."
 else:
     _overview_state = "ready"
     _overview_id = str(_overview_current.get("id", ""))
-    _overview_label = escape(
-        str(_overview_current.get("label", "Selection"))
-    )
+    _overview_label = escape(str(_overview_current.get("label", "Selection")))
     _overview_note = (
-        escape(str(_overview_current.get("note", "")).strip())
-        or "No note added"
+        escape(str(_overview_current.get("note", "")).strip()) or "No note added"
     )
-    _overview_cell = escape(
-        str(_overview_current["outputCellId"])
-    )
+    _overview_cell = escape(str(_overview_current["outputCellId"]))
     _overview_context_status = (
-        "Ready"
-        if _overview_current.get("cellStatus") == "available"
-        else "Unavailable"
+        "Ready" if _overview_current.get("cellStatus") == "available" else "Unavailable"
     )
-    _overview_images = {
-        str(_image.selection_id)
-        for _image in _overview_context.images
-    }
+    _overview_images = {str(_image.selection_id) for _image in _overview_context.images}
     _overview_snapshot = _overview_current.get("snapshot", {})
     _overview_image_status = (
         "Ready"
         if _overview_id in _overview_images
         else escape(
-            str(_overview_snapshot.get("status", "pending"))
-            .replace("_", " ")
-            .title()
+            str(_overview_snapshot.get("status", "pending")).replace("_", " ").title()
         )
     )
     _overview_title = f"{_overview_label} is connected"
@@ -275,9 +263,7 @@ if overview_activity_button.value:
             }
         )
     else:
-        _overview_activity_cell = str(
-            _overview_activity_current["outputCellId"]
-        )
+        _overview_activity_cell = str(_overview_activity_current["outputCellId"])
         overview_lens.activity(
             _overview_activity_cell,
             label="Working on it…",
@@ -307,15 +293,9 @@ if overview_complete_button.value:
             }
         )
     else:
-        _overview_complete_id = str(
-            _overview_complete_current["id"]
-        )
-        _overview_complete_cell = str(
-            _overview_complete_current["outputCellId"]
-        )
-        _overview_complete_summary = (
-            "Returned the selected result for review."
-        )
+        _overview_complete_id = str(_overview_complete_current["id"])
+        _overview_complete_cell = str(_overview_complete_current["outputCellId"])
+        _overview_complete_summary = "Returned the selected result for review."
         _overview_complete_revision = overview_lens.resolve(
             [_overview_complete_id],
             expected_revision=_overview_complete_context.revision,
@@ -350,18 +330,12 @@ _overview_feedback_current = _overview_feedback_context.current
 _overview_feedback_kind = (
     str(_overview_feedback_action["kind"])
     if _overview_feedback_action is not None
-    else (
-        "ready"
-        if _overview_feedback_current is not None
-        else "empty"
-    )
+    else ("ready" if _overview_feedback_current is not None else "empty")
 )
 
 if _overview_feedback_kind == "empty":
     _overview_feedback_title = "Mark the chart first"
-    _overview_feedback_body = (
-        "Open a selection before returning agent feedback."
-    )
+    _overview_feedback_body = "Open a selection before returning agent feedback."
 elif _overview_feedback_kind == "ready":
     _overview_feedback_title = "The request is ready"
     _overview_feedback_body = (
@@ -369,17 +343,12 @@ elif _overview_feedback_kind == "ready":
     )
 elif _overview_feedback_kind == "missing":
     _overview_feedback_title = "Open a selection first"
-    _overview_feedback_body = (
-        "Mark the chart before calling a feedback method."
-    )
+    _overview_feedback_body = "Mark the chart before calling a feedback method."
 elif _overview_feedback_kind == "activity":
-    _overview_feedback_cell = escape(
-        str(_overview_feedback_action["cellId"])
-    )
+    _overview_feedback_cell = escape(str(_overview_feedback_action["cellId"]))
     _overview_feedback_title = "Working on it…"
     _overview_feedback_body = (
-        f"activity() marked cell "
-        f"<code>{_overview_feedback_cell}</code>."
+        f"activity() marked cell <code>{_overview_feedback_cell}</code>."
     )
 else:
     _overview_feedback_title = "Ready for review"

@@ -83,8 +83,10 @@ handoff_to_agent = mo.ui.run_button(
 ```python marimo
 lens = Lens()
 
+
 def _sync_lens_revision(change):
     set_lens_revision(int(change["new"]["revision"]))
+
 
 lens.observe(_sync_lens_revision, names="_state")
 lens
@@ -98,9 +100,7 @@ lens
 _response_request = get_response_request()
 _applied_color = get_bar_color()
 _bar_fill = (
-    escape(str(_applied_color))
-    if _applied_color
-    else "light-dark(#1d7363,#cad996)"
+    escape(str(_applied_color)) if _applied_color else "light-dark(#1d7363,#cad996)"
 )
 _monthly_revenue = [
     ("Jan", 42),
@@ -164,13 +164,8 @@ mo.Html(
 ```python marimo output=false
 _lens_revision = get_lens_revision()
 _agent_context = lens.context()
-_agent_selections = list(
-    _agent_context.references.get("selections", [])
-)
-_agent_images = {
-    str(_image.selection_id): _image
-    for _image in _agent_context.images
-}
+_agent_selections = list(_agent_context.references.get("selections", []))
+_agent_images = {str(_image.selection_id): _image for _image in _agent_context.images}
 _agent_items = []
 for _index, _selection in enumerate(_agent_selections, start=1):
     _selection_id = str(_selection.get("id", ""))
@@ -209,9 +204,7 @@ if not _agent_items:
 else:
     agent_handoff = {
         "state": (
-            "ready"
-            if any(_item["note"] for _item in _agent_items)
-            else "selected"
+            "ready" if any(_item["note"] for _item in _agent_items) else "selected"
         ),
         "items": _agent_items,
         "reopened": any(_item["reopened"] for _item in _agent_items),
@@ -248,9 +241,7 @@ if _state == "empty":
     _handoff_output = mo.Html(_handoff_html)
 elif _state == "complete":
     _completed_summary = escape(_view["summary"])
-    _completed_noun = (
-        "request" if int(_view["count"]) == 1 else "requests"
-    )
+    _completed_noun = "request" if int(_view["count"]) == 1 else "requests"
     _handoff_html = f"""
     <aside
       aria-labelledby="lens-demo-complete-title"
@@ -322,13 +313,9 @@ else:
           </span>
         </div>
         """
-        _handoff_output = mo.Html(
-            f"{_panel_open}{_handoff_body}{_panel_close}"
-        )
+        _handoff_output = mo.Html(f"{_panel_open}{_handoff_body}{_panel_close}")
     else:
-        _request_noun = (
-            "request" if len(_view["items"]) == 1 else "requests"
-        )
+        _request_noun = "request" if len(_view["items"]) == 1 else "requests"
         _handoff_button = mo.md(
             f"""
             <span data-demo-handoff-button style="display:inline-flex;overflow:hidden;align-items:center;border:1px solid #0880ea;border-radius:6px;background:light-dark(#edf6ff,#1d5b6a);line-height:1;cursor:pointer">
@@ -372,12 +359,8 @@ _handoff_output
 ```python marimo output=false
 if handoff_to_agent.value:
     _handoff_context = lens.context()
-    _handoff_selections = list(
-        _handoff_context.references.get("selections", [])
-    )
-    _handoff_current_id = str(
-        _handoff_context.references.get("currentSelectionId", "")
-    )
+    _handoff_selections = list(_handoff_context.references.get("selections", []))
+    _handoff_current_id = str(_handoff_context.references.get("currentSelectionId", ""))
     _noted_selections = [
         _selection
         for _selection in _handoff_selections
@@ -388,20 +371,14 @@ if handoff_to_agent.value:
             (
                 _selection
                 for _selection in _handoff_selections
-                if str(_selection.get("id", ""))
-                == _handoff_current_id
+                if str(_selection.get("id", "")) == _handoff_current_id
             ),
             _handoff_selections[0],
         )
-        _handoff_cell_id = str(
-            _activity_selection["outputCellId"]
-        )
+        _handoff_cell_id = str(_activity_selection["outputCellId"])
         _ordered_notes = sorted(
             _noted_selections,
-            key=lambda _selection: (
-                str(_selection.get("id", ""))
-                != _handoff_current_id
-            ),
+            key=lambda _selection: str(_selection.get("id", "")) != _handoff_current_id,
         )
         _color_candidate = ""
         _color_supported = False
@@ -409,9 +386,7 @@ if handoff_to_agent.value:
 
         for _selection in _ordered_notes:
             _candidate = (
-                str(_selection["note"])
-                .rsplit(maxsplit=1)[-1]
-                .strip(".,!?;:'\"")
+                str(_selection["note"]).rsplit(maxsplit=1)[-1].strip(".,!?;:'\"")
             )[:64]
             _color_context_a = _offscreen_canvas.new(
                 1,
@@ -425,10 +400,7 @@ if handoff_to_agent.value:
             _color_context_b.fillStyle = "#040506"
             _color_context_a.fillStyle = _candidate
             _color_context_b.fillStyle = _candidate
-            if (
-                str(_color_context_a.fillStyle)
-                == str(_color_context_b.fillStyle)
-            ):
+            if str(_color_context_a.fillStyle) == str(_color_context_b.fillStyle):
                 _color_candidate = _candidate
                 _color_supported = True
                 break
@@ -451,8 +423,7 @@ if handoff_to_agent.value:
         set_response_request(
             {
                 "selectionIds": [
-                    str(_selection["id"])
-                    for _selection in _handoff_selections
+                    str(_selection["id"]) for _selection in _handoff_selections
                 ],
                 "cellId": _handoff_cell_id,
                 "revision": _handoff_context.revision,
@@ -468,8 +439,7 @@ _verified_request = chart_result["request"]
 if _verified_request is not None:
     _verified_context = lens.context()
     _verified_selection_ids = [
-        str(_selection_id)
-        for _selection_id in _verified_request["selectionIds"]
+        str(_selection_id) for _selection_id in _verified_request["selectionIds"]
     ]
     _open_selection_ids = {
         str(_selection.get("id", ""))
@@ -485,8 +455,7 @@ if _verified_request is not None:
         if _verified_request["colorSupported"]:
             if _verified_count == 1:
                 _verified_summary = (
-                    f"Changed the bars to {_verified_color} "
-                    "and checked the result."
+                    f"Changed the bars to {_verified_color} and checked the result."
                 )
             elif _verified_count == 2:
                 _verified_summary = (

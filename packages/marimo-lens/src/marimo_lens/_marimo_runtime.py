@@ -7,8 +7,7 @@ from collections.abc import Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any, cast
 
-from . import _control_state
-from . import _marimo_control_state
+from . import _control_state, _marimo_control_state
 from ._provenance import (
     MAX_RELEVANT_CELLS,
     MAX_REPORTED_OMITTED_CELL_IDS,
@@ -40,14 +39,14 @@ def collect_runtime_snapshot(
     try:
         from marimo._runtime.context import get_context
         from marimo._runtime.context.types import ContextNotInitializedError
-    except Exception:
+    except ImportError:
         return _unavailable("marimo runtime is unavailable")
 
     try:
         context = get_context()
     except ContextNotInitializedError:
         return _unavailable("not running in a marimo kernel")
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001
         return _unavailable(f"{type(error).__name__}: {error}")
 
     graph = getattr(context, "graph", None)
@@ -163,14 +162,14 @@ def runtime_cell_status(cell_id: str) -> RuntimeCellStatus:
     try:
         from marimo._runtime.context import get_context
         from marimo._runtime.context.types import ContextNotInitializedError
-    except Exception:
+    except ImportError:
         return "unavailable"
 
     try:
         context = get_context()
     except ContextNotInitializedError:
         return "unavailable"
-    except Exception:
+    except Exception:  # noqa: BLE001
         return "unavailable"
 
     graph = getattr(context, "graph", None)
@@ -205,17 +204,19 @@ def _runtime_cell(
 
 
 def _optional_runtime_text(cell: Any, name: str) -> str | None:
+    # Runtime cells are host-owned and may expose descriptors that raise.
     try:
         value = getattr(cell, name, None)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     return str(value) if value is not None else None
 
 
 def _runtime_stale(cell: Any) -> bool | None:
+    # Runtime cells are host-owned and may expose descriptors that raise.
     try:
         value = getattr(cell, "stale", None)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     return value if isinstance(value, bool) else None
 
@@ -268,9 +269,10 @@ def _parents(
 
 
 def _runtime_globals(context: Any) -> tuple[Mapping[str, Any], bool]:
+    # The private runtime context may expose globals through a failing descriptor.
     try:
-        value = getattr(context, "globals")
-    except Exception:
+        value = context.globals
+    except Exception:  # noqa: BLE001
         return {}, False
     if not isinstance(value, Mapping):
         return {}, False
@@ -384,7 +386,7 @@ def _lookup_control_source(
         value = namespace[name]
     except KeyError:
         return None, True
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None, False
 
     return (

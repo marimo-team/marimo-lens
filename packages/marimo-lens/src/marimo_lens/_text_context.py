@@ -184,7 +184,7 @@ def _render_selection_block(
     anchor = f"- Attention: {_anchor_text(selection.get('anchor'))}"
     snapshot = f"- Snapshot: {snapshot_text}"
     note_prefix = "- Note: "
-    fixed = len("\n".join((header, note_prefix, anchor, snapshot)))
+    fixed = len(f"{header}\n{note_prefix}\n{anchor}\n{snapshot}")
     note_text, note_truncated = _truncate_text(
         note or "none",
         max(1, quota - fixed),
@@ -386,7 +386,7 @@ def _dom_hint_text(value: object) -> str:
 
 def _snapshot_text(value: object, *, maximum: int) -> tuple[str, bool]:
     if not isinstance(value, Mapping):
-        raise RuntimeError("Selection snapshot metadata is invalid.")
+        raise TypeError("Selection snapshot metadata is invalid.")
     status = str(value.get("status") or "")
     if status == "available":
         text = f"available ({value.get('width')}x{value.get('height')} PNG)"

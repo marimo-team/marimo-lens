@@ -40,9 +40,7 @@ uv run marimo edit --no-token notebook.py
 import marimo as mo
 
 revenue = {"January": 42, "February": 58, "March": 39}
-rows = "\n".join(
-    f"| {month} | {value} |" for month, value in revenue.items()
-)
+rows = "\n".join(f"| {month} | {value} |" for month, value in revenue.items())
 mo.md(f"| Month | Revenue |\n| --- | ---: |\n{rows}")
 ```
 
@@ -82,8 +80,10 @@ get_starter_revision, set_starter_revision = mo.state(0)
 ```python marimo
 starter_lens = Lens()
 
+
 def _sync_starter_revision(change):
     set_starter_revision(int(change["new"]["revision"]))
+
 
 starter_lens.observe(_sync_starter_revision, names="_state")
 starter_lens
@@ -100,14 +100,9 @@ _starter_revenue = {
     "March": 39,
 }
 _starter_rows = "\n".join(
-    f"| {_month} | {_value} |"
-    for _month, _value in _starter_revenue.items()
+    f"| {_month} | {_value} |" for _month, _value in _starter_revenue.items()
 )
-mo.md(
-    "| Month | Revenue |\n"
-    "| --- | ---: |\n"
-    f"{_starter_rows}"
-)
+mo.md(f"| Month | Revenue |\n| --- | ---: |\n{_starter_rows}")
 ```
 
 </div>
@@ -118,9 +113,7 @@ mo.md(
 _starter_revision = get_starter_revision()
 _starter_context = starter_lens.context()
 _starter_current = _starter_context.current
-_starter_open_count = len(
-    _starter_context.references.get("selections", [])
-)
+_starter_open_count = len(_starter_context.references.get("selections", []))
 
 if _starter_current is None:
     _starter_state = "empty"
@@ -132,26 +125,18 @@ if _starter_current is None:
 else:
     _starter_state = "ready"
     _starter_id = str(_starter_current.get("id", ""))
-    _starter_label = escape(
-        str(_starter_current.get("label", "Selection"))
-    )
+    _starter_label = escape(str(_starter_current.get("label", "Selection")))
     _starter_note = (
-        escape(str(_starter_current.get("note", "")).strip())
-        or "No note added"
+        escape(str(_starter_current.get("note", "")).strip()) or "No note added"
     )
     _starter_cell = escape(str(_starter_current["outputCellId"]))
-    _starter_images = {
-        str(_image.selection_id)
-        for _image in _starter_context.images
-    }
+    _starter_images = {str(_image.selection_id) for _image in _starter_context.images}
     _starter_snapshot = _starter_current.get("snapshot", {})
     _starter_image_status = (
         "Ready"
         if _starter_id in _starter_images
         else escape(
-            str(_starter_snapshot.get("status", "pending"))
-            .replace("_", " ")
-            .title()
+            str(_starter_snapshot.get("status", "pending")).replace("_", " ").title()
         )
     )
     _starter_title = f"{_starter_label} is ready for an agent"

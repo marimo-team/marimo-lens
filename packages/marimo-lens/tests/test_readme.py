@@ -17,7 +17,8 @@ def test_root_readme_python_examples_execute() -> None:
 
     namespace: dict[str, Any] = {}
     for example in examples:
-        exec(compile(example, str(readme), "exec"), namespace)
+        # README snippets are repository-controlled executable test inputs.
+        exec(compile(example, str(readme), "exec"), namespace)  # noqa: S102
 
     lens = namespace["lens"]
     assert isinstance(lens, Lens)

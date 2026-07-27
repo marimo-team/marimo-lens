@@ -8,7 +8,6 @@ from typing import Any
 import anywidget
 import pytest
 import traitlets
-
 from marimo_lens._context import build_context
 from marimo_lens._control_state import (
     RuntimeControl,

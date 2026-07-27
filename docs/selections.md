@@ -36,8 +36,10 @@ get_selection_demo_revision, set_selection_demo_revision = mo.state(0)
 ```python marimo
 selection_demo_lens = Lens()
 
+
 def _sync_selection_demo_revision(change):
     set_selection_demo_revision(int(change["new"]["revision"]))
+
 
 selection_demo_lens.observe(
     _sync_selection_demo_revision,
@@ -117,32 +119,22 @@ _selection_demo_has_region = "rect" in _selection_demo_kinds
 if _selection_demo_has_point and _selection_demo_has_region:
     _selection_demo_state = "complete"
     _selection_demo_title = "Point and region added"
-    _selection_demo_body = (
-        "Open either selection to add a note or change its focus."
-    )
+    _selection_demo_body = "Open either selection to add a note or change its focus."
 elif _selection_demo_has_point:
     _selection_demo_state = "point"
     _selection_demo_title = "Point added. Now create a region."
-    _selection_demo_body = (
-        "Press Select again, then drag across two or more bars."
-    )
+    _selection_demo_body = "Press Select again, then drag across two or more bars."
 elif _selection_demo_has_region:
     _selection_demo_state = "region"
     _selection_demo_title = "Region added. Now create a point."
-    _selection_demo_body = (
-        "Press Select again, then click one bar."
-    )
+    _selection_demo_body = "Press Select again, then click one bar."
 else:
     _selection_demo_state = "empty"
     _selection_demo_title = "Create a point"
     _selection_demo_body = "Press Select, then click one bar."
 
-_selection_demo_point_status = (
-    "Added" if _selection_demo_has_point else "Not yet"
-)
-_selection_demo_region_status = (
-    "Added" if _selection_demo_has_region else "Not yet"
-)
+_selection_demo_point_status = "Added" if _selection_demo_has_point else "Not yet"
+_selection_demo_region_status = "Added" if _selection_demo_has_region else "Not yet"
 
 mo.Html(
     f"""

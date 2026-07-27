@@ -185,17 +185,18 @@ def _safe_value(
             "cycle": True,
         }
     ancestors.add(marker)
+    # Collection protocols can execute user code. Failed probes remain opaque.
     try:
         if isinstance(value, Mapping):
             try:
                 keys = list(islice(iter(value), MAX_VALUE_ITEMS + 1))
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return _describe(value, budget)
             keyed: list[tuple[str, Any]] = []
             for key in keys[:MAX_VALUE_ITEMS]:
                 try:
                     safe_key = _bounded_text(str(key), budget)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     budget.opaque = True
                     safe_key = _bounded_text(_type_name(key), budget)
                 if not isinstance(key, str):
@@ -209,7 +210,7 @@ def _safe_value(
                     break
                 try:
                     item = value[key]
-                except Exception:
+                except Exception:  # noqa: BLE001
                     budget.opaque = True
                     continue
                 if safe_key in mapping_result:
@@ -229,7 +230,7 @@ def _safe_value(
                 budget.opaque = True
             try:
                 items = list(islice(iter(value), MAX_VALUE_ITEMS + 1))
-            except Exception:
+            except Exception:  # noqa: BLE001
                 return _describe(value, budget)
             sequence_result: list[Any] = []
             for item in items[:MAX_VALUE_ITEMS]:
@@ -369,8 +370,8 @@ def _type_name(value: Any) -> str:
 
 
 __all__ = [
-    "MAX_CONTROL_CHARACTERS",
     "MAX_CONTROLS",
+    "MAX_CONTROL_CHARACTERS",
     "RuntimeControl",
     "SerializedControls",
     "serialize_controls",

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import pytest
-from pydantic import ValidationError
 from typing import Any, cast
 
+import pytest
 from marimo_lens._provenance import resolve_provenance
+from pydantic import ValidationError
 
 from tests.support.factories import cell, snapshot
 

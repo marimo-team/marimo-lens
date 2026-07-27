@@ -945,16 +945,17 @@ def test_concurrent_resolutions_emit_receipts_in_revision_order() -> None:
     )
     errors: list[Exception] = []
 
+    # Capture every worker failure so the main test can report it.
     def resolve_first() -> None:
         try:
             lens.resolve("selection-1", expected_revision=2)
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001
             errors.append(error)
 
     def resolve_second() -> None:
         try:
             lens.resolve("selection-2", expected_revision=3)
-        except Exception as error:
+        except Exception as error:  # noqa: BLE001
             errors.append(error)
         finally:
             lens.second_resolution_finished.set()

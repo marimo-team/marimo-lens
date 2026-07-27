@@ -7,7 +7,6 @@ app = marimo.App(width="medium")
 @app.cell(hide_code=True)
 def _():
     import marimo as mo
-
     from marimo_lens import Lens
 
     return Lens, mo
@@ -21,7 +20,6 @@ def _(mo):
     Select a bar or drag across several bars, then ask your agent about
     the selected output. Add a note when the request needs more detail.
     """)
-    return
 
 
 @app.cell(hide_code=True)
@@ -31,7 +29,7 @@ def _(mo):
         value="All",
         label="Region",
     )
-    region
+    region  # noqa: B018
     return (region,)
 
 
@@ -99,14 +97,12 @@ def _(filtered_sales, mo, region):
         ],
         gap=1,
     )
-    return
 
 
 @app.cell(hide_code=True)
 def _(Lens):
     lens = Lens()
-    lens
-    return
+    lens  # noqa: B018
 
 
 @app.cell

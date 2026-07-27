@@ -146,9 +146,10 @@ class OutputCaptureMailbox:
             )
             self._record = record
             timeout.start()
+            # AnyWidget transport hooks are application callbacks.
             try:
                 self._send(command)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self._fail(
                     request_id,
                     code="capture_failed",
@@ -247,7 +248,7 @@ class OutputCaptureMailbox:
                     code="capture_failed",
                     message=str(error),
                 )
-            except Exception:
+            except Exception:  # noqa: BLE001
                 self._fail(
                     request_id,
                     code="capture_failed",

@@ -15,11 +15,11 @@ from ._control_state import (
     MAX_CONTROL_CELL_IDS,
     MAX_CONTROL_NODES,
     RuntimeControl,
-    _ValueBudget,
     _identity_is_complete,
     _identity_text,
     _safe_value,
     _type_name,
+    _ValueBudget,
 )
 
 
@@ -125,9 +125,10 @@ def capture_control(source: ControlSource) -> RuntimeControl:
 
 
 def _ui_element_widget(value: Any) -> anywidget.AnyWidget | None:
+    # UI element descriptors may execute application code during attribute access.
     try:
         widget = getattr(value, "widget", None)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     return widget if isinstance(widget, anywidget.AnyWidget) else None
 
@@ -135,18 +136,19 @@ def _ui_element_widget(value: Any) -> anywidget.AnyWidget | None:
 def _is_ui_element(value: Any) -> bool:
     try:
         from marimo._plugins.ui._core.ui_element import UIElement
-    except Exception:
+    except ImportError:
         return False
     return isinstance(value, UIElement)
 
 
 def _ui_metadata(value: Any) -> tuple[str, str, Mapping[str, Any], bool]:
+    # Private marimo descriptors can fail independently across supported versions.
     try:
-        args = getattr(value, "_args")
-        component = str(getattr(args, "component_name") or "")
-        label = str(getattr(args, "label") or "")
-        init_args = getattr(args, "args")
-    except Exception:
+        args = value._args
+        component = str(args.component_name or "")
+        label = str(args.label or "")
+        init_args = args.args
+    except Exception:  # noqa: BLE001
         return _type_name(value), "", {}, False
     if not isinstance(init_args, Mapping):
         return component or _type_name(value), label, {}, False
@@ -179,10 +181,11 @@ def _capture_ui_value(
         value_budget.opaque = True
         return None, value_budget, True
     frontend_value: Any = _MISSING
+    # Reading and normalizing frontend state can invoke application-defined objects.
     try:
-        frontend_value = getattr(value, "_value_frontend")
+        frontend_value = value._value_frontend
         safe_value = _safe_value(frontend_value, budget=value_budget)
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001
         value_budget.opaque = True
         safe_value = _safe_value(
             {"unavailable": _type_name(error)},
@@ -213,9 +216,10 @@ def _ui_scalar_can_be_shown(value: Any) -> bool:
 
 
 def _is_lens_widget(widget: anywidget.AnyWidget) -> bool:
+    # Trait-backed markers may execute application code during attribute access.
     try:
         return getattr(widget, "_marimo_lens_widget", False) is True
-    except Exception:
+    except Exception:  # noqa: BLE001
         return False
 
 

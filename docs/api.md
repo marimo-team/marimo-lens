@@ -66,8 +66,10 @@ api_complete_button = mo.ui.run_button(
 ```python marimo
 api_demo_lens = Lens()
 
+
 def _sync_api_demo_revision(change):
     set_api_demo_revision(int(change["new"]["revision"]))
+
 
 api_demo_lens.observe(_sync_api_demo_revision, names="_state")
 api_demo_lens
@@ -165,9 +167,7 @@ if api_context_button.value:
                 "label": str(_context_current.get("label", "Selection")),
                 "note": str(_context_current.get("note", "")).strip(),
                 "cellId": str(_context_current["outputCellId"]),
-                "imageStatus": str(
-                    _context_snapshot.get("status", "pending")
-                ),
+                "imageStatus": str(_context_snapshot.get("status", "pending")),
                 "textLength": len(_context_result.text),
             }
         )
@@ -224,8 +224,7 @@ if api_complete_button.value:
         if _complete_ids:
             _complete_count = len(_complete_ids)
             _complete_summary = (
-                "Completed the API walkthrough and returned the "
-                "result for review."
+                "Completed the API walkthrough and returned the result for review."
                 if _complete_count == 1
                 else (
                     f"Completed {_complete_count} requests in the API "
@@ -263,9 +262,7 @@ if (
     _api_demo_result = None
 
 _api_demo_current = _api_demo_context.current
-_api_demo_open_count = len(
-    _api_demo_context.references.get("selections", [])
-)
+_api_demo_open_count = len(_api_demo_context.references.get("selections", []))
 _api_demo_kind = (
     str(_api_demo_result["kind"])
     if _api_demo_result is not None
@@ -274,21 +271,13 @@ _api_demo_kind = (
 
 if _api_demo_kind == "empty":
     _api_demo_title = "Select part of the chart"
-    _api_demo_body = (
-        "Press Select in the Lens dock, then click a bar or drag a region."
-    )
+    _api_demo_body = "Press Select in the Lens dock, then click a bar or drag a region."
 elif _api_demo_kind == "missing":
     _api_demo_title = "Create a selection first"
-    _api_demo_body = (
-        "Mark part of the chart before calling a method on the request."
-    )
+    _api_demo_body = "Mark part of the chart before calling a method on the request."
 elif _api_demo_kind == "ready":
-    _api_demo_label = escape(
-        str(_api_demo_current.get("label", "Selection"))
-    )
-    _api_demo_noun = (
-        "request" if _api_demo_open_count == 1 else "requests"
-    )
+    _api_demo_label = escape(str(_api_demo_current.get("label", "Selection")))
+    _api_demo_noun = "request" if _api_demo_open_count == 1 else "requests"
     _api_demo_title = f"{_api_demo_label} is ready"
     _api_demo_body = (
         f"Lens has {_api_demo_open_count} open {_api_demo_noun}. "
@@ -296,10 +285,7 @@ elif _api_demo_kind == "ready":
     )
 elif _api_demo_kind == "context":
     _api_demo_label = escape(str(_api_demo_result["label"]))
-    _api_demo_note = (
-        escape(str(_api_demo_result["note"]))
-        or "No note added"
-    )
+    _api_demo_note = escape(str(_api_demo_result["note"])) or "No note added"
     _api_demo_cell = escape(str(_api_demo_result["cellId"]))
     _api_demo_image_status = escape(
         str(_api_demo_result["imageStatus"]).replace("_", " ").title()
@@ -317,14 +303,11 @@ elif _api_demo_kind == "activity":
     _api_demo_cell = escape(str(_api_demo_result["cellId"]))
     _api_demo_title = "activity() marked the cell"
     _api_demo_body = (
-        f"Cell <code>{_api_demo_cell}</code> now shows "
-        "<strong>Working on it…</strong>."
+        f"Cell <code>{_api_demo_cell}</code> now shows <strong>Working on it…</strong>."
     )
 else:
     _api_demo_count = int(_api_demo_result["count"])
-    _api_demo_noun = (
-        "request" if _api_demo_count == 1 else "requests"
-    )
+    _api_demo_noun = "request" if _api_demo_count == 1 else "requests"
     _api_demo_title = "Ready for review"
     _api_demo_body = (
         f"resolve() moved {_api_demo_count} {_api_demo_noun} to history. "
