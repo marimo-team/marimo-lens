@@ -29,7 +29,7 @@ def _(mo):
         value="All",
         label="Region",
     )
-    region  # noqa: B018
+    mo.output.replace(region)
     return (region,)
 
 
@@ -100,14 +100,9 @@ def _(filtered_sales, mo, region):
 
 
 @app.cell(hide_code=True)
-def _(Lens):
+def _(Lens, mo):
     lens = Lens()
-    lens  # noqa: B018
-
-
-@app.cell
-def _():
-    return
+    mo.output.replace(lens)
 
 
 if __name__ == "__main__":

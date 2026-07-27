@@ -32,6 +32,10 @@ class ControlSource:
     definition_ids_complete: bool
 
 
+class _ControlReadError(RuntimeError):
+    """A host-owned control attribute could not be read."""
+
+
 def identify_control(
     *,
     name: str,
@@ -127,10 +131,17 @@ def capture_control(source: ControlSource) -> RuntimeControl:
 def _ui_element_widget(value: Any) -> anywidget.AnyWidget | None:
     # UI element descriptors may execute application code during attribute access.
     try:
-        widget = getattr(value, "widget", None)
-    except Exception:  # noqa: BLE001
+        widget = _read_ui_widget(value)
+    except _ControlReadError:
         return None
     return widget if isinstance(widget, anywidget.AnyWidget) else None
+
+
+def _read_ui_widget(value: Any) -> Any:
+    try:
+        return getattr(value, "widget", None)
+    except Exception as error:
+        raise _ControlReadError from error
 
 
 def _is_ui_element(value: Any) -> bool:
@@ -144,15 +155,23 @@ def _is_ui_element(value: Any) -> bool:
 def _ui_metadata(value: Any) -> tuple[str, str, Mapping[str, Any], bool]:
     # Private marimo descriptors can fail independently across supported versions.
     try:
-        args = value._args
-        component = str(args.component_name or "")
-        label = str(args.label or "")
-        init_args = args.args
-    except Exception:  # noqa: BLE001
+        component, label, init_args = _read_ui_metadata(value)
+    except _ControlReadError:
         return _type_name(value), "", {}, False
     if not isinstance(init_args, Mapping):
         return component or _type_name(value), label, {}, False
     return component or _type_name(value), label, init_args, True
+
+
+def _read_ui_metadata(value: Any) -> tuple[str, str, Any]:
+    try:
+        args = value._args
+        component = str(args.component_name or "")
+        label = str(args.label or "")
+        init_args = args.args
+    except Exception as error:
+        raise _ControlReadError from error
+    return component, label, init_args
 
 
 def _ui_value_policy(
@@ -181,16 +200,22 @@ def _capture_ui_value(
         value_budget.opaque = True
         return None, value_budget, True
     frontend_value: Any = _MISSING
-    # Reading and normalizing frontend state can invoke application-defined objects.
+    # Reading frontend state can invoke application-defined descriptors.
     try:
-        frontend_value = value._value_frontend
-        safe_value = _safe_value(frontend_value, budget=value_budget)
-    except Exception as error:  # noqa: BLE001
+        frontend_value = _read_frontend_value(value)
+    except _ControlReadError as error:
         value_budget.opaque = True
+        source_error = error.__cause__
         safe_value = _safe_value(
-            {"unavailable": _type_name(error)},
+            {
+                "unavailable": _type_name(
+                    source_error if source_error is not None else error
+                )
+            },
             budget=value_budget,
         )
+    else:
+        safe_value = _safe_value(frontend_value, budget=value_budget)
 
     value_complete = not value_budget.truncated and not value_budget.opaque
     can_show = (
@@ -199,6 +224,13 @@ def _capture_ui_value(
         and _ui_value_can_be_shown(frontend_value)
     )
     return safe_value if can_show else None, value_budget, not can_show
+
+
+def _read_frontend_value(value: Any) -> Any:
+    try:
+        return value._value_frontend
+    except Exception as error:
+        raise _ControlReadError from error
 
 
 def _ui_value_can_be_shown(value: Any) -> bool:
@@ -218,9 +250,16 @@ def _ui_scalar_can_be_shown(value: Any) -> bool:
 def _is_lens_widget(widget: anywidget.AnyWidget) -> bool:
     # Trait-backed markers may execute application code during attribute access.
     try:
-        return getattr(widget, "_marimo_lens_widget", False) is True
-    except Exception:  # noqa: BLE001
+        return _read_lens_marker(widget) is True
+    except _ControlReadError:
         return False
+
+
+def _read_lens_marker(widget: anywidget.AnyWidget) -> Any:
+    try:
+        return getattr(widget, "_marimo_lens_widget", False)
+    except Exception as error:
+        raise _ControlReadError from error
 
 
 __all__ = ["ControlSource", "capture_control", "identify_control"]

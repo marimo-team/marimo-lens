@@ -29,6 +29,10 @@ MAX_SELECTION_STATE_BYTES = 40_000
 MAX_HISTORY_STATE_BYTES = 64_000
 
 
+class _StateRestoreError(RuntimeError):
+    """The previous selection state could not be republished."""
+
+
 @dataclass(frozen=True, slots=True)
 class SelectionRecord:
     """One selection and every resource that shares its lifetime."""
@@ -213,13 +217,14 @@ class SelectionStore:
         self._state = state
         try:
             publish(state.payload())
-        except Exception:
+        except Exception as publish_error:
             self._state = previous
             try:
-                publish(previous.payload())
-            except Exception:  # noqa: BLE001, S110
-                # Preserve the original publication error after restoring state.
-                pass
+                _restore_published_state(publish, previous.payload())
+            except _StateRestoreError:
+                publish_error.add_note(
+                    "Lens restored local selection state but could not republish it."
+                )
             raise
 
     def release(self) -> None:
@@ -228,6 +233,16 @@ class SelectionStore:
             revision=state.revision,
             next_label=state.next_label,
         )
+
+
+def _restore_published_state(
+    publish: Callable[[dict[str, Any]], None],
+    payload: dict[str, Any],
+) -> None:
+    try:
+        publish(payload)
+    except Exception as error:
+        raise _StateRestoreError from error
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any, cast
 
@@ -31,6 +31,16 @@ class MarimoRuntimeAdapter:
         return runtime_cell_status(cell_id)
 
 
+class _RuntimeReadError(RuntimeError):
+    """A host-owned runtime value could not be read."""
+
+    def __init__(self, source: Exception) -> None:
+        self.source = source
+        name = type(source).__name__
+        detail = source.args[0] if len(source.args) == 1 else None
+        super().__init__(f"{name}: {detail}" if isinstance(detail, str) else name)
+
+
 def collect_runtime_snapshot(
     output_cell_ids: Sequence[str] | None = None,
 ) -> RuntimeSnapshot:
@@ -43,11 +53,11 @@ def collect_runtime_snapshot(
         return _unavailable("marimo runtime is unavailable")
 
     try:
-        context = get_context()
-    except ContextNotInitializedError:
+        context = _read_runtime_context(get_context)
+    except _RuntimeReadError as error:
+        if not isinstance(error.source, ContextNotInitializedError):
+            return _unavailable(str(error))
         return _unavailable("not running in a marimo kernel")
-    except Exception as error:  # noqa: BLE001
-        return _unavailable(f"{type(error).__name__}: {error}")
 
     graph = getattr(context, "graph", None)
     if graph is None:
@@ -161,15 +171,12 @@ def runtime_cell_status(cell_id: str) -> RuntimeCellStatus:
 
     try:
         from marimo._runtime.context import get_context
-        from marimo._runtime.context.types import ContextNotInitializedError
     except ImportError:
         return "unavailable"
 
     try:
-        context = get_context()
-    except ContextNotInitializedError:
-        return "unavailable"
-    except Exception:  # noqa: BLE001
+        context = _read_runtime_context(get_context)
+    except _RuntimeReadError:
         return "unavailable"
 
     graph = getattr(context, "graph", None)
@@ -206,8 +213,8 @@ def _runtime_cell(
 def _optional_runtime_text(cell: Any, name: str) -> str | None:
     # Runtime cells are host-owned and may expose descriptors that raise.
     try:
-        value = getattr(cell, name, None)
-    except Exception:  # noqa: BLE001
+        value = _read_runtime_attribute(cell, name)
+    except _RuntimeReadError:
         return None
     return str(value) if value is not None else None
 
@@ -215,8 +222,8 @@ def _optional_runtime_text(cell: Any, name: str) -> str | None:
 def _runtime_stale(cell: Any) -> bool | None:
     # Runtime cells are host-owned and may expose descriptors that raise.
     try:
-        value = getattr(cell, "stale", None)
-    except Exception:  # noqa: BLE001
+        value = _read_runtime_attribute(cell, "stale")
+    except _RuntimeReadError:
         return None
     return value if isinstance(value, bool) else None
 
@@ -271,8 +278,8 @@ def _parents(
 def _runtime_globals(context: Any) -> tuple[Mapping[str, Any], bool]:
     # The private runtime context may expose globals through a failing descriptor.
     try:
-        value = context.globals
-    except Exception:  # noqa: BLE001
+        value = _read_runtime_attribute(context, "globals")
+    except _RuntimeReadError:
         return {}, False
     if not isinstance(value, Mapping):
         return {}, False
@@ -383,10 +390,10 @@ def _lookup_control_source(
     name: str,
 ) -> tuple[_marimo_control_state.ControlSource | None, bool]:
     try:
-        value = namespace[name]
+        value = _read_namespace_value(namespace, name)
     except KeyError:
         return None, True
-    except Exception:  # noqa: BLE001
+    except _RuntimeReadError:
         return None, False
 
     return (
@@ -397,6 +404,29 @@ def _lookup_control_source(
         ),
         True,
     )
+
+
+def _read_runtime_context(get_context: Callable[[], Any]) -> Any:
+    try:
+        return get_context()
+    except Exception as error:
+        raise _RuntimeReadError(error) from error
+
+
+def _read_runtime_attribute(value: Any, name: str) -> Any:
+    try:
+        return getattr(value, name, None)
+    except Exception as error:
+        raise _RuntimeReadError(error) from error
+
+
+def _read_namespace_value(namespace: Mapping[str, Any], name: str) -> Any:
+    try:
+        return namespace[name]
+    except KeyError:
+        raise
+    except Exception as error:
+        raise _RuntimeReadError(error) from error
 
 
 def _graph_lock(value: Any) -> AbstractContextManager[Any]:

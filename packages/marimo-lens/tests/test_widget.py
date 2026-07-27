@@ -5,6 +5,7 @@ import inspect
 import json
 import threading
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, cast
 
 import marimo_lens
@@ -943,34 +944,24 @@ def test_concurrent_resolutions_emit_receipts_in_revision_order() -> None:
         revision=1,
         selection_value=selection(selection_id="selection-2", label="S2"),
     )
-    errors: list[Exception] = []
-
-    # Capture every worker failure so the main test can report it.
-    def resolve_first() -> None:
-        try:
-            lens.resolve("selection-1", expected_revision=2)
-        except Exception as error:  # noqa: BLE001
-            errors.append(error)
 
     def resolve_second() -> None:
         try:
             lens.resolve("selection-2", expected_revision=3)
-        except Exception as error:  # noqa: BLE001
-            errors.append(error)
         finally:
             lens.second_resolution_finished.set()
 
-    first = threading.Thread(target=resolve_first)
-    first.start()
-    assert lens.first_event_started.wait(timeout=1)
-    second = threading.Thread(target=resolve_second)
-    second.start()
-    first.join(timeout=2)
-    second.join(timeout=2)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(
+            lens.resolve,
+            "selection-1",
+            expected_revision=2,
+        )
+        assert lens.first_event_started.wait(timeout=1)
+        second = executor.submit(resolve_second)
+        first.result(timeout=2)
+        second.result(timeout=2)
 
-    assert not first.is_alive()
-    assert not second.is_alive()
-    assert errors == []
     events = [
         content
         for content, _buffers in lens.sent

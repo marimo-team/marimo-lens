@@ -49,6 +49,10 @@ class _ValueBudget:
     opaque: bool = False
 
 
+class _ValueReadError(RuntimeError):
+    """Application-defined control data could not be read."""
+
+
 def serialize_controls(
     controls: Sequence[RuntimeControl],
 ) -> SerializedControls:
@@ -189,14 +193,14 @@ def _safe_value(
     try:
         if isinstance(value, Mapping):
             try:
-                keys = list(islice(iter(value), MAX_VALUE_ITEMS + 1))
-            except Exception:  # noqa: BLE001
+                keys = _read_items(value)
+            except _ValueReadError:
                 return _describe(value, budget)
             keyed: list[tuple[str, Any]] = []
             for key in keys[:MAX_VALUE_ITEMS]:
                 try:
-                    safe_key = _bounded_text(str(key), budget)
-                except Exception:  # noqa: BLE001
+                    safe_key = _bounded_text(_read_text(key), budget)
+                except _ValueReadError:
                     budget.opaque = True
                     safe_key = _bounded_text(_type_name(key), budget)
                 if not isinstance(key, str):
@@ -209,8 +213,8 @@ def _safe_value(
                     budget.truncated = True
                     break
                 try:
-                    item = value[key]
-                except Exception:  # noqa: BLE001
+                    item = _read_mapping_item(value, key)
+                except _ValueReadError:
                     budget.opaque = True
                     continue
                 if safe_key in mapping_result:
@@ -229,8 +233,8 @@ def _safe_value(
             if isinstance(value, (set, frozenset)):
                 budget.opaque = True
             try:
-                items = list(islice(iter(value), MAX_VALUE_ITEMS + 1))
-            except Exception:  # noqa: BLE001
+                items = _read_items(value)
+            except _ValueReadError:
                 return _describe(value, budget)
             sequence_result: list[Any] = []
             for item in items[:MAX_VALUE_ITEMS]:
@@ -254,6 +258,27 @@ def _safe_value(
         return _describe(value, budget)
     finally:
         ancestors.remove(marker)
+
+
+def _read_items(value: Any) -> list[Any]:
+    try:
+        return list(islice(iter(value), MAX_VALUE_ITEMS + 1))
+    except Exception as error:
+        raise _ValueReadError from error
+
+
+def _read_text(value: Any) -> str:
+    try:
+        return str(value)
+    except Exception as error:
+        raise _ValueReadError from error
+
+
+def _read_mapping_item(value: Mapping[Any, Any], key: Any) -> Any:
+    try:
+        return value[key]
+    except Exception as error:
+        raise _ValueReadError from error
 
 
 def _describe(value: Any, budget: _ValueBudget) -> dict[str, str]:
