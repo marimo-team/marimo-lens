@@ -549,13 +549,21 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
 }
 
 .ml-dock-tab__logo {
-  display: block;
+  display: grid;
   width: 28px;
   height: 28px;
-  background-image: var(--ml-lens-mark-light);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: 162% 162%;
+  place-items: center;
+}
+
+.ml-dock-tab__logo-image {
+  display: block;
+  grid-area: 1 / 1;
+  width: 26px;
+  height: 26px;
+}
+
+.ml-dock-tab__logo > .ml-dock-tab__logo-image--dark {
+  display: none;
 }
 
 :is(
@@ -567,8 +575,23 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
     [data-vscode-theme-kind="vscode-high-contrast"]
   )
   .marimo_lens
-  .ml-dock-tab__logo {
-  background-image: var(--ml-lens-mark-dark);
+  .ml-dock-tab__logo
+  > .ml-dock-tab__logo-image--light {
+  display: none;
+}
+
+:is(
+    .dark,
+    .dark-mode,
+    [data-theme="dark"],
+    [data-mode="dark"],
+    [data-vscode-theme-kind="vscode-dark"],
+    [data-vscode-theme-kind="vscode-high-contrast"]
+  )
+  .marimo_lens
+  .ml-dock-tab__logo
+  > .ml-dock-tab__logo-image--dark {
+  display: block;
 }
 
 .ml-dock-tab__badge {
