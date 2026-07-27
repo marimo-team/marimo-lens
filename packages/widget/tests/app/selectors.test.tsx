@@ -33,6 +33,7 @@ describe("stable browser selectors", () => {
     document.body.appendChild(container);
     const selection = selectionFixture();
     const onActivate = vi.fn();
+    const onEditNote = vi.fn();
     const snapshotLoader = new SelectionSnapshotLoader(async () => {
       throw new Error("Snapshot loading is not expected in this test");
     });
@@ -85,9 +86,7 @@ describe("stable browser selectors", () => {
             busySelectionIds={new Set()}
             capturingSelectionIds={new Set()}
             onActivate={onActivate}
-            onEditNote={() => {}}
-            onDelete={() => {}}
-            snapshotLoader={snapshotLoader}
+            onEditNote={onEditNote}
             onReposition={() => {}}
             registerAdjustment={() => {}}
             releaseAdjustment={() => {}}
@@ -108,6 +107,6 @@ describe("stable browser selectors", () => {
       '[data-marimo-lens-selection-id="selection-1"]',
     );
     act(() => marker?.click());
-    expect(onActivate).toHaveBeenCalledWith(selection);
+    expect(onEditNote).toHaveBeenCalledWith(selection, "instant");
   });
 });

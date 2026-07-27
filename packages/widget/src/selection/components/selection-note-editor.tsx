@@ -1,6 +1,6 @@
 import type { Selection } from "@marimo-lens/protocol";
 
-import { Trash2, X } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
@@ -31,9 +31,12 @@ export function SelectionNoteEditor({
   onCancel,
   onDelete,
 }: SelectionNoteEditorProps) {
+  const surfaceRef = useRef<HTMLElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const attentionAnimationRef = useRef<Animation | null>(null);
+  const refocusTimerRef = useRef<number | null>(null);
   const [draft, setDraft] = useState(initialNote);
-  const headingId = useId();
+  const fieldId = useId();
   const errorId = useId();
   const dom = useNotebookDom();
   const anchor = editorAnchor(
@@ -44,20 +47,69 @@ export function SelectionNoteEditor({
     anchor,
     open: true,
     preferredPlacement: anchor && anchor.rect.top < 300 ? "below" : "above",
-    gap: 18,
-    width: 352,
-    surfaceHeight: 240,
+    gap: 8,
+    width: 320,
+    surfaceHeight: 190,
     fallback: { style: { right: 16, bottom: 72 }, placement: "above" },
   });
 
   useEffect(() => {
-    textareaRef.current?.focus({ preventScroll: true });
-    textareaRef.current?.select();
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.focus({ preventScroll: true });
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, []);
+
+  useEffect(() => {
+    const onOutsidePointerDown = (event: PointerEvent) => {
+      const surface = surfaceRef.current;
+      if (
+        !surface ||
+        !(event.target instanceof dom.window.Node) ||
+        surface.contains(event.target)
+      ) {
+        return;
+      }
+
+      attentionAnimationRef.current?.cancel();
+      const reducedMotion = dom.window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      if (!reducedMotion && typeof surface.animate === "function") {
+        attentionAnimationRef.current = surface.animate(
+          [
+            { transform: "translateX(0)" },
+            { transform: "translateX(-3px)" },
+            { transform: "translateX(3px)" },
+            { transform: "translateX(-2px)" },
+            { transform: "translateX(2px)" },
+            { transform: "translateX(0)" },
+          ],
+          { duration: 240, easing: "ease-out" },
+        );
+      }
+
+      if (refocusTimerRef.current !== null) {
+        dom.window.clearTimeout(refocusTimerRef.current);
+      }
+      refocusTimerRef.current = dom.window.setTimeout(
+        () => textareaRef.current?.focus({ preventScroll: true }),
+        reducedMotion ? 0 : 240,
+      );
+    };
+
+    dom.document.addEventListener("pointerdown", onOutsidePointerDown, true);
+    return () => {
+      dom.document.removeEventListener("pointerdown", onOutsidePointerDown, true);
+      attentionAnimationRef.current?.cancel();
+      if (refocusTimerRef.current !== null) {
+        dom.window.clearTimeout(refocusTimerRef.current);
+      }
+    };
+  }, [dom]);
 
   const title = selection.note ? "Edit note" : "Add note";
   return (
     <section
+      ref={surfaceRef}
       className="ml-note-editor"
       style={position.style}
       data-placement={position.placement}
@@ -65,39 +117,28 @@ export function SelectionNoteEditor({
       data-marimo-lens-note-editor
       data-marimo-lens-selection-cluster={selection.id}
       data-marimo-lens-ui
-      aria-labelledby={headingId}
+      aria-label={`${title} for ${selection.label}, cell ${selection.outputCellId}`}
     >
       <header className="ml-note-editor__header">
-        <span className="ml-label">{selection.label}</span>
-        <div className="ml-note-editor__identity">
-          <h2 id={headingId}>{title}</h2>
-          <span>
-            Cell <span className="ml-code">{selection.outputCellId}</span>
-            <SelectionKindMark kind={selection.anchor.kind} />
-          </span>
-        </div>
-        <button
-          className="ml-icon-button"
-          type="button"
-          onClick={onCancel}
-          disabled={mutationPending}
-          aria-label="Close note editor"
-        >
-          <X size={16} aria-hidden="true" />
-        </button>
+        <span className="ml-note-editor__selection ml-code">{selection.label}</span>
+        <span aria-hidden="true">·</span>
+        <span className="ml-note-editor__target">
+          Cell <span className="ml-code">{selection.outputCellId}</span>
+        </span>
+        <SelectionKindMark kind={selection.anchor.kind} />
       </header>
 
-      <label className="ml-visually-hidden" htmlFor={`${headingId}-field`}>
+      <label className="ml-visually-hidden" htmlFor={fieldId}>
         Note for selection {selection.label}
       </label>
       <textarea
-        id={`${headingId}-field`}
+        id={fieldId}
         ref={textareaRef}
         className="ml-note-editor__input"
         value={draft}
         maxLength={4_000}
         rows={3}
-        placeholder="Add context for this selection"
+        placeholder="Add a note (optional)"
         disabled={mutationPending}
         aria-invalid={saveError ? "true" : undefined}
         aria-describedby={saveError ? errorId : undefined}
@@ -118,23 +159,30 @@ export function SelectionNoteEditor({
 
       <footer className="ml-note-editor__footer">
         <button
-          className="ml-button ml-button--danger"
+          className="ml-icon-button ml-icon-button--danger"
           type="button"
           onClick={onDelete}
           disabled={mutationPending}
+          aria-label={`Remove selection ${selection.label}`}
+          title="Remove selection"
         >
-          <Trash2 size={14} aria-hidden="true" /> Remove selection
+          <Trash2 size={14} aria-hidden="true" />
         </button>
-        <button
-          className="ml-button ml-button--primary"
-          type="button"
-          onClick={() => onSave(draft)}
-          disabled={mutationPending}
-          aria-keyshortcuts="Meta+Enter Control+Enter"
-          title="Save note (Command/Ctrl+Enter)"
-        >
-          {saving ? "Saving…" : "Done"}
-        </button>
+        <span className="ml-note-editor__actions">
+          <button className="ml-button" type="button" onClick={onCancel} disabled={mutationPending}>
+            Cancel
+          </button>
+          <button
+            className="ml-button ml-button--primary"
+            type="button"
+            onClick={() => onSave(draft)}
+            disabled={mutationPending}
+            aria-keyshortcuts="Meta+Enter Control+Enter"
+            title="Save note (Command/Ctrl+Enter)"
+          >
+            {saving ? "Saving…" : "Done"}
+          </button>
+        </span>
       </footer>
     </section>
   );
@@ -146,13 +194,18 @@ function editorAnchor(
 ): AnchoredSurfaceAnchor | null {
   if (!output) return null;
   const viewportAnchor = anchorToViewport(output, selection.anchor);
-  const x =
-    viewportAnchor.kind === "point"
-      ? viewportAnchor.x
-      : viewportAnchor.x + viewportAnchor.width / 2;
-  const y = viewportAnchor.y;
+  const markerTop =
+    selection.anchor.kind === "point" ? viewportAnchor.y - 12 : viewportAnchor.y - 25;
+  const markerBottom = selection.anchor.kind === "point" ? viewportAnchor.y + 12 : viewportAnchor.y;
   return {
     element: output,
-    rect: { left: x, right: x, top: y, bottom: y, width: 0, height: 0 },
+    rect: {
+      left: viewportAnchor.x,
+      right: viewportAnchor.x,
+      top: markerTop,
+      bottom: markerBottom,
+      width: 0,
+      height: markerBottom - markerTop,
+    },
   };
 }

@@ -46,7 +46,11 @@ describe("selection mutations", () => {
 
     act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
 
-    expect(latestUi?.workflow).toEqual({ mode: "idle" });
+    expect(latestUi?.workflow).toEqual({
+      mode: "editingNote",
+      selectionId: "selection-fixed",
+      motion: "animate",
+    });
     expect(latestUi?.pendingSelections[0]?.selection).toMatchObject({
       label: "S1",
       note: "",

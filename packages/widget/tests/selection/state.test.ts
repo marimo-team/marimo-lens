@@ -10,7 +10,7 @@ import {
 import { selectionFixture } from "../support/fixtures";
 
 describe("selection workflow", () => {
-  test("returns to idle as soon as pointer release queues a selection", () => {
+  test("opens optional note editing as soon as pointer release queues a selection", () => {
     const output = document.createElement("div");
     output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 200);
     Object.defineProperties(output, {
@@ -30,7 +30,11 @@ describe("selection workflow", () => {
       pending: { selection },
     });
 
-    expect(queued.workflow).toEqual({ mode: "idle" });
+    expect(queued.workflow).toEqual({
+      mode: "editingNote",
+      selectionId: selection.id,
+      motion: "animate",
+    });
     expect(queued.pendingSelections[0]?.selection).toEqual(selection);
     expect(queued.optimisticCurrentSelectionId).toBe(selection.id);
     expect(queued.announcement).toBe("S1 selected.");

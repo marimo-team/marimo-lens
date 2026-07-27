@@ -1,8 +1,7 @@
 import type { RectAnchor, Selection, SelectionAnchor } from "@marimo-lens/protocol";
 
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
-import type { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
 import type { WorkflowState } from "@/selection/state";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
@@ -14,7 +13,6 @@ import {
   translateAnchor,
   type ResizeHandle,
 } from "@/selection/anchor";
-import { SelectionPeek } from "@/selection/components/selection-peek";
 import { previewAnchor } from "@/selection/state";
 
 type SelectionOverlayProps = {
@@ -26,8 +24,6 @@ type SelectionOverlayProps = {
   capturingSelectionIds: ReadonlySet<string>;
   onActivate: (selection: Selection) => void;
   onEditNote: (selection: Selection, motion: "animate" | "instant") => void;
-  onDelete: (selection: Selection) => void;
-  snapshotLoader: SelectionSnapshotLoader;
   onReposition: (selection: Selection, anchor: SelectionAnchor) => void;
   registerAdjustment: (cancel: AdjustmentCancel) => void;
   releaseAdjustment: (cancel: AdjustmentCancel) => void;
@@ -44,8 +40,6 @@ export function SelectionOverlay({
   capturingSelectionIds,
   onActivate,
   onEditNote,
-  onDelete,
-  snapshotLoader,
   onReposition,
   registerAdjustment,
   releaseAdjustment,
@@ -53,7 +47,6 @@ export function SelectionOverlay({
   const dom = useNotebookDom();
   const interactionActive = workflow.mode === "armed" || workflow.mode === "dragging";
   useViewportRevision(selections.length > 0 || interactionActive);
-  const [activePeekSelectionId, setActivePeekSelectionId] = useState<string | null>(null);
   const activeCellId =
     workflow.mode === "armed"
       ? workflow.activeOutputCellId
@@ -93,16 +86,9 @@ export function SelectionOverlay({
             current={selection.id === currentSelectionId}
             busy={busySelectionIds.has(selection.id)}
             capturing={capturingSelectionIds.has(selection.id)}
-            peekEnabled={workflow.mode === "idle"}
-            peekActive={activePeekSelectionId === selection.id}
+            interactionEnabled={workflow.mode === "idle"}
             onActivate={onActivate}
             onEditNote={onEditNote}
-            onDelete={onDelete}
-            snapshotLoader={snapshotLoader}
-            onOpenPeek={setActivePeekSelectionId}
-            onClosePeek={(selectionId) => {
-              setActivePeekSelectionId((current) => (current === selectionId ? null : current));
-            }}
             onReposition={onReposition}
             registerAdjustment={registerAdjustment}
             releaseAdjustment={releaseAdjustment}
@@ -131,14 +117,9 @@ function SelectionMarker({
   current,
   busy,
   capturing,
-  peekEnabled,
-  peekActive,
+  interactionEnabled,
   onActivate,
   onEditNote,
-  onDelete,
-  snapshotLoader,
-  onOpenPeek,
-  onClosePeek,
   onReposition,
   registerAdjustment,
   releaseAdjustment,
@@ -148,14 +129,9 @@ function SelectionMarker({
   current: boolean;
   busy: boolean;
   capturing: boolean;
-  peekEnabled: boolean;
-  peekActive: boolean;
+  interactionEnabled: boolean;
   onActivate: (selection: Selection) => void;
   onEditNote: (selection: Selection, motion: "animate" | "instant") => void;
-  onDelete: (selection: Selection) => void;
-  snapshotLoader: SelectionSnapshotLoader;
-  onOpenPeek: (selectionId: string) => void;
-  onClosePeek: (selectionId: string) => void;
   onReposition: (selection: Selection, anchor: SelectionAnchor) => void;
   registerAdjustment: (cancel: AdjustmentCancel) => void;
   releaseAdjustment: (cancel: AdjustmentCancel) => void;
@@ -169,34 +145,8 @@ function SelectionMarker({
     cancel: AdjustmentCancel;
   } | null>(null);
   const suppressPointerClick = useRef(false);
-  const peekOpenTimer = useRef<number | null>(null);
-  const peekCloseTimer = useRef<number | null>(null);
   const [preview, setPreview] = useState<SelectionAnchor | null>(null);
-  const [peekMotion, setPeekMotion] = useState<"animate" | "instant" | null>(null);
   const viewport = anchorToViewport(output, preview ?? selection.anchor);
-
-  const clearPeekTimers = useCallback(() => {
-    if (peekOpenTimer.current !== null) dom.window.clearTimeout(peekOpenTimer.current);
-    if (peekCloseTimer.current !== null) dom.window.clearTimeout(peekCloseTimer.current);
-    peekOpenTimer.current = null;
-    peekCloseTimer.current = null;
-  }, [dom]);
-  const openPeekNow = (motion: "animate" | "instant") => {
-    clearPeekTimers();
-    setPeekMotion(motion);
-    onOpenPeek(selection.id);
-  };
-  const schedulePeekOpen = () => {
-    clearPeekTimers();
-    peekOpenTimer.current = dom.window.setTimeout(() => openPeekNow("animate"), 180);
-  };
-  const schedulePeekClose = () => {
-    clearPeekTimers();
-    peekCloseTimer.current = dom.window.setTimeout(() => {
-      setPeekMotion(null);
-      onClosePeek(selection.id);
-    }, 120);
-  };
 
   useEffect(
     () => () => {
@@ -205,9 +155,8 @@ function SelectionMarker({
         releaseAdjustment(currentDrag.cancel);
         drag.current = null;
       }
-      clearPeekTimers();
     },
-    [clearPeekTimers, releaseAdjustment],
+    [releaseAdjustment],
   );
 
   const marker = (
@@ -221,38 +170,20 @@ function SelectionMarker({
       data-marimo-lens-selection-id={selection.id}
       style={selection.anchor.kind === "point" ? anchorStyle(viewport) : undefined}
       type="button"
-      disabled={busy || !peekEnabled}
+      disabled={busy || !interactionEnabled}
       aria-current={current ? "true" : undefined}
       aria-label={`${current ? "Current selection" : "Activate selection"} ${selection.label}. Drag to adjust.`}
-      onPointerEnter={schedulePeekOpen}
-      onPointerLeave={schedulePeekClose}
-      onFocus={() => openPeekNow("instant")}
-      onBlur={(event) => {
-        const related = event.relatedTarget;
-        const cluster =
-          related instanceof dom.window.Element
-            ? related.closest<HTMLElement>("[data-marimo-lens-selection-cluster]")
-            : null;
-        if (cluster?.dataset.marimoLensSelectionCluster === selection.id) return;
-        setPeekMotion(null);
-        onClosePeek(selection.id);
-      }}
       onClick={(event) => {
         if (event.detail > 0 && suppressPointerClick.current) {
           suppressPointerClick.current = false;
           return;
         }
-        onActivate(selection);
-        openPeekNow(event.detail === 0 ? "instant" : "animate");
+        onEditNote(selection, event.detail === 0 ? "instant" : "animate");
       }}
       onPointerDown={(event) => {
         if (event.button !== 0 || drag.current) return;
         event.preventDefault();
         event.stopPropagation();
-        clearPeekTimers();
-        setPeekMotion(null);
-        onClosePeek(selection.id);
-        onActivate(selection);
         event.currentTarget.setPointerCapture(event.pointerId);
         const target = event.currentTarget;
         const cancel = () => {
@@ -279,7 +210,10 @@ function SelectionMarker({
         if (!currentDrag || currentDrag.pointerId !== event.pointerId) return;
         const deltaX = event.clientX - currentDrag.startX;
         const deltaY = event.clientY - currentDrag.startY;
-        if (Math.hypot(deltaX, deltaY) >= 4) currentDrag.moved = true;
+        if (!currentDrag.moved && Math.hypot(deltaX, deltaY) >= 4) {
+          currentDrag.moved = true;
+          onActivate(selection);
+        }
         if (currentDrag.moved)
           setPreview(translateAnchor(output, selection.anchor, deltaX, deltaY));
       }}
@@ -308,7 +242,7 @@ function SelectionMarker({
             ),
           );
         } else {
-          openPeekNow("animate");
+          onEditNote(selection, "animate");
         }
         setPreview(null);
       }}
@@ -323,64 +257,36 @@ function SelectionMarker({
     </button>
   );
 
-  const selectionPeek =
-    peekEnabled && peekActive && peekMotion ? (
-      <SelectionPeek
-        selection={selection}
-        anchorElement={output}
-        viewportAnchor={viewport}
-        capturing={capturing}
-        motion={peekMotion}
-        snapshotLoader={snapshotLoader}
-        onEditNote={onEditNote}
-        onDelete={onDelete}
-        onClose={() => {
-          setPeekMotion(null);
-          onClosePeek(selection.id);
-        }}
-        onPointerEnter={clearPeekTimers}
-        onPointerLeave={schedulePeekClose}
-      />
-    ) : null;
-
   const rectAnchor = selection.anchor;
   if (rectAnchor.kind === "point" || viewport.kind === "point") {
-    return (
-      <Fragment>
-        {marker}
-        {selectionPeek}
-      </Fragment>
-    );
+    return marker;
   }
 
   return (
-    <Fragment>
-      <div
-        className="ml-rect-marker"
-        data-current={current ? "true" : "false"}
-        data-busy={busy ? "true" : "false"}
-        style={anchorStyle(viewport)}
-      >
-        {marker}
-        {current && peekEnabled
-          ? RESIZE_HANDLES.map((handle) => (
-              <ResizeHandleButton
-                key={handle}
-                selection={selection}
-                anchor={rectAnchor}
-                output={output}
-                handle={handle}
-                disabled={busy}
-                onPreview={setPreview}
-                onCommit={(anchor) => onReposition(selection, anchor)}
-                registerAdjustment={registerAdjustment}
-                releaseAdjustment={releaseAdjustment}
-              />
-            ))
-          : null}
-      </div>
-      {selectionPeek}
-    </Fragment>
+    <div
+      className="ml-rect-marker"
+      data-current={current ? "true" : "false"}
+      data-busy={busy ? "true" : "false"}
+      style={anchorStyle(viewport)}
+    >
+      {marker}
+      {current && interactionEnabled
+        ? RESIZE_HANDLES.map((handle) => (
+            <ResizeHandleButton
+              key={handle}
+              selection={selection}
+              anchor={rectAnchor}
+              output={output}
+              handle={handle}
+              disabled={busy}
+              onPreview={setPreview}
+              onCommit={(anchor) => onReposition(selection, anchor)}
+              registerAdjustment={registerAdjustment}
+              releaseAdjustment={releaseAdjustment}
+            />
+          ))
+        : null}
+    </div>
   );
 }
 
