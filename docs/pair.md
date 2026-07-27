@@ -12,12 +12,21 @@ the cells behind it, and return the verified result to the notebook.
 Create a request in [Getting started](./getting-started) before connecting an
 agent.
 
-## Install and connect Pair
+## Install the skills and connect Pair
+
+Install the Lens workflow skill:
+
+```bash
+npx skills add marimo-team/marimo-lens
+```
 
 Install or update Pair using the
 [marimo Pair installation guide](https://github.com/marimo-team/marimo-pair#install).
 It covers [Agent Skills](https://agentskills.io/) clients and the Claude Code
 plugin.
+
+The Lens skill uses Pair to inspect, change, and rerun cells in the active
+notebook kernel.
 
 The Getting Started command runs marimo with `--no-token`, so Pair can discover
 the local session. Open the notebook UI before asking Pair to connect. For an

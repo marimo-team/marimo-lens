@@ -52,9 +52,12 @@ covers existing projects and includes a live selection example.
 
 ## Connect an agent
 
-Connect a notebook agent that can call the Lens Python API to the same running
-notebook. [marimo Pair](https://marimo.io/pair) provides a ready-made
-integration.
+Install the Lens skill and [marimo Pair](https://marimo.io/pair):
+
+```bash
+npx skills add marimo-team/marimo-lens
+npx skills add marimo-team/marimo-pair
+```
 
 After selecting an output and adding a note, ask the agent:
 

@@ -1,0 +1,4 @@
+interface:
+  display_name: "marimo Lens"
+  short_description: "Resolve visual requests in live marimo notebooks"
+  default_prompt: "Use $marimo-lens to resolve the current Lens request in my live marimo notebook."

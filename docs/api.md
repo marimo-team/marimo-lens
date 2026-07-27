@@ -18,6 +18,50 @@ dependencies = [
 ]
 ```
 
+## Agent adapter
+
+Import the adapter inside the active notebook kernel:
+
+```python
+import marimo_lens.agent as lens_agent
+import marimo._code_mode as cm
+
+async with cm.get_context() as ctx:
+    mounted = lens_agent.discover(ctx)
+    scan = mounted[0].scan()
+```
+
+### `discover(context, *, identity=None) -> tuple[MountedLens, ...]`
+
+Returns mounted Lens handles found in a live
+`marimo._code_mode.get_context()` context. Pass an identity from an earlier
+`MountedLens.scan()` to reconnect to that exact Lens. The filtered result is
+empty when the instance changed or became unavailable.
+
+`scan()` returns bounded selection metadata, the current revision, an opaque
+Lens identity, and a compact current-cell summary. It keeps standalone context
+text and PNG bytes outside the scan.
+
+### `MountedLens`
+
+The handle exposes the Lens workflow through revision-checked methods:
+
+| Method                                                       | Behavior                                                       |
+| ------------------------------------------------------------ | -------------------------------------------------------------- |
+| `scan()`                                                     | Returns bounded current attention and cell metadata            |
+| `context(*, expected_revision)`                              | Returns a detached `LensContext` for the scanned revision      |
+| `selection_image(selection_id, *, expected_revision)`        | Returns an `AgentImage` when capture-time pixels are available |
+| `start_cell_image(cell_id, *, expected_revision)`            | Starts one marked full-cell capture and returns its request ID |
+| `read_cell_image(request_id)`                                | Reads pending state or consumes one terminal `CellImageResult` |
+| `activity(cell_id, *, label=None, message=None)`             | Shows the current agent work target                            |
+| `resolve(selection_ids, *, expected_revision, summary=None)` | Moves verified selections to History                           |
+| `reveal(cell_id, *, message=None)`                           | Brings the primary result into view                            |
+
+`AgentImage.transfer()` and `CellImageResult.transfer()` return marked records
+for direct piping to the Lens Agent Skill's `materialize-image.sh`. The client
+script validates the PNG and returns a temporary local path. Remove its
+`imageDir` after the final image read.
+
 ## Try the methods
 
 Create one or more selections on the chart, then run the methods in order. Each

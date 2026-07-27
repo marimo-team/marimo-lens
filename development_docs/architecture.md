@@ -42,6 +42,8 @@ and publishes as `marimo-lens`.
   selection interaction, the document-scoped dock, and transient effects.
 - `@marimo-lens/python` owns the public API, durable state, runtime context,
   output-capture mailbox, and packaged browser resources.
+- `marimo_lens.agent` owns mounted-Lens discovery, stable instance identity,
+  bounded agent scans, and full-cell capture adaptation.
 - `examples/lens.py` is the product example.
 
 Dependencies point toward the protocol package. Cross-package TypeScript
@@ -156,6 +158,18 @@ The browser transport resolves the displayed Lens handler, enforces its raster
 deadline, and replies with a validated PNG buffer or bounded failure. The
 consuming integration owns any temporary file it creates from the returned
 bytes.
+
+## Agent adapter
+
+Agents import `marimo_lens.agent` inside the active notebook kernel.
+`discover()` accepts a live marimo code-mode context and returns mounted Lens
+handles. Each handle carries a stable opaque identity, projects a bounded
+scan, guards context and image reads by revision, delegates public feedback
+methods, and adapts full-cell capture.
+
+The top-level `skills/marimo-lens` directory owns agent workflow policy and
+client-side PNG materialization. A live-kernel executor owns session
+discovery, kernel calls, code-mode mutation, and runtime verification.
 
 ## Agent feedback
 
