@@ -19,7 +19,7 @@ Open a notebook with marimo and Lens
 uvx --with marimo-lens marimo edit --no-token notebook.py
 ```
 
-We create an isolated environment for this notebook and configure --no-token to let an agent [pair](https://marimo.io/pair) with us on this notebook.
+We create an isolated environment for this notebook and configure `--no-token` to let an agent [pair](https://marimo.io/pair) with us on this notebook.
 
 ::: details Use an existing uv project
 
