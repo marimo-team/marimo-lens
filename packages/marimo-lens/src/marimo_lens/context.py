@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-import threading
 from typing import Any, Literal, Self, cast
 
 from marimo import Html

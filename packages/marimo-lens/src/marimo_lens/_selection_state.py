@@ -14,12 +14,12 @@ from ._images import MAX_TOTAL_IMAGE_BYTES, prepare_selection_image
 from ._protocol import MAX_HISTORY, MAX_SELECTIONS, ProtocolError
 from ._protocol_models import (
     ADDRESSED_SELECTION_ADAPTER,
-    AvailableSnapshot,
-    OutdatedSnapshot,
     POSITIVE_SAFE_INTEGER_ADAPTER,
     REVISION_ADAPTER,
     SELECTION_ADAPTER,
     SELECTION_LABEL_ADAPTER,
+    AvailableSnapshot,
+    OutdatedSnapshot,
 )
 from ._references import validate_reference_capacity
 from .context import SelectionImage
@@ -27,6 +27,10 @@ from .context import SelectionImage
 _IMMUTABLE_SELECTION_FIELDS = ("label", "outputCellId", "createdAt")
 MAX_SELECTION_STATE_BYTES = 40_000
 MAX_HISTORY_STATE_BYTES = 64_000
+
+
+class _StateRestoreError(RuntimeError):
+    """The previous selection state could not be republished."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -213,12 +217,14 @@ class SelectionStore:
         self._state = state
         try:
             publish(state.payload())
-        except Exception:
+        except Exception as publish_error:
             self._state = previous
             try:
-                publish(previous.payload())
-            except Exception:
-                pass
+                _restore_published_state(publish, previous.payload())
+            except _StateRestoreError:
+                publish_error.add_note(
+                    "Lens restored local selection state but could not republish it."
+                )
             raise
 
     def release(self) -> None:
@@ -227,6 +233,16 @@ class SelectionStore:
             revision=state.revision,
             next_label=state.next_label,
         )
+
+
+def _restore_published_state(
+    publish: Callable[[dict[str, Any]], None],
+    payload: dict[str, Any],
+) -> None:
+    try:
+        publish(payload)
+    except Exception as error:
+        raise _StateRestoreError from error
 
 
 @dataclass(frozen=True, slots=True)
@@ -872,11 +888,11 @@ def _thaw(value: Any) -> Any:
 
 
 __all__ = [
-    "AddressedSelectionRecord",
     "MAX_HISTORY_STATE_BYTES",
     "MAX_SELECTION_STATE_BYTES",
-    "SelectionRecord",
+    "AddressedSelectionRecord",
     "SelectionPutPlan",
+    "SelectionRecord",
     "SelectionState",
     "SelectionStore",
     "activate_selection",

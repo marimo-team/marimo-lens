@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, cast
+from typing import Any, ClassVar, cast
 
 import pytest
-
 from marimo_lens import Lens, LensError
 
 from tests.support.factories import png, selection
@@ -40,7 +39,7 @@ class FailingCaptureLens(RecordingLens):
 
 
 class ManualTimer:
-    instances: list[ManualTimer] = []
+    instances: ClassVar[list[ManualTimer]] = []
 
     def __init__(
         self,

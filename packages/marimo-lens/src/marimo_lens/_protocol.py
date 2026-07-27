@@ -14,8 +14,8 @@ from ._protocol_models import (
     COMMAND_ADAPTER,
     COMMAND_PROTOCOL,
     EVENT_PROTOCOL,
-    MAX_HISTORY,
     MAX_ERROR,
+    MAX_HISTORY,
     MAX_SELECTIONS,
     PROTOCOL_VERSION,
     REQUEST_ID_ADAPTER,
@@ -482,10 +482,10 @@ def _require_no_buffers(
 
 
 __all__ = [
-    "CaptureResponse",
-    "Command",
     "MAX_HISTORY",
     "MAX_SELECTIONS",
+    "CaptureResponse",
+    "Command",
     "ProtocolError",
     "capture_command",
     "cell_activity_event",

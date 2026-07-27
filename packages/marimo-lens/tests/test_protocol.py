@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 
 import pytest
-
 from marimo_lens._protocol import (
     ProtocolError,
     capture_command,
@@ -16,9 +15,11 @@ from marimo_lens._protocol import (
     request_id_from,
     selection_put_response,
     selection_resolved_event,
-    snapshot_metadata as build_snapshot_metadata,
     snapshot_response,
     success_response,
+)
+from marimo_lens._protocol import (
+    snapshot_metadata as build_snapshot_metadata,
 )
 from marimo_lens.context import SelectionImage
 

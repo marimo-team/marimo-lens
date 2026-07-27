@@ -4,7 +4,6 @@ import json
 from dataclasses import replace
 
 import pytest
-
 from marimo_lens._context import build_context
 from marimo_lens._control_state import (
     MAX_CONTROL_CHARACTERS,
@@ -12,13 +11,14 @@ from marimo_lens._control_state import (
     RuntimeControl,
     serialize_controls,
 )
-from marimo_lens._runtime import RuntimeSnapshot
 from marimo_lens._references import MAX_CONTEXT_REFERENCES_BYTES
+from marimo_lens._runtime import RuntimeSnapshot
 from marimo_lens._selection_state import (
     MAX_SELECTION_STATE_BYTES,
     validate_selection_admission,
 )
 from marimo_lens._text_context import MAX_CONTEXT_TEXT_CHARACTERS
+
 from tests.support.factories import cell, selection, snapshot
 
 

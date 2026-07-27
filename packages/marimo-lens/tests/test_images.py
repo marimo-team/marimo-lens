@@ -7,7 +7,6 @@ from array import array
 from collections.abc import Callable
 
 import pytest
-
 from marimo_lens._images import (
     ImageError,
     prepare_output_image,

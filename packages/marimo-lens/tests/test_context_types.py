@@ -2,9 +2,8 @@ from __future__ import annotations
 
 from typing import get_type_hints
 
-import pytest
-
 import marimo_lens
+import pytest
 from marimo_lens import Lens, LensContext, LensError, SelectionImage
 from marimo_lens._runtime import RuntimeSnapshot
 

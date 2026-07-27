@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from ._images import ImageError, OutputImage, prepare_output_image
 from ._protocol import (
+    CaptureResponse,
     ProtocolError,
     capture_command,
     parse_capture_response,
@@ -22,6 +23,14 @@ from .errors import LensError
 CAPTURE_TIMEOUT_SECONDS = 20.0
 
 CaptureStatus = Literal["pending", "available", "failed"]
+
+
+class _CaptureSendError(RuntimeError):
+    """The browser transport callback rejected a capture command."""
+
+
+class _CaptureResponseError(RuntimeError):
+    """A capture response failed outside the validated protocol contract."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -147,8 +156,8 @@ class OutputCaptureMailbox:
             self._record = record
             timeout.start()
             try:
-                self._send(command)
-            except Exception:
+                _send_capture_command(self._send, command)
+            except _CaptureSendError:
                 self._fail(
                     request_id,
                     code="capture_failed",
@@ -208,7 +217,7 @@ class OutputCaptureMailbox:
             if self._record is not record or record.status != "pending":
                 return
             try:
-                response = parse_capture_response(content, buffers)
+                response = _read_capture_response(content, buffers)
                 if response.cell_id != record.cell_id:
                     raise ProtocolError(
                         "invalid_response",
@@ -231,7 +240,7 @@ class OutputCaptureMailbox:
                         message=response.error or "Cell output capture failed.",
                     )
                     return
-                record.image = prepare_output_image(
+                record.image = _prepare_captured_output(
                     request_id,
                     record.cell_id,
                     response.image,
@@ -247,7 +256,7 @@ class OutputCaptureMailbox:
                     code="capture_failed",
                     message=str(error),
                 )
-            except Exception:
+            except _CaptureResponseError:
                 self._fail(
                     request_id,
                     code="capture_failed",
@@ -329,6 +338,42 @@ def _result(record: _CaptureRecord) -> OutputCaptureResult:
         error_code=record.error_code,
         error=record.error,
     )
+
+
+def _send_capture_command(
+    send: Callable[[dict[str, Any]], None],
+    command: dict[str, Any],
+) -> None:
+    try:
+        send(command)
+    except Exception as error:
+        raise _CaptureSendError from error
+
+
+def _read_capture_response(
+    content: Mapping[str, Any],
+    buffers: Sequence[bytes | bytearray | memoryview],
+) -> CaptureResponse:
+    try:
+        return parse_capture_response(content, buffers)
+    except ProtocolError:
+        raise
+    except Exception as error:
+        raise _CaptureResponseError from error
+
+
+def _prepare_captured_output(
+    request_id: str,
+    cell_id: str,
+    metadata: Mapping[str, Any],
+    buffer: bytes | bytearray | memoryview,
+) -> OutputImage:
+    try:
+        return prepare_output_image(request_id, cell_id, metadata, buffer)
+    except ImageError:
+        raise
+    except Exception as error:
+        raise _CaptureResponseError from error
 
 
 __all__ = [

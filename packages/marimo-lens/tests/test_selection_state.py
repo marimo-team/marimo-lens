@@ -3,9 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
-import pytest
-
 import marimo_lens._selection_state as selection_state_module
+import pytest
 from marimo_lens._protocol import ProtocolError
 from marimo_lens._selection_state import (
     SelectionRecord,
@@ -18,6 +17,7 @@ from marimo_lens._selection_state import (
     resolve_selections,
     validate_state_admission,
 )
+
 from tests.support.factories import selection
 
 

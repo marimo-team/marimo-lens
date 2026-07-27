@@ -7,13 +7,12 @@ from typing import Any
 import anywidget
 import pytest
 import traitlets
-
 from marimo_lens._context import build_context
-from marimo_lens._provenance import resolve_provenance
 from marimo_lens._marimo_runtime import (
     collect_runtime_snapshot,
     runtime_cell_status,
 )
+from marimo_lens._provenance import resolve_provenance
 
 from tests.support.factories import selection
 
