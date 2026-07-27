@@ -1,6 +1,6 @@
 # Getting started
 
-Start a marimo notebook with Lens, create one visual request, and inspect what
+Start a marimo notebook with **Lens**, create one visual request, and inspect what
 your notebook agent receives.
 
 ```marimo-config
@@ -13,16 +13,13 @@ dependencies = [
 
 ## Start a notebook
 
-Open `notebook.py` with marimo and Lens available:
+Open a notebook with marimo and Lens
 
 ```sh
 uvx --with marimo-lens marimo edit --no-token notebook.py
 ```
 
-[`uvx`](https://docs.astral.sh/uv/guides/tools/) creates and reuses an isolated
-environment for this command. The notebook can import `marimo_lens`
-immediately. `--no-token` lets [marimo Pair](https://marimo.io/pair) discover
-this local notebook.
+We create an isolated environment for this notebook and configure `--no-token` to let an agent [pair](https://marimo.io/pair) with us on this notebook.
 
 ::: details Use an existing uv project
 
@@ -37,7 +34,7 @@ uv run marimo edit --no-token notebook.py
 
 ## Make notebook results selectable
 
-Render a result in the first cell:
+1. Render a result in the first cell
 
 ```python
 import marimo as mo
@@ -49,7 +46,7 @@ rows = "\n".join(
 mo.md(f"| Month | Revenue |\n| --- | ---: |\n{rows}")
 ```
 
-Mount Lens in the second cell:
+2. Mount Lens in the second cell
 
 ```python
 from marimo_lens import Lens
@@ -58,8 +55,7 @@ lens = Lens()
 lens
 ```
 
-Keep the Lens cell mounted while you work. Its dock appears at the bottom of
-the notebook.
+This creates a dock that appears at the bottom of your notebook.
 
 ## Create a selection
 
@@ -187,15 +183,14 @@ mo.Html(
 
 </div>
 
-Press **Select** again to add another point or region.
+You can create multiple selections to batch a request. Press **Select** again to add another point or region.
 
 ## Connect an agent
 
-[marimo Pair](https://marimo.io/pair) provides a notebook-agent workflow.
-Follow [Use with marimo Pair](./pair) to connect it to this notebook and
-complete the first request.
+You can use any AI agent to work with this notebook including Claude Code, OpenCode or Codex.
 
-For another notebook agent, the [Overview](./overview) explains the context
-and feedback loop. The [Python API reference](./api) defines the methods an
-integration calls to read a request, show activity, complete it, and return the
-result.
+[marimo pair](https://marimo.io/pair) is a skill that teaches your agent on how to work with marimo notebooks.
+Follow the [instructions](./pair) to connect to this notebook and complete the first request.
+
+The [overview section](./overview) explains the mechanism and feedback loop of Lens and the [Python reference](./api)
+defines the methods to read a request, show the activity, complete it, and return a result.
