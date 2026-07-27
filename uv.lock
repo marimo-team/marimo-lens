@@ -437,7 +437,7 @@ wheels = [
 
 [[package]]
 name = "marimo-lens"
-version = "0.0.3"
+version = "0.0.4"
 source = { editable = "packages/marimo-lens" }
 dependencies = [
     { name = "anywidget" },
