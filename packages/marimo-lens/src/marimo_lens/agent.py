@@ -200,8 +200,10 @@ class MountedLens:
     def start_cell_image(self, cell_id: str, *, expected_revision: int) -> str:
         """Start a full-cell PNG request and return its opaque request ID."""
 
-        self.context(expected_revision=expected_revision)
-        return self._lens._start_output_capture(cell_id)
+        return self._lens._start_output_capture(
+            cell_id,
+            expected_revision=expected_revision,
+        )
 
     def read_cell_image(self, request_id: str) -> CellImageResult:
         """Read pending state or consume one terminal full-cell PNG result."""

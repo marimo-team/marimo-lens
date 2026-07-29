@@ -58,6 +58,23 @@ if [[ "${1:-}" == "cleanup" ]]; then
 fi
 [[ $# -eq 0 ]] || usage
 
+# An 8 MiB Lens PNG remains below this limit after base64 and metadata.
+max_transfer_bytes=$((12 * 1024 * 1024))
+tmp_root=$(cd "${TMPDIR:-/tmp}" && pwd -P)
+transfer_path=$(mktemp "${tmp_root}/marimo-lens-transfer.XXXXXX")
+chmod 600 "$transfer_path"
+cleanup_transfer() {
+  rm -f -- "$transfer_path"
+}
+trap cleanup_transfer EXIT
+
+head -c "$((max_transfer_bytes + 1))" >"$transfer_path"
+transfer_bytes=$(wc -c <"$transfer_path" | tr -d ' ')
+if [[ "$transfer_bytes" -gt "$max_transfer_bytes" ]]; then
+  echo "Lens image transfer exceeds the 12 MiB limit." >&2
+  exit 1
+fi
+
 payload=""
 match_count=0
 while IFS= read -r line; do
@@ -67,7 +84,10 @@ while IFS= read -r line; do
       match_count=$((match_count + 1))
       ;;
   esac
-done
+done <"$transfer_path"
+
+rm -f -- "$transfer_path"
+trap - EXIT
 
 if [[ "$match_count" -ne 1 ]] || ! jq -e '
   .protocol == "marimo-lens.image-transfer"
@@ -101,7 +121,6 @@ if ! jq -e '
   exit 1
 fi
 
-tmp_root=$(cd "${TMPDIR:-/tmp}" && pwd -P)
 image_dir=$(mktemp -d "${tmp_root}/marimo-lens.XXXXXX")
 chmod 700 "$image_dir"
 : >"$image_dir/.marimo-lens-images"

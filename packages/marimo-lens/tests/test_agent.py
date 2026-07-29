@@ -182,10 +182,20 @@ def test_cell_image_adapts_private_capture_mailbox(
     )
     lens = Lens()
     monkeypatch.setattr(Lens, "context", lambda _self: _lens_context())
+
+    def start_capture(
+        _lens: Lens,
+        _cell_id: str,
+        *,
+        expected_revision: int,
+    ) -> str:
+        assert expected_revision == 4
+        return "request-1"
+
     monkeypatch.setattr(
         Lens,
         "_start_output_capture",
-        lambda _self, _cell_id: "request-1",
+        start_capture,
     )
     monkeypatch.setattr(
         Lens,
@@ -303,3 +313,56 @@ def test_materialize_script_validates_writes_and_cleans_image(
     )
     assert refused.returncode == 1
     assert unowned_dir.exists()
+
+
+def test_materialize_script_rejects_oversized_transfer_before_parsing(
+    tmp_path: Path,
+) -> None:
+    script = (
+        Path(__file__).parents[3]
+        / "skills"
+        / "marimo-lens"
+        / "scripts"
+        / "materialize-image.sh"
+    )
+    marker = tmp_path / "jq-invoked"
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    fake_jq = fake_bin / "jq"
+    fake_jq.write_text('#!/bin/sh\n: > "$JQ_MARKER"\nexit 99\n')
+    fake_jq.chmod(0o755)
+    env = {
+        **os.environ,
+        "JQ_MARKER": str(marker),
+        "PATH": f"{fake_bin}:{os.environ['PATH']}",
+        "TMPDIR": str(tmp_path),
+    }
+    transfer = (
+        "__MARIMO_LENS_IMAGE__"
+        + json.dumps(
+            {
+                "protocol": "marimo-lens.image-transfer",
+                "version": 1,
+                "status": "failed",
+                "source": "cell",
+                "cellId": "cell-view",
+                "padding": "x" * (12 * 1024 * 1024),
+            },
+            separators=(",", ":"),
+        )
+        + "\n"
+    )
+
+    result = subprocess.run(
+        ["bash", str(script)],
+        input=transfer,
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert result.stderr == "Lens image transfer exceeds the 12 MiB limit.\n"
+    assert not marker.exists()
+    assert list(tmp_path.glob("marimo-lens-transfer.*")) == []

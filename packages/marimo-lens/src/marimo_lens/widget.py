@@ -252,22 +252,42 @@ class Lens(anywidget.AnyWidget):
             self._selection_store.release()
         super().close()
 
-    def _start_output_capture(self, cell_id: str) -> str:
+    def _start_output_capture(
+        self,
+        cell_id: str,
+        *,
+        expected_revision: int,
+    ) -> str:
         """Start one transient capture for an agent integration."""
 
         cell_id = _cell_id(cell_id)
+        expected_revision = _expected_revision(expected_revision)
         with self._lock:
             self._require_open()
+            state = self._selection_store.state
+            if state.revision != expected_revision:
+                raise LensError(
+                    "revision_conflict",
+                    (
+                        f"Expected Lens revision {expected_revision}, "
+                        f"but the current revision is {state.revision}."
+                    ),
+                    revision=state.revision,
+                )
             selections = tuple(
                 {
                     "selectionId": record.id,
                     "label": record.selection["label"],
                     "anchor": record.detached_selection()["anchor"],
                 }
-                for record in self._selection_store.state.records
+                for record in state.records
                 if record.selection["outputCellId"] == cell_id
             )
-        return self._output_captures.start(cell_id, selections=selections)
+        return self._output_captures.start(
+            cell_id,
+            expected_revision=expected_revision,
+            selections=selections,
+        )
 
     def _read_output_capture(self, request_id: str) -> OutputCaptureResult:
         """Read or consume one transient agent capture."""
