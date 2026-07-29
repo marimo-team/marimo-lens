@@ -120,6 +120,30 @@ describe("notebook DOM layout subscriptions", () => {
     expect(observe).toHaveBeenCalledWith(output);
     release();
   });
+
+  test("invalidates layout when content scrolls inside an open shadow root", () => {
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    const scroller = document.createElement("div");
+    shadow.appendChild(scroller);
+    document.body.appendChild(host);
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const listener = vi.fn();
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.subscribeLayout(listener);
+
+    scroller.dispatchEvent(new Event("scroll"));
+    expect(frames).toHaveLength(1);
+    frames.shift()?.(0);
+
+    expect(listener).toHaveBeenCalledOnce();
+    release();
+  });
 });
 
 describe("notebook DOM paint scheduling", () => {

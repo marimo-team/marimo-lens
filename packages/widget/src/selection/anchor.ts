@@ -8,10 +8,31 @@ export type ViewportAnchor =
 
 export type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
-export function anchorToViewport(output: HTMLElement, anchor: SelectionAnchor): ViewportAnchor {
+type ScrollFrame = {
+  element: HTMLElement;
+  scrollLeft: number;
+  scrollTop: number;
+};
+
+export type ScrollAttachment = {
+  frames: ScrollFrame[];
+};
+
+export function anchorToViewport(
+  output: HTMLElement,
+  anchor: SelectionAnchor,
+  attachment?: ScrollAttachment,
+): ViewportAnchor {
   const metrics = outputContentMetrics(output);
-  const x = metrics.bounds.left + (anchor.x * metrics.width - metrics.scrollLeft) * metrics.scaleX;
-  const y = metrics.bounds.top + (anchor.y * metrics.height - metrics.scrollTop) * metrics.scaleY;
+  const nestedScroll = attachmentOffset(attachment);
+  const x =
+    metrics.bounds.left +
+    (anchor.x * metrics.width - metrics.scrollLeft) * metrics.scaleX -
+    nestedScroll.x;
+  const y =
+    metrics.bounds.top +
+    (anchor.y * metrics.height - metrics.scrollTop) * metrics.scaleY -
+    nestedScroll.y;
   if (anchor.kind === "point") return { kind: "point", x, y };
   return {
     kind: "rect",
@@ -25,23 +46,45 @@ export function anchorToViewport(output: HTMLElement, anchor: SelectionAnchor): 
 export function isAnchorInsideOutputViewport(
   output: HTMLElement,
   anchor: SelectionAnchor,
+  attachment?: ScrollAttachment,
 ): boolean {
-  const bounds = output.getBoundingClientRect();
-  const viewport = anchorToViewport(output, anchor);
+  const viewport = anchorToViewport(output, anchor, attachment);
+  const clipBounds = [
+    output.getBoundingClientRect(),
+    ...(attachment?.frames.map(({ element }) => element.getBoundingClientRect()) ?? []),
+  ];
   if (viewport.kind === "point") {
-    return (
-      viewport.x >= bounds.left &&
-      viewport.x <= bounds.right &&
-      viewport.y >= bounds.top &&
-      viewport.y <= bounds.bottom
+    return clipBounds.every(
+      (bounds) =>
+        viewport.x >= bounds.left &&
+        viewport.x <= bounds.right &&
+        viewport.y >= bounds.top &&
+        viewport.y <= bounds.bottom,
     );
   }
-  return (
-    viewport.x >= bounds.left &&
-    viewport.y >= bounds.top &&
-    viewport.x + viewport.width <= bounds.right &&
-    viewport.y + viewport.height <= bounds.bottom
+  return clipBounds.every(
+    (bounds) =>
+      viewport.x >= bounds.left &&
+      viewport.y >= bounds.top &&
+      viewport.x + viewport.width <= bounds.right &&
+      viewport.y + viewport.height <= bounds.bottom,
   );
+}
+
+export function attachToNestedScroll(output: HTMLElement, element: Element): ScrollAttachment {
+  const frames: ScrollFrame[] = [];
+  let current: Element | null = element;
+  while (current && current !== output) {
+    if (isHTMLElement(current, output.ownerDocument) && isScrollFrame(current)) {
+      frames.push({
+        element: current,
+        scrollLeft: current.scrollLeft,
+        scrollTop: current.scrollTop,
+      });
+    }
+    current = parentElementAcrossShadow(current);
+  }
+  return { frames: current === output ? frames : [] };
 }
 
 export function translateAnchor(
@@ -110,4 +153,50 @@ export function resizeRectAnchor(
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+function attachmentOffset(attachment?: ScrollAttachment): { x: number; y: number } {
+  let x = 0;
+  let y = 0;
+  for (const frame of attachment?.frames ?? []) {
+    const bounds = frame.element.getBoundingClientRect();
+    const scaleX =
+      frame.element.offsetWidth > 0 && bounds.width > 0
+        ? bounds.width / frame.element.offsetWidth
+        : 1;
+    const scaleY =
+      frame.element.offsetHeight > 0 && bounds.height > 0
+        ? bounds.height / frame.element.offsetHeight
+        : 1;
+    x += (frame.element.scrollLeft - frame.scrollLeft) * scaleX;
+    y += (frame.element.scrollTop - frame.scrollTop) * scaleY;
+  }
+  return { x, y };
+}
+
+function isHTMLElement(element: Element, ownerDocument: Document): element is HTMLElement {
+  const ownerWindow = ownerDocument.defaultView;
+  return ownerWindow !== null && element instanceof ownerWindow.HTMLElement;
+}
+
+function isScrollFrame(element: HTMLElement): boolean {
+  const ownerWindow = element.ownerDocument.defaultView;
+  if (!ownerWindow) return false;
+  const style = ownerWindow.getComputedStyle(element);
+  return (
+    (element.scrollWidth > element.clientWidth &&
+      (acceptsScroll(style.overflowX) || acceptsScroll(style.overflow))) ||
+    (element.scrollHeight > element.clientHeight &&
+      (acceptsScroll(style.overflowY) || acceptsScroll(style.overflow)))
+  );
+}
+
+function acceptsScroll(overflow: string): boolean {
+  return overflow === "auto" || overflow === "scroll";
+}
+
+function parentElementAcrossShadow(element: Element): Element | null {
+  if (element.parentElement) return element.parentElement;
+  const root = element.getRootNode();
+  return root.nodeType === 11 && "host" in root ? (root as ShadowRoot).host : null;
 }
