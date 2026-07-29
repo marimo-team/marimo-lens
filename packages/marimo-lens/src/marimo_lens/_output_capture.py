@@ -95,6 +95,7 @@ class OutputCaptureMailbox:
         self,
         cell_id: str,
         *,
+        expected_revision: int,
         selections: Sequence[Mapping[str, Any]] = (),
     ) -> str:
         """Start one fresh capture and return its opaque request ID."""
@@ -112,6 +113,16 @@ class OutputCaptureMailbox:
             self._expire_pending()
             if self._record is not None and self._record.status == "pending":
                 self._raise_busy()
+            revision = self._revision()
+            if revision != expected_revision:
+                raise LensError(
+                    "revision_conflict",
+                    (
+                        f"Expected Lens revision {expected_revision}, "
+                        f"but the current revision is {revision}."
+                    ),
+                    revision=revision,
+                )
             if cell_status == "unavailable":
                 raise LensError(
                     "runtime_unavailable",

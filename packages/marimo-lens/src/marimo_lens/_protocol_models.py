@@ -35,7 +35,9 @@ MAX_DOM_TEXT = 240
 MAX_DOM_FIELD = 240
 MAX_ERROR = 500
 MAX_ATTENTION_MESSAGE = 240
+MAX_REVEAL_MESSAGE = 1_000
 MAX_ACTIVITY_LABEL = 40
+MAX_REVEAL_DURATION_MS = 60_000
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 _TIMESTAMP_PATTERN = (
@@ -142,6 +144,15 @@ OptionalAttentionText: TypeAlias = Annotated[
     AttentionText | None,
     BeforeValidator(_optional_text),
 ]
+RevealText: TypeAlias = Annotated[
+    UnicodeText,
+    AfterValidator(_nonblank),
+    AfterValidator(partial(_bounded_utf16, maximum=MAX_REVEAL_MESSAGE)),
+]
+OptionalRevealText: TypeAlias = Annotated[
+    RevealText | None,
+    BeforeValidator(_optional_text),
+]
 ActivityLabel: TypeAlias = Annotated[
     UnicodeText,
     AfterValidator(_nonblank),
@@ -179,6 +190,10 @@ PositiveSafeInteger: TypeAlias = Annotated[
 NonNegativeSafeInteger: TypeAlias = Annotated[
     int,
     Field(strict=True, ge=0, le=MAX_SAFE_INTEGER),
+]
+RevealDuration: TypeAlias = Annotated[
+    int,
+    Field(strict=True, ge=1, le=MAX_REVEAL_DURATION_MS),
 ]
 Revision: TypeAlias = NonNegativeSafeInteger
 ProtocolVersion: TypeAlias = Annotated[
@@ -550,7 +565,8 @@ CaptureBrowserMessage: TypeAlias = Annotated[
 
 class CellRevealPayload(TransportModel):
     cell_id: CellId
-    message: AttentionText | None = None
+    message: RevealText | None = None
+    duration_ms: RevealDuration | None = None
 
 
 class CellRevealEvent(TransportModel):
@@ -561,8 +577,10 @@ class CellRevealEvent(TransportModel):
     payload: CellRevealPayload
 
 
-class CellActivityPayload(CellRevealPayload):
+class CellActivityPayload(TransportModel):
+    cell_id: CellId
     label: ActivityLabel | None = None
+    message: AttentionText | None = None
 
 
 class CellActivityEvent(TransportModel):
@@ -647,7 +665,9 @@ POSITIVE_SAFE_INTEGER_ADAPTER = TypeAdapter(PositiveSafeInteger)
 NONNEGATIVE_SAFE_INTEGER_ADAPTER = TypeAdapter(NonNegativeSafeInteger)
 SELECTION_LABEL_ADAPTER = TypeAdapter(SelectionLabel)
 OPTIONAL_ATTENTION_TEXT_ADAPTER = TypeAdapter(OptionalAttentionText)
+OPTIONAL_REVEAL_TEXT_ADAPTER = TypeAdapter(OptionalRevealText)
 OPTIONAL_ACTIVITY_LABEL_ADAPTER = TypeAdapter(OptionalActivityLabel)
+REVEAL_DURATION_ADAPTER = TypeAdapter(RevealDuration)
 
 
 def dump_model(model: BaseModel) -> dict[str, Any]:

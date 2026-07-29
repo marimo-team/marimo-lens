@@ -63,6 +63,24 @@ describe("cell attention", () => {
     controller.dispose();
   });
 
+  test("holds a reveal for its requested duration", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const cell = setupCell("BYtC");
+    cell.scrollIntoView = vi.fn();
+
+    controller.reveal(revealEvent("BYtC", "Read the verified result.", 8_000));
+
+    vi.advanceTimersByTime(7_999);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "active" }));
+    vi.advanceTimersByTime(1);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "exiting" }));
+    vi.advanceTimersByTime(180);
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    controller.dispose();
+  });
+
   test("keeps same-cell activity until another attention event replaces it", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
@@ -335,12 +353,16 @@ function activityEvent(cellId: string, message?: string): CellActivityEvent {
   };
 }
 
-function revealEvent(cellId: string, message?: string): CellRevealEvent {
+function revealEvent(cellId: string, message?: string, durationMs?: number): CellRevealEvent {
   return {
     protocol: "marimo-lens.event",
     version: 1,
     type: "cell.reveal",
     revision: 7,
-    payload: { cellId, ...(message ? { message } : {}) },
+    payload: {
+      cellId,
+      ...(message ? { message } : {}),
+      ...(durationMs ? { durationMs } : {}),
+    },
   };
 }

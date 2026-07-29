@@ -52,9 +52,12 @@ covers existing projects and includes a live selection example.
 
 ## Connect an agent
 
-Connect a notebook agent that can call the Lens Python API to the same running
-notebook. [marimo Pair](https://marimo.io/pair) provides a ready-made
-integration.
+Install the Lens skill and [marimo Pair](https://marimo.io/pair):
+
+```bash
+npx skills add marimo-team/marimo-lens
+npx skills add marimo-team/marimo-pair
+```
 
 After selecting an output and adding a note, ask the agent:
 
@@ -76,7 +79,7 @@ Agent integrations use four methods:
 | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `lens.context()`                                                  | Returns detached selection context with lazy notebook text       |
 | `lens.activity(cell_id, *, label=None, message=None)`             | Marks the agent's current work until its result is ready         |
-| `lens.reveal(cell_id, *, message=None)`                           | Brings one verified or explanatory cell into view                |
+| `lens.reveal(cell_id, *, message=None, duration_ms=None)`         | Brings one verified or explanatory cell into view                |
 | `lens.resolve(selection_ids, *, expected_revision, summary=None)` | Moves one or more selections to History in one guarded operation |
 
 The [Python API reference](https://marimo-team.github.io/marimo-lens/api)

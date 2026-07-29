@@ -48,6 +48,23 @@ describe("cell attention presentation", () => {
     expect(view?.label.top).toBeUndefined();
   });
 
+  test("reserves more vertical space for a long reveal message", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
+    document.body.appendChild(target);
+    const presentation: CellAttentionPresentation = {
+      ...activityPresentation(target),
+      kind: "reveal",
+      event: revealEvent("A".repeat(300)),
+    };
+    const ownerWindow = { innerWidth: 1280, innerHeight: 720 } as Window;
+
+    const view = projectCellAttention(presentation, ownerWindow);
+
+    expect(view?.label.top).toBe(308);
+    expect(view?.label.bottom).toBeUndefined();
+  });
+
   test("shrinks a left-anchored label to the remaining narrow viewport", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(190, 80, 80, 160);
@@ -135,14 +152,16 @@ describe("cell attention presentation", () => {
     );
   });
 
-  test("uses the reveal message as its visible label", () => {
+  test("gives a long reveal message its own detail row", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
     document.body.appendChild(target);
+    const message =
+      "Updated the aggregation and verified the chart.\nThe regional totals now match the source table.";
     const presentation: CellAttentionPresentation = {
       ...activityPresentation(target),
       kind: "reveal",
-      event: revealEvent(),
+      event: revealEvent(message),
     };
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -152,10 +171,8 @@ describe("cell attention presentation", () => {
       root?.render(<CellAttentionIndicator view={projectCellAttention(presentation, window)} />),
     );
 
-    expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe(
-      "Updated the aggregation.",
-    );
-    expect(document.querySelector(".ml-cell-attention__message")).toBeNull();
+    expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe("Ready");
+    expect(document.querySelector(".ml-cell-attention__message")?.textContent).toBe(message);
     expect(document.querySelector("[data-marimo-lens-working-indicator]")).toBeNull();
   });
 
@@ -208,12 +225,12 @@ function activityEvent(label?: string): CellActivityEvent {
   };
 }
 
-function revealEvent(): CellRevealEvent {
+function revealEvent(message = "Updated the aggregation."): CellRevealEvent {
   return {
     protocol: "marimo-lens.event",
     version: 1,
     type: "cell.reveal",
     revision: 7,
-    payload: { cellId: "BYtC", message: "Updated the aggregation." },
+    payload: { cellId: "BYtC", message },
   };
 }

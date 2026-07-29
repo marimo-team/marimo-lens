@@ -74,7 +74,7 @@ def test_start_returns_one_opaque_pending_request(
     _install_runtime(monkeypatch)
     lens = RecordingLens()
 
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=0)
     result = lens._read_output_capture(request_id)
 
     assert result.request_id == request_id
@@ -121,7 +121,7 @@ def test_capture_includes_every_open_selection_for_the_requested_cell(
         revision=2,
     )
 
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=3)
     command = _capture_commands(lens)[0]
     result = lens._read_output_capture(request_id)
 
@@ -146,12 +146,42 @@ def test_capture_includes_every_open_selection_for_the_requested_cell(
     assert result.selection_ids == ("selection-1", "selection-2")
 
 
+def test_revision_change_during_runtime_check_rejects_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    lens: RecordingLens
+
+    def change_selection(
+        _runtime: MarimoRuntimeAdapter,
+        _cell_id: str,
+    ) -> str:
+        _put_selection(
+            lens,
+            selection(selection_id="selection-2", label="S2"),
+            revision=1,
+        )
+        return "available"
+
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", change_selection)
+    lens = RecordingLens()
+    _put_selection(lens, selection(), revision=0)
+
+    with pytest.raises(LensError) as raised:
+        lens._start_output_capture("cell-view", expected_revision=1)
+
+    assert raised.value.code == "revision_conflict"
+    assert raised.value.revision == 2
+    assert _capture_commands(lens) == []
+
+
 def test_successful_read_consumes_the_transferred_image(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _install_runtime(monkeypatch)
     lens = RecordingLens()
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=0)
     command = _capture_commands(lens)[0]
     data = png(3, 2)
 
@@ -185,7 +215,7 @@ def test_failed_read_consumes_one_bounded_failure(
 ) -> None:
     _install_runtime(monkeypatch)
     lens = RecordingLens()
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=0)
 
     _fail_reply(
         lens,
@@ -209,10 +239,10 @@ def test_pending_capture_rejects_another_request(
 ) -> None:
     _install_runtime(monkeypatch, "cell-view", "cell-other")
     lens = RecordingLens()
-    first = lens._start_output_capture("cell-view")
+    first = lens._start_output_capture("cell-view", expected_revision=0)
 
     with pytest.raises(LensError) as raised:
-        lens._start_output_capture("cell-other")
+        lens._start_output_capture("cell-other", expected_revision=0)
 
     assert raised.value.code == "capture_busy"
     assert lens._read_output_capture(first).status == "pending"
@@ -224,7 +254,7 @@ def test_new_start_replaces_an_unconsumed_terminal_result(
 ) -> None:
     _install_runtime(monkeypatch, "cell-view", "cell-other")
     lens = RecordingLens()
-    first = lens._start_output_capture("cell-view")
+    first = lens._start_output_capture("cell-view", expected_revision=0)
     _fail_reply(
         lens,
         _capture_commands(lens)[0],
@@ -232,7 +262,7 @@ def test_new_start_replaces_an_unconsumed_terminal_result(
         message="First failed.",
     )
 
-    second = lens._start_output_capture("cell-other")
+    second = lens._start_output_capture("cell-other", expected_revision=0)
 
     assert second != first
     with pytest.raises(LensError) as raised:
@@ -252,7 +282,7 @@ def test_browser_unready_fails_an_active_request(
 ) -> None:
     _install_runtime(monkeypatch)
     lens = RecordingLens()
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=0)
 
     _set_browser_ready(lens, False)
     result = lens._read_output_capture(request_id)
@@ -270,7 +300,7 @@ def test_deadline_fails_capture_and_ignores_late_pixels(
     monkeypatch.setattr(capture_module.threading, "Timer", ManualTimer)
     _install_runtime(monkeypatch)
     lens = RecordingLens()
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=0)
     command = _capture_commands(lens)[0]
     timer = ManualTimer.instances[-1]
 
@@ -288,7 +318,7 @@ def test_wrong_cell_or_invalid_png_becomes_a_terminal_failure(
 ) -> None:
     _install_runtime(monkeypatch)
     lens = RecordingLens()
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=0)
 
     _reply(lens, _capture_commands(lens)[0], data=png(), cell_id="cell-other")
     result = lens._read_output_capture(request_id)
@@ -303,7 +333,7 @@ def test_unrelated_response_does_not_change_the_active_request(
 ) -> None:
     _install_runtime(monkeypatch)
     lens = RecordingLens()
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=0)
     command = dict(_capture_commands(lens)[0])
     command["requestId"] = "another-request"
 
@@ -331,7 +361,7 @@ def test_start_requires_an_exact_runtime_cell(
     lens = RecordingLens()
 
     with pytest.raises(LensError) as raised:
-        lens._start_output_capture("cell-view")
+        lens._start_output_capture("cell-view", expected_revision=0)
 
     assert raised.value.code == code
     assert _capture_commands(lens) == []
@@ -344,7 +374,7 @@ def test_start_requires_a_displayed_capture_handler(
     lens = RecordingLens(browser_ready=False)
 
     with pytest.raises(LensError) as raised:
-        lens._start_output_capture("cell-view")
+        lens._start_output_capture("cell-view", expected_revision=0)
 
     assert raised.value.code == "browser_unavailable"
 
@@ -355,7 +385,7 @@ def test_send_failure_is_read_as_a_terminal_capture_failure(
     _install_runtime(monkeypatch)
     lens = FailingCaptureLens()
 
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=0)
     result = lens._read_output_capture(request_id)
 
     assert result.status == "failed"
@@ -367,7 +397,7 @@ def test_close_releases_the_mailbox(
 ) -> None:
     _install_runtime(monkeypatch)
     lens = RecordingLens()
-    request_id = lens._start_output_capture("cell-view")
+    request_id = lens._start_output_capture("cell-view", expected_revision=0)
 
     lens.close()
 
@@ -375,7 +405,7 @@ def test_close_releases_the_mailbox(
         lens._read_output_capture(request_id)
     assert read_error.value.code == "lens_closed"
     with pytest.raises(LensError) as start_error:
-        lens._start_output_capture("cell-view")
+        lens._start_output_capture("cell-view", expected_revision=0)
     assert start_error.value.code == "lens_closed"
 
 
@@ -402,7 +432,7 @@ def test_private_agent_boundary_validates_identifiers(
 
     with pytest.raises(error_type, match=message):
         if method == "start":
-            lens._start_output_capture(cast(Any, value))
+            lens._start_output_capture(cast(Any, value), expected_revision=0)
         else:
             lens._read_output_capture(cast(Any, value))
 

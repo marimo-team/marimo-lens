@@ -387,6 +387,7 @@ describe("Lens protocol client", () => {
       payload: {
         cellId: "cell-2",
         message: "Updated the chart.",
+        durationMs: 8_000,
         displayHint: "compact",
       },
       trace: "python",
@@ -419,7 +420,11 @@ describe("Lens protocol client", () => {
       version: 1,
       type: "cell.reveal",
       revision: 4,
-      payload: { cellId: "cell-2", message: "Updated the chart." },
+      payload: {
+        cellId: "cell-2",
+        message: "Updated the chart.",
+        durationMs: 8_000,
+      },
     });
     client.dispose();
   });
