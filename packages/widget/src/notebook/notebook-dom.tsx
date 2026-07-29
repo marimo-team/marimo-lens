@@ -146,7 +146,7 @@ export class NotebookDomAdapter {
         frame = 0;
         if (topologyDirty) {
           topologyDirty = false;
-          syncOutputs();
+          syncTopology();
         }
         for (const listener of this.#layoutListeners) listener();
       });
@@ -159,44 +159,92 @@ export class NotebookDomAdapter {
     this.window.addEventListener("resize", schedule);
     this.window.addEventListener("scroll", schedule, true);
 
-    const ResizeObserverClass = this.window.ResizeObserver;
-    const resizeObserver = ResizeObserverClass ? new ResizeObserverClass(schedule) : null;
-    const observedOutputs = new Set<HTMLElement>();
-    const syncOutputs = () => {
-      if (!resizeObserver) return;
-      const outputs = new Set(listOutputRoots(this.document).map((output) => output.element));
-      for (const output of observedOutputs) {
-        if (outputs.has(output)) continue;
-        resizeObserver.unobserve(output);
-        observedOutputs.delete(output);
-      }
-      for (const output of outputs) {
-        if (observedOutputs.has(output)) continue;
-        observedOutputs.add(output);
-        resizeObserver.observe(output);
-      }
-    };
-    resizeObserver?.observe(this.document.body);
-    syncOutputs();
-
     const MutationObserverClass = this.window.MutationObserver;
     const mutationObserver = MutationObserverClass
       ? new MutationObserverClass(scheduleTopology)
       : null;
-    mutationObserver?.observe(this.document.body, {
+    const mutationOptions = {
       childList: true,
       subtree: true,
-    });
+    } satisfies MutationObserverInit;
+    const ResizeObserverClass = this.window.ResizeObserver;
+    const resizeObserver = ResizeObserverClass ? new ResizeObserverClass(schedule) : null;
+    const observedOutputs = new Set<HTMLElement>();
+    const observedShadows = new Set<ShadowRoot>();
+    const syncTopology = () => {
+      if (resizeObserver) {
+        const outputs = new Set(listOutputRoots(this.document).map((output) => output.element));
+        for (const output of observedOutputs) {
+          if (outputs.has(output)) continue;
+          resizeObserver.unobserve(output);
+          observedOutputs.delete(output);
+        }
+        for (const output of outputs) {
+          if (observedOutputs.has(output)) continue;
+          observedOutputs.add(output);
+          resizeObserver.observe(output);
+        }
+      }
+
+      const shadows = new Set(listOpenShadowRoots(this.document.body));
+      let removedShadow = false;
+      for (const shadow of observedShadows) {
+        if (shadows.has(shadow)) continue;
+        shadow.removeEventListener("scroll", schedule, true);
+        observedShadows.delete(shadow);
+        removedShadow = true;
+      }
+      const addedShadows: ShadowRoot[] = [];
+      for (const shadow of shadows) {
+        if (observedShadows.has(shadow)) continue;
+        observedShadows.add(shadow);
+        addedShadows.push(shadow);
+        shadow.addEventListener("scroll", schedule, true);
+      }
+      if (removedShadow) {
+        mutationObserver?.disconnect();
+        mutationObserver?.observe(this.document.body, mutationOptions);
+        for (const shadow of observedShadows) {
+          mutationObserver?.observe(shadow, mutationOptions);
+        }
+      } else {
+        for (const shadow of addedShadows) {
+          mutationObserver?.observe(shadow, mutationOptions);
+        }
+      }
+    };
+    resizeObserver?.observe(this.document.body);
+    mutationObserver?.observe(this.document.body, mutationOptions);
+    syncTopology();
 
     return () => {
       if (frame) this.window.cancelAnimationFrame(frame);
       mutationObserver?.disconnect();
       resizeObserver?.disconnect();
       observedOutputs.clear();
+      for (const shadow of observedShadows) {
+        shadow.removeEventListener("scroll", schedule, true);
+      }
+      observedShadows.clear();
       this.window.removeEventListener("resize", schedule);
       this.window.removeEventListener("scroll", schedule, true);
     };
   }
+}
+
+function listOpenShadowRoots(root: ParentNode): ShadowRoot[] {
+  const shadows: ShadowRoot[] = [];
+  const visit = (parent: ParentNode) => {
+    for (const element of parent.children) {
+      if (element.shadowRoot) {
+        shadows.push(element.shadowRoot);
+        visit(element.shadowRoot);
+      }
+      visit(element);
+    }
+  };
+  visit(root);
+  return shadows;
 }
 
 const NotebookDomContext = createContext<NotebookDomAdapter | null>(null);

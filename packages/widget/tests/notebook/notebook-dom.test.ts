@@ -120,6 +120,76 @@ describe("notebook DOM layout subscriptions", () => {
     expect(observe).toHaveBeenCalledWith(output);
     release();
   });
+
+  test("invalidates layout when content scrolls inside an open shadow root", () => {
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    const scroller = document.createElement("div");
+    shadow.appendChild(scroller);
+    document.body.appendChild(host);
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const listener = vi.fn();
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.subscribeLayout(listener);
+
+    scroller.dispatchEvent(new Event("scroll"));
+    expect(frames).toHaveLength(1);
+    frames.shift()?.(0);
+
+    expect(listener).toHaveBeenCalledOnce();
+    release();
+  });
+
+  test("stops observing a shadow tree after its host is removed", () => {
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    const survivingHost = document.createElement("div");
+    const survivingShadow = survivingHost.attachShadow({ mode: "open" });
+    document.body.append(host, survivingHost);
+    const observedTargets = new Set<Node>();
+    let notifyMutation = (_target: Node) => {};
+    const MutationObserverStub = vi.fn(
+      class {
+        constructor(callback: MutationCallback) {
+          notifyMutation = (target) => {
+            if (observedTargets.has(target)) callback([], {} as MutationObserver);
+          };
+        }
+
+        observe = vi.fn((target: Node) => observedTargets.add(target));
+        disconnect = vi.fn(() => observedTargets.clear());
+      },
+    );
+    vi.stubGlobal("MutationObserver", MutationObserverStub);
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      frames.push(callback);
+      return frames.length;
+    });
+    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.subscribeLayout(() => {});
+
+    expect(observedTargets.has(shadow)).toBe(true);
+    expect(observedTargets.has(survivingShadow)).toBe(true);
+    host.remove();
+    notifyMutation(document.body);
+    frames.shift()?.(0);
+
+    expect(observedTargets.has(document.body)).toBe(true);
+    expect(observedTargets.has(shadow)).toBe(false);
+    expect(observedTargets.has(survivingShadow)).toBe(true);
+    notifyMutation(shadow);
+    expect(frames).toHaveLength(0);
+    notifyMutation(survivingShadow);
+    expect(frames).toHaveLength(1);
+    release();
+  });
 });
 
 describe("notebook DOM paint scheduling", () => {

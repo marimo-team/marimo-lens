@@ -1,15 +1,17 @@
 import type { RectAnchor, Selection, SelectionAnchor } from "@marimo-lens/protocol";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { WorkflowState } from "@/selection/state";
 
-import { useNotebookDom } from "@/notebook/notebook-dom";
+import { useNotebookDom, type NotebookDomAdapter } from "@/notebook/notebook-dom";
 import { useViewportRevision } from "@/notebook/viewport";
 import {
   anchorToViewport,
+  attachToNestedScroll,
   isAnchorInsideOutputViewport,
   resizeRectAnchor,
+  type ScrollAttachment,
   translateAnchor,
   type ResizeHandle,
 } from "@/selection/anchor";
@@ -46,7 +48,7 @@ export function SelectionOverlay({
 }: SelectionOverlayProps) {
   const dom = useNotebookDom();
   const interactionActive = workflow.mode === "armed" || workflow.mode === "dragging";
-  useViewportRevision(selections.length > 0 || interactionActive);
+  const viewportRevision = useViewportRevision(selections.length > 0 || interactionActive);
   const activeCellId =
     workflow.mode === "armed"
       ? workflow.activeOutputCellId
@@ -77,12 +79,13 @@ export function SelectionOverlay({
       {selections.map((selection) => {
         if (!availableOutputCellIds.has(selection.outputCellId)) return null;
         const output = dom.getOutputCell(selection.outputCellId)?.element;
-        if (!output || !isAnchorInsideOutputViewport(output, selection.anchor)) return null;
+        if (!output) return null;
         return (
           <SelectionMarker
             key={selection.id}
             selection={selection}
             output={output}
+            viewportRevision={viewportRevision}
             current={selection.id === currentSelectionId}
             busy={busySelectionIds.has(selection.id)}
             capturing={capturingSelectionIds.has(selection.id)}
@@ -114,6 +117,7 @@ function AnchorPreview({ output, anchor }: { output: HTMLElement; anchor: Select
 function SelectionMarker({
   selection,
   output,
+  viewportRevision,
   current,
   busy,
   capturing,
@@ -126,6 +130,7 @@ function SelectionMarker({
 }: {
   selection: Selection;
   output: HTMLElement;
+  viewportRevision: number;
   current: boolean;
   busy: boolean;
   capturing: boolean;
@@ -146,7 +151,18 @@ function SelectionMarker({
   } | null>(null);
   const suppressPointerClick = useRef(false);
   const [preview, setPreview] = useState<SelectionAnchor | null>(null);
-  const viewport = anchorToViewport(output, preview ?? selection.anchor);
+  const anchorKey = JSON.stringify(selection.anchor);
+  const [attachmentState, setAttachmentState] = useState(() =>
+    createScrollAttachmentState(dom, output, selection.anchor, anchorKey),
+  );
+  useLayoutEffect(() => {
+    setAttachmentState((current) =>
+      refreshScrollAttachmentState(current, dom, output, selection.anchor, anchorKey),
+    );
+  }, [anchorKey, dom, output, selection.anchor, viewportRevision]);
+  const attachment = attachmentState.attachment;
+  const displayedAnchor = preview ?? selection.anchor;
+  const viewport = anchorToViewport(output, displayedAnchor, attachment);
 
   useEffect(
     () => () => {
@@ -158,6 +174,8 @@ function SelectionMarker({
     },
     [releaseAdjustment],
   );
+
+  if (!isAnchorInsideOutputViewport(output, displayedAnchor, attachment)) return null;
 
   const marker = (
     <button
@@ -287,6 +305,95 @@ function SelectionMarker({
           ))
         : null}
     </div>
+  );
+}
+
+type ScrollAttachmentState = {
+  output: HTMLElement;
+  anchor: string;
+  target: Element | null;
+  attachment: ScrollAttachment;
+};
+
+function createScrollAttachmentState(
+  dom: NotebookDomAdapter,
+  output: HTMLElement,
+  anchor: SelectionAnchor,
+  anchorKey: string,
+): ScrollAttachmentState {
+  const target = attachmentTarget(dom, output, anchor);
+  return {
+    output,
+    anchor: anchorKey,
+    target,
+    attachment: target
+      ? attachToNestedScroll(output, target)
+      : { frames: [], ancestorBaselines: [] },
+  };
+}
+
+function refreshScrollAttachmentState(
+  current: ScrollAttachmentState,
+  dom: NotebookDomAdapter,
+  output: HTMLElement,
+  anchor: SelectionAnchor,
+  anchorKey: string,
+): ScrollAttachmentState {
+  const reset = current.output !== output || current.anchor !== anchorKey;
+  const target =
+    reset ||
+    current.target === null ||
+    !current.target.isConnected ||
+    current.attachment.frames.length === 0
+      ? attachmentTarget(dom, output, anchor)
+      : current.target;
+  const attachment = target
+    ? attachToNestedScroll(output, target, reset ? undefined : current.attachment)
+    : { frames: [], ancestorBaselines: [] };
+  if (
+    !reset &&
+    current.target === target &&
+    hasSameScrollAttachment(current.attachment, attachment)
+  ) {
+    return current;
+  }
+  return {
+    output,
+    anchor: anchorKey,
+    target,
+    attachment,
+  };
+}
+
+function attachmentTarget(
+  dom: NotebookDomAdapter,
+  output: HTMLElement,
+  anchor: SelectionAnchor,
+): Element | null {
+  const viewport = anchorToViewport(output, anchor);
+  const point =
+    viewport.kind === "point"
+      ? viewport
+      : { x: viewport.x + viewport.width / 2, y: viewport.y + viewport.height / 2 };
+  return typeof dom.document.elementsFromPoint === "function"
+    ? dom.deepestElementAtPoint(point.x, point.y)
+    : null;
+}
+
+function hasSameScrollAttachment(first: ScrollAttachment, second: ScrollAttachment): boolean {
+  return (
+    hasSameElements(first.frames, second.frames) &&
+    hasSameElements(first.ancestorBaselines, second.ancestorBaselines)
+  );
+}
+
+function hasSameElements(
+  first: ReadonlyArray<{ element: Element }>,
+  second: ReadonlyArray<{ element: Element }>,
+): boolean {
+  return (
+    first.length === second.length &&
+    first.every((item, index) => item.element === second[index]?.element)
   );
 }
 

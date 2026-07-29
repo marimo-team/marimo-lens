@@ -15,6 +15,8 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("selection overlay", () => {
@@ -30,6 +32,80 @@ describe("selection overlay", () => {
 
     expect(document.querySelector('[data-marimo-lens-selection-id="selection-1"]')).toBeNull();
     expect(document.querySelector('[data-marimo-lens-selection-id="selection-2"]')).not.toBeNull();
+  });
+
+  test("moves a region with the nested content it covers", () => {
+    const { scroller } = setupNestedScroller();
+    scroller.scrollLeft = 120;
+    const selection = selectionFixture({
+      anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.2, height: 0.3 },
+    });
+    const rerender = renderOverlay([selection], selection.id);
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+
+    scroller.scrollLeft = 160;
+    rerender();
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("60px");
+  });
+
+  test("attaches a marker to nested scroll content rendered after mount", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      window.setTimeout(() => callback(performance.now()), 0),
+    );
+    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
+    const output = setupOutput();
+    const selection = selectionFixture({
+      anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.2, height: 0.3 },
+    });
+    renderOverlay([selection], selection.id);
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    const { scroller } = setupNestedScroller(output);
+    scroller.scrollLeft = 120;
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    scroller.scrollLeft = 160;
+    await act(async () => {
+      scroller.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("60px");
+    scroller.scrollLeft = 180;
+    await act(async () => {
+      scroller.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("40px");
+  });
+
+  test("moves a marker on the first scroll after its ancestor becomes scrollable", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      window.setTimeout(() => callback(performance.now()), 0),
+    );
+    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
+    const { scroller } = setupNestedScroller();
+    Object.defineProperty(scroller, "scrollWidth", { configurable: true, value: 400 });
+    const selection = selectionFixture({
+      anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.2, height: 0.3 },
+    });
+    renderOverlay([selection], selection.id);
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    Object.defineProperty(scroller, "scrollWidth", { configurable: true, value: 800 });
+    scroller.scrollLeft = 40;
+    await act(async () => {
+      scroller.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("60px");
   });
 
   test("marks the current selection and exposes resize handles for its region", () => {
@@ -127,6 +203,42 @@ function setupOutput({ scrollHeight = 240, scrollTop = 0 } = {}) {
     scrollTop: { configurable: true, value: scrollTop },
   });
   document.body.appendChild(output);
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: () => [output],
+  });
+  return output;
+}
+
+function setupNestedScroller(output = setupOutput()): { scroller: HTMLElement } {
+  const host = document.createElement("div");
+  const shadow = host.attachShadow({ mode: "open" });
+  const scroller = document.createElement("div");
+  const content = document.createElement("div");
+  scroller.style.overflow = "auto";
+  scroller.appendChild(content);
+  shadow.appendChild(scroller);
+  output.appendChild(host);
+  Object.defineProperties(scroller, {
+    offsetWidth: { configurable: true, value: 400 },
+    offsetHeight: { configurable: true, value: 240 },
+    clientWidth: { configurable: true, value: 400 },
+    clientHeight: { configurable: true, value: 240 },
+    scrollWidth: { configurable: true, value: 800 },
+    scrollHeight: { configurable: true, value: 240 },
+    scrollLeft: { configurable: true, value: 0, writable: true },
+    scrollTop: { configurable: true, value: 0, writable: true },
+  });
+  scroller.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
+  Object.defineProperty(document, "elementsFromPoint", {
+    configurable: true,
+    value: () => [host, output],
+  });
+  Object.defineProperty(shadow, "elementsFromPoint", {
+    configurable: true,
+    value: () => [content],
+  });
+  return { scroller };
 }
 
 function renderOverlay(
