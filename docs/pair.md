@@ -12,17 +12,17 @@ the cells behind it, and return the verified result to the notebook.
 Create a request in [Getting started](./getting-started) before connecting an
 agent.
 
-## Install the skills and connect Pair
+## Install Lens and Pair
 
-Install the Lens workflow skill:
+Install the Lens and Pair skills:
 
 ```bash
 npx skills add marimo-team/marimo-lens
+npx skills add marimo-team/marimo-pair
 ```
 
-Install or update Pair using the
-[marimo Pair installation guide](https://github.com/marimo-team/marimo-pair#install).
-It covers [Agent Skills](https://agentskills.io/) clients and the Claude Code
+The [marimo Pair installation guide](https://github.com/marimo-team/marimo-pair#install)
+also covers upgrades, the `uvx` installation command, and the Claude Code
 plugin.
 
 The Lens skill uses Pair to inspect, change, and rerun cells in the active

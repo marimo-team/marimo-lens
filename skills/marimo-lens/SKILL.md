@@ -21,6 +21,12 @@ Resolve every helper path from this loaded `SKILL.md`. The
 `scripts/materialize-image.sh` helper accepts marked image transfers and writes
 validated temporary PNGs on the client.
 
+## Workflow reference
+
+Read [reference/workflow.md](reference/workflow.md) before acting on a Lens
+request. It contains executable kernel calls, image transfer commands, result
+handling, and the closeout sequence.
+
 ## Ground the request
 
 Import `marimo_lens.agent` inside the active kernel, then call `discover(ctx)`
@@ -63,10 +69,6 @@ Use `selection_image()` for pixels captured with one selection. Use
 including every open Lens mark on that cell. Pipe image transfers directly to
 `scripts/materialize-image.sh`, open the returned local path with the client's
 image reader, then track its `imageDir` for cleanup.
-
-Read [reference/workflow.md](reference/workflow.md) for executable kernel
-snippets, image transfer commands, result handling, and the exact closeout
-sequence.
 
 ## Apply and close the request
 
