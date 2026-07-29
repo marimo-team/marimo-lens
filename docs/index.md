@@ -51,7 +51,7 @@ dependencies = [
 Select part of the chart, add a note, and see what your notebook agent receives.
 
 <div class="lens-demo-steps" aria-label="Try Lens in four steps">
-  <span><strong>1</strong> Press Select</span>
+  <span><strong>1</strong> Press <strong>Select</strong></span>
   <span><strong>2</strong> Click a bar</span>
   <span><strong>3</strong> Add "Make bars blue"</span>
   <span><strong>4</strong> Mark another</span>
