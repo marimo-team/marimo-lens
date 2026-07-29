@@ -6,7 +6,8 @@ description: >-
   and return verified results through Lens History and reveal. Use with a live
   marimo kernel executor when the user mentions a Lens selection, asks to
   resolve a Lens request, points to "this" notebook output, or asks for a
-  visual change tied to marked notebook evidence.
+  visual change tied to marked notebook evidence or a guided walkthrough of
+  changes across notebook cells.
 ---
 
 # Work with marimo Lens
@@ -77,6 +78,12 @@ after execution.
 After verification, call `resolve()` for selections addressed by the same
 result, then call `reveal()` on the primary result cell. Keep selections open
 when verification fails or the next step requires user input.
+
+Use `reveal()` to guide the user's attention across verified notebook results.
+After changing several cells, create a short walkthrough by revealing each
+result in reading order. Give each call a self-contained message that explains
+the change and a readable `duration_ms`. Let one reveal finish before sending
+the next because a newer call replaces the current reveal.
 
 Remove every image directory after its final read:
 
