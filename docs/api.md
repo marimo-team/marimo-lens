@@ -18,9 +18,20 @@ dependencies = [
 ]
 ```
 
-## Agent adapter
+## Agent handoff adapter
 
-Import the adapter inside the active notebook kernel:
+`marimo_lens.agent` is the handoff interface for notebook agents such as
+[marimo Pair](https://github.com/marimo-team/marimo-pair). Pair connects to a
+running notebook and executes adapter calls inside its live kernel through
+marimo code mode.
+
+Notebook users select an output and ask their agent to act. The agent owns the
+code-mode connection, discovers the mounted Lens, reads the request, reports
+activity, changes and runs cells, verifies the result, then resolves and
+reveals it. `marimo._code_mode` stays inside the agent integration. Notebook
+cells mount Lens through the [public `Lens` API](#lens).
+
+A compatible agent performs the handoff inside its live-kernel execution path:
 
 ```python
 import marimo_lens.agent as lens_agent
