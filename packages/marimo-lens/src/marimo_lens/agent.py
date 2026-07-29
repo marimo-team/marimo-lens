@@ -234,10 +234,20 @@ class MountedLens:
             summary=summary,
         )
 
-    def reveal(self, cell_id: str, *, message: str | None = None) -> None:
+    def reveal(
+        self,
+        cell_id: str,
+        *,
+        message: str | None = None,
+        duration_ms: int | None = None,
+    ) -> None:
         """Bring one verified or explanatory cell into view."""
 
-        self._lens.reveal(cell_id, message=message)
+        self._lens.reveal(
+            cell_id,
+            message=message,
+            duration_ms=duration_ms,
+        )
 
 
 def discover(

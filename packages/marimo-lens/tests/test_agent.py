@@ -211,6 +211,36 @@ def test_cell_image_adapts_private_capture_mailbox(
     lens.close()
 
 
+def test_mounted_lens_forwards_reveal_duration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str | None, int | None]] = []
+    lens = Lens()
+    monkeypatch.setattr(
+        Lens,
+        "reveal",
+        lambda _self, cell_id, *, message=None, duration_ms=None: calls.append(
+            (cell_id, message, duration_ms)
+        ),
+    )
+    mounted = agent.discover(_context(lens))[0]
+
+    mounted.reveal(
+        "cell-view",
+        message="Updated the chart and verified its labels.",
+        duration_ms=8_000,
+    )
+
+    assert calls == [
+        (
+            "cell-view",
+            "Updated the chart and verified its labels.",
+            8_000,
+        )
+    ]
+    lens.close()
+
+
 def test_materialize_script_validates_writes_and_cleans_image(
     tmp_path: Path,
 ) -> None:

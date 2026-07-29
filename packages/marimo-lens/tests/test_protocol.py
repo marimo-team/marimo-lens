@@ -30,6 +30,7 @@ def test_cell_reveal_event_uses_transient_transport() -> None:
     assert cell_reveal_event(
         cell_id="cell-view",
         message="Updated the aggregation.",
+        duration_ms=8_000,
         revision=3,
     ) == {
         "protocol": "marimo-lens.event",
@@ -39,6 +40,7 @@ def test_cell_reveal_event_uses_transient_transport() -> None:
         "payload": {
             "cellId": "cell-view",
             "message": "Updated the aggregation.",
+            "durationMs": 8_000,
         },
     }
 

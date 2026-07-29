@@ -372,6 +372,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   font-size: 11px;
   line-height: 14px;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .ml-cell-attention__cell,
@@ -431,6 +432,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   font-size: 11px;
   line-height: 14px;
   overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 @keyframes ml-working-dot-wave {

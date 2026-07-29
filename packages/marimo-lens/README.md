@@ -79,7 +79,7 @@ Agent integrations use four methods:
 | ----------------------------------------------------------------- | ---------------------------------------------------------------- |
 | `lens.context()`                                                  | Returns detached selection context with lazy notebook text       |
 | `lens.activity(cell_id, *, label=None, message=None)`             | Marks the agent's current work until its result is ready         |
-| `lens.reveal(cell_id, *, message=None)`                           | Brings one verified or explanatory cell into view                |
+| `lens.reveal(cell_id, *, message=None, duration_ms=None)`         | Brings one verified or explanatory cell into view                |
 | `lens.resolve(selection_ids, *, expected_revision, summary=None)` | Moves one or more selections to History in one guarded operation |
 
 The [Python API reference](https://marimo-team.github.io/marimo-lens/api)

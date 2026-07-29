@@ -477,11 +477,11 @@ describe("marimo-lens content", () => {
     expect(document.activeElement).toBe(outside);
     expect(document.querySelector("[data-marimo-lens-cell-attention-notice]")).toBeNull();
     const attention = document.querySelector("[data-marimo-lens-cell-attention]");
-    expect(attention?.querySelector(".ml-cell-attention__status")?.textContent).toBe(
+    expect(attention?.querySelector(".ml-cell-attention__status")?.textContent).toBe("Ready");
+    expect(attention?.querySelector(".ml-cell-attention__cell")?.textContent).toBe("BYtC");
+    expect(attention?.querySelector(".ml-cell-attention__message")?.textContent).toBe(
       "Updated the aggregation.",
     );
-    expect(attention?.querySelector(".ml-cell-attention__cell")?.textContent).toBe("BYtC");
-    expect(attention?.querySelector(".ml-cell-attention__message")).toBeNull();
     const attentionStatus = () =>
       document.querySelector("[data-marimo-lens-cell-attention-status]")?.textContent;
     expect(attentionStatus()).toBe("Revealed cell BYtC. Updated the aggregation.");

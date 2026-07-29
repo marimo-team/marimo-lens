@@ -178,13 +178,18 @@ def cell_reveal_event(
     cell_id: str,
     message: str | None,
     revision: int,
+    duration_ms: int | None = None,
 ) -> dict[str, Any]:
     """Build one transient request to reveal an exact notebook cell."""
 
     try:
         event = CellRevealEvent(
             revision=revision,
-            payload=CellRevealPayload(cell_id=cell_id, message=message),
+            payload=CellRevealPayload(
+                cell_id=cell_id,
+                message=message,
+                duration_ms=duration_ms,
+            ),
         )
     except ValidationError as error:
         raise _protocol_error(error, context="Cell reveal event") from None

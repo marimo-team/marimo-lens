@@ -55,7 +55,7 @@ The handle exposes the Lens workflow through revision-checked methods:
 | `read_cell_image(request_id)`                                | Reads pending state or consumes one terminal `CellImageResult` |
 | `activity(cell_id, *, label=None, message=None)`             | Shows the current agent work target                            |
 | `resolve(selection_ids, *, expected_revision, summary=None)` | Moves verified selections to History                           |
-| `reveal(cell_id, *, message=None)`                           | Brings the primary result into view                            |
+| `reveal(cell_id, *, message=None, duration_ms=None)`         | Brings the primary result into view                            |
 
 `AgentImage.transfer()` and `CellImageResult.transfer()` return marked records
 for direct piping to the Lens Agent Skill's `materialize-image.sh`. The client
@@ -443,11 +443,11 @@ updates the label and message or marks a different cell. `label` defaults to
 Expected `LensError.code` values are `runtime_unavailable`, `cell_not_found`,
 and `lens_closed`.
 
-### `lens.reveal(cell_id, *, message=None) -> None`
+### `lens.reveal(cell_id, *, message=None, duration_ms=None) -> None`
 
 Validates `cell_id`, then sends a best-effort browser event. When the displayed
 Lens receives it, the notebook scrolls once to the rendered cell and highlights
-it for about two seconds.
+it for `duration_ms`. The default hold is 2,200 milliseconds.
 
 ```python
 context = lens.context()
@@ -457,11 +457,14 @@ if selection is not None and selection["cellStatus"] == "available":
     lens.reveal(
         str(selection["outputCellId"]),
         message="Updated the aggregation and verified the chart.",
+        duration_ms=8_000,
     )
 ```
 
-Reveal preserves keyboard focus and selection state. A second reveal replaces
-the current highlight.
+`duration_ms` accepts an integer from 1 through 60,000. Reveal messages accept
+up to 1,000 UTF-16 code units and wrap below the status and cell ID. Reveal
+preserves keyboard focus and selection state. A second reveal replaces the
+current highlight.
 
 Expected `LensError.code` values are `runtime_unavailable`, `cell_not_found`,
 and `lens_closed`.
@@ -584,7 +587,9 @@ Lens operation begins.
 | Selection note                       | 4,000 UTF-16 code units                    |
 | Cell ID or selection ID              | 128 UTF-16 code units                      |
 | Activity label                       | 40 UTF-16 code units                       |
-| Activity, reveal, or resolve message | 240 UTF-16 code units                      |
+| Activity message or resolve summary  | 240 UTF-16 code units                      |
+| Reveal message                       | 1,000 UTF-16 code units                    |
+| Reveal duration                      | 1 to 60,000 milliseconds                   |
 | Selections per resolution            | 64 unique IDs                              |
 | Active synchronized state            | 40,000 UTF-8 bytes                         |
 | Addressed History                    | 64 items and 64,000 UTF-8 bytes            |

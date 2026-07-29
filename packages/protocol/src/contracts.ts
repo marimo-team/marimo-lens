@@ -36,6 +36,7 @@ const PositiveNormalizedNumberSchema = v.pipe(
 );
 const PositiveIntegerSchema = v.pipe(v.number(), v.safeInteger(), v.minValue(1));
 const RevisionSchema = v.pipe(v.number(), v.safeInteger(), v.minValue(0));
+const RevealDurationSchema = v.pipe(PositiveIntegerSchema, v.maxValue(60_000));
 export const SelectionLabelSchema = v.pipe(
   UnicodeStringSchema,
   v.maxLength(16),
@@ -410,7 +411,8 @@ export const SelectionResolvedEventSchema = v.object({
 
 const CellRevealPayloadSchema = v.object({
   cellId: BoundedIdentifierSchema,
-  message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(240))),
+  message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(1_000))),
+  durationMs: v.optional(RevealDurationSchema),
 });
 
 const CellActivityPayloadSchema = v.object({

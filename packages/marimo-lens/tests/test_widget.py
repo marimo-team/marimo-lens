@@ -100,9 +100,11 @@ def test_public_api_exposes_context_and_resolution_contracts() -> None:
     )
     assert resolve_parameters["summary"].default is None
     reveal_parameters = inspect.signature(Lens.reveal).parameters
-    assert list(reveal_parameters) == ["self", "cell_id", "message"]
+    assert list(reveal_parameters) == ["self", "cell_id", "message", "duration_ms"]
     assert reveal_parameters["message"].kind is inspect.Parameter.KEYWORD_ONLY
     assert reveal_parameters["message"].default is None
+    assert reveal_parameters["duration_ms"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert reveal_parameters["duration_ms"].default is None
     activity_parameters = inspect.signature(Lens.activity).parameters
     assert list(activity_parameters) == ["self", "cell_id", "label", "message"]
     assert activity_parameters["label"].kind is inspect.Parameter.KEYWORD_ONLY
@@ -142,6 +144,7 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
     result = lens.reveal(
         "cell-view",
         message="  Updated the aggregation used by the chart.  ",
+        duration_ms=8_000,
     )
 
     assert result is None
@@ -154,6 +157,7 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
             "payload": {
                 "cellId": "cell-view",
                 "message": "Updated the aggregation used by the chart.",
+                "durationMs": 8_000,
             },
         },
         [],
@@ -163,6 +167,27 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
     assert "reveal" not in json.dumps(context.references)
     assert "Updated the aggregation" not in context.text
     assert lens.resolve("selection-1", expected_revision=1) == 2
+
+
+def test_reveal_accepts_a_long_result_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    monkeypatch.setattr(
+        MarimoRuntimeAdapter,
+        "cell_status",
+        lambda _self, _cell_id: "available",
+    )
+    lens = RecordingLens()
+    message = "x" * 1_000
+
+    lens.reveal("cell-view", message=message)
+
+    assert lens.sent[-1][0]["payload"] == {
+        "cellId": "cell-view",
+        "message": message,
+    }
 
 
 def test_activity_sends_one_transient_event_without_changing_selection_state(
@@ -265,18 +290,6 @@ def test_cell_attention_requires_an_exact_runtime_cell(
         ("", None, ValueError, "cell_id must not be empty"),
         ("x" * 129, None, ValueError, "at most 128 UTF-16 code units"),
         ("cell-view", 1, TypeError, "message must be a string or None"),
-        (
-            "cell-view",
-            "x" * 241,
-            ValueError,
-            "at most 240 UTF-16 code units",
-        ),
-        (
-            "cell-view",
-            "\U0001f642" * 121,
-            ValueError,
-            "at most 240 UTF-16 code units",
-        ),
         ("cell-view", "\ud800", ValueError, "valid Unicode text"),
     ],
 )
@@ -303,6 +316,76 @@ def test_cell_attention_validates_arguments_before_runtime_access(
 
     with pytest.raises(error_type, match=error_message):
         getattr(lens, action)(cell_id, message=message)
+
+    assert not runtime_accessed
+
+
+@pytest.mark.parametrize(
+    ("action", "message", "maximum"),
+    [
+        ("activity", "x" * 241, 240),
+        ("activity", "\U0001f642" * 121, 240),
+        ("reveal", "x" * 1_001, 1_000),
+        ("reveal", "\U0001f642" * 501, 1_000),
+    ],
+)
+def test_cell_attention_enforces_its_message_bound_before_runtime_access(
+    monkeypatch: pytest.MonkeyPatch,
+    action: str,
+    message: str,
+    maximum: int,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    runtime_accessed = False
+
+    def access_runtime(_self: object, _cell_id: str) -> str:
+        nonlocal runtime_accessed
+        runtime_accessed = True
+        return "available"
+
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
+    lens = RecordingLens()
+
+    with pytest.raises(
+        ValueError,
+        match=f"at most {maximum} UTF-16 code units",
+    ):
+        getattr(lens, action)("cell-view", message=message)
+
+    assert not runtime_accessed
+
+
+@pytest.mark.parametrize(
+    ("duration_ms", "error_type", "message"),
+    [
+        (True, TypeError, "duration_ms must be an integer or None"),
+        (1.5, TypeError, "duration_ms must be an integer or None"),
+        ("8000", TypeError, "duration_ms must be an integer or None"),
+        (0, ValueError, "between 1 and 60000 milliseconds"),
+        (60_001, ValueError, "between 1 and 60000 milliseconds"),
+    ],
+)
+def test_reveal_validates_duration_before_runtime_access(
+    monkeypatch: pytest.MonkeyPatch,
+    duration_ms: Any,
+    error_type: type[Exception],
+    message: str,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    runtime_accessed = False
+
+    def access_runtime(_self: object, _cell_id: str) -> str:
+        nonlocal runtime_accessed
+        runtime_accessed = True
+        return "available"
+
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
+    lens = RecordingLens()
+
+    with pytest.raises(error_type, match=message):
+        lens.reveal("cell-view", duration_ms=duration_ms)
 
     assert not runtime_accessed
 

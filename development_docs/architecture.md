@@ -179,7 +179,7 @@ selection state, and send best-effort events.
 Activity keeps the current scroll position and remains until a later activity,
 reveal, or teardown replaces it. A short caller-supplied label can describe the
 current task. Reveal replaces the active presentation, scrolls once, and exits
-after its presentation. Both use one cell-attention controller.
+after its bounded caller-supplied hold. Both use one cell-attention controller.
 
 Resolution commits one durable state transition before sending its best-effort
 browser receipt. One receipt event can represent every selection in an atomic

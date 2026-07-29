@@ -187,6 +187,7 @@ async with cm.get_context() as ctx:
     mounted.reveal(
         "BYtC",
         message="Updated the aggregation and verified the output",
+        duration_ms=8_000,
     )
 ```
 
