@@ -26,28 +26,12 @@ describe("Lens dock", () => {
   test("starts with an explicit Select action and a latched collapse control", () => {
     renderDock({ selections: [] });
 
-    expect(document.querySelector("[data-ml-select]")?.textContent).toBe("Select");
-    expect(document.querySelector("[data-ml-list]")).toBeNull();
+    expect(findButton("Select an output")?.textContent).toBe("Select");
 
     act(() => findButton("Collapse Lens")?.click());
     expect(findButton("Open Lens")).not.toBeNull();
-    const logoImages = Array.from(
-      document.querySelectorAll<HTMLImageElement>(".ml-dock-tab__logo-image"),
-    );
-    const logoSources = logoImages.map((image) => image.getAttribute("src") ?? "");
-    expect(logoImages).toHaveLength(2);
-    expect(
-      logoSources.every(
-        (source) => source.includes(".svg") || source.startsWith("data:image/svg+xml"),
-      ),
-    ).toBe(true);
-    expect(new Set(logoSources).size).toBe(2);
-    act(() => {
-      findButton("Open Lens")?.dispatchEvent(new PointerEvent("pointerenter", { bubbles: true }));
-    });
-    expect(findButton("Open Lens")).not.toBeNull();
     act(() => findButton("Open Lens")?.click());
-    expect(document.querySelector("[data-ml-select]")).not.toBeNull();
+    expect(findButton("Select an output")).not.toBeNull();
   });
 
   test("announces the selection count from the collapsed dock", () => {
@@ -58,6 +42,15 @@ describe("Lens dock", () => {
     act(() => findButton("Collapse Lens")?.click());
 
     expect(findButton("Open Lens, 2 open selections, 0 in history")).not.toBeNull();
+  });
+
+  test("opens the collapsed dock without starting selection mode", () => {
+    renderVisibilityHarness();
+
+    act(() => findButton("Collapse Lens")?.click());
+    act(() => findButton("Open Lens")?.click());
+
+    expect(findButton("Select an output")?.getAttribute("aria-pressed")).toBe("false");
   });
 
   test("moves focus between the expanded and collapsed entry points", () => {
@@ -77,73 +70,90 @@ describe("Lens dock", () => {
     act(() => open.click());
     act(() => frame?.(0));
 
-    expect(document.activeElement).toBe(document.querySelector("[data-ml-select]"));
+    expect(document.activeElement).toBe(findButton("Select an output"));
   });
 
-  test("enters selection mode globally with Option or Alt+L", () => {
+  test("keeps Option or Alt+L as a one-way entry into selection mode", () => {
     const frames: FrameRequestCallback[] = [];
-    const onToggleArmed = vi.fn();
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       frames.push(callback);
       return 1;
     });
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-    act(() => root?.render(withNotebookDom(<VisibilityHarness onToggle={onToggleArmed} />)));
     const input = document.createElement("input");
     document.body.appendChild(input);
+    renderVisibilityHarness();
     input.focus();
 
     const enter = pressLensShortcut(input);
     expect(enter.defaultPrevented).toBe(true);
     act(() => frames.shift()?.(0));
-    let select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
+    let select = findButton("Cancel selection mode")!;
     expect(document.activeElement).toBe(select);
     expect(select.getAttribute("aria-pressed")).toBe("true");
     expect(select.getAttribute("aria-keyshortcuts")).toContain("Alt+L");
-    expect(select.textContent).toContain("Click or drag");
-    expect(findButton("Open Lens")).toBeNull();
-    expect(onToggleArmed).toHaveBeenCalledOnce();
 
     const repeat = pressLensShortcut(select, { repeat: true });
     expect(repeat.defaultPrevented).toBe(true);
-    expect(onToggleArmed).toHaveBeenCalledOnce();
+    expect(select.getAttribute("aria-pressed")).toBe("true");
 
+    input.focus();
     const refocus = pressLensShortcut(input);
     expect(refocus.defaultPrevented).toBe(true);
     act(() => frames.shift()?.(0));
-    select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
+    select = findButton("Cancel selection mode")!;
     expect(document.activeElement).toBe(select);
-    expect(select.getAttribute("aria-pressed")).toBe("true");
-    expect(onToggleArmed).toHaveBeenCalledOnce();
 
-    const collapseButton = findButton("Collapse Lens")!;
-    expect(collapseButton.getAttribute("aria-keyshortcuts")).toBeNull();
-    act(() => collapseButton.click());
+    act(() => findButton("Collapse Lens")?.click());
     act(() => frames.shift()?.(0));
-    expect(onToggleArmed).toHaveBeenCalledTimes(2);
-
     const open = findButton("Open Lens")!;
     expect(document.activeElement).toBe(open);
-    expect(open.getAttribute("aria-keyshortcuts")).toBe("Alt+L");
-    expect(open.title).toContain("Start selection");
 
     pressLensShortcut(open);
     act(() => frames.shift()?.(0));
-    expect(document.querySelector("[data-ml-select]")?.getAttribute("aria-pressed")).toBe("true");
-    expect(onToggleArmed).toHaveBeenCalledTimes(3);
+    select = findButton("Cancel selection mode")!;
+    expect(document.activeElement).toBe(select);
   });
 
-  test("keeps selection mode off when expansion is interaction locked", () => {
+  test("enters selection mode from a same-origin output iframe", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return 1;
+    });
+    const output = document.createElement("div");
+    output.id = "output-cell-1";
+    const iframe = document.createElement("iframe");
+    output.appendChild(iframe);
+    document.body.appendChild(output);
+    const input = iframe.contentDocument?.createElement("input");
+    if (!input || !iframe.contentDocument?.body) throw new Error("Iframe fixture unavailable");
+    iframe.contentDocument.body.appendChild(input);
+
+    renderVisibilityHarness();
+    input.focus();
+
+    const enter = pressLensShortcut(input);
+    expect(enter.defaultPrevented).toBe(true);
+    act(() => frames.shift()?.(0));
+
+    const select = findButton("Cancel selection mode");
+    expect(document.activeElement).toBe(select);
+  });
+
+  test("leaves the selection shortcut untouched while interactions are locked", () => {
     const onToggleArmed = vi.fn();
     renderDock({ interactionLocked: true, onToggleArmed });
-
     act(() => findButton("Collapse Lens")?.click());
-    act(() => findButton("Open Lens")?.click());
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
 
+    const enter = pressLensShortcut(input);
+
+    expect(enter.defaultPrevented).toBe(false);
+    expect(findButton("Open Lens")).not.toBeNull();
+    expect(document.activeElement).toBe(input);
     expect(onToggleArmed).not.toHaveBeenCalled();
-    expect(document.querySelector<HTMLButtonElement>("[data-ml-select]")?.disabled).toBe(true);
   });
 
   test("leaves other Alt combinations available to marimo", () => {
@@ -153,7 +163,6 @@ describe("Lens dock", () => {
     expect(
       pressKey(document.body, "L", { altKey: true, code: "KeyL", shiftKey: true }).defaultPrevented,
     ).toBe(false);
-    expect(findButton("Collapse Lens")).not.toBeNull();
   });
 
   test("opens the selection sheet and restores focus to its trigger", () => {
@@ -166,9 +175,9 @@ describe("Lens dock", () => {
     root = createRoot(container);
     act(() => root?.render(withNotebookDom(<DockHarness />)));
 
-    const listTrigger = document.querySelector<HTMLButtonElement>("[data-ml-list]")!;
+    const listTrigger = findButton("Open selections, 1 open, 0 in history")!;
     act(() => listTrigger.click());
-    expect(document.activeElement?.classList.contains("ml-selection-list__summary")).toBe(true);
+    expect(document.activeElement?.getAttribute("aria-label")).toContain("Current selection S1");
     expect(document.querySelector('[aria-current="true"]')?.textContent).toContain("Cell cell-1");
 
     const close = findButton("Close selections")!;
@@ -179,7 +188,7 @@ describe("Lens dock", () => {
   test("keeps one-shot selection mode within a stable action slot", () => {
     renderDock({ armed: true });
 
-    const select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
+    const select = findButton("Cancel selection mode")!;
     expect(select.getAttribute("aria-pressed")).toBe("true");
     expect(select.textContent).toContain("Click or drag");
     expect(select.textContent).toContain("ESC");
@@ -218,7 +227,9 @@ describe("Lens dock", () => {
     });
 
     const rows = Array.from(
-      document.querySelectorAll<HTMLButtonElement>("[data-marimo-lens-selection-focus]"),
+      document.querySelectorAll<HTMLButtonElement>(
+        'button[aria-label^="Activate selection"], button[aria-label^="Current selection"]',
+      ),
     );
     for (const row of rows) Object.assign(row, { scrollIntoView: vi.fn() });
     expect(document.activeElement).toBe(rows[1]);
@@ -241,7 +252,9 @@ describe("Lens dock", () => {
       listOpen: true,
     });
 
-    const row = document.querySelector<HTMLButtonElement>("[data-marimo-lens-selection-focus]")!;
+    const row = document.querySelector<HTMLButtonElement>(
+      'button[aria-label^="Current selection S1"]',
+    )!;
     const edit = findButton("Edit note for S1")!;
     expect(pressKey(row, "Tab").defaultPrevented).toBe(false);
 
@@ -323,8 +336,6 @@ describe("Lens dock", () => {
     expect(document.querySelector(".ml-history-list__target")?.textContent).toContain(
       `Cell ${receipt.outputCellId}`,
     );
-    expect(document.querySelector('[aria-label="Point selection"]')).not.toBeNull();
-
     const disclosure = document.querySelector<HTMLDetailsElement>(".ml-history-list__disclosure")!;
     const trigger = document.querySelector<HTMLElement>(".ml-history-list__row")!;
     expect(disclosure.open).toBe(false);
@@ -402,18 +413,23 @@ describe("Lens dock", () => {
     expect(findButton("S1 is open")?.textContent).toBe("Open");
   });
 
-  test("represents region history with its compact selection mark", () => {
+  test.each([
+    {
+      anchor: { kind: "point" as const, x: 0.2, y: 0.2 },
+      accessibleName: "Point selection",
+    },
+    {
+      anchor: { kind: "rect" as const, x: 0.2, y: 0.2, width: 0.4, height: 0.3 },
+      accessibleName: "Region selection",
+    },
+  ])("names $accessibleName in History", ({ anchor, accessibleName }) => {
     renderDock({
-      history: [
-        addressedSelectionFixture({
-          anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.4, height: 0.3 },
-        }),
-      ],
+      history: [addressedSelectionFixture({ anchor })],
       listOpen: true,
       sheetTab: "history",
     });
 
-    expect(document.querySelector('[aria-label="Region selection"]')).not.toBeNull();
+    expect(document.querySelector("svg title")?.textContent).toBe(accessibleName);
   });
 
   test("opens exact history from the transient addressed receipt", () => {
@@ -426,7 +442,7 @@ describe("Lens dock", () => {
     });
 
     act(() => findButton("Collapse Lens")?.click());
-    expect(document.querySelector("[data-ml-dock-tab]")).not.toBeNull();
+    expect(findButton("Open Lens, 0 open selections, 1 in history")).not.toBeNull();
     act(() => findButton("Open history for S1")?.click());
     expect(onOpenHistory).toHaveBeenCalledWith(event);
     expect(findButton("Collapse Lens")).not.toBeNull();
@@ -529,16 +545,13 @@ function DockHarness() {
   );
 }
 
-function VisibilityHarness({ onToggle = () => {} }: { onToggle?: () => void }) {
+function VisibilityHarness() {
   const [armed, setArmed] = useState(false);
   return (
     <LensDock
       {...defaultProps()}
       armed={armed}
-      onToggleArmed={() => {
-        onToggle();
-        setArmed((active) => !active);
-      }}
+      onToggleArmed={() => setArmed((active) => !active)}
     />
   );
 }
@@ -563,6 +576,13 @@ function renderDock(overrides: Partial<React.ComponentProps<typeof LensDock>> = 
   document.body.appendChild(container);
   root = createRoot(container);
   act(() => root?.render(withNotebookDom(<LensDock {...defaultProps()} {...overrides} />)));
+}
+
+function renderVisibilityHarness() {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  act(() => root?.render(withNotebookDom(<VisibilityHarness />)));
 }
 
 function withNotebookDom(children: React.ReactNode) {

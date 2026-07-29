@@ -71,7 +71,14 @@ describe("interaction documents", () => {
       ownerFrame ? detachFrame : detachOwner,
     );
 
-    const dispose = observeInteractionSurfaces(document, true, attach);
+    const dispose = observeInteractionSurfaces(
+      document,
+      {
+        includeOutputFrames: true,
+        lockSelectionGestures: true,
+      },
+      attach,
+    );
     expect(query).toHaveBeenCalledTimes(1);
     expect(attach).toHaveBeenCalledTimes(2);
 
@@ -98,6 +105,114 @@ describe("interaction documents", () => {
     expect(detachFrame).toHaveBeenCalledOnce();
   });
 
+  test("discovers dynamically added output frames while gesture locking is off", () => {
+    let notifyMutation: MutationCallback | undefined;
+    vi.stubGlobal(
+      "MutationObserver",
+      vi.fn(
+        class {
+          constructor(callback: MutationCallback) {
+            notifyMutation = callback;
+          }
+
+          observe = vi.fn();
+          disconnect = vi.fn();
+        },
+      ),
+    );
+    let refresh: FrameRequestCallback | undefined;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      refresh = callback;
+      return 1;
+    });
+
+    const output = document.createElement("div");
+    output.id = "output-cell-1";
+    output.style.setProperty("touch-action", "pan-y");
+    document.body.appendChild(output);
+    const attachedDocuments: Document[] = [];
+    const dispose = observeInteractionSurfaces(
+      document,
+      {
+        includeOutputFrames: true,
+        lockSelectionGestures: false,
+      },
+      (surface) => {
+        attachedDocuments.push(surface.document);
+        return () => {};
+      },
+    );
+    expect(attachedDocuments).toEqual([document]);
+
+    const frame = document.createElement("iframe");
+    output.appendChild(frame);
+    frame.contentDocument?.documentElement.style.setProperty("touch-action", "manipulation");
+    notifyMutation?.([], {} as MutationObserver);
+    refresh?.(0);
+
+    expect(attachedDocuments).toEqual([document, frame.contentDocument]);
+    expect(output.style.getPropertyValue("touch-action")).toBe("pan-y");
+    expect(frame.contentDocument?.documentElement.style.getPropertyValue("touch-action")).toBe(
+      "manipulation",
+    );
+
+    dispose();
+  });
+
+  test("releases a removed shadow root while continuing to observe the live document", () => {
+    const observed = new Set<Node>();
+    let notifyMutation: ((root: Node) => void) | undefined;
+    vi.stubGlobal(
+      "MutationObserver",
+      vi.fn(
+        class {
+          constructor(callback: MutationCallback) {
+            notifyMutation = (root) => {
+              if (observed.has(root)) callback([], {} as MutationObserver);
+            };
+          }
+
+          observe = vi.fn((root: Node) => observed.add(root));
+          disconnect = () => observed.clear();
+        },
+      ),
+    );
+    const frames = new Map<number, FrameRequestCallback>();
+    let nextFrame = 1;
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
+      const id = nextFrame;
+      nextFrame += 1;
+      frames.set(id, callback);
+      return id;
+    });
+
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    document.body.appendChild(host);
+
+    const dispose = observeInteractionSurfaces(
+      document,
+      {
+        includeOutputFrames: true,
+        lockSelectionGestures: false,
+      },
+      () => () => {},
+    );
+    host.remove();
+    notifyMutation?.(document.body);
+    const pending = [...frames.entries()][0];
+    if (!pending) throw new Error("Shadow-root removal did not schedule a topology refresh");
+    frames.delete(pending[0]);
+    pending[1](0);
+
+    notifyMutation?.(shadow);
+    expect(frames.size).toBe(0);
+    notifyMutation?.(document.body);
+    expect(frames.size).toBe(1);
+
+    dispose();
+  });
+
   test("locks the resolved surface of a marimo island while selection is armed", () => {
     const island = document.createElement("marimo-island");
     island.setAttribute("data-cell-id", "island-cell");
@@ -110,7 +225,14 @@ describe("interaction documents", () => {
     island.appendChild(output);
     document.body.appendChild(island);
 
-    const dispose = observeInteractionSurfaces(document, true, () => () => {});
+    const dispose = observeInteractionSurfaces(
+      document,
+      {
+        includeOutputFrames: true,
+        lockSelectionGestures: true,
+      },
+      () => () => {},
+    );
 
     expect(content.style.getPropertyValue("touch-action")).toBe("none");
     expect(content.style.getPropertyPriority("touch-action")).toBe("important");

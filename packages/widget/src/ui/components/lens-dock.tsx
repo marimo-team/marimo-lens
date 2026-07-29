@@ -131,6 +131,11 @@ export function LensDock({
     dom.window.requestAnimationFrame(() => tabRef.current?.focus());
   }, [armed, dom, listOpen, onToggleArmed, onToggleList]);
 
+  const expand = useCallback(() => {
+    setExpanded(true);
+    dom.window.requestAnimationFrame(() => selectRef.current?.focus());
+  }, [dom]);
+
   const enterSelectionMode = useCallback(() => {
     setExpanded(true);
     if (!armed && !interactionLocked) onToggleArmed();
@@ -139,16 +144,24 @@ export function LensDock({
 
   useEffect(() => {
     const enterSelection = (event: KeyboardEvent) => {
-      if (!isLensSelectionShortcut(event)) return;
+      if (!isLensSelectionShortcut(event) || interactionLocked) return;
       event.preventDefault();
       event.stopPropagation();
       if (event.repeat) return;
       enterSelectionMode();
     };
 
-    dom.document.addEventListener("keydown", enterSelection, true);
-    return () => dom.document.removeEventListener("keydown", enterSelection, true);
-  }, [dom, enterSelectionMode]);
+    return dom.observeInteractionSurfaces(
+      {
+        includeOutputFrames: true,
+        lockSelectionGestures: false,
+      },
+      (surface) => {
+        surface.document.addEventListener("keydown", enterSelection, true);
+        return () => surface.document.removeEventListener("keydown", enterSelection, true);
+      },
+    );
+  }, [dom, enterSelectionMode, interactionLocked]);
 
   const openHistory = (event: SelectionResolvedEvent) => {
     setExpanded(true);
@@ -278,14 +291,13 @@ export function LensDock({
           className="ml-dock-tab"
           type="button"
           data-ml-dock-tab
-          onClick={enterSelectionMode}
-          aria-keyshortcuts={LENS_SELECTION_SHORTCUT}
+          onClick={expand}
           aria-label={
             hasSelectionSurface
               ? `Open Lens, ${selections.length} open ${selections.length === 1 ? "selection" : "selections"}, ${history.length} in history`
               : "Open Lens"
           }
-          title={`Start selection (${LENS_SELECTION_SHORTCUT_LABEL})`}
+          title="Open Lens"
         >
           <LensLogo className="ml-dock-tab__logo" />
           {selections.length > 0 ? (

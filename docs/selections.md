@@ -219,13 +219,13 @@ output.
 
 Use these keys while **Select** mode is active:
 
-| Keys                                     | Result                                                         |
-| ---------------------------------------- | -------------------------------------------------------------- |
-| `Option+L` on macOS or `Alt+L` elsewhere | Open or refocus **Select** mode from anywhere in the notebook. |
-| `↑` / `↓`                                | Move between selectable outputs.                               |
-| `Enter`                                  | Create a point in the center of the focused output.            |
-| `Tab`                                    | Exit **Select** mode and continue to the next dock control.    |
-| `Escape`                                 | Exit **Select** mode and return focus to **Select**.           |
+| Keys                                     | Result                                                                            |
+| ---------------------------------------- | --------------------------------------------------------------------------------- |
+| `Option+L` on macOS or `Alt+L` elsewhere | Start or refocus **Select** mode from the notebook or a same-origin output frame. |
+| `↑` / `↓`                                | Move between selectable outputs.                                                  |
+| `Enter`                                  | Create a point in the center of the focused output.                               |
+| `Tab`                                    | Exit **Select** mode and continue to the next dock control.                       |
+| `Escape`                                 | Exit **Select** mode and return focus to **Select**.                              |
 
 Open **Selections** for row, tab, and note controls:
 
@@ -235,7 +235,8 @@ Open **Selections** for row, tab, and note controls:
 | `Enter` on an open selection         | Make the focused selection current.                                       |
 | `←` / `→` on **Open** or **History** | Switch tabs when the other tab contains items.                            |
 | `Tab` / `Shift+Tab`                  | Move through row actions. In the note editor, cycle through its controls. |
-| `Escape`                             | Close the active sheet or note editor and return focus to its trigger.    |
+| `Escape` in **Selections**           | Close the sheet and return focus to **Selections**.                       |
+| `Escape` in the note editor          | Close the editor and return focus to the selection marker or Lens dock.   |
 
 ## Multiple Lens instances
 

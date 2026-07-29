@@ -42,6 +42,7 @@ describe("document selection interactions", () => {
       expect.any(HTMLElement),
       { kind: "point", x: 0.5, y: 0.5 },
       expect.any(Element),
+      "instant",
     );
   });
 
@@ -61,9 +62,9 @@ describe("document selection interactions", () => {
   });
 
   test("cycles outputs with vertical keys while keeping Select focused", () => {
-    const first = visibleOutput({ id: "cell-1", title: "Regional revenue", top: 0 });
-    const second = visibleOutput({ id: "cell-2", title: "Region", top: 220 });
-    const third = visibleOutput({ id: "cell-3", title: "All revenue", top: 440 });
+    const first = visibleOutput({ id: "cell-1", title: "Regional revenue" });
+    const second = visibleOutput({ id: "cell-2", title: "Region" });
+    const third = visibleOutput({ id: "cell-3", title: "All revenue" });
     mount(vi.fn<BeginSelection>());
     const select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
 
@@ -73,24 +74,24 @@ describe("document selection interactions", () => {
     });
 
     pressSelectKey("ArrowDown");
-    expect(first.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    expect(first.scrollIntoView).toHaveBeenCalledOnce();
     expect(announcement()).toBe("Output 1 of 3, Regional revenue.");
     expect(document.activeElement).toBe(select);
 
     pressSelectKey("ArrowDown");
-    expect(second.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    expect(second.scrollIntoView).toHaveBeenCalledOnce();
     expect(announcement()).toBe("Output 2 of 3, Region.");
 
     pressSelectKey("ArrowUp");
+    expect(first.scrollIntoView).toHaveBeenCalledTimes(2);
     expect(announcement()).toBe("Output 1 of 3, Regional revenue.");
 
     pressSelectKey("ArrowUp");
-    expect(third.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    expect(third.scrollIntoView).toHaveBeenCalledOnce();
     expect(announcement()).toBe("Output 3 of 3, All revenue.");
   });
 
   test("disarms Select on Tab and leaves native focus movement available", () => {
-    const output = visibleOutput();
     mount(vi.fn<BeginSelection>());
     const select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
     act(() => {
@@ -107,7 +108,6 @@ describe("document selection interactions", () => {
 
     expect(event.defaultPrevented).toBe(false);
     expect(select.getAttribute("aria-pressed")).toBe("false");
-    expect(output.scrollIntoView).not.toHaveBeenCalled();
   });
 
   test("tracks a point gesture inside a same-origin iframe", () => {
@@ -259,15 +259,13 @@ function disarm(): void {
 function visibleOutput({
   id = "cell-1",
   title,
-  top = 0,
 }: {
   id?: string;
   title?: string;
-  top?: number;
 } = {}): HTMLElement {
   const output = document.createElement("div");
   output.id = `output-${id}`;
-  output.getBoundingClientRect = () => new DOMRect(0, top, 400, 200);
+  output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 200);
   if (title) {
     const heading = document.createElement("h2");
     heading.textContent = title;

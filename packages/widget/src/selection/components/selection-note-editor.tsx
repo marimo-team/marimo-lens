@@ -1,7 +1,7 @@
 import type { Selection } from "@marimo-lens/protocol";
 
 import { Trash2 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
 import { anchorToViewport } from "@/selection/anchor";
@@ -33,8 +33,6 @@ export function SelectionNoteEditor({
 }: SelectionNoteEditorProps) {
   const surfaceRef = useRef<HTMLDialogElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const attentionAnimationRef = useRef<Animation | null>(null);
-  const refocusTimerRef = useRef<number | null>(null);
   const [draft, setDraft] = useState(initialNote);
   const fieldId = useId();
   const errorId = useId();
@@ -53,6 +51,15 @@ export function SelectionNoteEditor({
     fallback: { style: { right: 16, bottom: 72 }, placement: "above" },
   });
 
+  useLayoutEffect(() => {
+    const surface = surfaceRef.current;
+    if (!surface) return;
+    if (!surface.open) surface.showModal();
+    return () => {
+      if (surface.open) surface.close();
+    };
+  }, []);
+
   useEffect(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -60,56 +67,9 @@ export function SelectionNoteEditor({
     textarea.setSelectionRange(textarea.value.length, textarea.value.length);
   }, []);
 
-  useEffect(() => {
-    const onOutsidePointerDown = (event: PointerEvent) => {
-      const surface = surfaceRef.current;
-      if (
-        !surface ||
-        !(event.target instanceof dom.window.Node) ||
-        surface.contains(event.target)
-      ) {
-        return;
-      }
-
-      attentionAnimationRef.current?.cancel();
-      const reducedMotion = dom.window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-      if (!reducedMotion && typeof surface.animate === "function") {
-        attentionAnimationRef.current = surface.animate(
-          [
-            { transform: "translateX(0)" },
-            { transform: "translateX(-3px)" },
-            { transform: "translateX(3px)" },
-            { transform: "translateX(-2px)" },
-            { transform: "translateX(2px)" },
-            { transform: "translateX(0)" },
-          ],
-          { duration: 240, easing: "ease-out" },
-        );
-      }
-
-      if (refocusTimerRef.current !== null) {
-        dom.window.clearTimeout(refocusTimerRef.current);
-      }
-      refocusTimerRef.current = dom.window.setTimeout(
-        () => textareaRef.current?.focus({ preventScroll: true }),
-        reducedMotion ? 0 : 240,
-      );
-    };
-
-    dom.document.addEventListener("pointerdown", onOutsidePointerDown, true);
-    return () => {
-      dom.document.removeEventListener("pointerdown", onOutsidePointerDown, true);
-      attentionAnimationRef.current?.cancel();
-      if (refocusTimerRef.current !== null) {
-        dom.window.clearTimeout(refocusTimerRef.current);
-      }
-    };
-  }, [dom]);
-
   const title = selection.note ? "Edit note" : "Add note";
   return (
     <dialog
-      open
       ref={surfaceRef}
       className="ml-note-editor"
       style={position.style}
@@ -118,8 +78,16 @@ export function SelectionNoteEditor({
       data-marimo-lens-note-editor
       data-marimo-lens-selection-cluster={selection.id}
       data-marimo-lens-ui
-      aria-modal="true"
       aria-label={`${title} for ${selection.label}, cell ${selection.outputCellId}`}
+      onCancel={(event) => {
+        event.preventDefault();
+        onCancel();
+      }}
+      onPointerDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        event.preventDefault();
+        textareaRef.current?.focus({ preventScroll: true });
+      }}
       onKeyDown={(event) => {
         if (event.key !== "Tab") return;
         const controls = Array.from(

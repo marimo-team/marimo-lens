@@ -56,6 +56,21 @@ describe("selection workflow", () => {
     expect(committed.optimisticCurrentSelectionId).toBeNull();
   });
 
+  test("preserves instant motion when a queued keyboard selection opens note editing", () => {
+    const selection = selectionFixture({ note: "", snapshot: { status: "pending" } });
+    const queued = uiReducer(INITIAL_UI_STATE, {
+      type: "selectionQueued",
+      pending: { selection },
+      motion: "instant",
+    });
+
+    expect(queued.workflow).toEqual({
+      mode: "editingNote",
+      selectionId: selection.id,
+      motion: "instant",
+    });
+  });
+
   test("opens optional note editing without changing selection identity", () => {
     const editing = uiReducer(INITIAL_UI_STATE, {
       type: "editNote",

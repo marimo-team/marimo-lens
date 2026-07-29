@@ -3,7 +3,7 @@ import type { SelectionAnchor } from "@marimo-lens/protocol";
 import { useEffect, type Dispatch, type RefObject } from "react";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
-import type { UiAction, UiState, WorkflowState } from "@/selection/state";
+import type { SelectionMotion, UiAction, UiState, WorkflowState } from "@/selection/state";
 
 import { outputFromFrame, parentViewportPoint } from "@/notebook/interaction-documents";
 import {
@@ -20,6 +20,7 @@ export type BeginSelection = (
   output: HTMLElement,
   anchor: SelectionAnchor,
   detailElement: Element,
+  motion?: SelectionMotion,
 ) => void;
 
 export function useDocumentInteractions(options: {
@@ -39,7 +40,11 @@ export function useDocumentInteractions(options: {
     if (interactionActive) dom.document.documentElement.dataset.marimoLensArmed = "true";
     else delete dom.document.documentElement.dataset.marimoLensArmed;
 
-    const detachSurfaces = dom.observeInteractionSurfaces(interactionActive, (surface) => {
+    const surfaceOptions = {
+      includeOutputFrames: interactionActive,
+      lockSelectionGestures: interactionActive,
+    };
+    const detachSurfaces = dom.observeInteractionSurfaces(surfaceOptions, (surface) => {
       const outputForEvent = (event: Event) =>
         surface.frame ? outputFromFrame(surface.frame) : outputCellFromEvent(event);
 
@@ -207,6 +212,7 @@ function navigateOutputs(
         ...normalizedPoint(output.element, point),
       },
       detail,
+      "instant",
     );
   }
 }

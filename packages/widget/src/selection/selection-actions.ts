@@ -130,6 +130,7 @@ export function useSelectionActions(options: {
       output: HTMLElement,
       anchor: SelectionAnchor,
       detailElement: Element,
+      motion: SelectionMotion = "animate",
     ) => {
       const signal = currentSignal();
       signal.throwIfAborted();
@@ -144,7 +145,7 @@ export function useSelectionActions(options: {
         snapshot: { status: "pending" },
       };
       const captureJob = selectionCapture.reserve(selection.id);
-      dispatch({ type: "selectionQueued", pending: { selection } });
+      dispatch({ type: "selectionQueued", pending: { selection }, motion });
 
       const committed = enqueueMutation(async () => {
         let committedSelection: Selection | null = null;
