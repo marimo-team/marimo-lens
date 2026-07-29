@@ -81,9 +81,12 @@ when verification fails or the next step requires user input.
 
 Use `reveal()` to guide the user's attention across verified notebook results.
 After changing several cells, create a short walkthrough by revealing each
-result in reading order. Give each call a self-contained message that explains
-the change and a readable `duration_ms`. Let one reveal finish before sending
-the next because a newer call replaces the current reveal.
+result in reading order. Keep decisions, supporting details, and follow-up
+information the user may need later in the agent chat. Use each reveal for a
+concise description tied to the highlighted cell, and choose enough
+`duration_ms` for the user to read it. Each message disappears after that
+interval, and a newer call replaces the current reveal. Let one reveal finish
+before sending the next.
 
 Remove every image directory after its final read:
 
