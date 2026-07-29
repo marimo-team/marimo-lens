@@ -2,6 +2,7 @@ import { describe, expect, test } from "vite-plus/test";
 
 import {
   anchorToViewport,
+  attachToNestedScroll,
   isAnchorInsideOutputViewport,
   resizeRectAnchor,
   translateAnchor,
@@ -64,6 +65,31 @@ describe("selection anchor geometry", () => {
         height: 0.4,
       }),
     ).toBe(false);
+  });
+
+  test("keeps the baseline of an ancestor that becomes scrollable", () => {
+    const output = document.createElement("div");
+    const scroller = document.createElement("div");
+    const content = document.createElement("div");
+    scroller.style.overflow = "auto";
+    scroller.appendChild(content);
+    output.appendChild(scroller);
+    Object.defineProperties(scroller, {
+      clientWidth: { configurable: true, value: 400 },
+      clientHeight: { configurable: true, value: 240 },
+      scrollWidth: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 240 },
+      scrollLeft: { configurable: true, value: 0, writable: true },
+      scrollTop: { configurable: true, value: 0, writable: true },
+    });
+    const attachment = attachToNestedScroll(output, content);
+
+    Object.defineProperty(scroller, "scrollWidth", { configurable: true, value: 800 });
+    scroller.scrollLeft = 40;
+    const refreshed = attachToNestedScroll(output, content, attachment);
+
+    expect(refreshed.frames).toHaveLength(1);
+    expect(refreshed.frames[0]?.scrollLeft).toBe(0);
   });
 
   test("moves rectangles while keeping their extents inside the output", () => {

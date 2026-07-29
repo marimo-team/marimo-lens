@@ -48,7 +48,7 @@ export function SelectionOverlay({
 }: SelectionOverlayProps) {
   const dom = useNotebookDom();
   const interactionActive = workflow.mode === "armed" || workflow.mode === "dragging";
-  useViewportRevision(selections.length > 0 || interactionActive);
+  const viewportRevision = useViewportRevision(selections.length > 0 || interactionActive);
   const activeCellId =
     workflow.mode === "armed"
       ? workflow.activeOutputCellId
@@ -85,6 +85,7 @@ export function SelectionOverlay({
             key={selection.id}
             selection={selection}
             output={output}
+            viewportRevision={viewportRevision}
             current={selection.id === currentSelectionId}
             busy={busySelectionIds.has(selection.id)}
             capturing={capturingSelectionIds.has(selection.id)}
@@ -116,6 +117,7 @@ function AnchorPreview({ output, anchor }: { output: HTMLElement; anchor: Select
 function SelectionMarker({
   selection,
   output,
+  viewportRevision,
   current,
   busy,
   capturing,
@@ -128,6 +130,7 @@ function SelectionMarker({
 }: {
   selection: Selection;
   output: HTMLElement;
+  viewportRevision: number;
   current: boolean;
   busy: boolean;
   capturing: boolean;
@@ -152,14 +155,11 @@ function SelectionMarker({
   const [attachmentState, setAttachmentState] = useState(() =>
     createScrollAttachmentState(dom, output, selection.anchor, anchorKey),
   );
-  const attachmentStale =
-    attachmentState.output !== output ||
-    attachmentState.anchor !== anchorKey ||
-    attachmentState.attachment.frames.some(({ element }) => !element.isConnected);
   useLayoutEffect(() => {
-    if (!attachmentStale) return;
-    setAttachmentState(createScrollAttachmentState(dom, output, selection.anchor, anchorKey));
-  }, [anchorKey, attachmentStale, dom, output, selection.anchor]);
+    setAttachmentState((current) =>
+      refreshScrollAttachmentState(current, dom, output, selection.anchor, anchorKey),
+    );
+  }, [anchorKey, dom, output, selection.anchor, viewportRevision]);
   const attachment = attachmentState.attachment;
   const displayedAnchor = preview ?? selection.anchor;
   const viewport = anchorToViewport(output, displayedAnchor, attachment);
@@ -311,6 +311,7 @@ function SelectionMarker({
 type ScrollAttachmentState = {
   output: HTMLElement;
   anchor: string;
+  target: Element | null;
   attachment: ScrollAttachment;
 };
 
@@ -320,20 +321,80 @@ function createScrollAttachmentState(
   anchor: SelectionAnchor,
   anchorKey: string,
 ): ScrollAttachmentState {
+  const target = attachmentTarget(dom, output, anchor);
+  return {
+    output,
+    anchor: anchorKey,
+    target,
+    attachment: target
+      ? attachToNestedScroll(output, target)
+      : { frames: [], ancestorBaselines: [] },
+  };
+}
+
+function refreshScrollAttachmentState(
+  current: ScrollAttachmentState,
+  dom: NotebookDomAdapter,
+  output: HTMLElement,
+  anchor: SelectionAnchor,
+  anchorKey: string,
+): ScrollAttachmentState {
+  const reset = current.output !== output || current.anchor !== anchorKey;
+  const target =
+    reset ||
+    current.target === null ||
+    !current.target.isConnected ||
+    current.attachment.frames.length === 0
+      ? attachmentTarget(dom, output, anchor)
+      : current.target;
+  const attachment = target
+    ? attachToNestedScroll(output, target, reset ? undefined : current.attachment)
+    : { frames: [], ancestorBaselines: [] };
+  if (
+    !reset &&
+    current.target === target &&
+    hasSameScrollAttachment(current.attachment, attachment)
+  ) {
+    return current;
+  }
+  return {
+    output,
+    anchor: anchorKey,
+    target,
+    attachment,
+  };
+}
+
+function attachmentTarget(
+  dom: NotebookDomAdapter,
+  output: HTMLElement,
+  anchor: SelectionAnchor,
+): Element | null {
   const viewport = anchorToViewport(output, anchor);
   const point =
     viewport.kind === "point"
       ? viewport
       : { x: viewport.x + viewport.width / 2, y: viewport.y + viewport.height / 2 };
-  const element =
-    typeof dom.document.elementsFromPoint === "function"
-      ? dom.deepestElementAtPoint(point.x, point.y)
-      : null;
-  return {
-    output,
-    anchor: anchorKey,
-    attachment: element ? attachToNestedScroll(output, element) : { frames: [] },
-  };
+  return typeof dom.document.elementsFromPoint === "function"
+    ? dom.deepestElementAtPoint(point.x, point.y)
+    : null;
+}
+
+function hasSameScrollAttachment(first: ScrollAttachment, second: ScrollAttachment): boolean {
+  return (
+    hasSameElements(first.frames, second.frames) &&
+    hasSameElements(first.ancestorBaselines, second.ancestorBaselines)
+  );
+}
+
+function hasSameElements(
+  first: ReadonlyArray<{ element: Element }>,
+  second: ReadonlyArray<{ element: Element }>,
+): boolean {
+  return (
+    first.length === second.length &&
+    first.every((item, index) => item.element === second[index]?.element)
+  );
 }
 
 const RESIZE_HANDLES: ResizeHandle[] = ["nw", "ne", "sw", "se"];

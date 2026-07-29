@@ -16,6 +16,7 @@ type ScrollFrame = {
 
 export type ScrollAttachment = {
   frames: ScrollFrame[];
+  ancestorBaselines: ScrollFrame[];
 };
 
 export function anchorToViewport(
@@ -71,20 +72,31 @@ export function isAnchorInsideOutputViewport(
   );
 }
 
-export function attachToNestedScroll(output: HTMLElement, element: Element): ScrollAttachment {
+export function attachToNestedScroll(
+  output: HTMLElement,
+  element: Element,
+  previous?: ScrollAttachment,
+): ScrollAttachment {
   const frames: ScrollFrame[] = [];
+  const ancestorBaselines: ScrollFrame[] = [];
+  const previousBaselines = new Map(
+    previous?.ancestorBaselines.map((baseline) => [baseline.element, baseline]),
+  );
   let current: Element | null = element;
   while (current && current !== output) {
-    if (isHTMLElement(current, output.ownerDocument) && isScrollFrame(current)) {
-      frames.push({
+    if (isHTMLElement(current, output.ownerDocument)) {
+      const previousBaseline = previousBaselines.get(current);
+      const baseline = {
         element: current,
-        scrollLeft: current.scrollLeft,
-        scrollTop: current.scrollTop,
-      });
+        scrollLeft: previousBaseline?.scrollLeft ?? current.scrollLeft,
+        scrollTop: previousBaseline?.scrollTop ?? current.scrollTop,
+      };
+      ancestorBaselines.push(baseline);
+      if (isScrollFrame(current)) frames.push(baseline);
     }
     current = parentElementAcrossShadow(current);
   }
-  return { frames: current === output ? frames : [] };
+  return current === output ? { frames, ancestorBaselines } : { frames: [], ancestorBaselines: [] };
 }
 
 export function translateAnchor(

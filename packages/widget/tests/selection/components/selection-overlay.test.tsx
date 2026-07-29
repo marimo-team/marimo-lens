@@ -15,6 +15,8 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("selection overlay", () => {
@@ -44,6 +46,64 @@ describe("selection overlay", () => {
 
     scroller.scrollLeft = 160;
     rerender();
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("60px");
+  });
+
+  test("attaches a marker to nested scroll content rendered after mount", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      window.setTimeout(() => callback(performance.now()), 0),
+    );
+    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
+    const output = setupOutput();
+    const selection = selectionFixture({
+      anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.2, height: 0.3 },
+    });
+    renderOverlay([selection], selection.id);
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    const { scroller } = setupNestedScroller(output);
+    scroller.scrollLeft = 120;
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    scroller.scrollLeft = 160;
+    await act(async () => {
+      scroller.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("60px");
+    scroller.scrollLeft = 180;
+    await act(async () => {
+      scroller.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("40px");
+  });
+
+  test("moves a marker on the first scroll after its ancestor becomes scrollable", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      window.setTimeout(() => callback(performance.now()), 0),
+    );
+    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
+    const { scroller } = setupNestedScroller();
+    Object.defineProperty(scroller, "scrollWidth", { configurable: true, value: 400 });
+    const selection = selectionFixture({
+      anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.2, height: 0.3 },
+    });
+    renderOverlay([selection], selection.id);
+
+    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    Object.defineProperty(scroller, "scrollWidth", { configurable: true, value: 800 });
+    scroller.scrollLeft = 40;
+    await act(async () => {
+      scroller.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
 
     expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("60px");
   });
@@ -150,8 +210,7 @@ function setupOutput({ scrollHeight = 240, scrollTop = 0 } = {}) {
   return output;
 }
 
-function setupNestedScroller(): { scroller: HTMLElement } {
-  const output = setupOutput();
+function setupNestedScroller(output = setupOutput()): { scroller: HTMLElement } {
   const host = document.createElement("div");
   const shadow = host.attachShadow({ mode: "open" });
   const scroller = document.createElement("div");

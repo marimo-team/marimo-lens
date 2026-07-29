@@ -163,6 +163,10 @@ export class NotebookDomAdapter {
     const mutationObserver = MutationObserverClass
       ? new MutationObserverClass(scheduleTopology)
       : null;
+    const mutationOptions = {
+      childList: true,
+      subtree: true,
+    } satisfies MutationObserverInit;
     const ResizeObserverClass = this.window.ResizeObserver;
     const resizeObserver = ResizeObserverClass ? new ResizeObserverClass(schedule) : null;
     const observedOutputs = new Set<HTMLElement>();
@@ -183,26 +187,34 @@ export class NotebookDomAdapter {
       }
 
       const shadows = new Set(listOpenShadowRoots(this.document.body));
+      let removedShadow = false;
       for (const shadow of observedShadows) {
         if (shadows.has(shadow)) continue;
         shadow.removeEventListener("scroll", schedule, true);
         observedShadows.delete(shadow);
+        removedShadow = true;
       }
+      const addedShadows: ShadowRoot[] = [];
       for (const shadow of shadows) {
         if (observedShadows.has(shadow)) continue;
         observedShadows.add(shadow);
+        addedShadows.push(shadow);
         shadow.addEventListener("scroll", schedule, true);
-        mutationObserver?.observe(shadow, {
-          childList: true,
-          subtree: true,
-        });
+      }
+      if (removedShadow) {
+        mutationObserver?.disconnect();
+        mutationObserver?.observe(this.document.body, mutationOptions);
+        for (const shadow of observedShadows) {
+          mutationObserver?.observe(shadow, mutationOptions);
+        }
+      } else {
+        for (const shadow of addedShadows) {
+          mutationObserver?.observe(shadow, mutationOptions);
+        }
       }
     };
     resizeObserver?.observe(this.document.body);
-    mutationObserver?.observe(this.document.body, {
-      childList: true,
-      subtree: true,
-    });
+    mutationObserver?.observe(this.document.body, mutationOptions);
     syncTopology();
 
     return () => {
