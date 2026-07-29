@@ -31,7 +31,7 @@ export function SelectionNoteEditor({
   onCancel,
   onDelete,
 }: SelectionNoteEditorProps) {
-  const surfaceRef = useRef<HTMLElement>(null);
+  const surfaceRef = useRef<HTMLDialogElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const attentionAnimationRef = useRef<Animation | null>(null);
   const refocusTimerRef = useRef<number | null>(null);
@@ -108,7 +108,8 @@ export function SelectionNoteEditor({
 
   const title = selection.note ? "Edit note" : "Add note";
   return (
-    <section
+    <dialog
+      open
       ref={surfaceRef}
       className="ml-note-editor"
       style={position.style}
@@ -117,7 +118,26 @@ export function SelectionNoteEditor({
       data-marimo-lens-note-editor
       data-marimo-lens-selection-cluster={selection.id}
       data-marimo-lens-ui
+      aria-modal="true"
       aria-label={`${title} for ${selection.label}, cell ${selection.outputCellId}`}
+      onKeyDown={(event) => {
+        if (event.key !== "Tab") return;
+        const controls = Array.from(
+          event.currentTarget.querySelectorAll<HTMLElement>(
+            "textarea:not(:disabled), button:not(:disabled)",
+          ),
+        );
+        const first = controls[0];
+        const last = controls.at(-1);
+        const active = event.currentTarget.ownerDocument.activeElement;
+        if (event.shiftKey && active === first) {
+          event.preventDefault();
+          last?.focus({ preventScroll: true });
+        } else if (!event.shiftKey && active === last) {
+          event.preventDefault();
+          first?.focus({ preventScroll: true });
+        }
+      }}
     >
       <header className="ml-note-editor__header">
         <span className="ml-note-editor__selection ml-code">{selection.label}</span>
@@ -143,12 +163,6 @@ export function SelectionNoteEditor({
         aria-invalid={saveError ? "true" : undefined}
         aria-describedby={saveError ? errorId : undefined}
         onChange={(event) => setDraft(event.currentTarget.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault();
-            if (!mutationPending) onSave(draft);
-          }
-        }}
       />
 
       {saveError ? (
@@ -177,14 +191,12 @@ export function SelectionNoteEditor({
             type="button"
             onClick={() => onSave(draft)}
             disabled={mutationPending}
-            aria-keyshortcuts="Meta+Enter Control+Enter"
-            title="Save note (Command/Ctrl+Enter)"
           >
             {saving ? "Saving…" : "Done"}
           </button>
         </span>
       </footer>
-    </section>
+    </dialog>
   );
 }
 

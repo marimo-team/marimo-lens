@@ -122,6 +122,10 @@ export function useDocumentInteractions(options: {
           focusListTrigger: () => focusListTrigger(dom),
         });
         if (event.defaultPrevented || workflow.mode !== "armed") return;
+        if (event.key === "Tab") {
+          dispatch({ type: "disarm" });
+          return;
+        }
         const target = eventTargetElement(event, surface.document);
         const lensUi = target?.closest("[data-marimo-lens-ui]");
         if (lensUi && !target?.closest("[data-ml-select]")) return;
@@ -166,21 +170,24 @@ function navigateOutputs(
 ): void {
   const outputs = dom.listOutputCells();
   if (outputs.length === 0) return;
-  if (["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft", "Tab"].includes(event.key)) {
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     const current = outputs.findIndex((output) => output.id === workflow.activeOutputCellId);
-    const backwards =
-      event.key === "ArrowUp" ||
-      event.key === "ArrowLeft" ||
-      (event.key === "Tab" && event.shiftKey);
+    const backwards = event.key === "ArrowUp";
     const next =
       current < 0
         ? backwards
           ? outputs.length - 1
           : 0
         : (current + (backwards ? -1 : 1) + outputs.length) % outputs.length;
-    outputs[next]?.element.scrollIntoView({ block: "nearest" });
-    dispatch({ type: "focusOutput", outputCellId: outputs[next]?.id ?? null });
+    const output = outputs[next];
+    if (!output) return;
+    output.element.scrollIntoView({ block: "nearest" });
+    dispatch({ type: "focusOutput", outputCellId: output.id });
+    dispatch({
+      type: "announce",
+      message: outputAnnouncement(output.element, next, outputs.length),
+    });
   } else if (event.key === "Enter") {
     event.preventDefault();
     const output =
@@ -202,6 +209,24 @@ function navigateOutputs(
       detail,
     );
   }
+}
+
+function outputAnnouncement(output: HTMLElement, index: number, count: number): string {
+  const headingSelector = "h1, h2, h3, h4, h5, h6, [role='heading']";
+  const heading = output.matches(headingSelector)
+    ? output
+    : output.querySelector<HTMLElement>(headingSelector);
+  const labelled = output.matches("[aria-label]")
+    ? output
+    : output.querySelector<HTMLElement>("[aria-label]");
+  const label = normalizeLabel(heading?.textContent ?? labelled?.getAttribute("aria-label"));
+  return label ? `Output ${index + 1} of ${count}, ${label}.` : `Output ${index + 1} of ${count}.`;
+}
+
+function normalizeLabel(value: string | null | undefined): string {
+  const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
+  if (normalized.length <= 80) return normalized;
+  return `${normalized.slice(0, 79)}…`;
 }
 
 function eventTargetElement(event: Event, ownerDocument: Document): Element | null {

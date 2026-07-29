@@ -7,6 +7,7 @@ import type { UiState } from "@/selection/state";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import { useDocumentInteractions, type BeginSelection } from "@/selection/document-interactions";
 import { uiReducer } from "@/selection/state";
+import { LensStatus } from "@/ui/components/lens-status";
 
 let root: Root | null = null;
 
@@ -42,6 +43,71 @@ describe("document selection interactions", () => {
       { kind: "point", x: 0.5, y: 0.5 },
       expect.any(Element),
     );
+  });
+
+  test("leaves notebook keyboard behavior unchanged while Select is idle", () => {
+    const output = visibleOutput();
+    mount(vi.fn<BeginSelection>());
+    const event = new KeyboardEvent("keydown", {
+      key: "ArrowDown",
+      bubbles: true,
+      cancelable: true,
+    });
+
+    void act(() => output.dispatchEvent(event));
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(output.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  test("cycles outputs with vertical keys while keeping Select focused", () => {
+    const first = visibleOutput({ id: "cell-1", title: "Regional revenue", top: 0 });
+    const second = visibleOutput({ id: "cell-2", title: "Region", top: 220 });
+    const third = visibleOutput({ id: "cell-3", title: "All revenue", top: 440 });
+    mount(vi.fn<BeginSelection>());
+    const select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
+
+    act(() => {
+      select.focus();
+      select.click();
+    });
+
+    pressSelectKey("ArrowDown");
+    expect(first.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    expect(announcement()).toBe("Output 1 of 3, Regional revenue.");
+    expect(document.activeElement).toBe(select);
+
+    pressSelectKey("ArrowDown");
+    expect(second.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    expect(announcement()).toBe("Output 2 of 3, Region.");
+
+    pressSelectKey("ArrowUp");
+    expect(announcement()).toBe("Output 1 of 3, Regional revenue.");
+
+    pressSelectKey("ArrowUp");
+    expect(third.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
+    expect(announcement()).toBe("Output 3 of 3, All revenue.");
+  });
+
+  test("disarms Select on Tab and leaves native focus movement available", () => {
+    const output = visibleOutput();
+    mount(vi.fn<BeginSelection>());
+    const select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
+    act(() => {
+      select.focus();
+      select.click();
+    });
+    const event = new KeyboardEvent("keydown", {
+      key: "Tab",
+      bubbles: true,
+      cancelable: true,
+    });
+
+    void act(() => select.dispatchEvent(event));
+
+    expect(event.defaultPrevented).toBe(false);
+    expect(select.getAttribute("aria-pressed")).toBe("false");
+    expect(output.scrollIntoView).not.toHaveBeenCalled();
   });
 
   test("tracks a point gesture inside a same-origin iframe", () => {
@@ -165,14 +231,20 @@ function Harness({ beginSelection }: { beginSelection: BeginSelection }) {
     cancelAdjustment,
   });
   return (
-    <button
-      type="button"
-      data-marimo-lens-ui
-      data-ml-select
-      onClick={() => dispatch(ui.workflow.mode === "armed" ? { type: "disarm" } : { type: "arm" })}
-    >
-      Select
-    </button>
+    <>
+      <button
+        type="button"
+        data-marimo-lens-ui
+        data-ml-select
+        aria-pressed={ui.workflow.mode === "armed"}
+        onClick={() =>
+          dispatch(ui.workflow.mode === "armed" ? { type: "disarm" } : { type: "arm" })
+        }
+      >
+        Select
+      </button>
+      <LensStatus message={ui.announcement} />
+    </>
   );
 }
 
@@ -184,10 +256,23 @@ function disarm(): void {
   act(() => document.querySelector<HTMLButtonElement>("[data-ml-select]")?.click());
 }
 
-function visibleOutput(): HTMLElement {
+function visibleOutput({
+  id = "cell-1",
+  title,
+  top = 0,
+}: {
+  id?: string;
+  title?: string;
+  top?: number;
+} = {}): HTMLElement {
   const output = document.createElement("div");
-  output.id = "output-cell-1";
-  output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 200);
+  output.id = `output-${id}`;
+  output.getBoundingClientRect = () => new DOMRect(0, top, 400, 200);
+  if (title) {
+    const heading = document.createElement("h2");
+    heading.textContent = title;
+    output.appendChild(heading);
+  }
   Object.assign(output, {
     scrollIntoView: vi.fn(),
     setPointerCapture: vi.fn(),
@@ -200,6 +285,22 @@ function visibleOutput(): HTMLElement {
     value: () => [output],
   });
   return output;
+}
+
+function pressSelectKey(key: string): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", {
+    key,
+    bubbles: true,
+    cancelable: true,
+  });
+  void act(() =>
+    document.querySelector<HTMLButtonElement>("[data-ml-select]")?.dispatchEvent(event),
+  );
+  return event;
+}
+
+function announcement(): string {
+  return document.querySelector("[data-marimo-lens-status]")?.textContent ?? "";
 }
 
 function pointer(type: string, clientX: number, clientY: number, pointerId: number): PointerEvent {

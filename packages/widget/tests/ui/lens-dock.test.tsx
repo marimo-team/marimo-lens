@@ -60,6 +60,102 @@ describe("Lens dock", () => {
     expect(findButton("Open Lens, 2 open selections, 0 in history")).not.toBeNull();
   });
 
+  test("moves focus between the expanded and collapsed entry points", () => {
+    let frame: FrameRequestCallback | null = null;
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frame = callback;
+      return 1;
+    });
+    renderDock();
+
+    const collapse = findButton("Collapse Lens")!;
+    act(() => collapse.click());
+    act(() => frame?.(0));
+
+    const open = findButton("Open Lens")!;
+    expect(document.activeElement).toBe(open);
+    act(() => open.click());
+    act(() => frame?.(0));
+
+    expect(document.activeElement).toBe(document.querySelector("[data-ml-select]"));
+  });
+
+  test("enters selection mode globally with Option or Alt+L", () => {
+    const frames: FrameRequestCallback[] = [];
+    const onToggleArmed = vi.fn();
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      frames.push(callback);
+      return 1;
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root?.render(withNotebookDom(<VisibilityHarness onToggle={onToggleArmed} />)));
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+
+    const enter = pressLensShortcut(input);
+    expect(enter.defaultPrevented).toBe(true);
+    act(() => frames.shift()?.(0));
+    let select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
+    expect(document.activeElement).toBe(select);
+    expect(select.getAttribute("aria-pressed")).toBe("true");
+    expect(select.getAttribute("aria-keyshortcuts")).toContain("Alt+L");
+    expect(select.textContent).toContain("Click or drag");
+    expect(findButton("Open Lens")).toBeNull();
+    expect(onToggleArmed).toHaveBeenCalledOnce();
+
+    const repeat = pressLensShortcut(select, { repeat: true });
+    expect(repeat.defaultPrevented).toBe(true);
+    expect(onToggleArmed).toHaveBeenCalledOnce();
+
+    const refocus = pressLensShortcut(input);
+    expect(refocus.defaultPrevented).toBe(true);
+    act(() => frames.shift()?.(0));
+    select = document.querySelector<HTMLButtonElement>("[data-ml-select]")!;
+    expect(document.activeElement).toBe(select);
+    expect(select.getAttribute("aria-pressed")).toBe("true");
+    expect(onToggleArmed).toHaveBeenCalledOnce();
+
+    const collapseButton = findButton("Collapse Lens")!;
+    expect(collapseButton.getAttribute("aria-keyshortcuts")).toBeNull();
+    act(() => collapseButton.click());
+    act(() => frames.shift()?.(0));
+    expect(onToggleArmed).toHaveBeenCalledTimes(2);
+
+    const open = findButton("Open Lens")!;
+    expect(document.activeElement).toBe(open);
+    expect(open.getAttribute("aria-keyshortcuts")).toBe("Alt+L");
+    expect(open.title).toContain("Start selection");
+
+    pressLensShortcut(open);
+    act(() => frames.shift()?.(0));
+    expect(document.querySelector("[data-ml-select]")?.getAttribute("aria-pressed")).toBe("true");
+    expect(onToggleArmed).toHaveBeenCalledTimes(3);
+  });
+
+  test("keeps selection mode off when expansion is interaction locked", () => {
+    const onToggleArmed = vi.fn();
+    renderDock({ interactionLocked: true, onToggleArmed });
+
+    act(() => findButton("Collapse Lens")?.click());
+    act(() => findButton("Open Lens")?.click());
+
+    expect(onToggleArmed).not.toHaveBeenCalled();
+    expect(document.querySelector<HTMLButtonElement>("[data-ml-select]")?.disabled).toBe(true);
+  });
+
+  test("leaves other Alt combinations available to marimo", () => {
+    renderDock();
+
+    expect(pressKey(document.body, "l", { code: "KeyL" }).defaultPrevented).toBe(false);
+    expect(
+      pressKey(document.body, "L", { altKey: true, code: "KeyL", shiftKey: true }).defaultPrevented,
+    ).toBe(false);
+    expect(findButton("Collapse Lens")).not.toBeNull();
+  });
+
   test("opens the selection sheet and restores focus to its trigger", () => {
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       callback(0);
@@ -107,6 +203,51 @@ describe("Lens dock", () => {
     expect(onActivateSelection).not.toHaveBeenCalled();
     act(() => secondRow.click());
     expect(onActivateSelection).toHaveBeenCalledWith(second, "instant");
+  });
+
+  test("moves focus between open selection rows with list navigation keys", () => {
+    const first = selectionFixture();
+    const second = selectionFixture({ id: "selection-2", label: "S2" });
+    const third = selectionFixture({ id: "selection-3", label: "S3" });
+    const onActivateSelection = vi.fn();
+    renderDock({
+      selections: [first, second, third],
+      currentSelectionId: second.id,
+      listOpen: true,
+      onActivateSelection,
+    });
+
+    const rows = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-marimo-lens-selection-focus]"),
+    );
+    for (const row of rows) Object.assign(row, { scrollIntoView: vi.fn() });
+    expect(document.activeElement).toBe(rows[1]);
+
+    expect(pressKey(rows[1]!, "ArrowDown").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(rows[2]);
+    expect(pressKey(rows[2]!, "ArrowDown").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(rows[2]);
+    expect(pressKey(rows[2]!, "ArrowUp").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(rows[1]);
+    expect(pressKey(rows[1]!, "ArrowUp").defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(rows[0]);
+    expect(onActivateSelection).not.toHaveBeenCalled();
+  });
+
+  test("leaves Tab and row action keys to their native controls", () => {
+    renderDock({
+      selections: [selectionFixture()],
+      currentSelectionId: "selection-1",
+      listOpen: true,
+    });
+
+    const row = document.querySelector<HTMLButtonElement>("[data-marimo-lens-selection-focus]")!;
+    const edit = findButton("Edit note for S1")!;
+    expect(pressKey(row, "Tab").defaultPrevented).toBe(false);
+
+    act(() => edit.focus());
+    expect(pressKey(edit, "ArrowDown").defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(edit);
   });
 
   test("keeps the dock focused on selecting and opening selections", () => {
@@ -388,6 +529,20 @@ function DockHarness() {
   );
 }
 
+function VisibilityHarness({ onToggle = () => {} }: { onToggle?: () => void }) {
+  const [armed, setArmed] = useState(false);
+  return (
+    <LensDock
+      {...defaultProps()}
+      armed={armed}
+      onToggleArmed={() => {
+        onToggle();
+        setArmed((active) => !active);
+      }}
+    />
+  );
+}
+
 function TabHarness() {
   const [sheetTab, setSheetTab] = useState<"open" | "history">("open");
   return (
@@ -472,4 +627,30 @@ function findButton(label: string): HTMLButtonElement | null {
         button.textContent?.trim() === label || button.getAttribute("aria-label") === label,
     ) ?? null
   );
+}
+
+function pressKey(
+  target: HTMLElement,
+  key: string,
+  init: Omit<KeyboardEventInit, "bubbles" | "cancelable" | "key"> = {},
+): KeyboardEvent {
+  const event = new KeyboardEvent("keydown", {
+    key,
+    bubbles: true,
+    cancelable: true,
+    ...init,
+  });
+  void act(() => target.dispatchEvent(event));
+  return event;
+}
+
+function pressLensShortcut(
+  target: HTMLElement,
+  init: Omit<KeyboardEventInit, "altKey" | "bubbles" | "cancelable" | "code" | "key"> = {},
+): KeyboardEvent {
+  return pressKey(target, "¬", {
+    altKey: true,
+    code: "KeyL",
+    ...init,
+  });
 }

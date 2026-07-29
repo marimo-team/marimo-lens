@@ -1,3 +1,5 @@
+import type { KeyboardEvent } from "react";
+
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
 export function focusSelectionOrDock(dom: NotebookDomAdapter, selectionId: string): void {
@@ -28,6 +30,24 @@ export function focusDock(dom: NotebookDomAdapter): void {
 
 export function focusListTrigger(dom: NotebookDomAdapter): void {
   focusSelector(dom, "[data-ml-list]");
+}
+
+export function moveSelectionRowFocus(event: KeyboardEvent<HTMLButtonElement>): void {
+  if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+  const panel = event.currentTarget.closest<HTMLElement>('[role="tabpanel"]');
+  if (!panel) return;
+  const rows = Array.from(
+    panel.querySelectorAll<HTMLButtonElement>("[data-marimo-lens-selection-focus]:not(:disabled)"),
+  );
+  const current = rows.indexOf(event.currentTarget);
+  if (current < 0) return;
+  const next = Math.max(0, Math.min(rows.length - 1, current + (event.key === "ArrowUp" ? -1 : 1)));
+
+  event.preventDefault();
+  const row = rows[next];
+  if (!row || row === event.currentTarget) return;
+  row.focus({ preventScroll: true });
+  row.scrollIntoView({ block: "nearest" });
 }
 
 function focusSelector(dom: NotebookDomAdapter, selector: string): void {

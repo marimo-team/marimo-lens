@@ -73,6 +73,37 @@ describe("selection note editor", () => {
     expect(textarea.selectionStart).toBe(selection.note.length);
     expect(editor.querySelector('button[title="View image"]')).toBeNull();
     expect(editor.querySelector('[aria-label="Point selection"]')).not.toBeNull();
+    expect(editor.tagName).toBe("DIALOG");
+    expect(editor.getAttribute("aria-modal")).toBe("true");
+  });
+
+  test("keeps Tab within the note editor", () => {
+    renderEditor(selectionFixture(), () => {});
+    const editor = document.querySelector<HTMLElement>("[data-marimo-lens-note-editor]")!;
+    const textarea = editor.querySelector<HTMLTextAreaElement>("textarea")!;
+    const done = Array.from(editor.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Done",
+    )!;
+
+    act(() => {
+      done.focus();
+      done.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true }),
+      );
+    });
+    expect(document.activeElement).toBe(textarea);
+
+    act(() => {
+      textarea.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Tab",
+          shiftKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+    expect(document.activeElement).toBe(done);
   });
 
   test("identifies a region selection in the metadata row", () => {

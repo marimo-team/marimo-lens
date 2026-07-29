@@ -7,6 +7,7 @@ import type { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loa
 
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
 import { SnapshotPreviewButton } from "@/selection/components/selection-snapshot-preview";
+import { moveSelectionRowFocus } from "@/ui/focus";
 
 type SelectionListProps = {
   selections: Selection[];
@@ -58,6 +59,7 @@ export function SelectionList({
                 data-marimo-lens-selection-focus={selection.id}
                 type="button"
                 disabled={busy}
+                onKeyDown={moveSelectionRowFocus}
                 onClick={(event) =>
                   onActivate(selection, event.detail === 0 ? "instant" : "smooth")
                 }

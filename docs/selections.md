@@ -224,9 +224,18 @@ pass.
 
 ## Keyboard
 
-Keyboard users can move between eligible outputs and press Enter to create a
-centered point. Escape cancels an armed gesture. Lens follows the browser's
-reduced-motion preference.
+Tab reaches the Lens dock through the notebook's normal focus order. Enter arms
+Select. While armed, Up and Down move between eligible outputs, Enter creates a
+centered point, and Escape cancels. Tab cancels Select and continues through the
+dock.
+
+The selection sheet focuses the current selection when it opens. Up and Down
+move focus between open selections, Enter activates the focused selection, and
+Escape closes the sheet and returns focus to its trigger. Other controls follow
+the browser's normal Tab order.
+
+The note editor keeps focus within its controls until Done or Escape closes it.
+Lens follows the browser's reduced-motion preference.
 
 ## Multiple Lens instances
 

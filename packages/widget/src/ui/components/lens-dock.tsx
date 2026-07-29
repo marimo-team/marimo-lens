@@ -1,7 +1,15 @@
 import type { AddressedSelection, Selection, SelectionResolvedEvent } from "@marimo-lens/protocol";
 
 import { ChevronDown, List, MousePointer2 } from "lucide-react";
-import { Fragment, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import type { RevealMotion } from "@/selection/reveal";
 import type { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
@@ -11,6 +19,9 @@ import { useNotebookDom } from "@/notebook/notebook-dom";
 import { SelectionSheet } from "@/selection/components/selection-sheet";
 import { ResolutionReceipt } from "@/transient/resolution-receipt";
 import { LensLogo } from "@/ui/components/lens-logo";
+
+const LENS_SELECTION_SHORTCUT = "Alt+L";
+const LENS_SELECTION_SHORTCUT_LABEL = "Option/Alt+L";
 
 type LensDockProps = {
   selections: Selection[];
@@ -73,6 +84,7 @@ export function LensDock({
 }: LensDockProps) {
   const dom = useNotebookDom();
   const dockRef = useRef<HTMLElement>(null);
+  const selectRef = useRef<HTMLButtonElement>(null);
   const tabRef = useRef<HTMLButtonElement>(null);
   const listTriggerRef = useRef<HTMLButtonElement>(null);
   const sheetFocusRef = useRef({ open: false, historyRevision: null as number | null });
@@ -98,8 +110,12 @@ export function LensDock({
               `[data-marimo-lens-history-revision="${focusedHistoryRevision}"] .ml-history-list__reopen`,
             ) ?? dock?.querySelector<HTMLElement>("#marimo-lens-history-tab"))
         : (dock?.querySelector<HTMLElement>(
-            '[data-marimo-lens-selection-list] [aria-current="true"], [data-marimo-lens-selection-list] .ml-selection-list__summary',
-          ) ?? dock?.querySelector<HTMLElement>("#marimo-lens-open-tab"));
+            '[data-marimo-lens-selection-list] [aria-current="true"]',
+          ) ??
+          dock?.querySelector<HTMLElement>(
+            "[data-marimo-lens-selection-list] .ml-selection-list__summary",
+          ) ??
+          dock?.querySelector<HTMLElement>("#marimo-lens-open-tab"));
     target?.focus();
   }, [expanded, focusedHistoryRevision, listOpen, sheetTab]);
 
@@ -108,12 +124,31 @@ export function LensDock({
     dom.window.requestAnimationFrame(() => listTriggerRef.current?.focus());
   };
 
-  const collapse = () => {
+  const collapse = useCallback(() => {
     if (listOpen) onToggleList();
     if (armed) onToggleArmed();
     setExpanded(false);
     dom.window.requestAnimationFrame(() => tabRef.current?.focus());
-  };
+  }, [armed, dom, listOpen, onToggleArmed, onToggleList]);
+
+  const enterSelectionMode = useCallback(() => {
+    setExpanded(true);
+    if (!armed && !interactionLocked) onToggleArmed();
+    dom.window.requestAnimationFrame(() => selectRef.current?.focus());
+  }, [armed, dom, interactionLocked, onToggleArmed]);
+
+  useEffect(() => {
+    const enterSelection = (event: KeyboardEvent) => {
+      if (!isLensSelectionShortcut(event)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.repeat) return;
+      enterSelectionMode();
+    };
+
+    dom.document.addEventListener("keydown", enterSelection, true);
+    return () => dom.document.removeEventListener("keydown", enterSelection, true);
+  }, [dom, enterSelectionMode]);
 
   const openHistory = (event: SelectionResolvedEvent) => {
     setExpanded(true);
@@ -181,13 +216,24 @@ export function LensDock({
       {expanded ? (
         <div className="ml-dockbar" data-armed={armed ? "true" : "false"}>
           <button
+            ref={selectRef}
             className="ml-dockbar__action ml-dockbar__select"
             type="button"
             aria-pressed={armed}
+            aria-keyshortcuts={
+              armed
+                ? `${LENS_SELECTION_SHORTCUT} ArrowUp ArrowDown Enter Escape`
+                : LENS_SELECTION_SHORTCUT
+            }
             data-ml-select
             disabled={interactionLocked}
             onClick={onToggleArmed}
             aria-label={armed ? "Cancel selection mode" : "Select an output"}
+            title={
+              armed
+                ? "Selection mode active (Escape to exit)"
+                : `Select an output (${LENS_SELECTION_SHORTCUT_LABEL})`
+            }
           >
             <MousePointer2 size={15} aria-hidden="true" />
             <span>{armed ? "Click or drag" : "Select"}</span>
@@ -232,13 +278,14 @@ export function LensDock({
           className="ml-dock-tab"
           type="button"
           data-ml-dock-tab
-          onClick={() => setExpanded(true)}
+          onClick={enterSelectionMode}
+          aria-keyshortcuts={LENS_SELECTION_SHORTCUT}
           aria-label={
             hasSelectionSurface
               ? `Open Lens, ${selections.length} open ${selections.length === 1 ? "selection" : "selections"}, ${history.length} in history`
               : "Open Lens"
           }
-          title="Open Lens"
+          title={`Start selection (${LENS_SELECTION_SHORTCUT_LABEL})`}
         >
           <LensLogo className="ml-dock-tab__logo" />
           {selections.length > 0 ? (
@@ -249,5 +296,16 @@ export function LensDock({
         </button>
       )}
     </aside>
+  );
+}
+
+function isLensSelectionShortcut(event: KeyboardEvent): boolean {
+  return (
+    !event.isComposing &&
+    event.altKey &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.shiftKey &&
+    event.code === "KeyL"
   );
 }
