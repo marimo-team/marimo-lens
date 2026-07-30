@@ -6,6 +6,7 @@ import {
   iframeAtPoint,
   observeInteractionSurfaces,
   type InteractionSurface,
+  type InteractionSurfaceOptions,
 } from "@/notebook/interaction-documents";
 import {
   deepestElementAtPoint,
@@ -63,10 +64,10 @@ export class NotebookDomAdapter {
   }
 
   observeInteractionSurfaces(
-    armed: boolean,
+    options: InteractionSurfaceOptions,
     attach: (surface: InteractionSurface) => () => void,
   ): () => void {
-    return observeInteractionSurfaces(this.document, armed, attach);
+    return observeInteractionSurfaces(this.document, options, attach);
   }
 
   afterNextPaint(signal: AbortSignal): Promise<void> {

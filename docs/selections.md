@@ -1,8 +1,8 @@
 # Selections
 
-A Lens selection marks one rendered output cell. A point or rectangle narrows
-attention within that output, and an optional note records what you want an
-agent to inspect or change.
+A selection points an agent to one part of a rendered notebook output. Click to
+mark a point, drag to mark a region, and add a note when the mark needs more
+context.
 
 ```marimo-config
 requires-python = ">=3.11"
@@ -12,16 +12,19 @@ dependencies = [
 ]
 ```
 
-## Try both gestures
+## Create a selection
 
-Create one point and one region on the same chart. The status updates from the
-selections stored by Lens.
+Press **Select**, or use `Option+L` on macOS and `Alt+L` elsewhere. Click once
+for a point or drag for a region. Lens exits selection mode after it creates the
+selection.
+
+Try both gestures on the chart:
 
 <div class="lens-doc-demo">
 
 <div class="lens-doc-demo-steps lens-doc-demo-steps-two" aria-label="Create point and region selections">
-  <span><strong>1</strong> Press Select, then click a bar</span>
-  <span><strong>2</strong> Press Select, then drag across bars</span>
+  <span><strong>1</strong> Press <strong>Select</strong>, then click a bar</span>
+  <span><strong>2</strong> Press <strong>Select</strong>, then drag across bars</span>
 </div>
 
 ```python marimo output=false
@@ -123,15 +126,17 @@ if _selection_demo_has_point and _selection_demo_has_region:
 elif _selection_demo_has_point:
     _selection_demo_state = "point"
     _selection_demo_title = "Point added. Now create a region."
-    _selection_demo_body = "Press Select again, then drag across two or more bars."
+    _selection_demo_body = (
+        "Press <strong>Select</strong> again, then drag across two or more bars."
+    )
 elif _selection_demo_has_region:
     _selection_demo_state = "region"
     _selection_demo_title = "Region added. Now create a point."
-    _selection_demo_body = "Press Select again, then click one bar."
+    _selection_demo_body = "Press <strong>Select</strong> again, then click one bar."
 else:
     _selection_demo_state = "empty"
     _selection_demo_title = "Create a point"
-    _selection_demo_body = "Press Select, then click one bar."
+    _selection_demo_body = "Press <strong>Select</strong>, then click one bar."
 
 _selection_demo_point_status = "Added" if _selection_demo_has_point else "Not yet"
 _selection_demo_region_status = "Added" if _selection_demo_has_region else "Not yet"
@@ -165,68 +170,73 @@ mo.Html(
 
 </div>
 
-Releasing the pointer creates the selection and returns Lens to rest. Add an
-optional note in the selection sheet. Moving or resizing a selection keeps its
-stable `S<n>` label and starts a fresh annotated image capture.
+Each new selection appears in **Open** with a stable `S<n>` label. Use its row
+to add a note or inspect its image. Move or resize the marker on the output to
+refine its point or region.
 
-## Selection focus
+## Work with open selections
 
-Lens keeps one open selection current. New selections become current
-immediately. Activating a row, editing its note, moving it, or resizing it also
-makes it current.
+Open **Selections** to review your requests. Lens focuses the current selection
+in the **Open** tab. That selection is the likely target when you ask an agent
+to change "this" or inspect "here."
 
-Press **Select** again to add another point or region. Every open selection
-keeps its own stable label, note, producing cell, and annotated image.
+Choose another row to make it current. Editing its note, moving it, or resizing
+it also makes it current. If the current selection leaves **Open**, Lens focuses
+the most recently active selection that remains.
 
-The current selection is the likely focus when a request refers to "this" or
-"here." Select another row to change that focus before asking the agent.
+Open the note editor from a row, describe what the agent should inspect or
+change, then press **Done**.
 
-Several selections can describe one change. An agent can resolve them together
-after one verified result addresses every supplied selection. When those
-selections share an output cell, a current cell image can show all of their
-marks together.
+Press **Select** again to add another point or region. Several selections can
+describe one request, and an agent can address them together after one verified
+change.
 
-When the current selection is deleted or addressed, Lens promotes the most
-recently active open selection. Stable labels are never reused.
+Lens keeps each open selection connected as the notebook changes:
 
-## Output changes
+| Selection detail | What Lens keeps                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Label and note   | The `S<n>` label stays stable and is never reused.                                                                                         |
+| Output cell      | The exact marimo output cell ID reconnects after a rerender. If the output disappears temporarily, the selection remains open.             |
+| Annotated image  | Moving or resizing starts a fresh PNG capture. The previous image remains available and is marked outdated until the new capture succeeds. |
 
-Each selection stores the exact marimo output cell ID.
+Cross-origin images and external iframes can block image capture. The selection,
+cell reference, and note remain available.
 
-When an output rerenders, Lens reconnects the selection to the current output.
-When the output temporarily disappears, the selection, note, and annotated image
-remain available. Returning the same cell ID reconnects it to the notebook.
+## Finish or reopen a selection
 
-## Annotated images
+After completing the request, an agent marks the selection **Addressed**. Lens
+moves it from **Open** to **History** with its cell, note, point or region,
+timestamps, and optional completion summary.
 
-Lens attempts to capture an annotated PNG for each selection. An agent can
-inspect the PNG when pixels, layout, or a chart region affects the task.
+Selections completed by the same verified change can move together and share
+one completion summary.
 
-Moving or resizing a selection marks its current PNG as outdated until the
-replacement capture succeeds. A failed replacement keeps the prior image and
-labels it outdated.
-
-Cross-origin images and external iframes can block browser capture. The output
-cell reference and note remain available when image capture fails.
-
-## History
-
-An agent can mark a selection **Addressed** after completing the request. The
-open selection moves to **History** with its cell, note, point or region,
-timestamps, and optional completion summary. Lens releases its annotated PNG.
-
-Several selections completed by the same verified change can move to History
-together. They share one completion summary and resolution revision.
-
-Reopening a history item restores it as the current selection and starts a
-fresh annotated image capture. The History item remains available for the next
-pass.
+To continue a request, open **History** and press **Reopen**. Lens restores it
+as the current selection and captures a fresh annotated image from the current
+output.
 
 ## Keyboard
 
-Keyboard users can move between eligible outputs and press Enter to create a
-centered point. Escape cancels an armed gesture. Lens follows the browser's
-reduced-motion preference.
+Use these keys while **Select** mode is active:
+
+| Keys                                     | Result                                                                            |
+| ---------------------------------------- | --------------------------------------------------------------------------------- |
+| `Option+L` on macOS or `Alt+L` elsewhere | Start or refocus **Select** mode from the notebook or a same-origin output frame. |
+| `↑` / `↓`                                | Move between selectable outputs.                                                  |
+| `Enter`                                  | Create a point in the center of the focused output.                               |
+| `Tab`                                    | Exit **Select** mode and continue to the next dock control.                       |
+| `Escape`                                 | Exit **Select** mode and return focus to **Select**.                              |
+
+Open **Selections** for row, tab, and note controls:
+
+| Keys                                 | Result                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------- |
+| `↑` / `↓` on an open selection       | Move focus between selection rows.                                        |
+| `Enter` on an open selection         | Make the focused selection current.                                       |
+| `←` / `→` on **Open** or **History** | Switch tabs when the other tab contains items.                            |
+| `Tab` / `Shift+Tab`                  | Move through row actions. In the note editor, cycle through its controls. |
+| `Escape` in **Selections**           | Close the sheet and return focus to **Selections**.                       |
+| `Escape` in the note editor          | Close the editor and return focus to the selection marker or Lens dock.   |
 
 ## Multiple Lens instances
 

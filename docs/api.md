@@ -81,7 +81,7 @@ control calls the same Lens API that a notebook agent uses.
 <div class="lens-doc-demo">
 
 <div class="lens-doc-demo-steps" aria-label="Try the Lens API in four steps">
-  <span><strong>1</strong> Press Select</span>
+  <span><strong>1</strong> Press <strong>Select</strong></span>
   <span><strong>2</strong> Mark the chart</span>
   <span><strong>3</strong> Read and mark activity</span>
   <span><strong>4</strong> Complete the request</span>
@@ -326,7 +326,10 @@ _api_demo_kind = (
 
 if _api_demo_kind == "empty":
     _api_demo_title = "Select part of the chart"
-    _api_demo_body = "Press Select in the Lens dock, then click a bar or drag a region."
+    _api_demo_body = (
+        "Press <strong>Select</strong> in the Lens dock, "
+        "then click a bar or drag a region."
+    )
 elif _api_demo_kind == "missing":
     _api_demo_title = "Create a selection first"
     _api_demo_body = "Mark part of the chart before calling a method on the request."

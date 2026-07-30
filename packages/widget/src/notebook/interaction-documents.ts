@@ -7,12 +7,17 @@ export type InteractionSurface = {
   frame: HTMLIFrameElement | null;
 };
 
+export type InteractionSurfaceOptions = {
+  includeOutputFrames: boolean;
+  lockSelectionGestures: boolean;
+};
+
 export function observeInteractionSurfaces(
   ownerDocument: Document,
-  armed: boolean,
+  options: InteractionSurfaceOptions,
   attach: (surface: InteractionSurface) => () => void,
 ): () => void {
-  if (!armed) return attach({ document: ownerDocument, frame: null });
+  if (!options.includeOutputFrames) return attach({ document: ownerDocument, frame: null });
 
   const attached = new Map<Document, () => void>();
   const boundaries = new Set<HTMLIFrameElement>();
@@ -39,6 +44,15 @@ export function observeInteractionSurfaces(
     observer.observe(root, { childList: true, subtree: true });
   }
 
+  function syncObservedRoots(currentRoots: Set<Node>) {
+    const removed = [...observedRoots].some((root) => !currentRoots.has(root));
+    if (removed) {
+      observer.disconnect();
+      observedRoots.clear();
+    }
+    for (const root of currentRoots) observeRoot(root);
+  }
+
   function refresh() {
     if (disposed) return;
     const scan = scanOpenTree(ownerDocument);
@@ -55,14 +69,16 @@ export function observeInteractionSurfaces(
     }
 
     const currentFrames = new Set(frames);
+    const boundaryFrames = options.lockSelectionGestures
+      ? frames.filter((frame) => !frameDocument(frame))
+      : [];
+    const currentBoundaries = new Set(boundaryFrames);
     for (const frame of boundaries) {
-      if (!currentFrames.has(frame) || frameDocument(frame)) {
-        delete frame.dataset.marimoLensPointerBoundary;
-        boundaries.delete(frame);
-      }
+      if (currentBoundaries.has(frame)) continue;
+      delete frame.dataset.marimoLensPointerBoundary;
+      boundaries.delete(frame);
     }
-    for (const frame of frames) {
-      if (frameDocument(frame)) continue;
+    for (const frame of boundaryFrames) {
       frame.dataset.marimoLensPointerBoundary = "true";
       boundaries.add(frame);
     }
@@ -79,16 +95,17 @@ export function observeInteractionSurfaces(
       frameLoadListeners.add(frame);
     }
 
-    const touchTargets = new Set(scan.outputs);
-    for (const surface of surfaces) {
-      if (surface.frame) touchTargets.add(surface.document.documentElement);
+    const touchTargets = options.lockSelectionGestures
+      ? new Set<HTMLElement>(scan.outputs)
+      : new Set<HTMLElement>();
+    if (options.lockSelectionGestures) {
+      for (const surface of surfaces) {
+        if (surface.frame) touchTargets.add(surface.document.documentElement);
+      }
     }
     syncInlineStyleLocks(touchActionLocks, touchTargets, "touch-action", "none");
 
-    observeRoot(ownerDocument.body);
-    for (const shadow of scan.shadows) {
-      observeRoot(shadow);
-    }
+    syncObservedRoots(new Set<Node>([ownerDocument.body, ...scan.shadows]));
   }
 
   refresh();

@@ -165,7 +165,7 @@ _overview_current = _overview_context.current
 if _overview_current is None:
     _overview_state = "empty"
     _overview_title = "Mark the chart"
-    _overview_body = "Press Select, mark one bar, and add a note."
+    _overview_body = "Press <strong>Select</strong>, mark one bar, and add a note."
 else:
     _overview_state = "ready"
     _overview_id = str(_overview_current.get("id", ""))

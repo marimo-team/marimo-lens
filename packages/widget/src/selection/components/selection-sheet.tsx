@@ -54,17 +54,8 @@ export function SelectionSheet({
   snapshotLoader,
 }: SelectionSheetProps) {
   const changeTabFromKeyboard = (event: KeyboardEvent<HTMLButtonElement>) => {
-    const nextTab =
-      event.key === "Home"
-        ? "open"
-        : event.key === "End"
-          ? "history"
-          : event.key === "ArrowLeft" || event.key === "ArrowRight"
-            ? event.currentTarget.id === "marimo-lens-open-tab"
-              ? "history"
-              : "open"
-            : null;
-    if (!nextTab) return;
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    const nextTab = event.currentTarget.id === "marimo-lens-open-tab" ? "history" : "open";
     event.preventDefault();
     if (
       (nextTab === "open" && selections.length === 0) ||

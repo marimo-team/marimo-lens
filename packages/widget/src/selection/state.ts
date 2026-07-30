@@ -52,7 +52,7 @@ export type UiAction =
       point: ViewportPoint;
     }
   | { type: "moveDrag"; pointerId: number; point: ViewportPoint }
-  | { type: "selectionQueued"; pending: PendingSelection }
+  | { type: "selectionQueued"; pending: PendingSelection; motion?: SelectionMotion }
   | { type: "selectionCommitted"; selectionId: string; label: string }
   | { type: "selectionFailed"; selectionId: string; message: string }
   | { type: "selectionActivated"; selectionId: string }
@@ -139,7 +139,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
         workflow: {
           mode: "editingNote",
           selectionId: action.pending.selection.id,
-          motion: "animate",
+          motion: action.motion ?? "animate",
         },
         pendingSelections: [...state.pendingSelections, action.pending],
         optimisticCurrentSelectionId: action.pending.selection.id,

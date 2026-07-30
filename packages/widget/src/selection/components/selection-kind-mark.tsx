@@ -3,14 +3,16 @@ import type { SelectionAnchor } from "@marimo-lens/protocol";
 export function SelectionKindMark({ kind }: { kind: SelectionAnchor["kind"] }) {
   const label = kind === "point" ? "Point selection" : "Region selection";
   return (
-    <span className="ml-selection-kind-mark" data-kind={kind} aria-label={label} title={label}>
+    <span className="ml-selection-kind-mark" data-kind={kind} title={label}>
       {kind === "point" ? (
-        <svg viewBox="0 0 14 14" aria-hidden="true">
+        <svg viewBox="0 0 14 14">
+          <title>{label}</title>
           <circle className="ml-selection-kind-mark__boundary" cx="7" cy="7" r="4.25" />
           <circle className="ml-selection-kind-mark__point" cx="7" cy="7" r="2" />
         </svg>
       ) : (
-        <svg viewBox="0 0 14 14" aria-hidden="true">
+        <svg viewBox="0 0 14 14">
+          <title>{label}</title>
           <rect
             className="ml-selection-kind-mark__region-fill"
             x="2"

@@ -68,7 +68,7 @@ This creates a dock that appears at the bottom of your notebook.
 <div class="lens-doc-demo">
 
 <div class="lens-doc-demo-steps" aria-label="Create a Lens request in four steps">
-  <span><strong>1</strong> Press Select</span>
+  <span><strong>1</strong> Press <strong>Select</strong></span>
   <span><strong>2</strong> Click a value</span>
   <span><strong>3</strong> Add a note</span>
   <span><strong>4</strong> Review the request</span>
