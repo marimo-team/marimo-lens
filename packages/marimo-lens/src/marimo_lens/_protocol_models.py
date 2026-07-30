@@ -36,7 +36,7 @@ MAX_DOM_FIELD = 240
 MAX_ERROR = 500
 MAX_ATTENTION_MESSAGE = 240
 MAX_REVEAL_MESSAGE = 1_000
-MAX_ACTIVITY_LABEL = 40
+MAX_ATTENTION_LABEL = 40
 MAX_REVEAL_DURATION_MS = 60_000
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
@@ -153,13 +153,13 @@ OptionalRevealText: TypeAlias = Annotated[
     RevealText | None,
     BeforeValidator(_optional_text),
 ]
-ActivityLabel: TypeAlias = Annotated[
+AttentionLabel: TypeAlias = Annotated[
     UnicodeText,
     AfterValidator(_nonblank),
-    AfterValidator(partial(_bounded_utf16, maximum=MAX_ACTIVITY_LABEL)),
+    AfterValidator(partial(_bounded_utf16, maximum=MAX_ATTENTION_LABEL)),
 ]
-OptionalActivityLabel: TypeAlias = Annotated[
-    ActivityLabel | None,
+OptionalAttentionLabel: TypeAlias = Annotated[
+    AttentionLabel | None,
     BeforeValidator(_optional_text),
 ]
 TimestampText: TypeAlias = Annotated[
@@ -565,8 +565,9 @@ CaptureBrowserMessage: TypeAlias = Annotated[
 
 class CellRevealPayload(TransportModel):
     cell_id: CellId
+    duration_ms: RevealDuration
+    label: AttentionLabel | None = None
     message: RevealText | None = None
-    duration_ms: RevealDuration | None = None
 
 
 class CellRevealEvent(TransportModel):
@@ -579,7 +580,7 @@ class CellRevealEvent(TransportModel):
 
 class CellActivityPayload(TransportModel):
     cell_id: CellId
-    label: ActivityLabel | None = None
+    label: AttentionLabel | None = None
     message: AttentionText | None = None
 
 
@@ -666,7 +667,7 @@ NONNEGATIVE_SAFE_INTEGER_ADAPTER = TypeAdapter(NonNegativeSafeInteger)
 SELECTION_LABEL_ADAPTER = TypeAdapter(SelectionLabel)
 OPTIONAL_ATTENTION_TEXT_ADAPTER = TypeAdapter(OptionalAttentionText)
 OPTIONAL_REVEAL_TEXT_ADAPTER = TypeAdapter(OptionalRevealText)
-OPTIONAL_ACTIVITY_LABEL_ADAPTER = TypeAdapter(OptionalActivityLabel)
+OPTIONAL_ATTENTION_LABEL_ADAPTER = TypeAdapter(OptionalAttentionLabel)
 REVEAL_DURATION_ADAPTER = TypeAdapter(RevealDuration)
 
 

@@ -485,14 +485,16 @@ if _verified_request is not None:
             message=_verification_message,
         )
         await asyncio.sleep(5)
+        lens.reveal(
+            _verified_cell_id,
+            duration_ms=10_000,
+            label="Updated chart",
+            message=_verified_summary,
+        )
         lens.resolve(
             _verified_selection_ids,
             expected_revision=int(_verified_request["revision"]),
             summary=_verified_summary,
-        )
-        lens.reveal(
-            _verified_cell_id,
-            message=_verified_summary,
         )
         set_response_completion(
             {

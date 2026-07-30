@@ -27,9 +27,10 @@ marimo code mode.
 
 Notebook users select an output and ask their agent to act. The agent owns the
 code-mode connection, discovers the mounted Lens, reads the request, reports
-activity, changes and runs cells, verifies the result, then resolves and
-reveals it. `marimo._code_mode` stays inside the agent integration. Notebook
-cells mount Lens through the [public `Lens` API](#lens).
+activity, changes and runs cells, verifies the result, then reveals it and
+resolves the addressed selections. `marimo._code_mode` stays inside the agent
+integration. Notebook cells mount Lens through the
+[public `Lens` API](#lens).
 
 A compatible agent performs the handoff inside its live-kernel execution path:
 
@@ -65,13 +66,14 @@ The handle exposes the Lens workflow through revision-checked methods:
 | `start_cell_image(cell_id, *, expected_revision)`            | Starts one marked full-cell capture and returns its request ID |
 | `read_cell_image(request_id)`                                | Reads pending state or consumes one terminal `CellImageResult` |
 | `activity(cell_id, *, label=None, message=None)`             | Shows the current agent work target                            |
+| `reveal(cell_id, *, duration_ms, label=None, message=None)`  | Brings the primary result into view                            |
 | `resolve(selection_ids, *, expected_revision, summary=None)` | Moves verified selections to History                           |
-| `reveal(cell_id, *, message=None, duration_ms=None)`         | Brings the primary result into view                            |
 
-`AgentImage.transfer()` and `CellImageResult.transfer()` return marked records
-for direct piping to the Lens Agent Skill's `materialize-image.sh`. The client
-script validates the PNG and returns a temporary local path. Remove its
-`imageDir` after the final image read.
+An `AgentImage` returned by `selection_image()` or `CellImageResult.image`
+contains validated PNG bytes in `data`. Write those bytes to a private
+temporary file in the active kernel, then open that path with the agent's image
+reader. The kernel and image reader must share a filesystem. Remove the file
+after its final read.
 
 ## Try the methods
 
@@ -111,7 +113,7 @@ api_activity_button = mo.ui.run_button(
 api_complete_button = mo.ui.run_button(
     label=(
         "<span style='display:block;padding:0.3rem 0.75rem;"
-        "line-height:1.25rem'>resolve() + reveal()</span>"
+        "line-height:1.25rem'>reveal() + resolve()</span>"
     ),
 )
 ```
@@ -286,14 +288,16 @@ if api_complete_button.value:
                     "walkthrough and returned the result for review."
                 )
             )
+            api_demo_lens.reveal(
+                _complete_cell_id,
+                duration_ms=10_000,
+                label="API walkthrough",
+                message=_complete_summary,
+            )
             _complete_revision = api_demo_lens.resolve(
                 _complete_ids,
                 expected_revision=_complete_context.revision,
                 summary=_complete_summary,
-            )
-            api_demo_lens.reveal(
-                _complete_cell_id,
-                message=_complete_summary,
             )
             set_api_demo_result(
                 {
@@ -436,7 +440,7 @@ created before closing remain readable.
 
 Validates that `cell_id` belongs to the current marimo graph, then sends a
 best-effort browser event. When the displayed Lens receives it, the cell is
-marked until another activity call, a reveal, or Lens teardown.
+marked until another activity call, a reveal, a resolution, or Lens teardown.
 
 ```python
 context = lens.context()
@@ -457,11 +461,11 @@ updates the label and message or marks a different cell. `label` defaults to
 Expected `LensError.code` values are `runtime_unavailable`, `cell_not_found`,
 and `lens_closed`.
 
-### `lens.reveal(cell_id, *, message=None, duration_ms=None) -> None`
+### `lens.reveal(cell_id, *, duration_ms, label=None, message=None) -> None`
 
 Validates `cell_id`, then sends a best-effort browser event. When the displayed
 Lens receives it, the notebook scrolls once to the rendered cell and highlights
-it for `duration_ms`. The default hold is 2,200 milliseconds.
+it for `duration_ms`.
 
 ```python
 context = lens.context()
@@ -470,15 +474,21 @@ selection = context.current
 if selection is not None and selection["cellStatus"] == "available":
     lens.reveal(
         str(selection["outputCellId"]),
+        duration_ms=10_000,
+        label="Updated chart",
         message="Updated the aggregation and verified the chart.",
-        duration_ms=8_000,
     )
 ```
 
-`duration_ms` accepts an integer from 1 through 60,000. Reveal messages accept
-up to 1,000 UTF-16 code units and wrap below the status and cell ID. Reveal
-preserves keyboard focus and selection state. A second reveal replaces the
-current highlight.
+`duration_ms` accepts an integer from 1 through 60,000. Choose a hold that lets
+the user orient to the highlighted cell and read the message comfortably.
+Longer or denser messages need more time. `label` accepts up to 40 UTF-16 code
+units and appears as the reveal heading.
+
+Reveal messages accept up to 1,000 UTF-16 code units and wrap below the status
+and cell ID. Reveal preserves keyboard focus and selection state. A second
+reveal replaces the current highlight. Wait for `duration_ms` before revealing
+another cell or resolving the selections addressed by the result.
 
 Expected `LensError.code` values are `runtime_unavailable`, `cell_not_found`,
 and `lens_closed`.
@@ -515,7 +525,8 @@ after `LensError(code="revision_conflict")`.
 
 The state change commits before Lens sends the best-effort **Addressed**
 presentation event. A browser delivery failure does not roll back the completed
-selection.
+selection. When a cell reveal is active, the browser holds the receipt until
+the reveal exits so the two presentations remain sequential.
 
 Expected `LensError.code` values are `lens_closed`, `revision_conflict`, and
 `selection_not_found`.
@@ -600,7 +611,7 @@ Lens operation begins.
 | Open selections                      | 64                                         |
 | Selection note                       | 4,000 UTF-16 code units                    |
 | Cell ID or selection ID              | 128 UTF-16 code units                      |
-| Activity label                       | 40 UTF-16 code units                       |
+| Activity or reveal label             | 40 UTF-16 code units                       |
 | Activity message or resolve summary  | 240 UTF-16 code units                      |
 | Reveal message                       | 1,000 UTF-16 code units                    |
 | Reveal duration                      | 1 to 60,000 milliseconds                   |

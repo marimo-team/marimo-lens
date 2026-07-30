@@ -42,7 +42,7 @@ export const SelectionLabelSchema = v.pipe(
   v.maxLength(16),
   v.regex(/^S[1-9]\d*$/),
 );
-const ActivityLabelSchema = v.pipe(NonEmptyStringSchema, v.maxLength(40));
+const AttentionLabelSchema = v.pipe(NonEmptyStringSchema, v.maxLength(40));
 
 export const PointAnchorSchema = v.object({
   kind: v.literal("point"),
@@ -411,13 +411,14 @@ export const SelectionResolvedEventSchema = v.object({
 
 const CellRevealPayloadSchema = v.object({
   cellId: BoundedIdentifierSchema,
+  durationMs: RevealDurationSchema,
+  label: v.optional(AttentionLabelSchema),
   message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(1_000))),
-  durationMs: v.optional(RevealDurationSchema),
 });
 
 const CellActivityPayloadSchema = v.object({
   cellId: BoundedIdentifierSchema,
-  label: v.optional(ActivityLabelSchema),
+  label: v.optional(AttentionLabelSchema),
   message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(240))),
 });
 

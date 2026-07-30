@@ -100,11 +100,19 @@ def test_public_api_exposes_context_and_resolution_contracts() -> None:
     )
     assert resolve_parameters["summary"].default is None
     reveal_parameters = inspect.signature(Lens.reveal).parameters
-    assert list(reveal_parameters) == ["self", "cell_id", "message", "duration_ms"]
+    assert list(reveal_parameters) == [
+        "self",
+        "cell_id",
+        "duration_ms",
+        "label",
+        "message",
+    ]
     assert reveal_parameters["message"].kind is inspect.Parameter.KEYWORD_ONLY
     assert reveal_parameters["message"].default is None
     assert reveal_parameters["duration_ms"].kind is inspect.Parameter.KEYWORD_ONLY
-    assert reveal_parameters["duration_ms"].default is None
+    assert reveal_parameters["duration_ms"].default is inspect.Parameter.empty
+    assert reveal_parameters["label"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert reveal_parameters["label"].default is None
     activity_parameters = inspect.signature(Lens.activity).parameters
     assert list(activity_parameters) == ["self", "cell_id", "label", "message"]
     assert activity_parameters["label"].kind is inspect.Parameter.KEYWORD_ONLY
@@ -141,13 +149,13 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
     _put(lens, revision=0, selection_value=selection())
     before = copy.deepcopy(_state(lens))
 
-    result = lens.reveal(
+    lens.reveal(
         "cell-view",
+        label="Updated chart",
         message="  Updated the aggregation used by the chart.  ",
         duration_ms=8_000,
     )
 
-    assert result is None
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
@@ -156,6 +164,7 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
             "revision": 1,
             "payload": {
                 "cellId": "cell-view",
+                "label": "Updated chart",
                 "message": "Updated the aggregation used by the chart.",
                 "durationMs": 8_000,
             },
@@ -169,7 +178,7 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
     assert lens.resolve("selection-1", expected_revision=1) == 2
 
 
-def test_reveal_accepts_a_long_result_message(
+def test_reveal_uses_the_caller_supplied_hold_for_a_long_result_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
@@ -182,11 +191,16 @@ def test_reveal_accepts_a_long_result_message(
     lens = RecordingLens()
     message = "x" * 1_000
 
-    lens.reveal("cell-view", message=message)
+    lens.reveal(
+        "cell-view",
+        duration_ms=12_000,
+        message=message,
+    )
 
     assert lens.sent[-1][0]["payload"] == {
         "cellId": "cell-view",
         "message": message,
+        "durationMs": 12_000,
     }
 
 
@@ -233,7 +247,10 @@ def test_activity_sends_one_transient_event_without_changing_selection_state(
     assert "Updating the aggregation" not in context.text
 
 
-@pytest.mark.parametrize("action", ["activity", "reveal"])
+@pytest.mark.parametrize(
+    "action",
+    ["activity", "reveal"],
+)
 def test_cell_attention_omits_an_empty_message_and_tolerates_delivery_failure(
     monkeypatch: pytest.MonkeyPatch,
     action: str,
@@ -247,7 +264,8 @@ def test_cell_attention_omits_an_empty_message_and_tolerates_delivery_failure(
     )
     lens = FailingEventLens()
 
-    assert getattr(lens, action)("cell-view", message="  ") is None
+    duration = {"duration_ms": 4_000} if action == "reveal" else {}
+    assert getattr(lens, action)("cell-view", message="  ", **duration) is None
     assert _state(lens)["revision"] == 0
 
 
@@ -274,9 +292,10 @@ def test_cell_attention_requires_an_exact_runtime_cell(
     )
     lens = RecordingLens()
     sent_before = len(lens.sent)
+    duration = {"duration_ms": 4_000} if action == "reveal" else {}
 
     with pytest.raises(LensError) as raised:
-        getattr(lens, action)("cell-view")
+        getattr(lens, action)("cell-view", **duration)
 
     assert raised.value.code == code
     assert raised.value.revision == 0
@@ -313,9 +332,10 @@ def test_cell_attention_validates_arguments_before_runtime_access(
 
     monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
     lens = RecordingLens()
+    duration = {"duration_ms": 4_000} if action == "reveal" else {}
 
     with pytest.raises(error_type, match=error_message):
-        getattr(lens, action)(cell_id, message=message)
+        getattr(lens, action)(cell_id, message=message, **duration)
 
     assert not runtime_accessed
 
@@ -346,12 +366,13 @@ def test_cell_attention_enforces_its_message_bound_before_runtime_access(
 
     monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
     lens = RecordingLens()
+    duration = {"duration_ms": 4_000} if action == "reveal" else {}
 
     with pytest.raises(
         ValueError,
         match=f"at most {maximum} UTF-16 code units",
     ):
-        getattr(lens, action)("cell-view", message=message)
+        getattr(lens, action)("cell-view", message=message, **duration)
 
     assert not runtime_accessed
 
@@ -359,9 +380,10 @@ def test_cell_attention_enforces_its_message_bound_before_runtime_access(
 @pytest.mark.parametrize(
     ("duration_ms", "error_type", "message"),
     [
-        (True, TypeError, "duration_ms must be an integer or None"),
-        (1.5, TypeError, "duration_ms must be an integer or None"),
-        ("8000", TypeError, "duration_ms must be an integer or None"),
+        (None, TypeError, "duration_ms must be an integer"),
+        (True, TypeError, "duration_ms must be an integer"),
+        (1.5, TypeError, "duration_ms must be an integer"),
+        ("8000", TypeError, "duration_ms must be an integer"),
         (0, ValueError, "between 1 and 60000 milliseconds"),
         (60_001, ValueError, "between 1 and 60000 milliseconds"),
     ],
@@ -385,7 +407,10 @@ def test_reveal_validates_duration_before_runtime_access(
     lens = RecordingLens()
 
     with pytest.raises(error_type, match=message):
-        lens.reveal("cell-view", duration_ms=duration_ms)
+        lens.reveal(
+            "cell-view",
+            duration_ms=duration_ms,
+        )
 
     assert not runtime_accessed
 
@@ -399,11 +424,13 @@ def test_reveal_validates_duration_before_runtime_access(
         ("\ud800", ValueError, "valid Unicode text"),
     ],
 )
-def test_activity_validates_its_label_before_runtime_access(
+@pytest.mark.parametrize("action", ["activity", "reveal"])
+def test_cell_attention_validates_its_label_before_runtime_access(
     monkeypatch: pytest.MonkeyPatch,
     label: Any,
     error_type: type[Exception],
     message: str,
+    action: str,
 ) -> None:
     from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
 
@@ -416,9 +443,10 @@ def test_activity_validates_its_label_before_runtime_access(
 
     monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
     lens = RecordingLens()
+    duration = {"duration_ms": 4_000} if action == "reveal" else {}
 
     with pytest.raises(error_type, match=message):
-        lens.activity("cell-view", label=label)
+        getattr(lens, action)("cell-view", label=label, **duration)
 
     assert not runtime_accessed
 
@@ -440,9 +468,10 @@ def test_cell_attention_rejects_a_closed_lens_before_runtime_access(
     monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
     lens = RecordingLens()
     lens.close()
+    duration = {"duration_ms": 4_000} if action == "reveal" else {}
 
     with pytest.raises(LensError) as raised:
-        getattr(lens, action)("cell-view")
+        getattr(lens, action)("cell-view", **duration)
 
     assert raised.value.code == "lens_closed"
     assert not runtime_accessed

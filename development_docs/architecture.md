@@ -167,9 +167,10 @@ handles. Each handle carries a stable opaque identity, projects a bounded
 scan, guards context and image reads by revision, delegates public feedback
 methods, and adapts full-cell capture.
 
-The top-level `skills/marimo-lens` directory owns agent workflow policy and
-client-side PNG materialization. A live-kernel executor owns session
-discovery, kernel calls, code-mode mutation, and runtime verification.
+The top-level `skills/marimo-lens` directory owns agent workflow policy. A
+live-kernel executor owns session discovery, kernel calls, code-mode mutation,
+runtime verification, and writes of validated PNG bytes to private temporary
+files.
 
 ## Agent feedback
 
@@ -177,13 +178,18 @@ discovery, kernel calls, code-mode mutation, and runtime verification.
 selection state, and send best-effort events.
 
 Activity keeps the current scroll position and remains until a later activity,
-reveal, or teardown replaces it. A short caller-supplied label can describe the
-current task. Reveal replaces the active presentation, scrolls once, and exits
-after its bounded caller-supplied hold. Both use one cell-attention controller.
+reveal, matching resolution, or teardown replaces it. A short caller-supplied
+label describes the current task or result. Reveal replaces the active
+presentation, scrolls once, and exits after the caller-supplied hold. Python
+validates and sends the label and duration with every reveal event, and the
+browser uses them for presentation. Both use one cell-attention controller and
+position their label above the target cell at its top-right edge.
 
 Resolution commits one durable state transition before sending its best-effort
 browser receipt. One receipt event can represent every selection in an atomic
-batch. Event delivery failure never rolls back the committed selections.
+batch. The browser clears matching activity and queues the receipt behind an
+active reveal. Event delivery failure never rolls back the committed
+selections.
 
 ## Notebook host integration
 

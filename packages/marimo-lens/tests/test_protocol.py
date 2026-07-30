@@ -29,6 +29,7 @@ from tests.support.factories import png, selection, snapshot_metadata
 def test_cell_reveal_event_uses_transient_transport() -> None:
     assert cell_reveal_event(
         cell_id="cell-view",
+        label="Updated chart",
         message="Updated the aggregation.",
         duration_ms=8_000,
         revision=3,
@@ -39,6 +40,7 @@ def test_cell_reveal_event_uses_transient_transport() -> None:
         "revision": 3,
         "payload": {
             "cellId": "cell-view",
+            "label": "Updated chart",
             "message": "Updated the aggregation.",
             "durationMs": 8_000,
         },
@@ -48,9 +50,11 @@ def test_cell_reveal_event_uses_transient_transport() -> None:
 def test_cell_reveal_event_omits_an_absent_message() -> None:
     assert cell_reveal_event(
         cell_id="cell-view",
+        label=None,
         message=None,
+        duration_ms=4_000,
         revision=0,
-    )["payload"] == {"cellId": "cell-view"}
+    )["payload"] == {"cellId": "cell-view", "durationMs": 4_000}
 
 
 def test_cell_activity_event_uses_transient_transport() -> None:

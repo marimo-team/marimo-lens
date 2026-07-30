@@ -38,7 +38,7 @@ from ._protocol_models import (
     CELL_ID_ADAPTER,
     MAX_REVEAL_DURATION_MS,
     MAX_SELECTIONS,
-    OPTIONAL_ACTIVITY_LABEL_ADAPTER,
+    OPTIONAL_ATTENTION_LABEL_ADAPTER,
     OPTIONAL_ATTENTION_TEXT_ADAPTER,
     OPTIONAL_REVEAL_TEXT_ADAPTER,
     REQUEST_ID_ADAPTER,
@@ -115,15 +115,17 @@ class Lens(anywidget.AnyWidget):
         self,
         cell_id: str,
         *,
+        duration_ms: int,
+        label: str | None = None,
         message: str | None = None,
-        duration_ms: int | None = None,
     ) -> None:
-        """Reveal one exact notebook cell for an optional duration in milliseconds."""
+        """Reveal one exact notebook cell for the supplied hold."""
 
         self._send_cell_attention(
             "reveal",
             cell_id,
             message,
+            label=label,
             duration_ms=duration_ms,
         )
 
@@ -153,9 +155,9 @@ class Lens(anywidget.AnyWidget):
             if kind == "reveal"
             else _attention_message(message)
         )
-        activity_label = _activity_label(label) if kind == "activity" else None
+        attention_label = _attention_label(label)
         reveal_duration_ms = (
-            _reveal_duration_ms(duration_ms) if kind == "reveal" else None
+            _validated_duration_ms(duration_ms) if kind == "reveal" else None
         )
         with self._lock:
             self._require_open()
@@ -178,13 +180,15 @@ class Lens(anywidget.AnyWidget):
             if kind == "activity":
                 event = cell_activity_event(
                     cell_id=cell_id,
-                    label=activity_label,
+                    label=attention_label,
                     message=message,
                     revision=revision,
                 )
             else:
+                assert reveal_duration_ms is not None
                 event = cell_reveal_event(
                     cell_id=cell_id,
+                    label=attention_label,
                     message=message,
                     duration_ms=reveal_duration_ms,
                     revision=revision,
@@ -601,23 +605,21 @@ def _reveal_message(value: object) -> str | None:
     )
 
 
-def _reveal_duration_ms(value: object) -> int | None:
-    if value is None:
-        return None
+def _validated_duration_ms(value: object) -> int:
     try:
         return REVEAL_DURATION_ADAPTER.validate_python(value)
     except ValidationError as error:
         error_type, _ = _validation_detail(error)
         if error_type == "int_type":
-            raise TypeError("duration_ms must be an integer or None.") from None
+            raise TypeError("duration_ms must be an integer.") from None
         raise ValueError(
             f"duration_ms must be between 1 and {MAX_REVEAL_DURATION_MS} milliseconds."
         ) from None
 
 
-def _activity_label(value: object) -> str | None:
+def _attention_label(value: object) -> str | None:
     try:
-        return OPTIONAL_ACTIVITY_LABEL_ADAPTER.validate_python(value)
+        return OPTIONAL_ATTENTION_LABEL_ADAPTER.validate_python(value)
     except ValidationError as error:
         error_type, message = _validation_detail(error)
         if error_type in {"string_type", "none_required"}:

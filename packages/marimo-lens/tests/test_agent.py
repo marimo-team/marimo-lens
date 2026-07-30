@@ -1,12 +1,7 @@
 from __future__ import annotations
 
 import hashlib
-import json
-import os
-import subprocess
-from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 from marimo_lens import Lens, LensContext, LensError, SelectionImage, agent
@@ -224,19 +219,29 @@ def test_cell_image_adapts_private_capture_mailbox(
 def test_mounted_lens_forwards_reveal_duration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[tuple[str, str | None, int | None]] = []
+    calls: list[tuple[str, str | None, str | None, int]] = []
     lens = Lens()
+
+    def reveal(
+        _self: Lens,
+        cell_id: str,
+        *,
+        duration_ms: int,
+        label: str | None = None,
+        message: str | None = None,
+    ) -> None:
+        calls.append((cell_id, label, message, duration_ms))
+
     monkeypatch.setattr(
         Lens,
         "reveal",
-        lambda _self, cell_id, *, message=None, duration_ms=None: calls.append(
-            (cell_id, message, duration_ms)
-        ),
+        reveal,
     )
     mounted = agent.discover(_context(lens))[0]
 
     mounted.reveal(
         "cell-view",
+        label="Updated chart",
         message="Updated the chart and verified its labels.",
         duration_ms=8_000,
     )
@@ -244,125 +249,9 @@ def test_mounted_lens_forwards_reveal_duration(
     assert calls == [
         (
             "cell-view",
+            "Updated chart",
             "Updated the chart and verified its labels.",
             8_000,
         )
     ]
     lens.close()
-
-
-def test_materialize_script_validates_writes_and_cleans_image(
-    tmp_path: Path,
-) -> None:
-    data = png()
-    image = agent.AgentImage(
-        source="cell",
-        media_type="image/png",
-        data=data,
-        width=2,
-        height=2,
-        sha256=hashlib.sha256(data).hexdigest(),
-        captured_at="2026-07-27T10:00:00Z",
-        cell_id="cell-view",
-    )
-    script = (
-        Path(__file__).parents[3]
-        / "skills"
-        / "marimo-lens"
-        / "scripts"
-        / "materialize-image.sh"
-    )
-    env = {**os.environ, "TMPDIR": str(tmp_path)}
-
-    created = subprocess.run(
-        ["bash", str(script)],
-        input=image.transfer() + "\n",
-        check=True,
-        capture_output=True,
-        env=env,
-        text=True,
-    )
-    payload: dict[str, Any] = json.loads(created.stdout)
-    image_path = Path(payload["path"])
-    image_dir = Path(payload["imageDir"])
-
-    assert payload["status"] == "available"
-    assert image_path.read_bytes() == data
-    removed = subprocess.run(
-        ["bash", str(script), "cleanup", str(image_dir)],
-        check=True,
-        capture_output=True,
-        env=env,
-        text=True,
-    )
-    assert json.loads(removed.stdout) == {
-        "status": "removed",
-        "imageDirs": [str(image_dir)],
-        "count": 1,
-    }
-    assert not image_dir.exists()
-
-    unowned_dir = tmp_path / "marimo-lens.unowned"
-    unowned_dir.mkdir()
-    refused = subprocess.run(
-        ["bash", str(script), "cleanup", str(unowned_dir)],
-        check=False,
-        capture_output=True,
-        env=env,
-        text=True,
-    )
-    assert refused.returncode == 1
-    assert unowned_dir.exists()
-
-
-def test_materialize_script_rejects_oversized_transfer_before_parsing(
-    tmp_path: Path,
-) -> None:
-    script = (
-        Path(__file__).parents[3]
-        / "skills"
-        / "marimo-lens"
-        / "scripts"
-        / "materialize-image.sh"
-    )
-    marker = tmp_path / "jq-invoked"
-    fake_bin = tmp_path / "bin"
-    fake_bin.mkdir()
-    fake_jq = fake_bin / "jq"
-    fake_jq.write_text('#!/bin/sh\n: > "$JQ_MARKER"\nexit 99\n')
-    fake_jq.chmod(0o755)
-    env = {
-        **os.environ,
-        "JQ_MARKER": str(marker),
-        "PATH": f"{fake_bin}:{os.environ['PATH']}",
-        "TMPDIR": str(tmp_path),
-    }
-    transfer = (
-        "__MARIMO_LENS_IMAGE__"
-        + json.dumps(
-            {
-                "protocol": "marimo-lens.image-transfer",
-                "version": 1,
-                "status": "failed",
-                "source": "cell",
-                "cellId": "cell-view",
-                "padding": "x" * (12 * 1024 * 1024),
-            },
-            separators=(",", ":"),
-        )
-        + "\n"
-    )
-
-    result = subprocess.run(
-        ["bash", str(script)],
-        input=transfer,
-        check=False,
-        capture_output=True,
-        env=env,
-        text=True,
-    )
-
-    assert result.returncode == 1
-    assert result.stderr == "Lens image transfer exceeds the 12 MiB limit.\n"
-    assert not marker.exists()
-    assert list(tmp_path.glob("marimo-lens-transfer.*")) == []
