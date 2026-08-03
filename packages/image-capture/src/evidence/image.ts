@@ -1,5 +1,3 @@
-import type { OutputCaptureSelection } from "@marimo-lens/protocol";
-
 import { boundedUtf16 } from "@marimo-lens/protocol";
 
 import type { CapturedSnapshot, CaptureResult } from "../types";
@@ -16,7 +14,6 @@ import { encodePng } from "./png";
 type OutputCaptureOptions = {
   imageId: string;
   output: HTMLElement;
-  selections?: readonly OutputCaptureSelection[];
   signal?: AbortSignal;
 };
 
@@ -30,7 +27,6 @@ export async function captureOutputSnapshot(
   throwIfCaptureAborted(options.signal, ownerDocument);
   const canvas = composeOutputEvidence({
     ownerDocument,
-    selections: options.selections ?? [],
     ...evidence,
   });
   const encoded = await encodePng(canvas, options.signal);

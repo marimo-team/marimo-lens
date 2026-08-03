@@ -1,4 +1,4 @@
-import type { DomHintBounds, OutputCaptureSelection, SelectionAnchor } from "@marimo-lens/protocol";
+import type { DomHintBounds, SelectionAnchor } from "@marimo-lens/protocol";
 
 import { anchorCenter } from "./geometry";
 import { ownerError } from "./owner-realm";
@@ -64,7 +64,6 @@ export function composeOutputEvidence(options: {
   overview: HTMLImageElement;
   detail: HTMLImageElement | null;
   backgroundColor: string;
-  selections: readonly OutputCaptureSelection[];
 }): HTMLCanvasElement {
   const layout = evidenceLayout(
     options.overview.naturalWidth,
@@ -76,10 +75,7 @@ export function composeOutputEvidence(options: {
     layout,
     options.backgroundColor,
   );
-  const overviewRegion = drawContained(context, options.overview, layout.overview);
-  for (const selection of options.selections) {
-    drawMarker(context, selection.anchor, selection.label, overviewRegion);
-  }
+  drawContained(context, options.overview, layout.overview);
   if (options.detail && layout.detail) {
     drawEvidenceDivider(context, layout.detail);
     drawContained(context, options.detail, layout.detail);
