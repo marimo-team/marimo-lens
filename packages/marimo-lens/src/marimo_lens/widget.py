@@ -18,11 +18,12 @@ from pydantic import TypeAdapter, ValidationError
 from ._context import build_lens_context
 from ._images import ImageError
 from ._marimo_runtime import MarimoRuntimeAdapter
-from ._output_capture import OutputCaptureMailbox, OutputCaptureResult
+from ._output_capture import OutputCaptureSlot
 from ._protocol import (
     Command,
     ProtocolError,
-    cell_activity_event,
+    cell_activity_start_event,
+    cell_activity_stop_event,
     cell_reveal_event,
     error_response,
     is_response_envelope,
@@ -35,14 +36,13 @@ from ._protocol import (
     snapshot_response,
 )
 from ._protocol_models import (
+    ATTENTION_DURATION_ADAPTER,
     CELL_ID_ADAPTER,
-    MAX_REVEAL_DURATION_MS,
+    MAX_ATTENTION_DURATION_MS,
     MAX_SELECTIONS,
     OPTIONAL_ATTENTION_LABEL_ADAPTER,
     OPTIONAL_ATTENTION_TEXT_ADAPTER,
     OPTIONAL_REVEAL_TEXT_ADAPTER,
-    REQUEST_ID_ADAPTER,
-    REVEAL_DURATION_ADAPTER,
     REVISION_ADAPTER,
     SELECTION_ID_ADAPTER,
 )
@@ -87,7 +87,7 @@ class Lens(anywidget.AnyWidget):
         self._selection_store = SelectionStore()
         self._runtime = MarimoRuntimeAdapter()
         super().__init__(_state=self._selection_store.state.payload())
-        self._output_captures = OutputCaptureMailbox(
+        self._output_capture = OutputCaptureSlot(
             lock=self._lock,
             send=self.send,
             revision=lambda: self._selection_store.state.revision,
@@ -129,16 +129,36 @@ class Lens(anywidget.AnyWidget):
             duration_ms=duration_ms,
         )
 
-    def activity(
+    def start_activity(
         self,
         cell_id: str,
         *,
+        duration_ms: int | None = None,
         label: str | None = None,
         message: str | None = None,
     ) -> None:
-        """Mark one exact notebook cell as the agent's active work target."""
+        """Mark one work cell until stopped or the optional duration ends."""
 
-        self._send_cell_attention("activity", cell_id, message, label=label)
+        self._send_cell_attention(
+            "activity",
+            cell_id,
+            message,
+            label=label,
+            duration_ms=duration_ms,
+        )
+
+    def stop_activity(self, cell_id: str) -> None:
+        """Stop active work when it is attached to the supplied cell."""
+
+        cell_id = _cell_id(cell_id)
+        with self._lock:
+            self._require_open()
+            event = cell_activity_stop_event(
+                cell_id=cell_id,
+                revision=self._selection_store.state.revision,
+            )
+            with suppress(Exception):
+                self.send(event)
 
     def _send_cell_attention(
         self,
@@ -156,8 +176,10 @@ class Lens(anywidget.AnyWidget):
             else _attention_message(message)
         )
         attention_label = _attention_label(label)
-        reveal_duration_ms = (
-            _validated_duration_ms(duration_ms) if kind == "reveal" else None
+        validated_duration_ms = (
+            _validated_duration_ms(duration_ms)
+            if kind == "reveal" or duration_ms is not None
+            else None
         )
         with self._lock:
             self._require_open()
@@ -178,19 +200,20 @@ class Lens(anywidget.AnyWidget):
                     revision=revision,
                 )
             if kind == "activity":
-                event = cell_activity_event(
+                event = cell_activity_start_event(
                     cell_id=cell_id,
+                    duration_ms=validated_duration_ms,
                     label=attention_label,
                     message=message,
                     revision=revision,
                 )
             else:
-                assert reveal_duration_ms is not None
+                assert validated_duration_ms is not None
                 event = cell_reveal_event(
                     cell_id=cell_id,
                     label=attention_label,
                     message=message,
-                    duration_ms=reveal_duration_ms,
+                    duration_ms=validated_duration_ms,
                     revision=revision,
                 )
             with suppress(Exception):
@@ -252,17 +275,17 @@ class Lens(anywidget.AnyWidget):
             if self._lens_closed:
                 return
             self._lens_closed = True
-            self._output_captures.close()
+            self._output_capture.close()
             self._selection_store.release()
         super().close()
 
-    def _start_output_capture(
+    def _cell_image(
         self,
         cell_id: str,
         *,
         expected_revision: int,
-    ) -> str:
-        """Start one transient capture for an agent integration."""
+    ) -> bytes | None:
+        """Return current cell PNG bytes across consecutive kernel calls."""
 
         cell_id = _cell_id(cell_id)
         expected_revision = _expected_revision(expected_revision)
@@ -278,26 +301,9 @@ class Lens(anywidget.AnyWidget):
                     ),
                     revision=state.revision,
                 )
-            selections = tuple(
-                {
-                    "selectionId": record.id,
-                    "label": record.selection["label"],
-                    "anchor": record.detached_selection()["anchor"],
-                }
-                for record in state.records
-                if record.selection["outputCellId"] == cell_id
-            )
-        return self._output_captures.start(
+        return self._output_capture.image(
             cell_id,
             expected_revision=expected_revision,
-            selections=selections,
-        )
-
-    def _read_output_capture(self, request_id: str) -> OutputCaptureResult:
-        """Read or consume one transient agent capture."""
-
-        return self._output_captures.read(
-            _validated_identifier(REQUEST_ID_ADAPTER, request_id, name="request_id")
         )
 
     def _bind_comm_close(self) -> None:
@@ -359,11 +365,11 @@ class Lens(anywidget.AnyWidget):
         except ProtocolError:
             return
         if capture_event is not None:
-            self._output_captures.set_browser_ready(capture_event == "ready")
+            self._output_capture.set_browser_ready(capture_event == "ready")
             return
         if is_response_envelope(content):
             if isinstance(content, Mapping):
-                self._output_captures.accept_response(
+                self._output_capture.accept_response(
                     cast(Mapping[str, Any], content),
                     buffers,
                 )
@@ -607,13 +613,13 @@ def _reveal_message(value: object) -> str | None:
 
 def _validated_duration_ms(value: object) -> int:
     try:
-        return REVEAL_DURATION_ADAPTER.validate_python(value)
+        return ATTENTION_DURATION_ADAPTER.validate_python(value)
     except ValidationError as error:
         error_type, _ = _validation_detail(error)
         if error_type == "int_type":
             raise TypeError("duration_ms must be an integer.") from None
         raise ValueError(
-            f"duration_ms must be between 1 and {MAX_REVEAL_DURATION_MS} milliseconds."
+            f"duration_ms must be between 1 and {MAX_ATTENTION_DURATION_MS} milliseconds."
         ) from None
 
 

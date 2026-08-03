@@ -8,10 +8,16 @@ class LensError(RuntimeError):
 
     Attributes:
         code: Stable machine-readable failure code.
-        revision: Current Lens selection revision.
+        revision: Current Lens selection revision when one is available.
     """
 
-    def __init__(self, code: str, message: str, *, revision: int) -> None:
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        revision: int | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
         self.revision = revision

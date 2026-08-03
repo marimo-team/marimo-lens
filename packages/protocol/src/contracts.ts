@@ -36,7 +36,7 @@ const PositiveNormalizedNumberSchema = v.pipe(
 );
 const PositiveIntegerSchema = v.pipe(v.number(), v.safeInteger(), v.minValue(1));
 const RevisionSchema = v.pipe(v.number(), v.safeInteger(), v.minValue(0));
-const RevealDurationSchema = v.pipe(PositiveIntegerSchema, v.maxValue(60_000));
+const AttentionDurationSchema = v.pipe(PositiveIntegerSchema, v.maxValue(300_000));
 export const SelectionLabelSchema = v.pipe(
   UnicodeStringSchema,
   v.maxLength(16),
@@ -315,26 +315,11 @@ export const GetSnapshotCommandSchema = v.object({
   }),
 });
 
-export const OutputCaptureSelectionSchema = v.object({
-  selectionId: BoundedIdentifierSchema,
-  label: SelectionLabelSchema,
-  anchor: SelectionAnchorSchema,
-});
-
 export const OutputCaptureCommandSchema = v.object({
   ...CommandBaseSchema,
   type: v.literal("output.capture"),
   payload: v.object({
     outputCellId: BoundedIdentifierSchema,
-    selections: v.pipe(
-      v.array(OutputCaptureSelectionSchema),
-      v.maxLength(64),
-      v.check(
-        (selections) =>
-          new Set(selections.map((selection) => selection.selectionId)).size === selections.length,
-        "Cell capture selections must be unique",
-      ),
-    ),
   }),
 });
 
@@ -411,15 +396,20 @@ export const SelectionResolvedEventSchema = v.object({
 
 const CellRevealPayloadSchema = v.object({
   cellId: BoundedIdentifierSchema,
-  durationMs: RevealDurationSchema,
+  durationMs: AttentionDurationSchema,
   label: v.optional(AttentionLabelSchema),
   message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(1_000))),
 });
 
-const CellActivityPayloadSchema = v.object({
+const CellActivityStartPayloadSchema = v.object({
   cellId: BoundedIdentifierSchema,
+  durationMs: v.optional(AttentionDurationSchema),
   label: v.optional(AttentionLabelSchema),
   message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(240))),
+});
+
+const CellActivityStopPayloadSchema = v.object({
+  cellId: BoundedIdentifierSchema,
 });
 
 export const CellRevealEventSchema = v.object({
@@ -430,12 +420,20 @@ export const CellRevealEventSchema = v.object({
   payload: CellRevealPayloadSchema,
 });
 
-export const CellActivityEventSchema = v.object({
+export const CellActivityStartEventSchema = v.object({
   protocol: v.literal("marimo-lens.event"),
   version: v.literal(WIDGET_TRANSPORT_VERSION),
-  type: v.literal("cell.activity"),
+  type: v.literal("cell.activity.start"),
   revision: RevisionSchema,
-  payload: CellActivityPayloadSchema,
+  payload: CellActivityStartPayloadSchema,
+});
+
+export const CellActivityStopEventSchema = v.object({
+  protocol: v.literal("marimo-lens.event"),
+  version: v.literal(WIDGET_TRANSPORT_VERSION),
+  type: v.literal("cell.activity.stop"),
+  revision: RevisionSchema,
+  payload: CellActivityStopPayloadSchema,
 });
 
 export type PointAnchor = v.InferOutput<typeof PointAnchorSchema>;
@@ -464,7 +462,6 @@ export type ClearSelectionsResponsePayload = v.InferOutput<
   typeof ClearSelectionsResponsePayloadSchema
 >;
 export type ClientCommand = v.InferOutput<typeof ClientCommandSchema>;
-export type OutputCaptureSelection = v.InferOutput<typeof OutputCaptureSelectionSchema>;
 export type OutputCaptureCommand = v.InferOutput<typeof OutputCaptureCommandSchema>;
 export type OutputCaptureResponsePayload = v.InferOutput<typeof OutputCaptureResponsePayloadSchema>;
 export type OutputCaptureFailurePayload = v.InferOutput<typeof OutputCaptureFailurePayloadSchema>;
@@ -473,8 +470,9 @@ export type LensResponse = v.InferOutput<typeof LensResponseSchema>;
 export type ResolvedSelection = v.InferOutput<typeof ResolvedSelectionSchema>;
 export type SelectionResolvedEvent = v.InferOutput<typeof SelectionResolvedEventSchema>;
 export type CellRevealEvent = v.InferOutput<typeof CellRevealEventSchema>;
-export type CellActivityEvent = v.InferOutput<typeof CellActivityEventSchema>;
-export type CellAttentionEvent = CellActivityEvent | CellRevealEvent;
+export type CellActivityStartEvent = v.InferOutput<typeof CellActivityStartEventSchema>;
+export type CellActivityStopEvent = v.InferOutput<typeof CellActivityStopEventSchema>;
+export type CellAttentionEvent = CellActivityStartEvent | CellActivityStopEvent | CellRevealEvent;
 
 export type CommandType = ClientCommand["type"];
 export type CommandPayload<TType extends CommandType> = Extract<
@@ -513,8 +511,12 @@ export function parseCellRevealEvent(input: unknown): CellRevealEvent {
   return parseContract(CellRevealEventSchema, input, "Lens cell reveal event");
 }
 
-export function parseCellActivityEvent(input: unknown): CellActivityEvent {
-  return parseContract(CellActivityEventSchema, input, "Lens cell activity event");
+export function parseCellActivityStartEvent(input: unknown): CellActivityStartEvent {
+  return parseContract(CellActivityStartEventSchema, input, "Lens cell activity start event");
+}
+
+export function parseCellActivityStopEvent(input: unknown): CellActivityStopEvent {
+  return parseContract(CellActivityStopEventSchema, input, "Lens cell activity stop event");
 }
 
 function isValidUnicodeText(value: string): boolean {

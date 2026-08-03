@@ -1,15 +1,22 @@
-import type { CellActivityEvent, CellAttentionEvent, CellRevealEvent } from "@marimo-lens/protocol";
+import type {
+  CellActivityStartEvent,
+  CellActivityStopEvent,
+  CellRevealEvent,
+} from "@marimo-lens/protocol";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
+const ACTIVITY_EXIT_MS = 120;
 const REVEAL_EXIT_MS = 180;
+export const CELL_ATTENTION_TOP_GUTTER = 48;
 
 export type CellAttentionKind = "activity" | "reveal";
 export type CellAttentionPhase = "active" | "exiting";
+type CellAttentionPresentationEvent = CellActivityStartEvent | CellRevealEvent;
 
 export type CellAttentionPresentation = {
   kind: CellAttentionKind;
-  event: CellAttentionEvent;
+  event: CellAttentionPresentationEvent;
   sequence: number;
   target: HTMLElement | null;
   expiresAt: number | null;
@@ -39,7 +46,7 @@ export class CellAttentionController {
     this.#onChange = onChange;
   }
 
-  activity(event: CellActivityEvent): void {
+  startActivity(event: CellActivityStartEvent): void {
     const active = this.#active;
     if (active?.kind === "activity" && active.event.payload.cellId === event.payload.cellId) {
       this.#renewActivity(active, event);
@@ -52,9 +59,9 @@ export class CellAttentionController {
     this.#start("reveal", event);
   }
 
-  finishActivity(resolutionRevision: number): void {
+  stopActivity(event: CellActivityStopEvent): void {
     const active = this.#active;
-    if (active?.kind === "activity" && resolutionRevision >= active.event.revision) {
+    if (active?.kind === "activity" && active.event.payload.cellId === event.payload.cellId) {
       this.#clear(true);
     }
   }
@@ -63,26 +70,21 @@ export class CellAttentionController {
     this.#clear(true);
   }
 
-  #start(kind: CellAttentionKind, event: CellAttentionEvent): void {
+  #start(kind: CellAttentionKind, event: CellAttentionPresentationEvent): void {
     this.#clear(false);
     const target = attentionTarget(this.#dom, event.payload.cellId);
-    if (kind === "reveal" && target) {
-      target.scrollIntoView({
-        block: "center",
-        inline: "nearest",
-        behavior: prefersReducedMotion(this.#dom.window) ? "auto" : "smooth",
-      });
-    }
+    this.#reframe(kind, target);
 
-    const revealDuration = event.type === "cell.reveal" ? event.payload.durationMs : 0;
-    const expiresAt = kind === "activity" ? null : this.#now() + revealDuration + REVEAL_EXIT_MS;
+    const exitDuration = kind === "activity" ? ACTIVITY_EXIT_MS : REVEAL_EXIT_MS;
+    const duration = event.payload.durationMs ?? null;
+    const expiresAt = duration === null ? null : this.#now() + duration + exitDuration;
     const active: ActiveAttention = {
       kind,
       event,
       sequence: ++this.#sequence,
       target,
       expiresAt,
-      exitDuration: REVEAL_EXIT_MS,
+      exitDuration,
       observedTarget: null,
       phase: "active",
       resizeObserver: null,
@@ -98,17 +100,23 @@ export class CellAttentionController {
     this.#emit(active);
   }
 
-  #renewActivity(active: ActiveAttention, event: CellActivityEvent): void {
-    const previous = active.event as CellActivityEvent;
+  #renewActivity(active: ActiveAttention, event: CellActivityStartEvent): void {
+    const previous = active.event as CellActivityStartEvent;
     const samePresentation =
       previous.payload.label === event.payload.label &&
       previous.payload.message === event.payload.message;
     const target = attentionTarget(this.#dom, event.payload.cellId);
     active.event = event;
     active.target = target;
+    this.#reframe("activity", target);
     this.#observeTarget(active, target);
     active.phase = "active";
+    active.expiresAt =
+      event.payload.durationMs === undefined
+        ? null
+        : this.#now() + event.payload.durationMs + active.exitDuration;
     if (!samePresentation) active.sequence = ++this.#sequence;
+    this.#schedule(active);
     this.#emit(active);
   }
 
@@ -119,9 +127,28 @@ export class CellAttentionController {
       return;
     }
     const target = attentionTarget(this.#dom, active.event.payload.cellId);
+    const targetBecameAvailable = active.observedTarget === null && target !== null;
     active.target = target;
+    if (targetBecameAvailable) this.#reframe(active.kind, target);
     this.#observeTarget(active, target);
     this.#emit(active);
+  }
+
+  #reframe(kind: CellAttentionKind, target: HTMLElement | null): void {
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    if (
+      kind !== "reveal" &&
+      intersectsViewport(this.#dom.window, target) &&
+      rect.top >= CELL_ATTENTION_TOP_GUTTER
+    ) {
+      return;
+    }
+    target.scrollIntoView({
+      block: "center",
+      inline: "nearest",
+      behavior: prefersReducedMotion(this.#dom.window) ? "auto" : "smooth",
+    });
   }
 
   #handleVisibility(active: ActiveAttention): void {
@@ -219,6 +246,16 @@ function isRendered(ownerWindow: Window, element: HTMLElement): boolean {
     style.visibility !== "hidden" &&
     rect.width > 0 &&
     rect.height > 0
+  );
+}
+
+function intersectsViewport(ownerWindow: Window, element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  return (
+    rect.bottom > 0 &&
+    rect.right > 0 &&
+    rect.top < ownerWindow.innerHeight &&
+    rect.left < ownerWindow.innerWidth
   );
 }
 

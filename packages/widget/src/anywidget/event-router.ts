@@ -1,7 +1,8 @@
 import type { CellAttentionEvent, SelectionResolvedEvent } from "@marimo-lens/protocol";
 
 import {
-  parseCellActivityEvent,
+  parseCellActivityStartEvent,
+  parseCellActivityStopEvent,
   parseCellRevealEvent,
   parseSelectionResolvedEvent,
 } from "@marimo-lens/protocol";
@@ -29,23 +30,27 @@ export class EventRouter {
     if (!isRoutedEvent(message)) return false;
     if (buffers.length !== 0) return true;
     if (message.type === "selection.resolved") {
+      let event: SelectionResolvedEvent;
       try {
-        const event = parseSelectionResolvedEvent(message);
-        for (const listener of this.#selectionResolvedListeners) listener(event);
+        event = parseSelectionResolvedEvent(message);
       } catch {
-        // Invalid events remain isolated from the widget interaction state.
+        return true;
       }
+      dispatch(this.#selectionResolvedListeners, event);
       return true;
     }
+    let event: CellAttentionEvent;
     try {
-      const event =
-        message.type === "cell.activity"
-          ? parseCellActivityEvent(message)
-          : parseCellRevealEvent(message);
-      for (const listener of this.#cellAttentionListeners) listener(event);
+      event =
+        message.type === "cell.activity.start"
+          ? parseCellActivityStartEvent(message)
+          : message.type === "cell.activity.stop"
+            ? parseCellActivityStopEvent(message)
+            : parseCellRevealEvent(message);
     } catch {
-      // Invalid events remain isolated from the widget interaction state.
+      return true;
     }
+    dispatch(this.#cellAttentionListeners, event);
     return true;
   }
 
@@ -55,9 +60,21 @@ export class EventRouter {
   }
 }
 
+function dispatch<T>(listeners: ReadonlySet<(event: T) => void>, event: T): void {
+  const failures: unknown[] = [];
+  for (const listener of listeners) {
+    try {
+      listener(event);
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length > 0) throw failures[0];
+}
+
 function isRoutedEvent(message: unknown): message is {
   protocol: string;
-  type: "selection.resolved" | "cell.activity" | "cell.reveal";
+  type: "selection.resolved" | "cell.activity.start" | "cell.activity.stop" | "cell.reveal";
 } {
   return (
     typeof message === "object" &&
@@ -66,7 +83,8 @@ function isRoutedEvent(message: unknown): message is {
     message.protocol === EVENT_PROTOCOL &&
     "type" in message &&
     (message.type === "selection.resolved" ||
-      message.type === "cell.activity" ||
+      message.type === "cell.activity.start" ||
+      message.type === "cell.activity.stop" ||
       message.type === "cell.reveal")
   );
 }

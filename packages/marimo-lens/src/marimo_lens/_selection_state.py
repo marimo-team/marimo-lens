@@ -10,7 +10,7 @@ from typing import Any, cast
 
 from pydantic import ValidationError
 
-from ._images import MAX_TOTAL_IMAGE_BYTES, prepare_selection_image
+from ._images import MAX_TOTAL_IMAGE_BYTES, _SelectionImage, prepare_selection_image
 from ._protocol import MAX_HISTORY, MAX_SELECTIONS, ProtocolError
 from ._protocol_models import (
     ADDRESSED_SELECTION_ADAPTER,
@@ -22,7 +22,6 @@ from ._protocol_models import (
     OutdatedSnapshot,
 )
 from ._references import validate_reference_capacity
-from .context import SelectionImage
 
 _IMMUTABLE_SELECTION_FIELDS = ("label", "outputCellId", "createdAt")
 MAX_SELECTION_STATE_BYTES = 40_000
@@ -38,7 +37,7 @@ class SelectionRecord:
     """One selection and every resource that shares its lifetime."""
 
     selection: Mapping[str, Any]
-    image: SelectionImage | None
+    image: _SelectionImage | None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "selection", _freeze_mapping(self.selection))
@@ -166,14 +165,16 @@ class SelectionState:
     def selections(self) -> list[dict[str, Any]]:
         return [record.detached_selection() for record in self.records]
 
-    def images(self) -> tuple[SelectionImage, ...]:
-        return tuple(
-            record.image for record in self.records if record.image is not None
-        )
+    def images(self) -> dict[str, bytes]:
+        return {
+            record.id: record.image.data
+            for record in self.records
+            if record.image is not None
+        }
 
     @property
     def image_bytes(self) -> int:
-        return sum(len(image.data) for image in self.images())
+        return sum(len(data) for data in self.images().values())
 
     def payload(self) -> dict[str, Any]:
         return {

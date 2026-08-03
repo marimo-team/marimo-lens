@@ -203,7 +203,7 @@ export function MarimoLensContent() {
           resolutionReceipt={resolutionReceipt.receipt}
           onResolutionReceiptInteractionChange={resolutionReceipt.setInteraction}
           cellAttentionFallback={
-            cellAttention && !cellAttentionView ? (
+            cellAttention && cellAttention.target === null ? (
               <CellAttentionFallback presentation={cellAttention} />
             ) : null
           }
@@ -340,20 +340,18 @@ function useCellAttention(
     const releaseAttention = protocol.onCellAttention((event) => {
       const active = dom.document.activeElement;
       if (
+        event.type !== "cell.activity.stop" &&
         active instanceof dom.window.HTMLElement &&
         active.closest("[data-marimo-lens-resolution-receipt]")
       ) {
         focusDock(dom);
       }
-      if (event.type === "cell.activity") controller.activity(event);
+      if (event.type === "cell.activity.start") controller.startActivity(event);
+      else if (event.type === "cell.activity.stop") controller.stopActivity(event);
       else controller.reveal(event);
-    });
-    const releaseResolution = protocol.onSelectionResolved((event) => {
-      controller.finishActivity(event.revision);
     });
     return () => {
       releaseAttention();
-      releaseResolution();
     };
   }, [controller, dom, protocol]);
   return presentation;

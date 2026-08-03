@@ -2,16 +2,25 @@
 
 from __future__ import annotations
 
+from importlib import metadata
+
 from .context import (
     LensContext,
-    SelectionImage,
+    LensReferences,
+    NotebookReference,
+    SelectionReference,
 )
 from .errors import LensError
 from .widget import Lens
+
+__version__ = metadata.version("marimo-lens")
 
 __all__ = [
     "Lens",
     "LensContext",
     "LensError",
-    "SelectionImage",
+    "LensReferences",
+    "NotebookReference",
+    "SelectionReference",
+    "__version__",
 ]

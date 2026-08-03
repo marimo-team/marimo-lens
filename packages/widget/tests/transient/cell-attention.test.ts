@@ -1,4 +1,8 @@
-import type { CellActivityEvent, CellRevealEvent } from "@marimo-lens/protocol";
+import type {
+  CellActivityStartEvent,
+  CellActivityStopEvent,
+  CellRevealEvent,
+} from "@marimo-lens/protocol";
 
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -12,21 +16,19 @@ afterEach(() => {
 });
 
 describe("cell attention", () => {
-  test("marks activity without scrolling or mutating the target", () => {
+  test("marks visible activity without scrolling or moving focus", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
     const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
     const cell = setupCell("BYtC");
     cell.scrollIntoView = vi.fn();
-    const before = cell.outerHTML;
     const focused = document.createElement("button");
     document.body.appendChild(focused);
     focused.focus();
 
-    controller.activity(activityEvent("BYtC", "Updating the aggregation."));
+    controller.startActivity(startActivityEvent("BYtC", "Updating the aggregation."));
 
     expect(cell.scrollIntoView).not.toHaveBeenCalled();
-    expect(cell.outerHTML).toBe(before);
     expect(document.activeElement).toBe(focused);
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -35,6 +37,42 @@ describe("cell attention", () => {
         phase: "active",
       }),
     );
+    controller.dispose();
+  });
+
+  test("brings an offscreen activity target into view once", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const cell = setupCell("new-cell");
+    cell.getBoundingClientRect = () => new DOMRect(20, window.innerHeight + 100, 400, 300);
+    cell.scrollIntoView = vi.fn();
+
+    controller.startActivity(startActivityEvent("new-cell", "Building the requested chart."));
+
+    expect(cell.scrollIntoView).toHaveBeenCalledOnce();
+    expect(cell.scrollIntoView).toHaveBeenCalledWith({
+      block: "center",
+      inline: "nearest",
+      behavior: "smooth",
+    });
+    controller.dispose();
+  });
+
+  test("reframes an activity target that has no room for its label", () => {
+    vi.useFakeTimers();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
+    const cell = setupCell("near-top");
+    cell.getBoundingClientRect = () => new DOMRect(20, 20, 400, 300);
+    cell.scrollIntoView = vi.fn();
+
+    controller.startActivity(startActivityEvent("near-top", "Checking the chart."));
+
+    expect(cell.scrollIntoView).toHaveBeenCalledWith({
+      block: "center",
+      inline: "nearest",
+      behavior: "smooth",
+    });
     controller.dispose();
   });
 
@@ -86,12 +124,12 @@ describe("cell attention", () => {
     const onChange = vi.fn();
     const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
     setupCell("same");
-    const event = activityEvent("same", "Updating the chart.");
+    const event = startActivityEvent("same", "Updating the chart.");
 
-    controller.activity(event);
+    controller.startActivity(event);
     const first = onChange.mock.lastCall?.[0];
     vi.advanceTimersByTime(19_000);
-    controller.activity(event);
+    controller.startActivity(event);
     const renewed = onChange.mock.lastCall?.[0];
 
     expect(renewed.sequence).toBe(first.sequence);
@@ -106,6 +144,55 @@ describe("cell attention", () => {
     controller.dispose();
   });
 
+  test("expires timed activity after its hold and exit", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    setupCell("timed");
+
+    controller.startActivity(startActivityEvent("timed", "Checking the chart.", 8_000));
+
+    vi.advanceTimersByTime(7_999);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "active" }));
+    vi.advanceTimersByTime(1);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "exiting" }));
+    vi.advanceTimersByTime(120);
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    controller.dispose();
+  });
+
+  test("restarts a timed activity hold on the same cell", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    setupCell("timed");
+    const event = startActivityEvent("timed", "Checking the chart.", 4_000);
+
+    controller.startActivity(event);
+    vi.advanceTimersByTime(3_000);
+    controller.startActivity(event);
+    vi.advanceTimersByTime(3_999);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "active" }));
+    vi.advanceTimersByTime(1);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "exiting" }));
+    controller.dispose();
+  });
+
+  test("stops activity only for its active cell", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    setupCell("working");
+
+    controller.startActivity(startActivityEvent("working", "Updating the chart."));
+    controller.stopActivity(activityStopEvent("other"));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "activity" }));
+
+    controller.stopActivity(activityStopEvent("working"));
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    controller.dispose();
+  });
+
   test("updates a same-cell activity message and replaces activity with reveal", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
@@ -113,12 +200,12 @@ describe("cell attention", () => {
     const cell = setupCell("same");
     cell.scrollIntoView = vi.fn();
 
-    controller.activity(activityEvent("same", "Editing."));
+    controller.startActivity(startActivityEvent("same", "Editing."));
     const firstSequence = onChange.mock.lastCall?.[0].sequence;
-    controller.activity(activityEvent("same", "Running."));
+    controller.startActivity(startActivityEvent("same", "Running."));
     expect(onChange.mock.lastCall?.[0]).toMatchObject({
       kind: "activity",
-      event: activityEvent("same", "Running."),
+      event: startActivityEvent("same", "Running."),
     });
     expect(onChange.mock.lastCall?.[0].sequence).toBeGreaterThan(firstSequence);
 
@@ -131,42 +218,25 @@ describe("cell attention", () => {
     controller.dispose();
   });
 
-  test("finishes activity for a matching resolution and ignores an older one", () => {
-    vi.useFakeTimers();
-    const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
-    setupCell("same");
-
-    controller.activity(activityEvent("same", "Editing."));
-    controller.finishActivity(6);
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "activity" }));
-
-    controller.finishActivity(7);
-    expect(onChange).toHaveBeenLastCalledWith(null);
-    controller.dispose();
-  });
-
   test("replaces activity when the primary working cell changes", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
     const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
-    const first = setupCell("first");
+    setupCell("first");
     const second = setupCell("second");
 
-    controller.activity(activityEvent("first", "Editing."));
+    controller.startActivity(startActivityEvent("first", "Editing."));
     vi.advanceTimersByTime(19_000);
-    controller.activity(activityEvent("second", "Running."));
+    controller.startActivity(startActivityEvent("second", "Running."));
     vi.advanceTimersByTime(1_001);
 
     expect(onChange).toHaveBeenLastCalledWith(
       expect.objectContaining({
         kind: "activity",
-        event: activityEvent("second", "Running."),
+        event: startActivityEvent("second", "Running."),
         target: second,
       }),
     );
-    expect(first.attributes).toHaveLength(1);
-    expect(second.attributes).toHaveLength(1);
     controller.dispose();
   });
 
@@ -174,7 +244,7 @@ describe("cell attention", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
     const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
-    controller.activity(activityEvent("new-cell"));
+    controller.startActivity(startActivityEvent("new-cell"));
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ target: null }));
 
     const cell = setupCell("new-cell");
@@ -223,7 +293,7 @@ describe("cell attention", () => {
     const onChange = vi.fn();
     const cell = setupCell("resized");
     const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
-    controller.activity(activityEvent("resized"));
+    controller.startActivity(startActivityEvent("resized"));
     const callsBeforeResize = onChange.mock.calls.length;
 
     for (const resize of resizeCallbacks) resize([], {} as ResizeObserver);
@@ -256,7 +326,7 @@ describe("cell attention", () => {
     const onChange = vi.fn();
     const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
     const cell = setupCell("removed");
-    controller.activity(activityEvent("removed"));
+    controller.startActivity(startActivityEvent("removed"));
 
     cell.remove();
     window.dispatchEvent(new Event("scroll"));
@@ -285,7 +355,7 @@ describe("cell attention", () => {
 
     try {
       Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
-      controller.activity(activityEvent("hidden"));
+      controller.startActivity(startActivityEvent("hidden"));
       vi.setSystemTime(Date.now() + 21_000);
       Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
       document.dispatchEvent(new Event("visibilitychange"));
@@ -329,7 +399,7 @@ describe("cell attention", () => {
     const onChange = vi.fn();
     const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
     setupCell("disposed");
-    controller.activity(activityEvent("disposed"));
+    controller.startActivity(startActivityEvent("disposed"));
 
     controller.dispose();
     const callsAfterDispose = onChange.mock.calls.length;
@@ -345,7 +415,7 @@ describe("cell attention", () => {
 function setupCell(cellId: string): HTMLElement {
   const cell = document.createElement("section");
   cell.id = `cell-${cellId}`;
-  cell.getBoundingClientRect = () => new DOMRect(20, 20, 400, 300);
+  cell.getBoundingClientRect = () => new DOMRect(20, 80, 400, 300);
   document.body.appendChild(cell);
   return cell;
 }
@@ -353,18 +423,36 @@ function setupCell(cellId: string): HTMLElement {
 function setupOutput(cellId: string): HTMLElement {
   const output = document.createElement("div");
   output.id = `output-${cellId}`;
-  output.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
+  output.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
   document.body.appendChild(output);
   return output;
 }
 
-function activityEvent(cellId: string, message?: string): CellActivityEvent {
+function startActivityEvent(
+  cellId: string,
+  message?: string,
+  durationMs?: number,
+): CellActivityStartEvent {
   return {
     protocol: "marimo-lens.event",
     version: 1,
-    type: "cell.activity",
+    type: "cell.activity.start",
     revision: 7,
-    payload: { cellId, ...(message ? { message } : {}) },
+    payload: {
+      cellId,
+      ...(durationMs === undefined ? {} : { durationMs }),
+      ...(message ? { message } : {}),
+    },
+  };
+}
+
+function activityStopEvent(cellId: string): CellActivityStopEvent {
+  return {
+    protocol: "marimo-lens.event",
+    version: 1,
+    type: "cell.activity.stop",
+    revision: 7,
+    payload: { cellId },
   };
 }
 

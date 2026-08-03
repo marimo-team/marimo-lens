@@ -98,10 +98,7 @@ export class OutputCaptureTransport {
       );
       return;
     }
-    if (this.#active) {
-      this.#replyFailure(command, "capture_busy", "Lens is already capturing notebook output");
-      return;
-    }
+    this.#abortActive("Output capture was superseded by a newer request");
 
     const controller = new AbortController();
     const active: ActiveCapture = {

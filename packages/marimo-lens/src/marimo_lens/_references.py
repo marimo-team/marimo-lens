@@ -6,9 +6,12 @@ import copy
 import json
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 
 from ._runtime import RuntimeSnapshot
+
+if TYPE_CHECKING:
+    from .context import LensReferences
 
 MAX_CONTEXT_REFERENCES_BYTES = 45_000
 
@@ -69,7 +72,7 @@ def build_references(
     *,
     revision: int,
     current_selection_id: str | None,
-) -> dict[str, Any]:
+) -> LensReferences:
     live_cell_ids = {cell.id for cell in snapshot.cells}
     selection_references = [
         _project_selection(
@@ -108,7 +111,7 @@ def build_references(
         raise RuntimeError(
             "Lens context references exceeded their serialization budget."
         )
-    return references
+    return cast("LensReferences", references)
 
 
 def _reference_size(references: Mapping[str, Any]) -> int:

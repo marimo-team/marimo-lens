@@ -37,7 +37,7 @@ MAX_ERROR = 500
 MAX_ATTENTION_MESSAGE = 240
 MAX_REVEAL_MESSAGE = 1_000
 MAX_ATTENTION_LABEL = 40
-MAX_REVEAL_DURATION_MS = 60_000
+MAX_ATTENTION_DURATION_MS = 300_000
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 _TIMESTAMP_PATTERN = (
@@ -191,9 +191,9 @@ NonNegativeSafeInteger: TypeAlias = Annotated[
     int,
     Field(strict=True, ge=0, le=MAX_SAFE_INTEGER),
 ]
-RevealDuration: TypeAlias = Annotated[
+AttentionDuration: TypeAlias = Annotated[
     int,
-    Field(strict=True, ge=1, le=MAX_REVEAL_DURATION_MS),
+    Field(strict=True, ge=1, le=MAX_ATTENTION_DURATION_MS),
 ]
 Revision: TypeAlias = NonNegativeSafeInteger
 ProtocolVersion: TypeAlias = Annotated[
@@ -462,28 +462,8 @@ ClientCommand: TypeAlias = Annotated[
 ]
 
 
-class OutputCaptureSelection(TransportModel):
-    selection_id: Identifier
-    label: SelectionLabel
-    anchor: SelectionAnchor
-
-
 class OutputCapturePayload(TransportModel):
     output_cell_id: CellId
-    selections: Annotated[
-        tuple[OutputCaptureSelection, ...],
-        Field(max_length=MAX_SELECTIONS),
-    ]
-
-    @model_validator(mode="after")
-    def unique_selections(self) -> Self:
-        selection_ids = tuple(selection.selection_id for selection in self.selections)
-        if len(selection_ids) != len(set(selection_ids)):
-            raise PydanticCustomError(
-                "invalid_selection",
-                "Cell capture selections must be unique",
-            )
-        return self
 
 
 class OutputCaptureCommand(CommandBase):
@@ -565,7 +545,7 @@ CaptureBrowserMessage: TypeAlias = Annotated[
 
 class CellRevealPayload(TransportModel):
     cell_id: CellId
-    duration_ms: RevealDuration
+    duration_ms: AttentionDuration
     label: AttentionLabel | None = None
     message: RevealText | None = None
 
@@ -578,21 +558,36 @@ class CellRevealEvent(TransportModel):
     payload: CellRevealPayload
 
 
-class CellActivityPayload(TransportModel):
+class CellActivityStartPayload(TransportModel):
     cell_id: CellId
+    duration_ms: AttentionDuration | None = None
     label: AttentionLabel | None = None
     message: AttentionText | None = None
 
 
-class CellActivityEvent(TransportModel):
+class CellActivityStartEvent(TransportModel):
     protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
     version: ProtocolVersion = PROTOCOL_VERSION
-    type: Literal["cell.activity"] = "cell.activity"
+    type: Literal["cell.activity.start"] = "cell.activity.start"
     revision: Revision
-    payload: CellActivityPayload
+    payload: CellActivityStartPayload
 
 
-CellAttentionEvent: TypeAlias = CellActivityEvent | CellRevealEvent
+class CellActivityStopPayload(TransportModel):
+    cell_id: CellId
+
+
+class CellActivityStopEvent(TransportModel):
+    protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
+    version: ProtocolVersion = PROTOCOL_VERSION
+    type: Literal["cell.activity.stop"] = "cell.activity.stop"
+    revision: Revision
+    payload: CellActivityStopPayload
+
+
+CellAttentionEvent: TypeAlias = (
+    CellActivityStartEvent | CellActivityStopEvent | CellRevealEvent
+)
 
 
 class ResolvedSelection(TransportModel):
@@ -668,7 +663,7 @@ SELECTION_LABEL_ADAPTER = TypeAdapter(SelectionLabel)
 OPTIONAL_ATTENTION_TEXT_ADAPTER = TypeAdapter(OptionalAttentionText)
 OPTIONAL_REVEAL_TEXT_ADAPTER = TypeAdapter(OptionalRevealText)
 OPTIONAL_ATTENTION_LABEL_ADAPTER = TypeAdapter(OptionalAttentionLabel)
-REVEAL_DURATION_ADAPTER = TypeAdapter(RevealDuration)
+ATTENTION_DURATION_ADAPTER = TypeAdapter(AttentionDuration)
 
 
 def dump_model(model: BaseModel) -> dict[str, Any]:

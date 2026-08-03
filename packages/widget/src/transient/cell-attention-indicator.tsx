@@ -1,7 +1,10 @@
 import { LocateFixed, MousePointer2 } from "lucide-react";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
 
-import type { CellAttentionPresentation } from "@/transient/cell-attention";
+import {
+  CELL_ATTENTION_TOP_GUTTER,
+  type CellAttentionPresentation,
+} from "@/transient/cell-attention";
 
 const VIEWPORT_MARGIN = 12;
 const LABEL_MIN_HEIGHT = 28;
@@ -45,7 +48,9 @@ export function projectCellAttention(
   const labelMaxWidth = Math.floor(Math.min(LABEL_MAX_WIDTH, availableLabelWidth));
   const labelHeight =
     measurement?.maxWidth === labelMaxWidth ? measurement.height : LABEL_MIN_HEIGHT;
-  if (rect.top < labelHeight + LABEL_GAP + VIEWPORT_MARGIN) return null;
+  if (rect.top < Math.max(CELL_ATTENTION_TOP_GUTTER, labelHeight + LABEL_GAP + VIEWPORT_MARGIN)) {
+    return null;
+  }
 
   return {
     presentation,
@@ -88,7 +93,7 @@ export function CellAttentionIndicator({
   const { cellId, message } = presentation.event.payload;
   const status =
     presentation.event.payload.label ??
-    (presentation.event.type === "cell.activity" ? "Working" : "Ready");
+    (presentation.event.type === "cell.activity.start" ? "Working" : "Ready");
   const detail = message;
 
   return (
@@ -124,7 +129,7 @@ export function CellAttentionFallback({
   const { cellId, message } = presentation.event.payload;
   const status =
     presentation.event.payload.label ??
-    (presentation.event.type === "cell.activity" ? "Working" : "Not visible");
+    (presentation.event.type === "cell.activity.start" ? "Working" : "Not visible");
   return (
     <div
       className="ml-cell-attention-notice"
@@ -187,7 +192,7 @@ export function CellAttentionAnnouncement({
 function announceCellAttention(presentation: CellAttentionPresentation): string {
   const { cellId, label, message } = presentation.event.payload;
   const status =
-    presentation.event.type === "cell.activity"
+    presentation.event.type === "cell.activity.start"
       ? `${label ?? "Working"} in cell ${cellId}.`
       : label
         ? `${label} in cell ${cellId}.`

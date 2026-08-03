@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import hashlib
+import inspect
+from collections.abc import Mapping
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
-from marimo_lens import Lens, LensContext, LensError, SelectionImage, agent
-from marimo_lens._images import OutputImage
-from marimo_lens._output_capture import OutputCaptureResult
+from marimo_lens import Lens, LensContext, LensError, agent
 
 from tests.support.factories import png
 
@@ -18,22 +18,68 @@ class _MarimoWrapper:
         self.widget = widget
 
 
+def test_agent_module_exports_the_handoff_surface() -> None:
+    assert set(agent.__all__) == {"MountedLens", "connect"}
+
+
+def test_agent_handoff_matches_documented_signatures() -> None:
+    assert list(inspect.signature(agent.connect).parameters) == ["context", "identity"]
+    assert (
+        inspect.signature(agent.connect).parameters["identity"].kind
+        is inspect.Parameter.KEYWORD_ONLY
+    )
+    expected_parameters = {
+        "context": ["self"],
+        "cell_image": ["self", "cell_id", "expected_revision"],
+        "start_activity": [
+            "self",
+            "cell_id",
+            "duration_ms",
+            "label",
+            "message",
+        ],
+        "stop_activity": ["self", "cell_id"],
+        "resolve": ["self", "selection_ids", "expected_revision", "summary"],
+        "reveal": ["self", "cell_id", "duration_ms", "label", "message"],
+    }
+    for method_name, expected in expected_parameters.items():
+        parameters = inspect.signature(
+            getattr(agent.MountedLens, method_name)
+        ).parameters
+        assert list(parameters) == expected
+
+    assert (
+        inspect.signature(agent.MountedLens.cell_image)
+        .parameters["expected_revision"]
+        .kind
+        is inspect.Parameter.KEYWORD_ONLY
+    )
+    reveal_duration = inspect.signature(agent.MountedLens.reveal).parameters[
+        "duration_ms"
+    ]
+    assert reveal_duration.kind is inspect.Parameter.KEYWORD_ONLY
+    assert reveal_duration.default is inspect.Parameter.empty
+    activity_duration = inspect.signature(agent.MountedLens.start_activity).parameters[
+        "duration_ms"
+    ]
+    assert activity_duration.kind is inspect.Parameter.KEYWORD_ONLY
+    assert activity_duration.default is None
+
+
 def _context(
     lens: Lens,
     *,
     aliases: dict[str, object] | None = None,
-    cell: object | None = None,
 ) -> SimpleNamespace:
     namespace = {"_cell_demo_lens": lens, **(aliases or {})}
-    graph = SimpleNamespace(cells={"cell-view": cell} if cell is not None else {})
-    return SimpleNamespace(globals=namespace, graph=graph)
+    return SimpleNamespace(globals=namespace)
 
 
 def _lens_context(
     *,
     revision: int = 4,
     note: str = "Make this blue",
-    images: tuple[SelectionImage, ...] = (),
+    images: Mapping[str, bytes] | None = None,
 ) -> LensContext:
     return LensContext(
         {
@@ -54,173 +100,125 @@ def _lens_context(
             ],
         },
         "full Lens context",
-        images,
+        images or {},
     )
 
 
-def test_discover_deduplicates_aliases_and_preserves_identity() -> None:
+def test_connect_deduplicates_aliases_and_preserves_identity() -> None:
     lens = Lens()
     context = _context(
         lens,
         aliases={"alias": lens, "wrapped": _MarimoWrapper(lens)},
     )
 
-    first = agent.discover(context)
-    second = agent.discover(context, identity=first[0].identity)
+    first = agent.connect(context)
+    second = agent.connect(context, identity=first.identity)
 
-    assert len(first) == 1
-    assert first[0].names == ("alias", "wrapped", "_lens")
-    assert second[0].identity == first[0].identity
-    assert agent.discover(context, identity="another-lens") == ()
+    assert second.identity == first.identity
+    with pytest.raises(LensError) as raised:
+        agent.connect(context, identity="another-lens")
+    assert raised.value.code == "lens_unavailable"
+    assert raised.value.revision is None
     lens.close()
 
 
-def test_discover_skips_closed_lenses() -> None:
+def test_connect_reports_an_unavailable_lens() -> None:
     lens = Lens()
     lens.close()
 
-    assert agent.discover(_context(lens)) == ()
+    with pytest.raises(LensError) as raised:
+        agent.connect(_context(lens))
+    assert raised.value.code == "lens_unavailable"
+    assert raised.value.revision is None
 
 
-def test_scan_returns_bounded_current_attention(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_connect_reports_ambiguous_lenses() -> None:
+    first = Lens()
+    second = Lens()
+    context = _context(first, aliases={"other_lens": second})
+
+    with pytest.raises(LensError) as raised:
+        agent.connect(context)
+
+    assert raised.value.code == "lens_ambiguous"
+    assert raised.value.revision is None
+    first.close()
+    second.close()
+
+
+def test_connect_requires_a_string_identity() -> None:
     lens = Lens()
-    context_value = _lens_context(note="x" * 1_100)
-    monkeypatch.setattr(Lens, "context", lambda _self: context_value)
-    context = _context(
-        lens,
-        cell=SimpleNamespace(
-            code="chart = make_chart(data)",
-            defs={"chart"},
-            refs={"data"},
-        ),
-    )
-
-    scan = agent.discover(context)[0].scan()
-
-    assert scan["revision"] == 4
-    assert scan["lens"] == {
-        "variable": "_lens",
-        "aliases": [],
-        "omittedAliasCount": 0,
-    }
-    assert scan["selectionCount"] == 1
-    assert scan["current"] == {
-        "id": "selection-1",
-        "label": "S1",
-        "outputCellId": "cell-view",
-        "cellStatus": "available",
-        "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
-        "note": {"text": "x" * 1_000, "truncated": True},
-        "snapshotStatus": "available",
-        "domHint": {"tag": "svg", "text": "Quarterly revenue"},
-    }
-    assert scan["currentCell"] == {
-        "id": "cell-view",
-        "status": "available",
-        "defs": ["chart"],
-        "refs": ["data"],
-        "codeCharacters": 24,
-    }
+    with pytest.raises(TypeError, match="identity must be a string or None"):
+        agent.connect(_context(lens), identity=cast(str | None, 1))
     lens.close()
 
 
-def test_context_and_selection_image_guard_the_scan_revision(
+def test_connect_requires_a_nonempty_identity() -> None:
+    lens = Lens()
+    with pytest.raises(ValueError, match="identity must not be empty"):
+        agent.connect(_context(lens), identity="")
+    lens.close()
+
+
+def test_context_returns_the_current_snapshot_and_png_bytes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     data = png()
-    image = SelectionImage(
-        id="image:selection-1",
-        selection_id="selection-1",
-        media_type="image/png",
-        data=data,
-        width=2,
-        height=2,
-        sha256=hashlib.sha256(data).hexdigest(),
-        captured_at="2026-07-27T10:00:00Z",
-        outdated=False,
-    )
     lens = Lens()
-    context_value = _lens_context(images=(image,))
+    context_value = _lens_context(images={"selection-1": data})
     monkeypatch.setattr(Lens, "context", lambda _self: context_value)
-    mounted = agent.discover(_context(lens))[0]
+    mounted = agent.connect(_context(lens))
 
-    with pytest.raises(LensError) as raised:
-        mounted.context(expected_revision=3)
-
-    assert raised.value.code == "revision_conflict"
-    transferred = mounted.selection_image(
-        "selection-1",
-        expected_revision=4,
-    )
-    assert transferred is not None
-    assert transferred.source == "selection"
-    assert transferred.cell_id == "cell-view"
-    assert transferred.data == data
+    assert mounted.context().revision == 4
+    assert mounted.context().images["selection-1"] == data
     lens.close()
 
 
-def test_cell_image_adapts_private_capture_mailbox(
+def test_cell_image_forwards_the_raw_byte_contract(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     data = png(3, 2)
-    output = OutputImage(
-        request_id="request-1",
-        cell_id="cell-view",
-        media_type="image/png",
-        data=data,
-        width=3,
-        height=2,
-        sha256=hashlib.sha256(data).hexdigest(),
-        captured_at="2026-07-27T10:00:00Z",
-    )
     lens = Lens()
     monkeypatch.setattr(Lens, "context", lambda _self: _lens_context())
+    calls: list[tuple[str, int]] = []
 
-    def start_capture(
+    def cell_image(
         _lens: Lens,
-        _cell_id: str,
+        cell_id: str,
         *,
         expected_revision: int,
-    ) -> str:
-        assert expected_revision == 4
-        return "request-1"
+    ) -> bytes:
+        calls.append((cell_id, expected_revision))
+        return data
 
-    monkeypatch.setattr(
-        Lens,
-        "_start_output_capture",
-        start_capture,
-    )
-    monkeypatch.setattr(
-        Lens,
-        "_read_output_capture",
-        lambda _self, _request_id: OutputCaptureResult(
-            request_id="request-1",
-            cell_id="cell-view",
-            selection_ids=("selection-1",),
-            status="available",
-            image=output,
-        ),
-    )
-    mounted = agent.discover(_context(lens))[0]
+    monkeypatch.setattr(Lens, "_cell_image", cell_image)
+    mounted = agent.connect(_context(lens))
 
-    request_id = mounted.start_cell_image("cell-view", expected_revision=4)
-    result = mounted.read_cell_image(request_id)
+    result = mounted.cell_image("cell-view", expected_revision=4)
 
-    assert request_id == "request-1"
-    assert result.status == "available"
-    assert result.image is not None
-    assert result.image.source == "cell"
-    assert result.image.data == data
+    assert result == data
+    assert calls == [("cell-view", 4)]
     lens.close()
 
 
-def test_mounted_lens_forwards_reveal_duration(
+def test_mounted_lens_forwards_attention_workflow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    calls: list[tuple[str, str | None, str | None, int]] = []
+    calls: list[tuple[object, ...]] = []
     lens = Lens()
+
+    def start_activity(
+        _self: Lens,
+        cell_id: str,
+        *,
+        duration_ms: int | None = None,
+        label: str | None = None,
+        message: str | None = None,
+    ) -> None:
+        calls.append(("start", cell_id, duration_ms, label, message))
+
+    def stop_activity(_self: Lens, cell_id: str) -> None:
+        calls.append(("stop", cell_id))
 
     def reveal(
         _self: Lens,
@@ -230,15 +228,19 @@ def test_mounted_lens_forwards_reveal_duration(
         label: str | None = None,
         message: str | None = None,
     ) -> None:
-        calls.append((cell_id, label, message, duration_ms))
+        calls.append(("reveal", cell_id, duration_ms, label, message))
 
-    monkeypatch.setattr(
-        Lens,
-        "reveal",
-        reveal,
+    monkeypatch.setattr(Lens, "start_activity", start_activity)
+    monkeypatch.setattr(Lens, "stop_activity", stop_activity)
+    monkeypatch.setattr(Lens, "reveal", reveal)
+    mounted = agent.connect(_context(lens))
+
+    mounted.start_activity(
+        "cell-view",
+        label="Updating aggregation",
+        message="Applying the requested grouping.",
     )
-    mounted = agent.discover(_context(lens))[0]
-
+    mounted.stop_activity("cell-view")
     mounted.reveal(
         "cell-view",
         label="Updated chart",
@@ -248,10 +250,19 @@ def test_mounted_lens_forwards_reveal_duration(
 
     assert calls == [
         (
+            "start",
             "cell-view",
+            None,
+            "Updating aggregation",
+            "Applying the requested grouping.",
+        ),
+        ("stop", "cell-view"),
+        (
+            "reveal",
+            "cell-view",
+            8_000,
             "Updated chart",
             "Updated the chart and verified its labels.",
-            8_000,
-        )
+        ),
     ]
     lens.close()
