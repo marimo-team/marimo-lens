@@ -12,113 +12,161 @@ description: >-
 
 # Work with marimo Lens
 
-Run this skill alongside a live marimo kernel executor such as
-`marimo-pair`. The executor supplies session discovery, Python execution in the
-active kernel, code-mode mutation, and runtime verification. This skill owns
-Lens grounding, image handling, activity, resolution, and reveal policy.
+Run this skill alongside a live marimo kernel executor such as `marimo-pair`.
+The executor supplies kernel calls, code-mode mutation, and runtime
+verification. This skill owns Lens grounding, images, activity, reveals, and
+resolution.
 
-## Workflow reference
+Activate this workflow after the request identifies Lens work through a
+selection, output reference, overview, or walkthrough. A generic kernel
+connection or toast remains with the executor.
 
-Read [reference/workflow.md](reference/workflow.md) before acting on a Lens
-request. It contains executable kernel calls, image file handling, result
-handling, and the closeout sequence.
+Use [reference/workflow.md](reference/workflow.md) for complete mutation
+templates, operation failures, and multi-cell walkthroughs. The workflow here
+covers inspection and straightforward changes.
 
-## Ground the request
+## Connect and read the request
 
-Import `marimo_lens.agent` inside the active kernel, then call `discover(ctx)`
-inside a `marimo._code_mode.get_context()` block:
+Connect to the mounted Lens and take one detached context snapshot in the same
+kernel call:
 
 ```python
 import marimo_lens.agent as lens_agent
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx)
+    mounted = lens_agent.connect(ctx)
+    snapshot = mounted.context()
+    selection = snapshot.current
+    if selection is not None and selection["cellStatus"] == "available":
+        mounted.start_activity(
+            selection["outputCellId"],
+            label="Tracing selected result",
+            message="Reading its producing cell and relevant inputs.",
+        )
+    print(mounted.identity)
+    print(snapshot.revision)
+    print(snapshot.current)
 ```
 
-Inspect each handle with `scan()`.
+Keep `mounted.identity` and `snapshot.revision` together. Reconnect in later
+kernel calls with `connect(ctx, identity=identity)`. Read a fresh context when
+`connect()` reports `lens_unavailable`.
 
-- Report an import failure as an unavailable Lens adapter in the active
-  notebook environment.
-- Continue from the single mounted Lens when one is present.
-- Ask the user to leave one Lens mounted when several are present.
-- Report that Lens is unavailable when the request explicitly depends on Lens
-  and no mounted handle is present.
+Ask the user to leave one Lens mounted when `connect()` reports
+`lens_ambiguous`. Report Lens as unavailable when the request explicitly
+depends on it and `connect()` reports `lens_unavailable` without an identity.
 
-Keep the scan's `identity` and `revision` together. When selections are
-present, also keep their selection IDs and output cell IDs. In later kernel
-calls, reconnect with
-`discover(ctx, identity=identity)`. An empty result means the mounted Lens
-changed, so scan again before acting.
+`snapshot.current` is the likely referent for "this", "here", or "the selected
+output". The explicit request takes priority over an older selection note. An
+empty selection list describes the current attention state. Continue an
+explicit overview or walkthrough through the notebook's ordered cells and
+graph.
 
-A mounted Lens is available at any `selectionCount`. A zero count means the
-request has no human point or region context. Continue from the user's explicit
-request and the notebook cells.
+## Start meaningful activity
 
-Treat the current selection as the likely referent for "this", "here", or
-"the selected output". The explicit request takes priority over an older
-selection note.
+Call `start_activity()` as soon as the primary work cell and a meaningful label
+are known. Start it in the initial context call when the current selection
+already identifies that cell. Do this before extended context loading, image
+inspection, planning, mutation, or verification.
 
-## Use the required evidence
+Use the selected or edited cell as the activity target. For an overview, use
+the first inspected cell whose ID is present in `ctx.graph.cells`. Start
+activity again when the primary target changes. A direct result can proceed to
+`reveal()`.
 
-For a selection request, read the selected cell and its required graph
-neighbors before planning a mutation. Load
-`handle.context(expected_revision=revision).text` when a truncated note or
-omitted scan detail affects the request.
+Leave `duration_ms` unset for work spanning context, edits, execution, and
+verification, then call `stop_activity()` when that work finishes. Pass
+`duration_ms` for a bounded status that should clear itself after its hold.
 
-For an overview or walkthrough, inspect the notebook's ordered cells and graph
-through the live executor. Choose a short route through existing cells that
-explains setup, inputs, transformations, and results. Reveal those cells in
-notebook order even when the scan contains zero selections.
+When the result needs a new cell, first create a visible comment-only
+placeholder such as `# Preparing the requested chart`. Start activity on its
+returned cell ID in the next kernel call, then replace and run that same cell.
 
-Use `selection_image()` for pixels captured with one selection. Use
-`start_cell_image()` and `read_cell_image()` for the current rendered cell,
-including every open Lens mark on that cell. Write an available
-`AgentImage.data` to a private temporary PNG in the active kernel, open that
-path with the agent's image reader, then remove the file after its final read.
-This path requires the kernel and image reader to share a filesystem. When
-they do not, continue from text and graph evidence and report that visual
-inspection is unavailable.
+## Inspect the required evidence
 
-## Apply and close the request
+Read the selected cell and its required graph neighbors before planning a
+mutation. `snapshot.text` contains bounded standalone context. For an aggregate
+mark, identify the plotted measure and its entity key. When an upstream join
+can multiply entities, compare the row count with the distinct entity count and
+name the plotted unit precisely.
 
-Call `activity()` when applying a notebook mutation or running an extended
-check. A read-only overview can proceed directly to its walkthrough. Use a
-fresh kernel call to verify changed cells are idle and free of relevant errors.
-For visual work, inspect a fresh cell image after execution.
+For an overview, inspect ordered cells and graph edges through the executor.
+Choose a short route through setup, inputs, transformations, and results.
+Reveal those cells in notebook order when the selection list is empty too.
 
-Give each activity and reveal a short contextual `label`. The label is the
-heading, while `message` explains the current action or result. Name the
-notebook object and the work being done, such as `Joining artist records`,
-`Checking image coverage`, `Source tables`, or `Updated chart`. Generic
-lifecycle headings such as `Verifying`, `Working`, and `Ready` are too vague.
-Vary labels across a walkthrough so each step is recognizable at a glance.
+Selection PNGs are annotated capture-time evidence. A cell PNG is a fresh,
+unannotated rendering:
 
-Use `reveal()` to guide the user's attention across verified notebook results.
-For an overview or a multi-cell change, create a short walkthrough by revealing
-each relevant cell in reading order. Give every reveal a `duration_ms` that
-lets the user orient to the highlighted cell and read its message at a
-comfortable pace. Allow more time for longer or denser messages. Use one kernel
-call per reveal, print the chosen hold in milliseconds, and wait for that hold
-before sending the next. Keep each message concise and tied to the highlighted
-cell.
-
-Reveal the primary result before resolving its selections. Wait for the final
-reveal's chosen hold, then resolve selections addressed by that verified result
-against the revision captured before the work. On `revision_conflict`, leave
-the selections open, scan again, and reassess the changed request. The addressed
-receipt is the final presentation. The browser also queues a receipt that
-arrives while a reveal is active. When the request has no selection, or the
-result does not address an open selection, finish after the walkthrough and
-leave selection state unchanged.
-
-Keep selections open when verification fails or the next step requires user
-input. Keep decisions, supporting details, and follow-up information the user
-may need later in the agent chat.
-
-Remove every temporary image file after its final read:
-
-```bash
-unlink '/private/tmp/marimo-lens-ab12cd34.png'
-unlink '/private/tmp/marimo-lens-ef56gh78.png'
+```python
+selection = snapshot.current
+selection_png = snapshot.images.get(selection["id"]) if selection is not None else None
+selection_status = selection["snapshot"]["status"] if selection is not None else None
+cell_png = None
+if selection is not None and selection["cellStatus"] == "available":
+    cell_id = selection["outputCellId"]
+    cell_png = mounted.cell_image(
+        cell_id,
+        expected_revision=snapshot.revision,
+    )
 ```
+
+A `selection_status` of `outdated` means the marker moved after
+`selection_png` was captured.
+
+The first call starts capture and returns `None`. Repeat it in later kernel
+executions with the saved identity, cell ID, and revision. Pending calls use the
+same capture. Lens has one full-cell capture slot. Finish the current cell with
+bytes or a terminal `LensError` before requesting another cell. A different
+cell while capture is pending raises `LensError(code="capture_busy")`.
+
+Write PNG bytes to a private temporary path visible to the image reader:
+
+```python
+from tempfile import NamedTemporaryFile
+
+image_bytes = cell_png if cell_png is not None else selection_png
+if image_bytes is not None:
+    with NamedTemporaryFile(
+        prefix="marimo-lens-", suffix=".png", delete=False
+    ) as image_file:
+        image_file.write(image_bytes)
+        print(image_file.name)
+```
+
+Open the printed path, then delete it after the image reader returns. The
+kernel and image reader must share a filesystem. Make visual claims after the
+reader returns visible pixels. When the reader cannot display the image, verify
+through code, data, cell status, and errors, then report that visual inspection
+was unavailable.
+
+## Apply, verify, and present
+
+Keep activity visible through context gathering, edits, cell creation,
+execution, and fresh verification. Verify changed cells in a fresh kernel call.
+Each claimed result must be idle and free of relevant errors. Inspect a fresh
+cell image for visual work.
+
+Give each activity and reveal a contextual `label`. Name the notebook object
+and action or result, such as `Joining artist records`, `Checking image
+coverage`, `Source tables`, or `Updated chart`. Use `message` for one concise
+supporting sentence. Vary labels across a walkthrough.
+
+After verification succeeds, call `stop_activity(cell_id)` for persistent
+activity. Timed activity may be stopped early or allowed to finish its hold.
+Reveal verified results in reading order. Set each `duration_ms` long enough for
+the user to orient to the cell and read its message comfortably. Use one kernel
+call per reveal, print the hold, and wait for it before sending the next.
+
+Reveal the primary result before resolving its selections. After the final
+hold, call `resolve()` with the revision captured before the work. The addressed
+receipt is the final presentation. Keep its summary to one short sentence of at
+most 240 UTF-16 code units. Put detailed evidence in notebook cells and reveal
+messages. On `revision_conflict`, leave selections open, reconnect, and reassess
+a fresh context.
+
+Finish after the walkthrough when no selection was addressed. Keep selections
+open when verification fails or the next step needs user input. Leave activity
+visible with a concrete label and message that describe that state.
+
+Delete every temporary image path after its final image-reader call.

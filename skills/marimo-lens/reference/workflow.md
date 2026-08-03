@@ -1,15 +1,19 @@
 # marimo Lens agent workflow
 
-Use these snippets through a live marimo kernel executor. With
-`marimo-pair`, resolve `PAIR_EXECUTE` to its `scripts/execute-code.sh` and
-target the notebook with its URL, port, or session arguments.
+Use these snippets through a live marimo kernel executor. With `marimo-pair`,
+resolve `PAIR_EXECUTE` to its `scripts/execute-code.sh` and target the notebook
+with its URL, port, or session arguments.
 
 Each kernel call has a fresh scratchpad namespace. Import
 `marimo_lens.agent` in every snippet that uses it.
 
-## Scan mounted Lens widgets
+Enter this workflow after the request identifies Lens work through a selection,
+output reference, overview, or walkthrough. Leave a generic kernel connection
+or toast to the executor.
 
-Run one bounded scan before the first mutation:
+## Connect and take a context snapshot
+
+Connect and read the current Lens state in one kernel call:
 
 ```python
 import json
@@ -18,291 +22,273 @@ import marimo_lens.agent as lens_agent
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
-    scans = [mounted.scan() for mounted in lens_agent.discover(ctx)]
-    print(json.dumps(scans, ensure_ascii=False, sort_keys=True))
+    mounted = lens_agent.connect(ctx)
+    snapshot = mounted.context()
+    print(
+        json.dumps(
+            {
+                "identity": mounted.identity,
+                "revision": snapshot.revision,
+                "current": snapshot.current,
+                "selectionCount": len(snapshot.references["selections"]),
+                "imageSelectionIds": list(snapshot.images),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
 ```
 
-A scan contains the stable mounted-Lens identity, current revision, bounded
-selection notes and DOM hints, and a compact summary of the current output
-cell. Load PNG bytes and standalone Lens text through their explicit methods.
+Keep the returned identity and revision. When a current selection exists, also
+keep its `id` and `outputCellId`.
 
-Keep these values from the chosen scan:
-
-```text
-identity
-revision
-selectionCount
-current.id            # when current is present
-current.outputCellId  # when current is present
-```
-
-Reconnect to the same Lens in each later call:
+Reconnect to the same Lens in later calls:
 
 ```python
 import marimo_lens.agent as lens_agent
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
-    matches = lens_agent.discover(ctx, identity="F3n...")
-    if len(matches) != 1:
-        raise RuntimeError("The mounted Lens changed. Run a fresh scan.")
-    mounted = matches[0]
+    mounted = lens_agent.connect(ctx, identity="F3n...")
 ```
 
-Route the request from the mounted Lens and the user's instruction:
+Route the request from the context and the user's instruction:
 
-| Request and scan state                                    | Continue with                             |
-| --------------------------------------------------------- | ----------------------------------------- |
-| Overview or walkthrough at any `selectionCount`           | Ordered notebook cells and graph          |
-| Request referring to "this", "here", or a selected output | Current selection and its cell            |
-| Explicit task with an unrelated older selection           | Explicit task, leaving the selection open |
+| Request and context                                     | Continue with                    |
+| ------------------------------------------------------- | -------------------------------- |
+| Overview or walkthrough with any selection count        | Ordered notebook cells and graph |
+| Request referring to "this" or the selected output      | `snapshot.current` and its cell  |
+| Explicit task with an unrelated older current selection | Explicit task                    |
 
-`selectionCount: 0` describes selection state. The mounted Lens can still
-reveal existing notebook cells.
+Leave an unrelated selection open.
 
-## Load standalone context
+## Inspect selection evidence
 
-Load standalone text when a relevant note or scan field was truncated:
+`snapshot.text` contains bounded standalone text. Read selected cell code and
+graph neighbors through the executor's code-mode API. For an aggregate mark,
+identify the plotted measure and its entity key. When an upstream join can
+multiply entities, compare row count with distinct entity count before naming
+the plotted unit.
+
+Get the current selection's annotated capture-time PNG in the same call that
+created the context:
+
+```python
+selection = snapshot.current
+selection_png = snapshot.images.get(selection["id"]) if selection is not None else None
+selection_status = selection["snapshot"]["status"] if selection is not None else None
+```
+
+A `selection_status` of `outdated` means the marker moved after
+`selection_png` was captured.
+
+Write available bytes to a private temporary PNG:
+
+```python
+from tempfile import NamedTemporaryFile
+
+if selection_png is not None:
+    with NamedTemporaryFile(
+        prefix="marimo-lens-", suffix=".png", delete=False
+    ) as image_file:
+        image_file.write(selection_png)
+        print(image_file.name)
+```
+
+Open the printed path with the image reader, then delete it. The kernel and
+image reader must share a filesystem. Make visual claims after the reader
+returns visible pixels. When the reader cannot display the image, use code,
+data, cell status, and errors as nonvisual evidence and report that visual
+inspection was unavailable.
+
+## Inspect a fresh cell image
+
+`cell_image()` captures the current rendered cell without Lens markers. Start
+capture after taking the context snapshot:
+
+```python
+png = mounted.cell_image(
+    selection["outputCellId"],
+    expected_revision=snapshot.revision,
+)
+print("ready" if png is not None else "pending")
+```
+
+The first call starts capture and returns `None`. Repeat the call in later
+kernel executions:
 
 ```python
 import marimo_lens.agent as lens_agent
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx, identity="F3n...")[0]
-    snapshot = mounted.context(expected_revision=8)
-    print(snapshot.text)
+    mounted = lens_agent.connect(ctx, identity="F3n...")
+    png = mounted.cell_image("BYtC", expected_revision=8)
+    if png is not None:
+        from tempfile import NamedTemporaryFile
+
+        with NamedTemporaryFile(
+            prefix="marimo-lens-", suffix=".png", delete=False
+        ) as image_file:
+            image_file.write(png)
+            print(image_file.name)
 ```
 
-Read selected cell code and graph neighbors through the executor's code-mode
-API. Group relevant selections by `outputCellId` before loading code or
-images.
+Pending calls share the same browser capture. Lens has one full-cell capture
+slot. Finish the current cell with bytes or a terminal `LensError` before
+starting another cell. A different cell while capture is pending raises
+`LensError(code="capture_busy")`. Capture several cells sequentially.
+
+## Start activity on the work cell
+
+Start activity as soon as the primary target and a contextual label are known:
+
+```python
+mounted.start_activity(
+    "BYtC",
+    label="Applying bar colors",
+    message="Applying the requested color to the selected chart.",
+)
+```
+
+Start it in the initial connection call when `snapshot.current` identifies the
+work cell. Keep it visible through extended context, images, planning, edits,
+execution, and verification. Start activity again when the primary target
+changes.
+
+Persistent activity leaves `duration_ms` unset and ends with
+`stop_activity(cell_id)`. A bounded status can pass `duration_ms=8_000` and
+clear itself after that hold. Starting timed activity again on the same cell
+restarts its hold.
+
+For a new result cell, create a visible comment-only placeholder in its own
+kernel call:
+
+```python
+import marimo._code_mode as cm
+
+async with cm.get_context() as ctx:
+    cell_id = ctx.create_cell(
+        "# Preparing the requested chart",
+        hide_code=False,
+    )
+    print(cell_id)
+```
+
+Start activity on that cell in the next call, then replace and run it:
+
+```python
+import marimo_lens.agent as lens_agent
+import marimo._code_mode as cm
+
+async with cm.get_context() as ctx:
+    mounted = lens_agent.connect(ctx, identity="F3n...")
+    cell_id = "new-cell-id"
+    mounted.start_activity(
+        cell_id,
+        label="Building requested chart",
+        message="Replacing the placeholder with the chart implementation.",
+    )
+    ctx.edit_cell(cell_id, "chart = build_chart(source_df)\nchart")
+    ctx.run_cell(cell_id)
+```
+
+Read each current cell body before replacing it. Submit the full new body and
+queue affected cells to run in one code-mode block.
 
 ## Walk through an existing notebook
 
 For an overview, inspect `ctx.cells` in notebook order and use `ctx.graph` to
-identify the cells that define inputs, transformations, and results. Choose a
-short route that answers the user's request.
+identify setup, inputs, transformations, and results. Start activity on the
+first inspected cell whose ID is present in `ctx.graph.cells`. A walkthrough
+can target existing cells when `snapshot.current` is `None`.
 
-Reveal one cell per kernel call. Set `duration_ms` long enough for the user to
-orient to the cell and read the message comfortably. Allow more time for longer
-or denser messages. Wait for that hold before revealing the next cell because
-a new reveal replaces the current one. A walkthrough can target existing cells
-and does not require a selection.
+Reveal one cell per kernel call and wait for its hold before continuing:
 
 ```python
 import marimo_lens.agent as lens_agent
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx, identity="F3n...")[0]
+    mounted = lens_agent.connect(ctx, identity="F3n...")
     hold_ms = 8_000
     mounted.reveal(
         "setup-cell",
         duration_ms=hold_ms,
         label="Source tables",
-        message="Loads the source tables used by the analysis.",
+        message="Loads the tables used by the analysis.",
     )
     print(hold_ms)
 ```
 
-## Write a selection image
-
-An `AgentImage` returned by Lens contains validated PNG bytes in `data`. Write
-them through Python's private temporary-file API inside the active kernel:
-
-```bash
-bash "$PAIR_EXECUTE" --url "$NOTEBOOK_URL" <<'PY'
-from tempfile import NamedTemporaryFile
-
-import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
-
-async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx, identity="F3n...")[0]
-    image = mounted.selection_image(
-        "243110...",
-        expected_revision=8,
-    )
-    if image is None:
-        raise RuntimeError("The selection image is unavailable.")
-    with NamedTemporaryFile(
-        prefix="marimo-lens-",
-        suffix=".png",
-        delete=False,
-    ) as image_file:
-        image_file.write(image.data)
-        print(image_file.name)
-PY
-```
-
-Open the printed path with the agent's image reader
-before making a claim about color, position, spacing, overlap, alignment,
-legibility, or chart marks. The kernel executor and image reader must share a
-filesystem. When the printed path is not visible to the image reader, remove
-it through the kernel and continue from text and graph evidence.
-
-## Write a current cell image
-
-Start one capture:
-
-```python
-import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
-
-async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx, identity="F3n...")[0]
-    request_id = mounted.start_cell_image(
-        "BYtC",
-        expected_revision=8,
-    )
-    print(request_id)
-```
-
-Read the request in a later kernel call:
-
-```bash
-bash "$PAIR_EXECUTE" --url "$NOTEBOOK_URL" <<'PY'
-from tempfile import NamedTemporaryFile
-
-import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
-
-async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx, identity="F3n...")[0]
-    result = mounted.read_cell_image("request-id")
-    if result.status == "pending":
-        print("pending")
-    elif result.status == "failed":
-        detail = result.error or "Cell image capture failed."
-        raise RuntimeError(
-            f"{result.error_code}: {detail}" if result.error_code else detail
-        )
-    elif result.image is None:
-        raise RuntimeError("Lens returned no image.")
-    else:
-        with NamedTemporaryFile(
-            prefix="marimo-lens-",
-            suffix=".png",
-            delete=False,
-        ) as image_file:
-            image_file.write(result.image.data)
-            print(image_file.name)
-PY
-```
-
-Retry with the same request ID while the status is `pending`. An available
-result includes the image dimensions, digest, cell ID, and selection IDs drawn
-on the image. A failed result includes its error code and message. A stalled
-capture becomes `failed` with `capture_timeout` after 20 seconds.
-
-A selection image preserves capture-time pixels. When it reports
-`outdated: true`, inspect a current cell image before changing or verifying
-the current output.
-
-## Show activity for active work
-
-Start activity after grounding and before the first mutation or extended
-verification:
-
-```python
-import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
-
-async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx, identity="F3n...")[0]
-    mounted.activity(
-        "BYtC",
-        label="Applying bar colors",
-        message="Applying the requested color to the selected chart",
-    )
-```
-
-Submit the activity call and the executor's code-mode mutation as one shell
-command joined by `&&`. A failed activity call stops the mutation. Keep the
-label stable through the request. Skip activity for a read-only overview and
-use the walkthrough reveals.
-
-Apply related cell edits and runs in one code-mode block. Read each current
-cell body before replacing it, submit the full new body, and queue affected
-cells to run.
+Set the hold long enough for the user to orient to the cell and read the
+message comfortably. Allow more time for longer or denser messages.
 
 ## Verify, reveal, and resolve
 
-Use a fresh kernel call after mutation. Check the target and every cell needed
-to support the final claim. Each claimed cell must be idle with no relevant
-errors. Run a stale downstream cell when the notebook uses lazy execution.
+Verify mutations in a fresh kernel call. Check the target and every cell needed
+to support the result. Each claimed cell must be idle and free of relevant
+errors. Capture a fresh cell image for visual work.
 
-For visual work, capture and open a fresh current cell image after runtime
-verification.
-
-Reveal the primary result and print its hold:
+After verification succeeds, stop activity and reveal the result:
 
 ```python
 import marimo_lens.agent as lens_agent
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx, identity="F3n...")[0]
+    mounted = lens_agent.connect(ctx, identity="F3n...")
+    mounted.stop_activity("BYtC")
     hold_ms = 8_000
     mounted.reveal(
         "BYtC",
         duration_ms=hold_ms,
         label="Updated aggregation",
-        message="Updated the aggregation and verified the output",
+        message="Updated the aggregation and verified the output.",
     )
     print(hold_ms)
 ```
 
-Wait for `hold_ms`, then resolve through a fresh kernel call. Use the revision
-captured before the work so a changed request remains open:
+Wait for `hold_ms`, then resolve through a fresh kernel call using the revision
+captured before the work:
 
 ```python
 import marimo_lens.agent as lens_agent
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx, identity="F3n...")[0]
-    addressed_ids = ["243110...", "8b20f4..."]
+    mounted = lens_agent.connect(ctx, identity="F3n...")
     mounted.resolve(
-        addressed_ids,
+        ["243110...", "8b20f4..."],
         expected_revision=8,
         summary="Updated the aggregation and verified the chart.",
     )
 ```
 
-One resolve call commits selections that share one verified result. Use
-separate calls when the changes or rationales differ. Reveal ends activity and
-scrolls once to the primary result. Resolve runs after the reveal hold, so its
-receipt is the final result presentation. The browser also queues a receipt
-received during an active reveal. On `revision_conflict`, leave the selections
-open, scan again, and reassess the changed request.
+Resolve selections together when they share one verified result. Use separate
+calls when changes or rationales differ. Resolve after the final reveal hold so
+the receipt is the final presentation. Keep `summary` to one short sentence of
+at most 240 UTF-16 code units. Put detailed evidence in notebook cells and
+reveal messages.
 
-For a multi-cell walkthrough, reveal earlier cells through separate kernel
-calls. After the final reveal's hold, resolve the selections addressed by the
-verified walkthrough. Finish after the final reveal when no selection was
-addressed.
+On `revision_conflict`, leave selections open, reconnect, and take a fresh
+context. Keep selections open and activity visible when verification fails or
+user input is required. Update the activity label and message to describe that
+state.
 
-Keep selections open when runtime or visual verification fails. If user input
-is required, update activity with a `Needs input` label and a concrete message.
+## Operation failures
 
-## Handle operation results
+- `lens_unavailable`: connect again without an identity, or report that Lens is
+  unavailable when no instance is mounted.
+- `lens_ambiguous`: ask the user to leave one Lens mounted.
+- `revision_conflict`: reconnect and reassess a fresh context.
+- `selection_not_found`: reconnect and inspect the current selection.
+- `capture_busy`: finish polling the current cell before requesting another.
+- Missing selection PNG: continue from text and graph evidence.
+- Pending cell PNG: repeat `cell_image()` with the same cell and revision.
+- Cell-image `LensError`: continue from nonvisual evidence or retry after the
+  output settles.
+- Image-reader failure: continue from nonvisual evidence and report the visual
+  coverage limit.
 
-- Import failure: report that the active notebook environment lacks the Lens
-  adapter.
-- Empty initial discovery: Lens is unavailable in the active notebook.
-- Several mounted handles: ask the user to leave one Lens mounted.
-- Empty identity-filtered discovery: scan because the mounted Lens changed.
-- `revision_conflict`: scan and confirm the current workset.
-- `selection_not_found`: scan and confirm the current selection.
-- Missing selection image: continue from text and graph evidence.
-- Pending cell image: read the same request again.
-- Failed cell image: use its error code, then continue from nonvisual evidence
-  or retry once after the output settles.
-
-Remove every temporary image file after its final read:
-
-```bash
-unlink '/private/tmp/marimo-lens-ab12cd34.png'
-unlink '/private/tmp/marimo-lens-ef56gh78.png'
-```
+Delete every temporary image path after its final image-reader call.
