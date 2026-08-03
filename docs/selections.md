@@ -244,5 +244,5 @@ The first displayed Lens in a document owns interaction. Additional Lens views
 show **Lens is already active** until the owner closes. A Lens in another
 same-origin document has its own owner.
 
-The [Python API reference](./api) describes the context, activity, reveal, and
-resolution methods used by agent integrations.
+The [Python API reference](./api) describes the context, activity lifecycle,
+reveal, and resolution methods used by agent integrations.

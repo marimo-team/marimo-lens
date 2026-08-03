@@ -25,6 +25,7 @@ dependencies = [
 ```
 
 ```python marimo output=false
+import asyncio
 from html import escape
 
 import marimo as mo
@@ -177,11 +178,10 @@ else:
     _overview_context_status = (
         "Ready" if _overview_current.get("cellStatus") == "available" else "Unavailable"
     )
-    _overview_images = {str(_image.selection_id) for _image in _overview_context.images}
     _overview_snapshot = _overview_current.get("snapshot", {})
     _overview_image_status = (
         "Ready"
-        if _overview_id in _overview_images
+        if _overview_id in _overview_context.images
         else escape(
             str(_overview_snapshot.get("status", "pending")).replace("_", " ").title()
         )
@@ -223,12 +223,13 @@ context.
 
 The same Lens instance carries the agent’s response back to the user:
 
-| Method       | Visible role                                                     |
-| ------------ | ---------------------------------------------------------------- |
-| `context()`  | Reads the current selections and related notebook context        |
-| `activity()` | Marks the cell the agent is changing or checking                 |
-| `resolve()`  | Moves completed selections into history with an optional summary |
-| `reveal()`   | Brings one verified or explanatory result into view              |
+| Method             | Visible role                                                     |
+| ------------------ | ---------------------------------------------------------------- |
+| `context()`        | Reads the current selections and related notebook context        |
+| `start_activity()` | Marks a work cell until stopped or an optional hold ends         |
+| `stop_activity()`  | Stops activity after the marked cell is ready                    |
+| `resolve()`        | Moves completed selections into history with an optional summary |
+| `reveal()`         | Brings one verified or explanatory result into view              |
 
 Continue with the selection from the chart. These controls call the same
 feedback methods a notebook agent uses.
@@ -264,9 +265,9 @@ if overview_activity_button.value:
         )
     else:
         _overview_activity_cell = str(_overview_activity_current["outputCellId"])
-        overview_lens.activity(
+        overview_lens.start_activity(
             _overview_activity_cell,
-            label="Working on it…",
+            label="Reviewing selected chart",
             message="Checking the selected result",
         )
         set_overview_action(
@@ -296,12 +297,15 @@ if overview_complete_button.value:
         _overview_complete_id = str(_overview_complete_current["id"])
         _overview_complete_cell = str(_overview_complete_current["outputCellId"])
         _overview_complete_summary = "Returned the selected result for review."
+        overview_lens.stop_activity(_overview_complete_cell)
+        _overview_hold_ms = 8_000
         overview_lens.reveal(
             _overview_complete_cell,
-            duration_ms=8_000,
+            duration_ms=_overview_hold_ms,
             label="Selected result",
             message=_overview_complete_summary,
         )
+        await asyncio.sleep(_overview_hold_ms / 1_000)
         _overview_complete_revision = overview_lens.resolve(
             [_overview_complete_id],
             expected_revision=_overview_complete_context.revision,
@@ -348,9 +352,9 @@ elif _overview_feedback_kind == "missing":
     _overview_feedback_body = "Mark the chart before calling a feedback method."
 elif _overview_feedback_kind == "activity":
     _overview_feedback_cell = escape(str(_overview_feedback_action["cellId"]))
-    _overview_feedback_title = "Working on it…"
+    _overview_feedback_title = "Reviewing selected chart"
     _overview_feedback_body = (
-        f"activity() marked cell <code>{_overview_feedback_cell}</code>."
+        f"start_activity() marked cell <code>{_overview_feedback_cell}</code>."
     )
 else:
     _overview_feedback_title = "Ready for review"

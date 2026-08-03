@@ -42,8 +42,8 @@ and publishes as `marimo-lens`.
   selection interaction, the document-scoped dock, and transient effects.
 - `@marimo-lens/python` owns the public API, durable state, runtime context,
   output-capture mailbox, and packaged browser resources.
-- `marimo_lens.agent` owns mounted-Lens discovery, stable instance identity,
-  bounded agent scans, and full-cell capture adaptation.
+- `marimo_lens.agent` owns mounted-Lens connection, stable instance identity,
+  detached context access, and full-cell capture adaptation.
 - `examples/lens.py` is the product example.
 
 Dependencies point toward the protocol package. Cross-package TypeScript
@@ -60,7 +60,7 @@ no notebook graph work.
 | Selection gesture and sheet workflow       | Browser reducer                   | Current mounted owner view                         |
 | Marked PNG capture job                     | Browser `SelectionCapture`        | Until commit, supersession, removal, or teardown   |
 | Shared snapshot preview read               | Browser `SelectionSnapshotLoader` | While a preview holds a lease                      |
-| Agent output-capture request and result    | Python `OutputCaptureMailbox`     | Until consumption, supersession, or teardown       |
+| Agent output-capture slot                  | Python `OutputCaptureSlot`        | Until byte read, supersession, or teardown         |
 | Active output raster                       | Browser output-capture transport  | Until reply, timeout, replacement, or teardown     |
 | Cell activity, reveal, and receipt display | Browser transient effects         | Until replacement, presentation end, or teardown   |
 | Request interpretation and notebook edits  | Agent client                      | Agent task                                         |
@@ -125,9 +125,9 @@ and standalone text. A reopened current selection may include its prior
 addressed timestamp and summary so an agent can understand the previous
 attempt.
 
-Marked selection images are exposed separately through `LensContext.images`.
-PNG bytes never enter synchronized trait state, compact references, standalone
-text, or local storage.
+`LensContext.images` maps selection IDs directly to marked PNG bytes. PNG bytes
+never enter synchronized trait state, compact references, standalone text, or
+local storage.
 
 ## Image paths
 
@@ -144,28 +144,27 @@ Iframe accessibility is checked before and after rasterization.
 
 ### Agent output capture
 
-Full-cell capture is a one-use agent transfer independent from selection state,
-selection revision, and `LensContext`.
-
-`OutputCaptureMailbox` accepts one pending request per Lens, correlates an
-opaque request ID with the exact cell ID, and retains one terminal result until
-the first terminal read. Reading pending state preserves the request. Reading
-available or failed state consumes it. A new request can supersede an unread
-terminal result. The request snapshots every open selection on that cell. The
-browser draws those point and region markers into one overview raster.
+Full-cell capture is a transient agent transfer keyed by cell ID and selection
+revision. `OutputCaptureSlot` stores one capture per Lens. The first
+`MountedLens.cell_image()` call starts capture and returns `None`. A later call
+with the same cell and revision returns the PNG bytes when available and keeps
+the slot pending otherwise. A different cell receives `capture_busy` while the
+slot is pending. Reading terminal bytes or an error releases the slot for the
+next cell. The browser captures the rendered cell without Lens markers.
 
 The browser transport resolves the displayed Lens handler, enforces its raster
-deadline, and replies with a validated PNG buffer or bounded failure. The
-consuming integration owns any temporary file it creates from the returned
-bytes.
+deadline, and replies with a validated PNG buffer or bounded failure. Request
+IDs remain inside this private transport. The consuming integration owns any
+temporary file it creates from the returned bytes.
 
 ## Agent adapter
 
 Agents import `marimo_lens.agent` inside the active notebook kernel.
-`discover()` accepts a live marimo code-mode context and returns mounted Lens
-handles. Each handle carries a stable opaque identity, projects a bounded
-scan, guards context and image reads by revision, delegates public feedback
-methods, and adapts full-cell capture.
+`connect()` accepts a live marimo code-mode context and returns one mounted Lens
+handle. The handle carries a stable opaque identity, returns the current
+detached context, guards cell images and mutations by revision, delegates
+public feedback methods, and returns selection and full-cell images as PNG
+bytes.
 
 The top-level `skills/marimo-lens` directory owns agent workflow policy. A
 live-kernel executor owns session discovery, kernel calls, code-mode mutation,
@@ -174,22 +173,23 @@ files.
 
 ## Agent feedback
 
-`Lens.activity()` and `Lens.reveal()` validate exact graph membership, preserve
-selection state, and send best-effort events.
+`Lens.start_activity()` and `Lens.reveal()` validate exact graph membership,
+preserve selection state, and send best-effort events. `Lens.stop_activity()`
+targets the activity cell even after that cell leaves the graph.
 
-Activity keeps the current scroll position and remains until a later activity,
-reveal, matching resolution, or teardown replaces it. A short caller-supplied
-label describes the current task or result. Reveal replaces the active
-presentation, scrolls once, and exits after the caller-supplied hold. Python
-validates and sends the label and duration with every reveal event, and the
-browser uses them for presentation. Both use one cell-attention controller and
-position their label above the target cell at its top-right edge.
+Activity keeps the current scroll position for a visible target, brings an
+offscreen target into view once, and remains until a matching stop, later
+activity, reveal, or teardown replaces it. A short
+caller-supplied label describes the current task or result. Reveal replaces the
+active presentation, scrolls once, and exits after the caller-supplied hold.
+Python validates and sends the label and duration with every reveal event, and
+the browser uses them for presentation. Both use one cell-attention controller
+and position their label above the target cell at its top-right edge.
 
 Resolution commits one durable state transition before sending its best-effort
 browser receipt. One receipt event can represent every selection in an atomic
-batch. The browser clears matching activity and queues the receipt behind an
-active reveal. Event delivery failure never rolls back the committed
-selections.
+batch. The browser queues the receipt behind an active reveal. Event delivery
+failure never rolls back the committed selections.
 
 ## Notebook host integration
 
