@@ -95,30 +95,37 @@ For an overview, inspect ordered cells and graph edges through the executor.
 Choose a short route through setup, inputs, transformations, and results.
 Reveal those cells in notebook order when the selection list is empty too.
 
-Selection PNGs are annotated capture-time evidence. A cell PNG is a fresh,
-unannotated rendering:
+Selection PNGs are annotated capture-time evidence. Read the selection PNG
+when it supplies the required visual context. Start a fresh cell capture when
+the task depends on the current full-cell rendering, such as after a mutation.
+Do not start a full-cell capture as an optional side effect.
 
 ```python
 selection = snapshot.current
 selection_png = snapshot.images.get(selection["id"]) if selection is not None else None
 selection_status = selection["snapshot"]["status"] if selection is not None else None
 cell_png = None
-if selection is not None and selection["cellStatus"] == "available":
-    cell_id = selection["outputCellId"]
-    cell_png = mounted.cell_image(
-        cell_id,
-        expected_revision=snapshot.revision,
-    )
 ```
 
 A `selection_status` of `outdated` means the marker moved after
 `selection_png` was captured.
 
-The first call starts capture and returns `None`. Repeat it in later kernel
-executions with the saved identity, cell ID, and revision. Pending calls use the
-same capture. Lens has one full-cell capture slot. Finish the current cell with
-bytes or a terminal `LensError` before requesting another cell. A different
-cell while capture is pending raises `LensError(code="capture_busy")`.
+Request a fresh cell PNG after confirming that the output cell is available:
+
+```python
+cell_id = selection["outputCellId"]
+cell_png = mounted.cell_image(
+    cell_id,
+    expected_revision=snapshot.revision,
+)
+```
+
+The first call starts capture and returns `None`. Save the Lens identity, cell
+ID, and revision, then repeat the same call in later kernel executions until it
+returns bytes or raises a terminal `LensError`. A pending capture owns Lens's
+single full-cell capture slot. Finish it before requesting another cell, even
+when the task no longer needs the bytes. A different cell while capture is
+pending raises `LensError(code="capture_busy")`.
 
 Write PNG bytes to a private temporary path visible to the image reader:
 
@@ -136,9 +143,14 @@ if image_bytes is not None:
 
 Open the printed path, then delete it after the image reader returns. The
 kernel and image reader must share a filesystem. Make visual claims after the
-reader returns visible pixels. When the reader cannot display the image, verify
-through code, data, cell status, and errors, then report that visual inspection
-was unavailable.
+reader returns visible pixels.
+
+When the reader reports that the current model or session cannot display
+images, treat visual inspection as unavailable for the rest of that session.
+Delete the temporary path and skip later image-reader calls unless the reader
+capability changes. Verify through code, data, cell status, and errors. State
+the visual coverage limit in the final response, and attribute appearance
+claims supplied by the user or a source to that observer.
 
 ## Apply, verify, and present
 

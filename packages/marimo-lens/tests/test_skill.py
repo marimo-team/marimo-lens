@@ -8,19 +8,9 @@ from marimo_lens.context import LensContext
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
-class _MountedLens:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, int]] = []
-
-    def cell_image(self, cell_id: str, *, expected_revision: int) -> bytes:
-        self.calls.append((cell_id, expected_revision))
-        return b"cell-png"
-
-
-def test_primary_skill_image_snippet_executes_against_lens_context() -> None:
+def test_primary_skill_image_snippet_reads_selection_evidence() -> None:
     snapshot = _context()
-    mounted = _MountedLens()
-    namespace: dict[str, object] = {"mounted": mounted, "snapshot": snapshot}
+    namespace: dict[str, object] = {"snapshot": snapshot}
 
     exec(  # noqa: S102 - Exercise the repository-owned skill example.
         _python_block(
@@ -31,8 +21,7 @@ def test_primary_skill_image_snippet_executes_against_lens_context() -> None:
 
     assert namespace["selection_png"] == b"selection-png"
     assert namespace["selection_status"] == "outdated"
-    assert namespace["cell_png"] == b"cell-png"
-    assert mounted.calls == [("cell-view", 4)]
+    assert namespace["cell_png"] is None
 
 
 def test_workflow_image_snippet_executes_against_lens_context() -> None:
