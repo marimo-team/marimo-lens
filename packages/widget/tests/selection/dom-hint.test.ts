@@ -46,6 +46,22 @@ describe("generic DOM hints", () => {
     expect(collectDomHint(mark, output).path).toContain("::shadow");
   });
 
+  test("collects visible text without embedded stylesheet or script content", () => {
+    const output = document.createElement("div");
+    const legend = document.createElement("div");
+    legend.innerHTML = [
+      "<style>:where(.plot-swatches) { display: flex; }</style>",
+      "<span>Public</span> ",
+      "<script>window.plotReady = true</script>",
+      "<span>Private</span>",
+    ].join("");
+    output.appendChild(legend);
+    output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 200);
+    legend.getBoundingClientRect = () => new DOMRect(0, 0, 200, 40);
+
+    expect(collectDomHint(legend, output).text).toBe("Public Private");
+  });
+
   test("does not split emoji at UTF-16 evidence limits", () => {
     const output = document.createElement("div");
     const button = document.createElement("button");
