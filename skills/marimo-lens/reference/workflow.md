@@ -54,13 +54,14 @@ async with cm.get_context() as ctx:
 
 Route the request from the context and the user's instruction:
 
-| Request and context                                     | Continue with                    |
-| ------------------------------------------------------- | -------------------------------- |
-| Overview or walkthrough with any selection count        | Ordered notebook cells and graph |
-| Request referring to "this" or the selected output      | `snapshot.current` and its cell  |
-| Explicit task with an unrelated older current selection | Explicit task                    |
+| Request and context                                     | Continue with                             |
+| ------------------------------------------------------- | ----------------------------------------- |
+| `address` mode                                          | Every entry in `references["selections"]` |
+| Overview or walkthrough with any selection count        | Ordered notebook cells and graph          |
+| Request referring to "this" or the selected output      | `snapshot.current` and its cell           |
+| Explicit task with an unrelated older current selection | Explicit task                             |
 
-Leave an unrelated selection open.
+Outside `address` mode, leave an unrelated selection open.
 
 ## Inspect selection evidence
 

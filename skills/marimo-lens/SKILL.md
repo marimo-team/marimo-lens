@@ -5,9 +5,10 @@ description: >-
   existing outputs in a live marimo notebook. Inspect relevant cells and
   optional images, show agent activity, reveal results in reading order, and
   move addressed selections to Lens History. Use with a live marimo kernel
-  executor when the user mentions a Lens selection, asks to resolve a Lens
-  request, points to "this" notebook output, requests a notebook overview, or
-  asks for a guided walkthrough across notebook cells.
+  executor. The `address` mode, written `marimo-lens address`, sweeps every
+  outstanding selection. Use this skill when the user mentions a Lens selection,
+  asks to resolve a Lens request, points to "this" notebook output, requests a
+  notebook overview, or asks for a guided walkthrough across notebook cells.
 ---
 
 # Work with marimo Lens
@@ -24,6 +25,17 @@ connection or toast remains with the executor.
 Use [reference/workflow.md](reference/workflow.md) for complete mutation
 templates, operation failures, and multi-cell walkthroughs. The workflow here
 covers inspection and straightforward changes.
+
+## Modes
+
+Read the word that follows the skill name as the mode. `marimo-lens` alone
+routes from the request and `snapshot.current`.
+
+`marimo-lens address` inspects every outstanding selection in
+`snapshot.references["selections"]`, including its note and cell or image
+evidence. Address each actionable request, verify the result, then resolve its
+selection. Keep ambiguous, blocked, or unverified selections open and report
+why.
 
 ## Connect and read the request
 
