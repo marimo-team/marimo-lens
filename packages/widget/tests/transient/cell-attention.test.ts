@@ -275,7 +275,7 @@ describe("cell attention", () => {
     controller.dispose();
   });
 
-  test("refreshes fixed attention when the exact cell resizes", () => {
+  test("reframes activity after its cell grows beyond the viewport", () => {
     vi.useFakeTimers();
     const resizeCallbacks: ResizeObserverCallback[] = [];
     const disconnect = vi.fn();
@@ -292,13 +292,20 @@ describe("cell attention", () => {
     );
     const onChange = vi.fn();
     const cell = setupCell("resized");
+    let rect = new DOMRect(20, 80, 400, 300);
+    cell.getBoundingClientRect = () => rect;
+    cell.scrollIntoView = vi.fn();
     const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
     controller.startActivity(startActivityEvent("resized"));
     const callsBeforeResize = onChange.mock.calls.length;
+    expect(cell.scrollIntoView).not.toHaveBeenCalled();
+
+    rect = new DOMRect(20, 120, 400, window.innerHeight - 100);
 
     for (const resize of resizeCallbacks) resize([], {} as ResizeObserver);
 
     expect(observe).toHaveBeenCalledWith(cell);
+    expect(cell.scrollIntoView).toHaveBeenCalledOnce();
     expect(onChange.mock.calls.length).toBeGreaterThan(callsBeforeResize);
     controller.dispose();
     expect(disconnect).toHaveBeenCalled();
