@@ -441,11 +441,15 @@ describe("selection contracts", () => {
       revision: 4,
       payload: {
         cellId: "BYtC",
+        label: "Updated chart",
         message: "Updated the aggregation.",
         durationMs: 8_000,
       },
     };
     expect(parseContract(CellRevealEventSchema, reveal, "event")).toEqual(reveal);
+    expect(() =>
+      parseContract(CellRevealEventSchema, { ...reveal, payload: { cellId: "BYtC" } }, "event"),
+    ).toThrow();
     expect(() =>
       parseContract(
         CellRevealEventSchema,
@@ -476,6 +480,13 @@ describe("selection contracts", () => {
       parseContract(
         CellRevealEventSchema,
         { ...reveal, payload: { cellId: "BYtC", message: "x".repeat(1_001) } },
+        "event",
+      ),
+    ).toThrow();
+    expect(() =>
+      parseContract(
+        CellRevealEventSchema,
+        { ...reveal, payload: { cellId: "BYtC", label: "x".repeat(41) } },
         "event",
       ),
     ).toThrow();

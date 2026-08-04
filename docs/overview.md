@@ -296,14 +296,16 @@ if overview_complete_button.value:
         _overview_complete_id = str(_overview_complete_current["id"])
         _overview_complete_cell = str(_overview_complete_current["outputCellId"])
         _overview_complete_summary = "Returned the selected result for review."
+        overview_lens.reveal(
+            _overview_complete_cell,
+            duration_ms=8_000,
+            label="Selected result",
+            message=_overview_complete_summary,
+        )
         _overview_complete_revision = overview_lens.resolve(
             [_overview_complete_id],
             expected_revision=_overview_complete_context.revision,
             summary=_overview_complete_summary,
-        )
-        overview_lens.reveal(
-            _overview_complete_cell,
-            message=_overview_complete_summary,
         )
         set_overview_action(
             {
@@ -383,7 +385,7 @@ request for another pass and starts a fresh annotated image capture.
 Any notebook agent that can call the Lens Python API in a marimo notebook can
 use this loop. [marimo Pair](https://marimo.io/pair) provides a ready-made
 workflow that reads the current request, reports activity, revises and checks
-the notebook, then resolves and reveals the result.
+the notebook, then reveals the result and resolves the addressed selection.
 
 Follow [Use with marimo Pair](./pair) for that workflow. The
 [Python API reference](./api) defines the methods an agent integration calls.

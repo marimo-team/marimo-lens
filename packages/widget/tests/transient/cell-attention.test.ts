@@ -56,14 +56,14 @@ describe("cell attention", () => {
       behavior: "smooth",
     });
     expect(output.scrollIntoView).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(2_200);
+    vi.advanceTimersByTime(4_000);
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "exiting" }));
     vi.advanceTimersByTime(180);
     expect(onChange).toHaveBeenLastCalledWith(null);
     controller.dispose();
   });
 
-  test("holds a reveal for its requested duration", () => {
+  test("uses the duration carried by the reveal event", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
     const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
@@ -128,6 +128,21 @@ describe("cell attention", () => {
       event: revealEvent("same", "Verified."),
     });
     expect(cell.scrollIntoView).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  test("finishes activity for a matching resolution and ignores an older one", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    setupCell("same");
+
+    controller.activity(activityEvent("same", "Editing."));
+    controller.finishActivity(6);
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "activity" }));
+
+    controller.finishActivity(7);
+    expect(onChange).toHaveBeenLastCalledWith(null);
     controller.dispose();
   });
 
@@ -353,7 +368,7 @@ function activityEvent(cellId: string, message?: string): CellActivityEvent {
   };
 }
 
-function revealEvent(cellId: string, message?: string, durationMs?: number): CellRevealEvent {
+function revealEvent(cellId: string, message?: string, durationMs = 4_000): CellRevealEvent {
   return {
     protocol: "marimo-lens.event",
     version: 1,
@@ -361,8 +376,8 @@ function revealEvent(cellId: string, message?: string, durationMs?: number): Cel
     revision: 7,
     payload: {
       cellId,
+      durationMs,
       ...(message ? { message } : {}),
-      ...(durationMs ? { durationMs } : {}),
     },
   };
 }

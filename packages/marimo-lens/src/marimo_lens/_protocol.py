@@ -176,9 +176,10 @@ def is_response_envelope(content: object) -> bool:
 def cell_reveal_event(
     *,
     cell_id: str,
+    label: str | None,
     message: str | None,
     revision: int,
-    duration_ms: int | None = None,
+    duration_ms: int,
 ) -> dict[str, Any]:
     """Build one transient request to reveal an exact notebook cell."""
 
@@ -187,6 +188,7 @@ def cell_reveal_event(
             revision=revision,
             payload=CellRevealPayload(
                 cell_id=cell_id,
+                label=label,
                 message=message,
                 duration_ms=duration_ms,
             ),

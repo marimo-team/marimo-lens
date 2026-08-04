@@ -29,7 +29,7 @@ import {
 import { LensDock } from "@/ui/components/lens-dock";
 import { LensPortal } from "@/ui/components/lens-portal";
 import { LensStatus } from "@/ui/components/lens-status";
-import { focusSelectionOrDock } from "@/ui/focus";
+import { focusDock, focusSelectionOrDock } from "@/ui/focus";
 
 export function MarimoLensContent() {
   const dom = useNotebookDom();
@@ -70,16 +70,40 @@ export function MarimoLensContent() {
     protocol: model.protocol,
   });
   const { invalidateSnapshotCapture, settleUnavailableSnapshot } = actions;
+  useOutputCapture(model.protocol, dom);
+  const cellAttention = useCellAttention(model.protocol, dom);
+  const [cellAttentionLabel, setCellAttentionLabel] = useState<{
+    sequence: number;
+    height: number;
+    maxWidth: number;
+  } | null>(null);
+  const measureCellAttentionLabel = useCallback(
+    (sequence: number, measurement: { height: number; maxWidth: number }) => {
+      setCellAttentionLabel((current) =>
+        current?.sequence === sequence &&
+        current.height === measurement.height &&
+        current.maxWidth === measurement.maxWidth
+          ? current
+          : { sequence, ...measurement },
+      );
+    },
+    [],
+  );
   const resolutionReceipt = useResolutionReceipt({
     state: model.state,
     protocol: model.protocol,
     dom,
     dispatch,
     invalidateSnapshotCapture,
+    attentionKind: cellAttention?.kind ?? null,
   });
-  useOutputCapture(model.protocol, dom);
-  const cellAttention = useCellAttention(model.protocol, dom);
-  const cellAttentionView = projectCellAttention(cellAttention, dom.window);
+  const cellAttentionView = projectCellAttention(
+    cellAttention,
+    dom.window,
+    cellAttentionLabel !== null && cellAttentionLabel.sequence === cellAttention?.sequence
+      ? cellAttentionLabel
+      : undefined,
+  );
   const snapshotLoader = useMemo(
     () => new SelectionSnapshotLoader((selectionId) => model.protocol.getSnapshot(selectionId)),
     [model.protocol],
@@ -233,7 +257,10 @@ export function MarimoLensContent() {
           onReposition={actions.repositionSelection}
         />
 
-        <CellAttentionIndicator view={cellAttentionView} />
+        <CellAttentionIndicator
+          view={cellAttentionView}
+          onLabelMeasure={measureCellAttentionLabel}
+        />
 
         {noteSelection && noteWorkflow ? (
           <SelectionNoteEditor
@@ -284,7 +311,6 @@ function useOutputCapture(protocol: LensProtocolClient, dom: NotebookDomAdapter)
         const result = await captureOutputSnapshot({
           imageId: `image:${command.requestId}`,
           output: element,
-          selections: command.payload.selections,
           signal,
         });
         const current = dom.getOutputCell(command.payload.outputCellId);
@@ -311,10 +337,24 @@ function useCellAttention(
   const controller = useMemo(() => new CellAttentionController(dom, setPresentation), [dom]);
   useEffect(() => () => controller.dispose(), [controller]);
   useEffect(() => {
-    return protocol.onCellAttention((event) => {
+    const releaseAttention = protocol.onCellAttention((event) => {
+      const active = dom.document.activeElement;
+      if (
+        active instanceof dom.window.HTMLElement &&
+        active.closest("[data-marimo-lens-resolution-receipt]")
+      ) {
+        focusDock(dom);
+      }
       if (event.type === "cell.activity") controller.activity(event);
       else controller.reveal(event);
     });
-  }, [controller, protocol]);
+    const releaseResolution = protocol.onSelectionResolved((event) => {
+      controller.finishActivity(event.revision);
+    });
+    return () => {
+      releaseAttention();
+      releaseResolution();
+    };
+  }, [controller, dom, protocol]);
   return presentation;
 }

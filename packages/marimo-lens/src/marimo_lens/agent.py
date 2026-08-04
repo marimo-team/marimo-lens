@@ -17,20 +17,17 @@ pixels captured with one selection are required.
 
 Full-cell images use a two-call mailbox. Start with
 :meth:`MountedLens.start_cell_image`, then call
-:meth:`MountedLens.read_cell_image` until it returns a terminal result. Pipe
-``result.transfer()`` or ``image.transfer()`` directly to the marimo-lens
-skill's ``materialize-image.sh`` script so PNG bytes stay out of the agent's
-text context.
+:meth:`MountedLens.read_cell_image` until it returns a terminal result. When
+the result is available, write ``result.image.data`` to a private file inside
+the active kernel and inspect that file with the agent's image reader.
 
 Call :meth:`MountedLens.activity` after grounding and before a notebook
-mutation. After a fresh runtime check, call :meth:`MountedLens.resolve`, then
-:meth:`MountedLens.reveal`.
+mutation. After a fresh runtime check, call :meth:`MountedLens.reveal`, then
+:meth:`MountedLens.resolve` for addressed selections.
 """
 
 from __future__ import annotations
 
-import base64
-import json
 import re
 import secrets
 import threading
@@ -45,7 +42,6 @@ from .context import LensContext, SelectionImage
 from .errors import LensError
 from .widget import Lens
 
-_IMAGE_TRANSFER_PREFIX = "__MARIMO_LENS_IMAGE__"
 _MAX_ALIASES = 4
 _MAX_CURRENT_NOTE = 1_000
 _MAX_DOM_TEXT = 240
@@ -64,7 +60,7 @@ _IDENTITIES_LOCK = threading.RLock()
 
 @dataclass(frozen=True, slots=True)
 class AgentImage:
-    """One validated Lens PNG ready for a client-side transfer."""
+    """One validated Lens PNG available to agent code."""
 
     source: Literal["selection", "cell"]
     media_type: Literal["image/png"]
@@ -76,18 +72,6 @@ class AgentImage:
     cell_id: str
     selection_id: str | None = None
     outdated: bool | None = None
-
-    def transfer(self) -> str:
-        """Return one marked transfer record for ``materialize-image.sh``."""
-
-        return _encode_transfer(
-            status="available",
-            source=self.source,
-            cell_id=self.cell_id,
-            selection_id=self.selection_id,
-            outdated=self.outdated,
-            image=self,
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -101,20 +85,6 @@ class CellImageResult:
     image: AgentImage | None = None
     error_code: str | None = None
     error: str | None = None
-
-    def transfer(self) -> str:
-        """Return one marked transfer record for ``materialize-image.sh``."""
-
-        return _encode_transfer(
-            status=self.status,
-            source="cell",
-            cell_id=self.cell_id,
-            request_id=self.request_id,
-            selection_ids=self.selection_ids,
-            error_code=self.error_code,
-            error=self.error,
-            image=self.image,
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -240,13 +210,15 @@ class MountedLens:
         self,
         cell_id: str,
         *,
+        duration_ms: int,
+        label: str | None = None,
         message: str | None = None,
-        duration_ms: int | None = None,
     ) -> None:
-        """Bring one verified or explanatory cell into view."""
+        """Bring one cell into view for the supplied hold."""
 
         self._lens.reveal(
             cell_id,
+            label=label,
             message=message,
             duration_ms=duration_ms,
         )
@@ -552,55 +524,6 @@ def _cell_image_result(result: OutputCaptureResult) -> CellImageResult:
         image=agent_image,
         error_code=result.error_code,
         error=result.error,
-    )
-
-
-def _encode_transfer(
-    *,
-    status: Literal["pending", "available", "failed"],
-    source: Literal["selection", "cell"],
-    cell_id: str,
-    request_id: str | None = None,
-    selection_id: str | None = None,
-    selection_ids: Sequence[str] = (),
-    outdated: bool | None = None,
-    error_code: str | None = None,
-    error: str | None = None,
-    image: AgentImage | None = None,
-) -> str:
-    payload: dict[str, object] = {
-        "protocol": "marimo-lens.image-transfer",
-        "version": 1,
-        "status": status,
-        "source": source,
-        "cellId": cell_id,
-    }
-    if request_id is not None:
-        payload["requestId"] = request_id
-    if selection_id is not None:
-        payload["selectionId"] = selection_id
-    if selection_ids:
-        payload["selectionIds"] = list(selection_ids)
-    if outdated is not None:
-        payload["outdated"] = outdated
-    if error_code is not None:
-        payload["errorCode"] = error_code
-    if error is not None:
-        payload["error"] = error
-    if image is not None:
-        payload["image"] = {
-            "mediaType": image.media_type,
-            "bytes": len(image.data),
-            "width": image.width,
-            "height": image.height,
-            "sha256": image.sha256,
-            "capturedAt": image.captured_at,
-            "data": base64.b64encode(image.data).decode("ascii"),
-        }
-    return _IMAGE_TRANSFER_PREFIX + json.dumps(
-        payload,
-        ensure_ascii=False,
-        separators=(",", ":"),
     )
 
 

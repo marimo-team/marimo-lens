@@ -72,7 +72,7 @@ export function SelectionNoteEditor({
     <dialog
       ref={surfaceRef}
       className="ml-note-editor"
-      style={position.style}
+      style={{ inset: "auto", ...position.style }}
       data-placement={position.placement}
       data-instant={motion === "instant" ? "true" : "false"}
       data-marimo-lens-note-editor

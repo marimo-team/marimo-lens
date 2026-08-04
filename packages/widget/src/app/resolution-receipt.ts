@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import type { UiAction } from "@/selection/state";
+import type { CellAttentionKind } from "@/transient/cell-attention";
 
 import { focusSelectionOrDock } from "@/ui/focus";
 
@@ -14,14 +15,17 @@ export function useResolutionReceipt(options: {
   dom: NotebookDomAdapter;
   dispatch: Dispatch<UiAction>;
   invalidateSnapshotCapture: (selectionId: string) => void;
+  attentionKind: CellAttentionKind | null;
 }): {
   receipt: SelectionResolvedEvent | null;
   setInteraction: (event: SelectionResolvedEvent, active: boolean) => void;
 } {
-  const { state, protocol, dom, dispatch, invalidateSnapshotCapture } = options;
+  const { state, protocol, dom, dispatch, invalidateSnapshotCapture, attentionKind } = options;
+  const suspended = attentionKind !== null;
   const [queued, setQueued] = useState<SelectionResolvedEvent | null>(null);
   const [receipt, setReceipt] = useState<SelectionResolvedEvent | null>(null);
   const [pausedRevision, setPausedRevision] = useState<number | null>(null);
+  const presentedRevision = useRef<number | null>(null);
   const focus = useRef<{
     revision: number;
     selectionId: string;
@@ -51,12 +55,18 @@ export function useResolutionReceipt(options: {
   }, [dom, invalidateSnapshotCapture, protocol]);
 
   useEffect(() => {
-    if (!receipt || pausedRevision === receipt.revision) return undefined;
+    if (!receipt || suspended || pausedRevision === receipt.revision) return undefined;
     const timeout = dom.window.setTimeout(() => {
       setReceipt((current) => (current === receipt ? null : current));
     }, 6_000);
     return () => dom.window.clearTimeout(timeout);
-  }, [dom, pausedRevision, receipt]);
+  }, [dom, pausedRevision, receipt, suspended]);
+
+  useEffect(() => {
+    if (!receipt || attentionKind !== "activity") return;
+    setReceipt((current) => (current === receipt ? null : current));
+    setPausedRevision((current) => (current === receipt.revision ? null : current));
+  }, [attentionKind, receipt]);
 
   const setInteraction = useCallback((event: SelectionResolvedEvent, active: boolean) => {
     setPausedRevision((current) =>
@@ -83,16 +93,6 @@ export function useResolutionReceipt(options: {
     if (!reconciled) return;
     setReceipt(reconciled);
     setQueued((current) => (current === reconciled ? null : current));
-    const resolved = reconciled.payload.selections;
-    const resolutionLabel =
-      resolved.length === 1
-        ? `${resolved[0]!.label} addressed.`
-        : `${resolved.length} selections addressed.`;
-    dispatch({
-      type: "announce",
-      message: `${resolutionLabel}${reconciled.payload.summary ? ` ${reconciled.payload.summary}` : ""}`,
-    });
-
     const pendingFocus = focus.current;
     if (
       pendingFocus?.revision === reconciled.revision &&
@@ -103,9 +103,23 @@ export function useResolutionReceipt(options: {
       focusSelectionOrDock(dom, state.currentSelectionId ?? pendingFocus.selectionId);
     }
     if (pendingFocus?.revision === reconciled.revision) focus.current = null;
-  }, [dispatch, dom, reconciled, state.currentSelectionId]);
+  }, [dom, reconciled, state.currentSelectionId]);
 
-  return { receipt, setInteraction };
+  useEffect(() => {
+    if (!receipt || suspended || presentedRevision.current === receipt.revision) return;
+    presentedRevision.current = receipt.revision;
+    const resolved = receipt.payload.selections;
+    const resolutionLabel =
+      resolved.length === 1
+        ? `${resolved[0]!.label} addressed.`
+        : `${resolved.length} selections addressed.`;
+    dispatch({
+      type: "announce",
+      message: `${resolutionLabel}${receipt.payload.summary ? ` ${receipt.payload.summary}` : ""}`,
+    });
+  }, [dispatch, receipt, suspended]);
+
+  return { receipt: suspended ? null : receipt, setInteraction };
 }
 
 function focusedSelectionId(element: HTMLElement | null): string | null {

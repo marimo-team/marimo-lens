@@ -24,7 +24,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-describe("selection snapshot capture", () => {
+describe("image capture", () => {
   test("captures one unmarked raster for the full output root", async () => {
     class LoadedImage extends EventTarget {
       naturalWidth = 640;
@@ -41,24 +41,8 @@ describe("selection snapshot capture", () => {
         height: 320,
       }),
       fillStyle: "",
-      strokeStyle: "",
-      lineWidth: 0,
-      shadowColor: "",
-      shadowBlur: 0,
-      font: "",
-      textBaseline: "",
       fillRect: vi.fn(),
       drawImage: vi.fn(),
-      save: vi.fn(),
-      restore: vi.fn(),
-      beginPath: vi.fn(),
-      arc: vi.fn(),
-      fill: vi.fn(),
-      stroke: vi.fn(),
-      strokeRect: vi.fn(),
-      measureText: vi.fn(() => ({ width: 17 })),
-      roundRect: vi.fn(),
-      fillText: vi.fn(),
     };
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
       context as unknown as CanvasRenderingContext2D,
@@ -77,18 +61,6 @@ describe("selection snapshot capture", () => {
     const result = await captureOutputSnapshot({
       imageId: "image:capture-1",
       output,
-      selections: [
-        {
-          selectionId: "selection-1",
-          label: "S1",
-          anchor: { kind: "point", x: 0.25, y: 0.5 },
-        },
-        {
-          selectionId: "selection-2",
-          label: "S2",
-          anchor: { kind: "rect", x: 0.4, y: 0.2, width: 0.3, height: 0.4 },
-        },
-      ],
     });
 
     expect(result).toMatchObject({
@@ -110,9 +82,6 @@ describe("selection snapshot capture", () => {
       style: { maxHeight: "none", overflow: "visible" },
     });
     expect(context.drawImage).toHaveBeenCalledOnce();
-    expect(context.arc).toHaveBeenCalledOnce();
-    expect(context.strokeRect).toHaveBeenCalledOnce();
-    expect(context.fillText.mock.calls.map(([label]) => label)).toEqual(["S1", "S2"]);
   });
 
   test("creates decoded images and canvases in the output document", async () => {

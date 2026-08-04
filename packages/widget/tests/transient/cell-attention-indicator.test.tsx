@@ -2,7 +2,7 @@ import type { CellActivityEvent, CellRevealEvent } from "@marimo-lens/protocol";
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, test } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type { CellAttentionPresentation } from "@/transient/cell-attention";
 
@@ -19,21 +19,24 @@ afterEach(() => {
   act(() => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  vi.restoreAllMocks();
 });
 
 describe("cell attention presentation", () => {
-  test("projects a visible target and clamps its label to the viewport", () => {
+  test("anchors a visible label above the target at its top-right edge", () => {
     const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(980, 40, 200, 160);
+    target.getBoundingClientRect = () => new DOMRect(980, 80, 200, 160);
     document.body.appendChild(target);
     const presentation = activityPresentation(target);
+    const ownerWindow = { innerWidth: 1280, innerHeight: 720 } as Window;
 
-    const view = projectCellAttention(presentation, window);
+    const view = projectCellAttention(presentation, ownerWindow);
 
-    expect(view?.ring).toMatchObject({ top: 40, left: 980, width: 200, height: 160 });
-    expect(view?.label.right).toBe(12);
+    expect(view?.ring).toMatchObject({ top: 80, left: 980, width: 200, height: 160 });
+    expect(view?.label.right).toBe(108);
     expect(view?.label.maxWidth).toBe(480);
-    expect(view?.label.top).toBe(48);
+    expect(view?.label.bottom).toBe(648);
+    expect(view?.label.top).toBeUndefined();
   });
 
   test("anchors an above-target label by its bottom edge", () => {
@@ -48,7 +51,7 @@ describe("cell attention presentation", () => {
     expect(view?.label.top).toBeUndefined();
   });
 
-  test("reserves more vertical space for a long reveal message", () => {
+  test("keeps a long reveal message above its target", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
     document.body.appendChild(target);
@@ -61,11 +64,11 @@ describe("cell attention presentation", () => {
 
     const view = projectCellAttention(presentation, ownerWindow);
 
-    expect(view?.label.top).toBe(308);
-    expect(view?.label.bottom).toBeUndefined();
+    expect(view?.label.bottom).toBe(428);
+    expect(view?.label.top).toBeUndefined();
   });
 
-  test("shrinks a left-anchored label to the remaining narrow viewport", () => {
+  test("shrinks a right-anchored label to the remaining narrow viewport", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(190, 80, 80, 160);
     document.body.appendChild(target);
@@ -73,8 +76,84 @@ describe("cell attention presentation", () => {
 
     const view = projectCellAttention(activityPresentation(target), narrowWindow);
 
-    expect(view?.label.left).toBe(198);
-    expect(view?.label.maxWidth).toBe(270);
+    expect(view?.label.right).toBe(218);
+    expect(view?.label.left).toBeUndefined();
+    expect(view?.label.maxWidth).toBe(250);
+  });
+
+  test("uses the dock fallback when the viewport has no room above the target", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
+    document.body.appendChild(target);
+    const ownerWindow = { innerWidth: 1280, innerHeight: 720 } as Window;
+
+    expect(projectCellAttention(activityPresentation(target), ownerWindow)).toBeNull();
+  });
+
+  test("uses the dock fallback when the rendered label cannot fit above the target", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
+    document.body.appendChild(target);
+    const ownerWindow = { innerWidth: 480, innerHeight: 720 } as Window;
+
+    expect(
+      projectCellAttention(activityPresentation(target), ownerWindow, {
+        height: 226,
+        maxWidth: 400,
+      }),
+    ).toBeNull();
+  });
+
+  test("remeasures a suppressed label when its projected width changes", () => {
+    let targetWidth = 400;
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 160, targetWidth, 240);
+    document.body.appendChild(target);
+    const presentation = activityPresentation(target);
+    const measurement = { height: 226, maxWidth: 400 };
+
+    expect(
+      projectCellAttention(
+        presentation,
+        { innerWidth: 480, innerHeight: 720 } as Window,
+        measurement,
+      ),
+    ).toBeNull();
+
+    targetWidth = 900;
+    expect(
+      projectCellAttention(
+        presentation,
+        { innerWidth: 1_280, innerHeight: 720 } as Window,
+        measurement,
+      )?.labelMaxWidth,
+    ).toBe(480);
+  });
+
+  test("reports the rendered label height", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
+    document.body.appendChild(target);
+    const presentation = activityPresentation(target);
+    const view = projectCellAttention(presentation, window);
+    const onLabelMeasure = vi.fn();
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+      function (this: HTMLElement) {
+        return this.classList.contains("ml-cell-attention__label")
+          ? new DOMRect(0, 0, 320, 226)
+          : new DOMRect();
+      },
+    );
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => root?.render(<CellAttentionIndicator view={view} onLabelMeasure={onLabelMeasure} />));
+
+    expect(onLabelMeasure).toHaveBeenCalledWith(presentation.sequence, {
+      height: 226,
+      maxWidth: 400,
+    });
   });
 
   test("renders one capture-safe indicator and one stable live announcement", () => {
@@ -152,7 +231,7 @@ describe("cell attention presentation", () => {
     );
   });
 
-  test("gives a long reveal message its own detail row", () => {
+  test("uses one contextual reveal label across visible and accessible states", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
     document.body.appendChild(target);
@@ -168,11 +247,25 @@ describe("cell attention presentation", () => {
     root = createRoot(container);
 
     act(() =>
-      root?.render(<CellAttentionIndicator view={projectCellAttention(presentation, window)} />),
+      root?.render(
+        <>
+          <CellAttentionIndicator view={projectCellAttention(presentation, window)} />
+          <CellAttentionFallback presentation={presentation} />
+          <CellAttentionAnnouncement presentation={presentation} />
+        </>,
+      ),
     );
 
-    expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe("Ready");
+    expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe(
+      "Updated chart",
+    );
+    expect(document.querySelector(".ml-cell-attention-notice__status")?.textContent).toBe(
+      "Updated chart",
+    );
     expect(document.querySelector(".ml-cell-attention__message")?.textContent).toBe(message);
+    expect(document.querySelector("[data-marimo-lens-cell-attention-status]")?.textContent).toBe(
+      `Updated chart in cell BYtC. ${message}`,
+    );
     expect(document.querySelector("[data-marimo-lens-working-indicator]")).toBeNull();
   });
 
@@ -185,7 +278,7 @@ describe("cell attention presentation", () => {
       kind: "reveal",
       event: {
         ...revealEvent(),
-        payload: { cellId: "BYtC" },
+        payload: { cellId: "BYtC", durationMs: 4_000 },
       },
     };
     const container = document.createElement("div");
@@ -231,6 +324,11 @@ function revealEvent(message = "Updated the aggregation."): CellRevealEvent {
     version: 1,
     type: "cell.reveal",
     revision: 7,
-    payload: { cellId: "BYtC", message },
+    payload: {
+      cellId: "BYtC",
+      durationMs: 4_000,
+      label: "Updated chart",
+      message,
+    },
   };
 }

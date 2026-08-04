@@ -186,7 +186,7 @@ def test_selection_image_enforces_total_budget() -> None:
     assert first.data == first_data
 
 
-def test_output_image_is_a_detached_validated_transfer() -> None:
+def test_output_image_is_a_detached_validated_capture() -> None:
     data = png(3, 3)
     image = prepare_output_image(
         "request-1",

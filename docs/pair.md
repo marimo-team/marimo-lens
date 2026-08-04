@@ -1,16 +1,17 @@
 ---
 title: Use with marimo Pair
-description: Connect marimo Pair to a Lens request and return the result for review.
+description: Connect marimo Pair to a Lens request or guided notebook walkthrough.
 ---
 
 # Use with marimo Pair
 
 [marimo Pair](https://marimo.io/pair) connects an agent to a live marimo
 notebook. With Lens mounted, Pair can start from the result you marked, inspect
-the cells behind it, and return the verified result to the notebook.
+the cells behind it, and return the verified result to the notebook. Pair can
+also reveal a reading-order walkthrough of existing cells.
 
-Create a request in [Getting started](./getting-started) before connecting an
-agent.
+Mount Lens by following [Getting started](./getting-started) before connecting
+an agent.
 
 ## Install Lens and Pair
 
@@ -47,21 +48,41 @@ Resolve my Lens request.
 
 The selection identifies the exact output cell, point or region, and optional
 note. Pair reads related notebook cells and opens an annotated image when the
-task depends on visual detail.
+task depends on visual detail. Image inspection requires the notebook kernel
+and Pair's image reader to share a filesystem. Pair continues from cell, graph,
+and selection text when a remote kernel does not expose the temporary image
+file.
+
+## Request a notebook overview
+
+Ask Pair for an overview with Lens mounted:
+
+```text
+Use Lens to give me an overview of this notebook.
+```
+
+Pair inspects the ordered notebook cells and graph, then reveals a short route
+through existing inputs, transformations, and results. A selection adds a
+human point or region to that context. The walkthrough also works when there
+are zero selections.
 
 ## Pair workflow
 
-Pair uses Lens to keep the work visible in the notebook:
+For a notebook change, Pair uses Lens to keep the work visible:
 
 1. An activity label marks the cell Pair is changing or checking.
 2. Pair edits and runs the notebook through the live kernel.
 3. Pair checks that the affected cells completed successfully.
-4. Lens moves the completed selection into **History**.
-5. Lens brings the verified result into view.
+4. Lens brings the verified result into view.
+5. Lens moves each addressed selection into **History** and presents its receipt.
 
 Working marks never scroll the notebook. Reveal scrolls once and keeps keyboard
-focus in place. The working mark stays present while Pair applies, runs, and
-verifies the requested change.
+focus in place. Activity and reveal labels sit above the target cell at its
+top-right edge. The working mark stays present while Pair applies, runs, and
+verifies the requested change. Their headings name the current notebook task
+or result. Pair gives each reveal enough time for the user to orient to the
+cell and read its message comfortably. The addressed receipt appears after the
+final reveal finishes.
 
 ## Reopen a selection
 

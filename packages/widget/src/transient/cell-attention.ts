@@ -2,7 +2,6 @@ import type { CellActivityEvent, CellAttentionEvent, CellRevealEvent } from "@ma
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
-const DEFAULT_REVEAL_DURATION_MS = 2_200;
 const REVEAL_EXIT_MS = 180;
 
 export type CellAttentionKind = "activity" | "reveal";
@@ -53,6 +52,13 @@ export class CellAttentionController {
     this.#start("reveal", event);
   }
 
+  finishActivity(resolutionRevision: number): void {
+    const active = this.#active;
+    if (active?.kind === "activity" && resolutionRevision >= active.event.revision) {
+      this.#clear(true);
+    }
+  }
+
   dispose(): void {
     this.#clear(true);
   }
@@ -68,8 +74,7 @@ export class CellAttentionController {
       });
     }
 
-    const revealDuration =
-      event.type === "cell.reveal" ? (event.payload.durationMs ?? DEFAULT_REVEAL_DURATION_MS) : 0;
+    const revealDuration = event.type === "cell.reveal" ? event.payload.durationMs : 0;
     const expiresAt = kind === "activity" ? null : this.#now() + revealDuration + REVEAL_EXIT_MS;
     const active: ActiveAttention = {
       kind,
