@@ -306,6 +306,26 @@ describe("cell attention", () => {
     controller.dispose();
   });
 
+  test("reframes activity when its output target is replaced by the rendered cell", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const output = setupOutput("promoted");
+    output.scrollIntoView = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    controller.startActivity(startActivityEvent("promoted"));
+
+    const cell = setupCell("promoted");
+    cell.getBoundingClientRect = () => new DOMRect(20, window.innerHeight + 100, 400, 300);
+    cell.scrollIntoView = vi.fn();
+    window.dispatchEvent(new Event("scroll"));
+    vi.advanceTimersByTime(20);
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ target: cell }));
+    expect(output.scrollIntoView).not.toHaveBeenCalled();
+    expect(cell.scrollIntoView).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
   test("re-resolves a replaced reveal target without scrolling again", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();

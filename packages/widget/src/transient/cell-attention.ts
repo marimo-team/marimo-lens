@@ -139,7 +139,7 @@ export class CellAttentionController {
       return;
     }
     const target = attentionTarget(this.#dom, active.event.payload.cellId);
-    const targetBecameAvailable = active.observedTarget === null && target !== null;
+    const activityTargetChanged = target !== null && active.observedTarget !== target;
     active.target = target;
     if (
       active.framing === "pending" &&
@@ -148,7 +148,7 @@ export class CellAttentionController {
     ) {
       this.#finishFraming(active);
     }
-    if (active.kind === "activity" && targetBecameAvailable) {
+    if (active.kind === "activity" && activityTargetChanged) {
       this.#beginFraming(active, target);
     } else if (active.kind === "activity" && reframe) {
       if (active.framing === "pending") active.reframeAfterPending = true;
