@@ -11,6 +11,7 @@ import {
   outputCellFromElement,
   outputCellFromEvent,
 } from "@/notebook/output-root";
+import { anchorToViewport } from "@/selection/anchor";
 import { handleLensEscape } from "@/selection/escape";
 import { gestureAnchor, normalizedPoint } from "@/selection/state";
 import { focusDock, focusListTrigger, focusSelectionOrDock } from "@/ui/focus";
@@ -91,8 +92,9 @@ export function useDocumentInteractions(options: {
         event.stopPropagation();
         const end = parentViewportPoint(event, surface.frame);
         const anchor = gestureAnchor(workflow.output.element, workflow.start, end);
-        const frame = surface.frame ?? dom.iframeAtPoint(end, workflow.output);
-        const candidate = frame ?? dom.deepestElementAtPoint(end.x, end.y);
+        const detailPoint = anchorCenter(workflow.output.element, anchor);
+        const frame = surface.frame ?? dom.iframeAtPoint(detailPoint, workflow.output);
+        const candidate = frame ?? dom.deepestElementAtPoint(detailPoint.x, detailPoint.y);
         const detail =
           candidate && outputCellFromElement(candidate)?.id === workflow.output.id
             ? candidate
@@ -164,6 +166,16 @@ export function useDocumentInteractions(options: {
     interactionActive,
     uiRef,
   ]);
+}
+
+function anchorCenter(output: HTMLElement, anchor: SelectionAnchor): { x: number; y: number } {
+  const viewport = anchorToViewport(output, anchor);
+  return viewport.kind === "point"
+    ? viewport
+    : {
+        x: viewport.x + viewport.width / 2,
+        y: viewport.y + viewport.height / 2,
+      };
 }
 
 function navigateOutputs(

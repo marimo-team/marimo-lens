@@ -183,6 +183,32 @@ describe("document selection interactions", () => {
     expect(pointerMoveRegistrations()).toBe(armedRegistrations);
   });
 
+  test("grounds a dragged region at its center", () => {
+    const output = visibleOutput();
+    const selectedMark = document.createElement("rect");
+    const axisTick = document.createElement("text");
+    axisTick.textContent = "1950";
+    output.append(selectedMark, axisTick);
+    Object.defineProperty(document, "elementsFromPoint", {
+      configurable: true,
+      value: (x: number, y: number) =>
+        x === 286 && y === 140 ? [selectedMark, output] : [axisTick, output],
+    });
+    const beginSelection = vi.fn<BeginSelection>();
+    mount(beginSelection);
+    arm();
+
+    void act(() => output.dispatchEvent(pointer("pointerdown", 280, 100, 13)));
+    void act(() => output.dispatchEvent(pointer("pointerup", 292, 180, 13)));
+
+    expect(beginSelection).toHaveBeenCalledWith(
+      "cell-1",
+      output,
+      expect.objectContaining({ kind: "rect" }),
+      selectedMark,
+    );
+  });
+
   test("keeps one iframe interaction surface throughout a pointer gesture", () => {
     const output = visibleOutput();
     const frame = document.createElement("iframe");
