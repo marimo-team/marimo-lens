@@ -70,14 +70,15 @@ are zero selections.
 
 For a notebook change, Pair uses Lens to keep the work visible:
 
-1. An activity label marks the cell Pair is changing or checking.
-2. Pair edits and runs the notebook through the live kernel.
-3. Pair checks that the affected cells completed successfully.
+1. An activity label marks the work cell as soon as Pair identifies it.
+2. Pair edits and runs that cell through the live kernel while activity remains visible.
+3. Pair checks that the affected cells completed successfully, then stops activity.
 4. Lens brings the verified result into view.
 5. Lens moves each addressed selection into **History** and presents its receipt.
 
-Working marks never scroll the notebook. Reveal scrolls once and keeps keyboard
-focus in place. Activity and reveal labels sit above the target cell at its
+Working marks preserve the current scroll position when the cell is visible and
+bring an offscreen work cell into view once. Reveal follows the same scroll and
+focus behavior. Activity and reveal labels sit above the target cell at its
 top-right edge. The working mark stays present while Pair applies, runs, and
 verifies the requested change. Their headings name the current notebook task
 or result. Pair gives each reveal enough time for the user to orient to the
@@ -101,8 +102,8 @@ Pair treats that selection as the likely focus of the next request.
 
 Add or edit the note when the mark alone could support several interpretations.
 When one verified change addresses several selections, Pair can complete them
-together with one summary. A current cell image can show every open point and
-region on the same output.
+together with one summary. `context.images` keeps each selection's annotated
+capture, while `cell_image()` returns a fresh rendering without Lens markers.
 
 [Selections](./selections) covers point and region behavior, annotated images,
 keyboard use, and output changes. Pair setup and troubleshooting remain in the

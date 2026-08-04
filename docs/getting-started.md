@@ -146,11 +146,10 @@ else:
         escape(str(_starter_current.get("note", "")).strip()) or "No note added"
     )
     _starter_cell = escape(str(_starter_current["outputCellId"]))
-    _starter_images = {str(_image.selection_id) for _image in _starter_context.images}
     _starter_snapshot = _starter_current.get("snapshot", {})
     _starter_image_status = (
         "Ready"
-        if _starter_id in _starter_images
+        if _starter_id in _starter_context.images
         else escape(
             str(_starter_snapshot.get("status", "pending")).replace("_", " ").title()
         )

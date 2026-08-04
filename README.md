@@ -72,15 +72,18 @@ result, and keep completed feedback available for another pass.
 
 ## Python API
 
-The package exports `Lens`, `LensContext`, `LensError`, and `SelectionImage`.
-Agent integrations use four methods:
+The package exports `Lens`, `LensContext`, `LensError`, `LensReferences`,
+`NotebookReference`, `SelectionReference`, and `__version__`. The version string
+comes from the installed `marimo-lens` distribution metadata.
+Agent integrations use five methods:
 
-| Method                                                            | Behavior                                                         |
-| ----------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `lens.context()`                                                  | Returns detached selection context with lazy notebook text       |
-| `lens.activity(cell_id, *, label=None, message=None)`             | Marks the agent's current work until its result is ready         |
-| `lens.reveal(cell_id, *, duration_ms, label=None, message=None)`  | Brings one verified or explanatory cell into view                |
-| `lens.resolve(selection_ids, *, expected_revision, summary=None)` | Moves one or more selections to History in one guarded operation |
+| Method                                                                        | Behavior                                                         |
+| ----------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `lens.context()`                                                              | Returns detached selection context with lazy notebook text       |
+| `lens.start_activity(cell_id, *, duration_ms=None, label=None, message=None)` | Marks current work until stopped or its optional hold ends       |
+| `lens.stop_activity(cell_id)`                                                 | Stops activity attached to that exact cell                       |
+| `lens.reveal(cell_id, *, duration_ms, label=None, message=None)`              | Brings one verified or explanatory cell into view                |
+| `lens.resolve(selection_ids, *, expected_revision, summary=None)`             | Moves one or more selections to History in one guarded operation |
 
 The [Python API reference](https://marimo-team.github.io/marimo-lens/api)
 documents return values, errors, limits, and lifecycle behavior.

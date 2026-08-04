@@ -8,7 +8,9 @@ description: Python API contracts for reading Lens requests and returning agent 
 The Python API lets notebook agents read the current selection, show their work
 in the notebook, reveal a result, and complete a request.
 
-The package exports `Lens`, `LensContext`, `SelectionImage`, and `LensError`.
+The package exports `Lens`, `LensContext`, `LensError`, `LensReferences`,
+`NotebookReference`, `SelectionReference`, and `__version__`. The version string
+comes from the installed `marimo-lens` distribution metadata.
 
 ```marimo-config
 requires-python = ">=3.11"
@@ -26,10 +28,11 @@ running notebook and executes adapter calls inside its live kernel through
 marimo code mode.
 
 Notebook users select an output and ask their agent to act. The agent owns the
-code-mode connection, discovers the mounted Lens, reads the request, reports
-activity, changes and runs cells, verifies the result, then reveals it and
-resolves the addressed selections. `marimo._code_mode` stays inside the agent
-integration. Notebook cells mount Lens through the
+code-mode connection, connects to the mounted Lens, reads the request, reports
+activity on the work cell, changes and runs cells, verifies the result, stops
+activity, reveals the result for its full hold, then resolves the addressed
+selections.
+`marimo._code_mode` stays inside the agent integration. Notebook cells mount Lens through the
 [public `Lens` API](#lens).
 
 A compatible agent performs the handoff inside its live-kernel execution path:
@@ -39,41 +42,63 @@ import marimo_lens.agent as lens_agent
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
-    mounted = lens_agent.discover(ctx)
-    scan = mounted[0].scan()
+    mounted = lens_agent.connect(ctx)
+    snapshot = mounted.context()
 ```
 
-### `discover(context, *, identity=None) -> tuple[MountedLens, ...]`
+### `connect(context, *, identity=None) -> MountedLens`
 
-Returns mounted Lens handles found in a live
-`marimo._code_mode.get_context()` context. Pass an identity from an earlier
-`MountedLens.scan()` to reconnect to that exact Lens. The filtered result is
-empty when the instance changed or became unavailable.
+Returns the mounted Lens found in a live `marimo._code_mode.get_context()`
+context. Pass an earlier handle's `identity` to reconnect to that exact Lens in
+a later kernel call.
 
-`scan()` returns bounded selection metadata, the current revision, an opaque
-Lens identity, and a compact current-cell summary. It keeps standalone context
-text and PNG bytes outside the scan.
+`connect()` raises `LensError(code="lens_unavailable")` when the requested Lens
+cannot be found. It raises `LensError(code="lens_ambiguous")` when several Lens
+widgets are mounted and no identity selects one.
 
 ### `MountedLens`
 
-The handle exposes the Lens workflow through revision-checked methods:
+The handle exposes context reads, cell feedback, and revision-checked actions:
 
-| Method                                                       | Behavior                                                       |
-| ------------------------------------------------------------ | -------------------------------------------------------------- |
-| `scan()`                                                     | Returns bounded current attention and cell metadata            |
-| `context(*, expected_revision)`                              | Returns a detached `LensContext` for the scanned revision      |
-| `selection_image(selection_id, *, expected_revision)`        | Returns an `AgentImage` when capture-time pixels are available |
-| `start_cell_image(cell_id, *, expected_revision)`            | Starts one marked full-cell capture and returns its request ID |
-| `read_cell_image(request_id)`                                | Reads pending state or consumes one terminal `CellImageResult` |
-| `activity(cell_id, *, label=None, message=None)`             | Shows the current agent work target                            |
-| `reveal(cell_id, *, duration_ms, label=None, message=None)`  | Brings the primary result into view                            |
-| `resolve(selection_ids, *, expected_revision, summary=None)` | Moves verified selections to History                           |
+| Method                                                                   | Behavior                                                     |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| `context()`                                                              | Returns the current detached `LensContext`                   |
+| `cell_image(cell_id, *, expected_revision)`                              | Returns fresh cell PNG bytes after browser capture completes |
+| `start_activity(cell_id, *, duration_ms=None, label=None, message=None)` | Shows the current agent work target                          |
+| `stop_activity(cell_id)`                                                 | Stops activity attached to that exact cell                   |
+| `reveal(cell_id, *, duration_ms, label=None, message=None)`              | Brings the primary result into view                          |
+| `resolve(selection_ids, *, expected_revision, summary=None)`             | Moves verified selections to History                         |
 
-An `AgentImage` returned by `selection_image()` or `CellImageResult.image`
-contains validated PNG bytes in `data`. Write those bytes to a private
-temporary file in the active kernel, then open that path with the agent's image
-reader. The kernel and image reader must share a filesystem. Remove the file
-after its final read.
+`context.images` maps selection IDs to annotated capture-time PNG bytes. The
+matching selection reports `selection["snapshot"]["status"] == "outdated"`
+when its marker changed after those bytes were captured. `cell_image()`
+captures the current rendered output without Lens markers.
+
+The first `cell_image()` call starts a fresh browser capture and returns `None`.
+Repeat the same call in later kernel executions. Pending calls share one
+in-flight capture. Complete that capture before requesting another cell. A
+completed call returns the bytes, while a failed or stalled capture raises
+`LensError`.
+
+Write PNG bytes to a private temporary path in the active kernel before opening
+them with an agent image reader. The kernel and image reader must share a
+filesystem. Remove the path after its final read.
+
+### `mounted.cell_image(cell_id, *, expected_revision) -> bytes | None`
+
+Returns a fresh, unannotated PNG of `cell_id`. The first call starts browser
+capture and returns `None`. Repeat the call with the same cell and revision in
+later kernel executions. The completed call returns and consumes the PNG bytes.
+
+```python
+png = mounted.cell_image("BYtC", expected_revision=revision)
+```
+
+A call for another cell during capture raises `LensError(code="capture_busy")`.
+Poll the first cell until it returns bytes or a terminal error, then request the
+next cell. Other failures use `revision_conflict`, `runtime_unavailable`,
+`cell_not_found`, `browser_unavailable`, `capture_timeout`,
+`output_unavailable`, `capture_failed`, or `lens_closed`.
 
 ## Try the methods
 
@@ -85,11 +110,12 @@ control calls the same Lens API that a notebook agent uses.
 <div class="lens-doc-demo-steps" aria-label="Try the Lens API in four steps">
   <span><strong>1</strong> Press <strong>Select</strong></span>
   <span><strong>2</strong> Mark the chart</span>
-  <span><strong>3</strong> Read and mark activity</span>
+  <span><strong>3</strong> Read and start activity</span>
   <span><strong>4</strong> Complete the request</span>
 </div>
 
 ```python marimo output=false
+import asyncio
 from html import escape
 
 import marimo as mo
@@ -107,13 +133,13 @@ api_context_button = mo.ui.run_button(
 api_activity_button = mo.ui.run_button(
     label=(
         "<span style='display:block;padding:0.3rem 0.75rem;"
-        "line-height:1.25rem'>activity()</span>"
+        "line-height:1.25rem'>start_activity()</span>"
     ),
 )
 api_complete_button = mo.ui.run_button(
     label=(
         "<span style='display:block;padding:0.3rem 0.75rem;"
-        "line-height:1.25rem'>reveal() + resolve()</span>"
+        "line-height:1.25rem'>Reveal, then resolve</span>"
     ),
 )
 ```
@@ -243,10 +269,10 @@ if api_activity_button.value:
         )
     elif _activity_current["cellStatus"] == "available":
         _activity_cell_id = str(_activity_current["outputCellId"])
-        api_demo_lens.activity(
+        api_demo_lens.start_activity(
             _activity_cell_id,
-            label="Working on it…",
-            message="Reviewing the selected result",
+            label="Reviewing selected chart",
+            message="Checking the selected result before updating it",
         )
         set_api_demo_result(
             {
@@ -288,12 +314,15 @@ if api_complete_button.value:
                     "walkthrough and returned the result for review."
                 )
             )
+            api_demo_lens.stop_activity(_complete_cell_id)
+            _complete_hold_ms = 10_000
             api_demo_lens.reveal(
                 _complete_cell_id,
-                duration_ms=10_000,
+                duration_ms=_complete_hold_ms,
                 label="API walkthrough",
                 message=_complete_summary,
             )
+            await asyncio.sleep(_complete_hold_ms / 1_000)
             _complete_revision = api_demo_lens.resolve(
                 _complete_ids,
                 expected_revision=_complete_context.revision,
@@ -363,10 +392,8 @@ elif _api_demo_kind == "context":
     """
 elif _api_demo_kind == "activity":
     _api_demo_cell = escape(str(_api_demo_result["cellId"]))
-    _api_demo_title = "activity() marked the cell"
-    _api_demo_body = (
-        f"Cell <code>{_api_demo_cell}</code> now shows <strong>Working on it…</strong>."
-    )
+    _api_demo_title = "start_activity() marked the cell"
+    _api_demo_body = f"Cell <code>{_api_demo_cell}</code> now shows the active review."
 else:
     _api_demo_count = int(_api_demo_result["count"])
     _api_demo_noun = "request" if _api_demo_count == 1 else "requests"
@@ -436,30 +463,55 @@ captured runtime snapshot.
 `context()` raises `LensError(code="lens_closed")` after Lens closes. Contexts
 created before closing remain readable.
 
-### `lens.activity(cell_id, *, label=None, message=None) -> None`
+### `lens.start_activity(cell_id, *, duration_ms=None, label=None, message=None) -> None`
 
 Validates that `cell_id` belongs to the current marimo graph, then sends a
 best-effort browser event. When the displayed Lens receives it, the cell is
-marked until another activity call, a reveal, a resolution, or Lens teardown.
+marked until its optional hold ends, `stop_activity()` targets that cell, or
+another activity, reveal, or Lens teardown replaces it.
 
 ```python
 context = lens.context()
 selection = context.current
 
 if selection is not None and selection["cellStatus"] == "available":
-    lens.activity(
+    lens.start_activity(
         str(selection["outputCellId"]),
-        label="On it",
+        label="Updating aggregation",
         message="Updating the aggregation",
     )
 ```
 
-Activity never scrolls and preserves selection state. Another activity call
-updates the label and message or marks a different cell. `label` defaults to
-**Working** and accepts at most 40 UTF-16 code units.
+Activity preserves selection state. It keeps the current scroll position when
+the work cell has room for the label above it. It reframes offscreen and
+near-top work cells once so the label stays outside the cell.
+Another `start_activity()` call updates the label and message or marks a
+different cell. Starting timed activity again on the same cell restarts its
+hold.
+
+`duration_ms` defaults to `None`, which keeps activity visible until an explicit
+stop or replacement. Pass a positive integer up to 300,000 to clear it after
+that hold. `stop_activity()` can dismiss timed activity before its hold ends.
+`label` defaults to **Working** and accepts at most 40 UTF-16 code units.
+
+Call `stop_activity()` after verification and before `reveal()` or `resolve()`.
 
 Expected `LensError.code` values are `runtime_unavailable`, `cell_not_found`,
 and `lens_closed`.
+
+### `lens.stop_activity(cell_id) -> None`
+
+Sends a best-effort browser event that clears persistent or timed activity when
+`cell_id` matches the active work cell. Activity on another cell remains
+visible.
+
+```python
+lens.stop_activity("cell-view")
+```
+
+Call `stop_activity()` after the cell edit or creation has run and fresh
+verification succeeds. The method accepts the original cell ID after that cell
+has been replaced or removed from the current graph.
 
 ### `lens.reveal(cell_id, *, duration_ms, label=None, message=None) -> None`
 
@@ -480,10 +532,10 @@ if selection is not None and selection["cellStatus"] == "available":
     )
 ```
 
-`duration_ms` accepts an integer from 1 through 60,000. Choose a hold that lets
-the user orient to the highlighted cell and read the message comfortably.
-Longer or denser messages need more time. `label` accepts up to 40 UTF-16 code
-units and appears as the reveal heading.
+`duration_ms` accepts a positive integer up to 300,000 milliseconds. Choose a
+hold that lets the user orient to the highlighted cell and read the message
+comfortably. Longer or denser messages need more time. `label` accepts up to 40
+UTF-16 code units and appears as the reveal heading.
 
 Reveal messages accept up to 1,000 UTF-16 code units and wrap below the status
 and cell ID. Reveal preserves keyboard focus and selection state. A second
@@ -536,8 +588,8 @@ Expected `LensError.code` values are `lens_closed`, `revision_conflict`, and
 Closes Lens, cancels pending full-cell capture, and releases Lens-owned
 annotated images. Calling `close()` more than once has no effect.
 
-Later calls to `context()`, `activity()`, `reveal()`, and `resolve()` raise
-`LensError(code="lens_closed")`.
+Later calls to `context()`, `start_activity()`, `stop_activity()`, `reveal()`, and
+`resolve()` raise `LensError(code="lens_closed")`.
 
 ## `LensContext`
 
@@ -549,7 +601,7 @@ Later calls to `context()`, `activity()`, `reveal()`, and `resolve()` raise
 | `current`    | Current compact selection reference, or `None`                    |
 | `references` | JSON-safe selection references for a live notebook integration    |
 | `text`       | Bounded text for selected cells and their relevant upstream cells |
-| `images`     | Tuple of successful `SelectionImage` values in selection order    |
+| `images`     | Read-only mapping from selection IDs to captured PNG bytes        |
 
 Each compact selection reference includes its stable ID and label, note, exact
 `outputCellId`, point or region, annotated image status, and runtime
@@ -561,45 +613,59 @@ Each compact selection reference includes its stable ID and label, note, exact
 - `missing` when the runtime is available and the cell ID is absent
 - `unavailable` when Lens cannot inspect the current marimo runtime
 
+## Typed context references
+
+`LensContext.references` returns a `LensReferences` dictionary.
+`LensContext.current` returns its current `SelectionReference`, or `None` when
+no selection is current. These `TypedDict` contracts are exported from
+`marimo_lens` for type checking and editor completion.
+
+`LensReferences` contains:
+
+| Key                  | Value                               |
+| -------------------- | ----------------------------------- |
+| `revision`           | Captured selection revision         |
+| `generatedAt`        | Context generation timestamp        |
+| `notebook`           | `NotebookReference` metadata        |
+| `currentSelectionId` | Current selection ID, or `None`     |
+| `selections`         | List of `SelectionReference` values |
+
+`SelectionReference` contains `id`, `label`, `note`, `outputCellId`,
+`cellStatus`, `anchor`, and `snapshot`. `domHint` and `previousResolution`
+appear when that evidence is available for the selection.
+
+`NotebookReference` contains `path` and `available`. It includes `reason` when
+the active marimo runtime is unavailable.
+
 Standalone text includes selected cell source, relevant upstream cell source,
 definitions, references, direct parent IDs, notes, and safely displayable native
 marimo control values. Passwords, file payloads, custom controls, AnyWidgets,
 and opaque state render as `[redacted]` or `[unavailable]`.
 
-## `SelectionImage`
+## Selection PNG bytes
 
-`context.images` contains successful annotated PNG captures. Match an image to
-a selection with `SelectionImage.selection_id`.
+`context.images` contains successful capture-time PNGs indexed by selection ID.
+The corresponding selection reference reports
+`selection["snapshot"]["status"] == "outdated"` when the marker changed after
+capture.
 
-| Attribute      | Value                                          |
-| -------------- | ---------------------------------------------- |
-| `id`           | Stable image ID                                |
-| `selection_id` | Selection that owns the image                  |
-| `media_type`   | `"image/png"`                                  |
-| `data`         | Immutable PNG bytes                            |
-| `width`        | Pixel width                                    |
-| `height`       | Pixel height                                   |
-| `sha256`       | SHA-256 digest of `data`                       |
-| `captured_at`  | Capture timestamp                              |
-| `outdated`     | Whether the selection moved after these pixels |
-
-Render the first captured image as a marimo output:
+Render one captured image as a marimo output:
 
 ```python
-context = lens.context()
-image = next(iter(context.images), None)
-image.render(width=640, alt="Selected chart region") if image is not None else None
-```
+import marimo as mo
 
-`SelectionImage.render(*, alt=None, width=None, height=None)` returns a marimo
-image. A `SelectionImage` also renders when it is the final value of a cell.
+context = lens.context()
+png = context.images.get("selection-1")
+mo.image(png, width=640, alt="Selected chart region") if png is not None else None
+```
 
 ## `LensError`
 
 Expected Lens operation failures raise `LensError`.
 
 - `code` is the stable machine-readable failure code.
-- `revision` is the current Lens selection revision when the error is created.
+- `revision` is the current Lens selection revision, or `None` when connection
+  failed before a Lens instance was available.
 
 Invalid argument types and values raise `TypeError` or `ValueError` before a
 Lens operation begins.
@@ -614,7 +680,7 @@ Lens operation begins.
 | Activity or reveal label             | 40 UTF-16 code units                       |
 | Activity message or resolve summary  | 240 UTF-16 code units                      |
 | Reveal message                       | 1,000 UTF-16 code units                    |
-| Reveal duration                      | 1 to 60,000 milliseconds                   |
+| Reveal duration                      | 1 to 300,000 milliseconds                  |
 | Selections per resolution            | 64 unique IDs                              |
 | Active synchronized state            | 40,000 UTF-8 bytes                         |
 | Addressed History                    | 64 items and 64,000 UTF-8 bytes            |

@@ -165,7 +165,6 @@ mo.Html(
 _lens_revision = get_lens_revision()
 _agent_context = lens.context()
 _agent_selections = list(_agent_context.references.get("selections", []))
-_agent_images = {str(_image.selection_id): _image for _image in _agent_context.images}
 _agent_items = []
 for _index, _selection in enumerate(_agent_selections, start=1):
     _selection_id = str(_selection.get("id", ""))
@@ -178,7 +177,7 @@ for _index, _selection in enumerate(_agent_selections, start=1):
             "cellId": str(_selection.get("outputCellId", "")),
             "imageStatus": (
                 "Ready"
-                if _selection_id in _agent_images
+                if _selection_id in _agent_context.images
                 else str(_snapshot.get("status", "pending")).title()
             ),
             "reopened": isinstance(
@@ -412,9 +411,9 @@ if handoff_to_agent.value:
             else f"Working through {_selection_count} requests"
         )
         set_response_completion(None)
-        lens.activity(
+        lens.start_activity(
             _handoff_cell_id,
-            label="Working on it…",
+            label="Reviewing chart request",
             message=_activity_message,
         )
         await asyncio.sleep(5)
@@ -479,18 +478,21 @@ if _verified_request is not None:
             if _verified_request["colorSupported"]
             else "Checking what this demo can change."
         )
-        lens.activity(
+        lens.start_activity(
             _verified_cell_id,
-            label="Checking the result…",
+            label="Checking updated chart",
             message=_verification_message,
         )
         await asyncio.sleep(5)
+        lens.stop_activity(_verified_cell_id)
+        _reveal_hold_ms = 10_000
         lens.reveal(
             _verified_cell_id,
-            duration_ms=10_000,
+            duration_ms=_reveal_hold_ms,
             label="Updated chart",
             message=_verified_summary,
         )
+        await asyncio.sleep(_reveal_hold_ms / 1_000)
         lens.resolve(
             _verified_selection_ids,
             expected_revision=int(_verified_request["revision"]),

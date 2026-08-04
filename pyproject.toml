@@ -2,7 +2,8 @@
 members = ["packages/marimo-lens"]
 
 [dependency-groups]
-dev = ["marimo[recommended]>=0.23.15", "pyrefly>=1", "pytest>=9.0.3", "ruff>=0.15.14", "ty>=0.0.39"]
+# mdx-marimo 0.0.2 imports marimo._server.export while compiling docs.
+dev = ["marimo[recommended]==0.23.15", "pyrefly>=1", "pytest>=9.0.3", "ruff>=0.15.14", "ty>=0.0.39"]
 
 [tool.uv]
 exclude-newer = "3 days"
