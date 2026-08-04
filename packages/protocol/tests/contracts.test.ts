@@ -2,7 +2,8 @@ import { describe, expect, test } from "vite-plus/test";
 
 import {
   ActivateSelectionCommandSchema,
-  CellActivityEventSchema,
+  CellActivityStartEventSchema,
+  CellActivityStopEventSchema,
   CellRevealEventSchema,
   ClearHistoryCommandSchema,
   GetSnapshotCommandSchema,
@@ -469,12 +470,16 @@ describe("selection contracts", () => {
         CellRevealEventSchema,
         {
           ...reveal,
-          payload: { cellId: "BYtC", message: "x".repeat(1_000), durationMs: 60_000 },
+          payload: {
+            cellId: "BYtC",
+            message: "x".repeat(1_000),
+            durationMs: 300_000,
+          },
         },
         "event",
       ),
     ).toMatchObject({
-      payload: { message: "x".repeat(1_000), durationMs: 60_000 },
+      payload: { message: "x".repeat(1_000), durationMs: 300_000 },
     });
     expect(() =>
       parseContract(
@@ -490,7 +495,7 @@ describe("selection contracts", () => {
         "event",
       ),
     ).toThrow();
-    for (const durationMs of [0, 60_001, 1.5]) {
+    for (const durationMs of [0, 300_001, 1.5]) {
       expect(() =>
         parseContract(
           CellRevealEventSchema,
@@ -508,39 +513,65 @@ describe("selection contracts", () => {
     ).toEqual(reveal);
   });
 
-  test("accepts bounded cell activity events", () => {
+  test("accepts bounded cell activity start events", () => {
     const activity = {
       protocol: "marimo-lens.event",
       version: 1,
-      type: "cell.activity",
+      type: "cell.activity.start",
       revision: 4,
       payload: {
         cellId: "BYtC",
+        durationMs: 8_000,
         label: "On it",
         message: "Updating the aggregation.",
       },
     };
-    expect(parseContract(CellActivityEventSchema, activity, "event")).toEqual(activity);
+    expect(parseContract(CellActivityStartEventSchema, activity, "event")).toEqual(activity);
+    const persistent = { ...activity, payload: { cellId: "BYtC" } };
+    expect(parseContract(CellActivityStartEventSchema, persistent, "event")).toEqual(persistent);
     expect(
       parseContract(
-        CellActivityEventSchema,
+        CellActivityStartEventSchema,
         { ...activity, payload: { ...activity.payload, displayHint: "compact" } },
         "event",
       ),
     ).toEqual(activity);
     expect(() =>
       parseContract(
-        CellActivityEventSchema,
+        CellActivityStartEventSchema,
         { ...activity, payload: { cellId: "BYtC", message: "   " } },
         "event",
       ),
     ).toThrow();
     expect(() =>
       parseContract(
-        CellActivityEventSchema,
+        CellActivityStartEventSchema,
         { ...activity, payload: { cellId: "BYtC", label: "x".repeat(41) } },
         "event",
       ),
+    ).toThrow();
+    for (const durationMs of [0, 300_001, 1.5]) {
+      expect(() =>
+        parseContract(
+          CellActivityStartEventSchema,
+          { ...activity, payload: { cellId: "BYtC", durationMs } },
+          "event",
+        ),
+      ).toThrow();
+    }
+  });
+
+  test("accepts a cell-specific activity stop event", () => {
+    const stop = {
+      protocol: "marimo-lens.event",
+      version: 1,
+      type: "cell.activity.stop",
+      revision: 4,
+      payload: { cellId: "BYtC" },
+    };
+    expect(parseContract(CellActivityStopEventSchema, stop, "event")).toEqual(stop);
+    expect(() =>
+      parseContract(CellActivityStopEventSchema, { ...stop, payload: { cellId: "" } }, "event"),
     ).toThrow();
   });
 
@@ -552,13 +583,6 @@ describe("selection contracts", () => {
       type: "output.capture",
       payload: {
         outputCellId: "cell-view",
-        selections: [
-          {
-            selectionId: "selection-1",
-            label: "S1",
-            anchor: { kind: "point", x: 0.25, y: 0.5 },
-          },
-        ],
       },
     };
     const image = {

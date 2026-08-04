@@ -63,7 +63,13 @@ export function useResolutionReceipt(options: {
   }, [dom, pausedRevision, receipt, suspended]);
 
   useEffect(() => {
-    if (!receipt || attentionKind !== "activity") return;
+    if (
+      !receipt ||
+      attentionKind !== "activity" ||
+      presentedRevision.current !== receipt.revision
+    ) {
+      return;
+    }
     setReceipt((current) => (current === receipt ? null : current));
     setPausedRevision((current) => (current === receipt.revision ? null : current));
   }, [attentionKind, receipt]);

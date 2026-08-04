@@ -12,7 +12,6 @@ from typing import Any, Literal
 from pydantic import ValidationError
 
 from ._protocol_models import OUTPUT_CAPTURE_IMAGE_ADAPTER
-from .context import SelectionImage
 
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 MAX_TOTAL_IMAGE_BYTES = 64 * 1024 * 1024
@@ -40,17 +39,18 @@ class ImageError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
-class OutputImage:
-    """One validated browser rendering awaiting agent consumption."""
+class _SelectionImage:
+    """Validated PNG evidence retained with one open selection."""
 
-    request_id: str
-    cell_id: str
+    id: str
+    selection_id: str
     media_type: Literal["image/png"]
     data: bytes = field(repr=False)
     width: int
     height: int
     sha256: str
     captured_at: str
+    outdated: bool
 
 
 def prepare_selection_image(
@@ -61,7 +61,7 @@ def prepare_selection_image(
     other_bytes: int,
     max_image_bytes: int = MAX_IMAGE_BYTES,
     max_total_bytes: int = MAX_TOTAL_IMAGE_BYTES,
-) -> SelectionImage:
+) -> _SelectionImage:
     """Validate one marked selection capture against the Lens image budget."""
 
     data, width, height, digest, captured_at = _prepare_png(
@@ -75,7 +75,7 @@ def prepare_selection_image(
             "image_store_full",
             f"Lens images exceed {max_total_bytes} bytes.",
         )
-    return SelectionImage(
+    return _SelectionImage(
         id=f"image:{selection_id}",
         selection_id=selection_id,
         media_type="image/png",
@@ -88,30 +88,20 @@ def prepare_selection_image(
     )
 
 
-def prepare_output_image(
+def validate_output_png(
     request_id: str,
-    cell_id: str,
     metadata: Mapping[str, Any],
     buffer: bytes | bytearray | memoryview,
-) -> OutputImage:
+) -> bytes:
     """Validate one transient output capture."""
 
-    data, width, height, digest, captured_at = _prepare_png(
+    data, _width, _height, _digest, _captured_at = _prepare_png(
         metadata,
         buffer,
         expected_id=f"image:{request_id}",
         max_image_bytes=MAX_IMAGE_BYTES,
     )
-    return OutputImage(
-        request_id=request_id,
-        cell_id=cell_id,
-        media_type="image/png",
-        data=data,
-        width=width,
-        height=height,
-        sha256=digest,
-        captured_at=captured_at,
-    )
+    return data
 
 
 def _prepare_png(
@@ -287,7 +277,6 @@ def _validate_png(data: bytes) -> tuple[int, int]:
 
 __all__ = [
     "ImageError",
-    "OutputImage",
-    "prepare_output_image",
     "prepare_selection_image",
+    "validate_output_png",
 ]

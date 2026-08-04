@@ -1,85 +1,61 @@
 from __future__ import annotations
 
-from typing import get_type_hints
+from collections.abc import Mapping
+from importlib import metadata as pkg
+from typing import Any, cast, get_type_hints
 
 import marimo_lens
 import pytest
-from marimo_lens import Lens, LensContext, LensError, SelectionImage
+from marimo_lens import (
+    Lens,
+    LensContext,
+    LensError,
+    LensReferences,
+    NotebookReference,
+    SelectionReference,
+)
 from marimo_lens._runtime import RuntimeSnapshot
-
-from tests.support.factories import png
 
 
 def test_package_exports_the_public_api() -> None:
-    assert marimo_lens.__all__ == [
-        "Lens",
-        "LensContext",
-        "LensError",
-        "SelectionImage",
-    ]
-    assert [getattr(marimo_lens, name) for name in marimo_lens.__all__] == [
-        Lens,
-        LensContext,
-        LensError,
-        SelectionImage,
-    ]
+    expected = {
+        "Lens": Lens,
+        "LensContext": LensContext,
+        "LensError": LensError,
+        "LensReferences": LensReferences,
+        "NotebookReference": NotebookReference,
+        "SelectionReference": SelectionReference,
+        "__version__": pkg.version("marimo-lens"),
+    }
+
+    assert set(marimo_lens.__all__) == set(expected)
+    assert {name: getattr(marimo_lens, name) for name in expected} == expected
 
 
-def test_selection_image_repr_hides_png_bytes() -> None:
-    image = _image(b"private-png-bytes")
-
-    result = repr(image)
-
-    assert "SelectionImage" in result
-    assert "selection-1" in result
-    assert "data=" not in result
-    assert "private-png-bytes" not in result
-
-
-def test_selection_images_render_through_marimo_display_protocol() -> None:
-    from marimo import Html
-    from marimo._output.formatting import try_format
-
-    image = _image(png())
-    rendered = image.render()
-    formatted = try_format(image)
-
-    assert isinstance(rendered, Html)
-    assert formatted.mimetype == "text/html"
-    assert "<img" in formatted.data
-    assert not hasattr(image, "__dict__")
+def test_context_exposes_typed_reference_dictionaries() -> None:
+    references_getter = LensContext.references.fget
+    current_getter = LensContext.current.fget
+    assert references_getter is not None
+    assert current_getter is not None
+    assert get_type_hints(references_getter)["return"] is LensReferences
+    assert get_type_hints(current_getter)["return"] == SelectionReference | None
+    assert get_type_hints(LensReferences)["notebook"] is NotebookReference
+    assert get_type_hints(LensReferences)["selections"] == list[SelectionReference]
+    assert get_type_hints(NotebookReference)["path"] is str
+    assert get_type_hints(SelectionReference)["outputCellId"] is str
 
 
-def test_image_render_return_type_is_runtime_resolvable() -> None:
-    from marimo import Html
+def test_context_exposes_immutable_png_bytes_by_selection_id() -> None:
+    images = {"selection-1": b"png-bytes"}
+    context = LensContext(references={}, text="", images=images)
+    images.clear()
 
-    assert get_type_hints(SelectionImage.render)["return"] is Html
-
-
-def test_selection_image_render_forwards_presentation_options(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo
-
-    calls: list[tuple[bytes, dict[str, object]]] = []
-    sentinel = marimo.Html("<span>rendered</span>")
-
-    def render_image(data: bytes, **options: object) -> marimo.Html:
-        calls.append((data, options))
-        return sentinel
-
-    monkeypatch.setattr(marimo, "image", render_image)
-    image = _image(png())
-
-    result = image.render(alt="Cell output", width="100%", height=120)
-
-    assert result is sentinel
-    assert calls == [
-        (
-            image.data,
-            {"alt": "Cell output", "width": "100%", "height": 120},
-        )
-    ]
+    assert context.images == {"selection-1": b"png-bytes"}
+    images_getter = LensContext.images.fget
+    assert images_getter is not None
+    assert get_type_hints(images_getter)["return"] == Mapping[str, bytes]
+    with pytest.raises(TypeError):
+        cast(Any, context.images)["selection-2"] = b"other"
 
 
 def test_context_current_returns_the_authoritative_selection() -> None:
@@ -92,7 +68,7 @@ def test_context_current_returns_the_authoritative_selection() -> None:
             ],
         },
         text="Current notebook context",
-        images=(),
+        images={},
     )
 
     assert context.current == {"id": "selection-2", "label": "S2"}
@@ -102,7 +78,7 @@ def test_context_current_is_none_when_no_selection_is_current() -> None:
     context = LensContext(
         references={"currentSelectionId": None, "selections": []},
         text="No Lens selections were collected.",
-        images=(),
+        images={},
     )
 
     assert context.current is None
@@ -112,7 +88,7 @@ def test_context_revision_returns_the_captured_selection_revision() -> None:
     context = LensContext(
         references={"revision": 7, "currentSelectionId": None, "selections": []},
         text="Current notebook context",
-        images=(),
+        images={},
     )
 
     assert context.revision == 7
@@ -122,7 +98,7 @@ def test_context_revision_rejects_an_invalid_reference_packet() -> None:
     context = LensContext(
         references={"currentSelectionId": None, "selections": []},
         text="Current notebook context",
-        images=(),
+        images={},
     )
 
     with pytest.raises(ValueError, match="valid revision"):
@@ -176,7 +152,7 @@ def test_context_repr_summarizes_context_and_image_sizes() -> None:
             "selections": [{"note": "private selection content"}, {}],
         },
         text="private text content" * 10_000,
-        images=(_image(b"x" * 100_000),),
+        images={"selection-1": b"x" * 100_000},
     )
 
     result = repr(context)
@@ -186,17 +162,3 @@ def test_context_repr_summarizes_context_and_image_sizes() -> None:
     )
     assert "private selection content" not in result
     assert "private text content" not in result
-
-
-def _image(data: bytes) -> SelectionImage:
-    return SelectionImage(
-        id="image:selection-1",
-        selection_id="selection-1",
-        media_type="image/png",
-        data=data,
-        width=10,
-        height=10,
-        sha256="0" * 64,
-        captured_at="2026-07-14T11:58:00Z",
-        outdated=False,
-    )

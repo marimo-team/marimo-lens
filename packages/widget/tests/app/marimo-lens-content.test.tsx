@@ -556,15 +556,13 @@ describe("marimo-lens content", () => {
       }),
     );
     expect(offscreen.scrollIntoView).toHaveBeenCalledOnce();
-    expect(
-      document.querySelector("[data-marimo-lens-cell-attention-notice]")?.textContent,
-    ).toContain("Not visibleoffscreenInspect this result.");
+    expect(document.querySelector("[data-marimo-lens-cell-attention-notice]")).toBeNull();
 
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
         version: 1,
-        type: "cell.activity",
+        type: "cell.activity.start",
         revision: 7,
         payload: { cellId: "BYtC", message: "Updating the aggregation." },
       }),
@@ -577,11 +575,55 @@ describe("marimo-lens content", () => {
     expect(activity?.querySelector("[data-marimo-lens-working-indicator]")).not.toBeNull();
     expect(attentionStatus()).toBe("Working in cell BYtC. Updating the aggregation.");
 
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 1,
+        type: "cell.activity.stop",
+        revision: 7,
+        payload: { cellId: "other" },
+      }),
+    );
+    expect(document.querySelector("[data-marimo-lens-cell-attention]")).not.toBeNull();
+
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 1,
+        type: "cell.activity.stop",
+        revision: 7,
+        payload: { cellId: "BYtC" },
+      }),
+    );
+    expect(document.querySelector("[data-marimo-lens-cell-attention]")).toBeNull();
+    expect(attentionStatus()).toBe("");
+
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 1,
+        type: "cell.activity.start",
+        revision: 7,
+        payload: { cellId: "BYtC", message: "Finishing the aggregation." },
+      }),
+    );
+
     act(() => {
       for (const resolutionListener of resolutionListeners) {
         resolutionListener(resolvedEvent({ revision: 7 }));
       }
     });
+    expect(document.querySelector("[data-marimo-lens-cell-attention]")).not.toBeNull();
+
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 1,
+        type: "cell.activity.stop",
+        revision: 7,
+        payload: { cellId: "BYtC" },
+      }),
+    );
     expect(document.querySelector("[data-marimo-lens-cell-attention]")).toBeNull();
   });
 
@@ -855,7 +897,7 @@ describe("marimo-lens content", () => {
       attentionListener?.({
         protocol: "marimo-lens.event",
         version: 1,
-        type: "cell.activity",
+        type: "cell.activity.start",
         revision: 4,
         payload: {
           cellId: selection.outputCellId,
@@ -882,6 +924,84 @@ describe("marimo-lens content", () => {
     void act(() => vi.advanceTimersByTime(4_180));
     expect(document.querySelector("[data-marimo-lens-cell-attention]")).toBeNull();
     expect(document.querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
+  });
+
+  test("presents a newly addressed receipt after timed activity finishes", () => {
+    vi.useFakeTimers();
+    let attentionListener: ((event: CellAttentionEvent) => void) | undefined;
+    let resolutionListener: ((event: SelectionResolvedEvent) => void) | undefined;
+    const selection = selectionFixture();
+    const event = resolvedEvent({ summary: "Updated the chart." });
+    let model = {
+      state: {
+        revision: 3,
+        nextLabel: "S2",
+        currentSelectionId: selection.id as string | null,
+        selections: [selection],
+        history: [] as AddressedSelection[],
+      },
+      protocol: {
+        getSnapshot: vi.fn(),
+        onOutputCapture: vi.fn(() => vi.fn()),
+        onCellAttention: vi.fn((next: (event: CellAttentionEvent) => void) => {
+          attentionListener = next;
+          return vi.fn();
+        }),
+        onSelectionResolved: vi.fn((next: (event: SelectionResolvedEvent) => void) => {
+          resolutionListener = next;
+          return vi.fn();
+        }),
+      },
+    };
+    mocks.useLensModel.mockImplementation(() => model);
+    mocks.useSelectionActions.mockImplementation(
+      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
+    );
+    const cell = document.createElement("section");
+    cell.id = `cell-${selection.outputCellId}`;
+    cell.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
+    cell.scrollIntoView = vi.fn();
+    document.body.appendChild(cell);
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root?.render(<MarimoLensContent />));
+
+    act(() =>
+      attentionListener?.({
+        protocol: "marimo-lens.event",
+        version: 1,
+        type: "cell.activity.start",
+        revision: 3,
+        payload: {
+          cellId: selection.outputCellId,
+          durationMs: 4_000,
+          label: "Updating chart",
+        },
+      }),
+    );
+    act(() => resolutionListener?.(event));
+    model = {
+      ...model,
+      state: {
+        revision: 4,
+        nextLabel: "S2",
+        currentSelectionId: null,
+        selections: [],
+        history: [addressedReceipt(selection, event)],
+      },
+    };
+    act(() => root?.render(<MarimoLensContent />));
+
+    expect(document.querySelector("[data-marimo-lens-cell-attention]")).not.toBeNull();
+    expect(document.querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
+
+    void act(() => vi.advanceTimersByTime(4_120));
+
+    expect(document.querySelector("[data-marimo-lens-cell-attention]")).toBeNull();
+    expect(document.querySelector("[data-marimo-lens-resolution-receipt]")?.textContent).toContain(
+      "S1AddressedUpdated the chart.",
+    );
   });
 
   test("reconciles one resolution receipt for an atomic batch", () => {
@@ -1109,9 +1229,12 @@ describe("marimo-lens content", () => {
     let listener: ((event: SelectionResolvedEvent) => void) | undefined;
     const selection = selectionFixture();
     const output = document.createElement("div");
+    let outputTop = 20;
     output.id = `output-${selection.outputCellId}`;
-    output.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
-    output.scrollIntoView = vi.fn();
+    output.getBoundingClientRect = () => new DOMRect(20, outputTop, 400, 240);
+    output.scrollIntoView = vi.fn(() => {
+      outputTop = 300;
+    });
     Object.defineProperties(output, {
       scrollWidth: { configurable: true, value: 400 },
       scrollHeight: { configurable: true, value: 240 },
@@ -1396,15 +1519,13 @@ function addressedReceipt(selection: Selection, event: SelectionResolvedEvent): 
   };
 }
 
-function outputCaptureCommand(
-  selections: OutputCaptureCommand["payload"]["selections"] = [],
-): OutputCaptureCommand {
+function outputCaptureCommand(): OutputCaptureCommand {
   return {
     protocol: "marimo-lens.command",
     version: 1,
     requestId: "capture-1",
     type: "output.capture",
-    payload: { outputCellId: "cell-1", selections },
+    payload: { outputCellId: "cell-1" },
   };
 }
 

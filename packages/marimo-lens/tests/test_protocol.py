@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import hashlib
+from dataclasses import replace
 
 import pytest
+from marimo_lens._images import prepare_selection_image
 from marimo_lens._protocol import (
     ProtocolError,
     capture_command,
-    cell_activity_event,
+    cell_activity_start_event,
+    cell_activity_stop_event,
     cell_reveal_event,
     error_response,
     mutation_ack_response,
@@ -21,7 +24,6 @@ from marimo_lens._protocol import (
 from marimo_lens._protocol import (
     snapshot_metadata as build_snapshot_metadata,
 )
-from marimo_lens.context import SelectionImage
 
 from tests.support.factories import png, selection, snapshot_metadata
 
@@ -57,22 +59,47 @@ def test_cell_reveal_event_omits_an_absent_message() -> None:
     )["payload"] == {"cellId": "cell-view", "durationMs": 4_000}
 
 
-def test_cell_activity_event_uses_transient_transport() -> None:
-    assert cell_activity_event(
+def test_cell_activity_start_event_uses_transient_transport() -> None:
+    assert cell_activity_start_event(
         cell_id="cell-view",
+        duration_ms=8_000,
         label="On it",
         message="Updating the aggregation.",
         revision=3,
     ) == {
         "protocol": "marimo-lens.event",
         "version": 1,
-        "type": "cell.activity",
+        "type": "cell.activity.start",
         "revision": 3,
         "payload": {
             "cellId": "cell-view",
+            "durationMs": 8_000,
             "label": "On it",
             "message": "Updating the aggregation.",
         },
+    }
+
+
+def test_cell_activity_start_event_omits_an_absent_duration() -> None:
+    assert cell_activity_start_event(
+        cell_id="cell-view",
+        duration_ms=None,
+        label=None,
+        message=None,
+        revision=0,
+    )["payload"] == {"cellId": "cell-view"}
+
+
+def test_cell_activity_stop_event_targets_one_cell() -> None:
+    assert cell_activity_stop_event(
+        cell_id="cell-view",
+        revision=3,
+    ) == {
+        "protocol": "marimo-lens.event",
+        "version": 1,
+        "type": "cell.activity.stop",
+        "revision": 3,
+        "payload": {"cellId": "cell-view"},
     }
 
 
@@ -632,15 +659,13 @@ def test_selection_response_builders_own_command_payload_shapes() -> None:
 
 def test_snapshot_response_builder_keeps_metadata_and_png_together() -> None:
     data = png()
-    image = SelectionImage(
-        id="image:selection-1",
-        selection_id="selection-1",
-        media_type="image/png",
-        data=data,
-        width=2,
-        height=2,
-        sha256=hashlib.sha256(data).hexdigest(),
-        captured_at="2026-07-14T11:58:00Z",
+    image = replace(
+        prepare_selection_image(
+            "selection-1",
+            snapshot_metadata(data),
+            data,
+            other_bytes=0,
+        ),
         outdated=True,
     )
 
@@ -663,13 +688,6 @@ def test_output_capture_uses_a_separate_outgoing_command_path() -> None:
     command = capture_command(
         request_id="request-1",
         cell_id="cell-view",
-        selections=[
-            {
-                "selectionId": "selection-1",
-                "label": "S1",
-                "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
-            }
-        ],
     )
 
     assert command == {
@@ -677,16 +695,7 @@ def test_output_capture_uses_a_separate_outgoing_command_path() -> None:
         "version": 1,
         "requestId": "request-1",
         "type": "output.capture",
-        "payload": {
-            "outputCellId": "cell-view",
-            "selections": [
-                {
-                    "selectionId": "selection-1",
-                    "label": "S1",
-                    "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
-                }
-            ],
-        },
+        "payload": {"outputCellId": "cell-view"},
     }
     with pytest.raises(ProtocolError) as raised:
         parse_command(command, [])

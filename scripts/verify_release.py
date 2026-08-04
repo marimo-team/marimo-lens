@@ -4,7 +4,16 @@ import sys
 from importlib.metadata import distribution
 from pathlib import Path
 
-from marimo_lens import Lens, LensContext, LensError, SelectionImage
+from marimo_lens import (
+    Lens,
+    LensContext,
+    LensError,
+    LensReferences,
+    NotebookReference,
+    SelectionReference,
+    __version__,
+)
+from marimo_lens.agent import MountedLens, connect
 
 
 def verify_release(expected_version: str) -> None:
@@ -14,6 +23,11 @@ def verify_release(expected_version: str) -> None:
         raise SystemExit(
             f"Installed marimo-lens version {installed_version} does not match "
             f"release {expected_version}"
+        )
+    if __version__ != installed_version:
+        raise SystemExit(
+            f"marimo_lens.__version__ {__version__} does not match installed "
+            f"distribution {installed_version}"
         )
 
     license_paths = [
@@ -39,7 +53,10 @@ def verify_release(expected_version: str) -> None:
         "Lens": Lens,
         "LensContext": LensContext,
         "LensError": LensError,
-        "SelectionImage": SelectionImage,
+        "LensReferences": LensReferences,
+        "MountedLens": MountedLens,
+        "NotebookReference": NotebookReference,
+        "SelectionReference": SelectionReference,
     }
     invalid_types = [
         name
@@ -50,6 +67,8 @@ def verify_release(expected_version: str) -> None:
         raise SystemExit(
             f"marimo-lens exports are not classes: {', '.join(invalid_types)}"
         )
+    if not callable(connect):
+        raise SystemExit("marimo_lens.agent.connect is not callable")
 
     lens = Lens()
     try:
@@ -58,7 +77,7 @@ def verify_release(expected_version: str) -> None:
             raise SystemExit(
                 f"Lens.context() returned {type(context).__name__}, expected LensContext"
             )
-        if context.revision != 0 or context.current is not None:
+        if context.revision != 0 or context.current is not None or context.images:
             raise SystemExit("A new Lens returned unexpected selection state")
     finally:
         lens.close()

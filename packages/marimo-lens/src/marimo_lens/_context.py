@@ -11,7 +11,7 @@ from ._references import build_references
 from ._runtime import RuntimeSnapshot
 from ._selection_state import SelectionState, validate_selection_admission
 from ._text_context import render_text
-from .context import LensContext
+from .context import LensContext, LensReferences
 
 
 def build_lens_context(
@@ -40,7 +40,7 @@ def build_context(
     *,
     revision: int,
     current_selection_id: str | None,
-) -> tuple[dict[str, Any], str]:
+) -> tuple[LensReferences, str]:
     """Build independent structured and text projections."""
 
     references, text_factory = build_context_lazy(
@@ -58,7 +58,7 @@ def build_context_lazy(
     *,
     revision: int,
     current_selection_id: str | None,
-) -> tuple[dict[str, Any], Callable[[], str]]:
+) -> tuple[LensReferences, Callable[[], str]]:
     """Build compact references and defer standalone text projection."""
 
     validate_selection_admission(selections)

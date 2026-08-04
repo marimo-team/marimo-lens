@@ -23,8 +23,10 @@ from ._protocol_models import (
     SELECTION_ADAPTER,
     SELECTION_ID_ADAPTER,
     AvailableSnapshot,
-    CellActivityEvent,
-    CellActivityPayload,
+    CellActivityStartEvent,
+    CellActivityStartPayload,
+    CellActivityStopEvent,
+    CellActivityStopPayload,
     CellRevealEvent,
     CellRevealPayload,
     ErrorDetail,
@@ -34,7 +36,6 @@ from ._protocol_models import (
     OutputCaptureFailure,
     OutputCapturePayload,
     OutputCaptureReady,
-    OutputCaptureSelection,
     OutputCaptureSuccess,
     PutSelectionCommand,
     ResolvedSelection,
@@ -46,7 +47,7 @@ from ._protocol_models import (
 )
 
 if TYPE_CHECKING:
-    from .context import SelectionImage
+    from ._images import _SelectionImage
 
 CommandType = Literal[
     "selection.put",
@@ -144,7 +145,6 @@ def capture_command(
     *,
     request_id: str,
     cell_id: str,
-    selections: Sequence[Mapping[str, Any]] = (),
 ) -> dict[str, Any]:
     """Build one browser request for a cell's current rendered output."""
 
@@ -154,13 +154,7 @@ def capture_command(
             version=PROTOCOL_VERSION,
             request_id=request_id,
             type="output.capture",
-            payload=OutputCapturePayload(
-                output_cell_id=cell_id,
-                selections=tuple(
-                    OutputCaptureSelection.model_validate(selection)
-                    for selection in selections
-                ),
-            ),
+            payload=OutputCapturePayload(output_cell_id=cell_id),
         )
     except ValidationError as error:
         raise _protocol_error(error, context="Output capture command") from None
@@ -198,9 +192,10 @@ def cell_reveal_event(
     return dump_model(event)
 
 
-def cell_activity_event(
+def cell_activity_start_event(
     *,
     cell_id: str,
+    duration_ms: int | None,
     label: str | None,
     message: str | None,
     revision: int,
@@ -208,16 +203,34 @@ def cell_activity_event(
     """Build one transient request to mark active work on a notebook cell."""
 
     try:
-        event = CellActivityEvent(
+        event = CellActivityStartEvent(
             revision=revision,
-            payload=CellActivityPayload(
+            payload=CellActivityStartPayload(
                 cell_id=cell_id,
+                duration_ms=duration_ms,
                 label=label,
                 message=message,
             ),
         )
     except ValidationError as error:
-        raise _protocol_error(error, context="Cell activity event") from None
+        raise _protocol_error(error, context="Cell activity start event") from None
+    return dump_model(event)
+
+
+def cell_activity_stop_event(
+    *,
+    cell_id: str,
+    revision: int,
+) -> dict[str, Any]:
+    """Build one transient request to stop active work on a notebook cell."""
+
+    try:
+        event = CellActivityStopEvent(
+            revision=revision,
+            payload=CellActivityStopPayload(cell_id=cell_id),
+        )
+    except ValidationError as error:
+        raise _protocol_error(error, context="Cell activity stop event") from None
     return dump_model(event)
 
 
@@ -324,7 +337,7 @@ def selection_put_response(
     )
 
 
-def snapshot_metadata(image: SelectionImage) -> dict[str, object]:
+def snapshot_metadata(image: _SelectionImage) -> dict[str, object]:
     """Project retained selection image metadata for browser transport."""
 
     try:
@@ -351,7 +364,7 @@ def snapshot_response(
     request_id: str,
     revision: int,
     selection_id: str,
-    image: SelectionImage,
+    image: _SelectionImage,
 ) -> tuple[dict[str, Any], tuple[bytes, ...]]:
     """Build a snapshot response and its exact retained PNG buffer."""
 
@@ -495,7 +508,8 @@ __all__ = [
     "Command",
     "ProtocolError",
     "capture_command",
-    "cell_activity_event",
+    "cell_activity_start_event",
+    "cell_activity_stop_event",
     "cell_reveal_event",
     "error_response",
     "is_response_envelope",

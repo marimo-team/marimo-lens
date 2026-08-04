@@ -14,7 +14,9 @@ from marimo_lens import (
     Lens,
     LensContext,
     LensError,
-    SelectionImage,
+    LensReferences,
+    NotebookReference,
+    SelectionReference,
 )
 
 from tests.support.factories import (
@@ -85,7 +87,10 @@ def test_public_api_exposes_context_and_resolution_contracts() -> None:
         "Lens",
         "LensContext",
         "LensError",
-        "SelectionImage",
+        "LensReferences",
+        "NotebookReference",
+        "SelectionReference",
+        "__version__",
     ]
     assert inspect.signature(Lens).parameters == {}
     resolve_parameters = inspect.signature(Lens.resolve).parameters
@@ -113,15 +118,29 @@ def test_public_api_exposes_context_and_resolution_contracts() -> None:
     assert reveal_parameters["duration_ms"].default is inspect.Parameter.empty
     assert reveal_parameters["label"].kind is inspect.Parameter.KEYWORD_ONLY
     assert reveal_parameters["label"].default is None
-    activity_parameters = inspect.signature(Lens.activity).parameters
-    assert list(activity_parameters) == ["self", "cell_id", "label", "message"]
-    assert activity_parameters["label"].kind is inspect.Parameter.KEYWORD_ONLY
-    assert activity_parameters["label"].default is None
-    assert activity_parameters["message"].kind is inspect.Parameter.KEYWORD_ONLY
-    assert activity_parameters["message"].default is None
+    start_activity_parameters = inspect.signature(Lens.start_activity).parameters
+    assert list(start_activity_parameters) == [
+        "self",
+        "cell_id",
+        "duration_ms",
+        "label",
+        "message",
+    ]
+    assert (
+        start_activity_parameters["duration_ms"].kind is inspect.Parameter.KEYWORD_ONLY
+    )
+    assert start_activity_parameters["duration_ms"].default is None
+    assert start_activity_parameters["label"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert start_activity_parameters["label"].default is None
+    assert start_activity_parameters["message"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert start_activity_parameters["message"].default is None
+    stop_activity_parameters = inspect.signature(Lens.stop_activity).parameters
+    assert list(stop_activity_parameters) == ["self", "cell_id"]
     assert LensContext.__module__ == "marimo_lens.context"
     assert LensError.__module__ == "marimo_lens.errors"
-    assert SelectionImage.__module__ == "marimo_lens.context"
+    assert LensReferences.__module__ == "marimo_lens.context"
+    assert NotebookReference.__module__ == "marimo_lens.context"
+    assert SelectionReference.__module__ == "marimo_lens.context"
 
     lens = RecordingLens()
     assert not hasattr(lens, "images")
@@ -193,18 +212,18 @@ def test_reveal_uses_the_caller_supplied_hold_for_a_long_result_message(
 
     lens.reveal(
         "cell-view",
-        duration_ms=12_000,
+        duration_ms=120_000,
         message=message,
     )
 
     assert lens.sent[-1][0]["payload"] == {
         "cellId": "cell-view",
         "message": message,
-        "durationMs": 12_000,
+        "durationMs": 120_000,
     }
 
 
-def test_activity_sends_one_transient_event_without_changing_selection_state(
+def test_start_activity_sends_one_transient_event_without_changing_selection_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
@@ -219,8 +238,9 @@ def test_activity_sends_one_transient_event_without_changing_selection_state(
     before = copy.deepcopy(_state(lens))
 
     assert (
-        lens.activity(
+        lens.start_activity(
             "cell-view",
+            duration_ms=8_000,
             label="  On it  ",
             message="  Updating the aggregation.  ",
         )
@@ -231,10 +251,11 @@ def test_activity_sends_one_transient_event_without_changing_selection_state(
         {
             "protocol": "marimo-lens.event",
             "version": 1,
-            "type": "cell.activity",
+            "type": "cell.activity.start",
             "revision": 1,
             "payload": {
                 "cellId": "cell-view",
+                "durationMs": 8_000,
                 "label": "On it",
                 "message": "Updating the aggregation.",
             },
@@ -247,9 +268,42 @@ def test_activity_sends_one_transient_event_without_changing_selection_state(
     assert "Updating the aggregation" not in context.text
 
 
+def test_stop_activity_sends_one_matching_cell_event_without_runtime_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    runtime_accessed = False
+
+    def access_runtime(_self: object, _cell_id: str) -> str:
+        nonlocal runtime_accessed
+        runtime_accessed = True
+        return "missing"
+
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
+    lens = RecordingLens()
+    _put(lens, revision=0, selection_value=selection())
+    before = copy.deepcopy(_state(lens))
+
+    lens.stop_activity("cell-view")
+
+    assert lens.sent[-1] == (
+        {
+            "protocol": "marimo-lens.event",
+            "version": 1,
+            "type": "cell.activity.stop",
+            "revision": 1,
+            "payload": {"cellId": "cell-view"},
+        },
+        [],
+    )
+    assert _state(lens) == before
+    assert not runtime_accessed
+
+
 @pytest.mark.parametrize(
     "action",
-    ["activity", "reveal"],
+    ["start_activity", "reveal"],
 )
 def test_cell_attention_omits_an_empty_message_and_tolerates_delivery_failure(
     monkeypatch: pytest.MonkeyPatch,
@@ -276,7 +330,7 @@ def test_cell_attention_omits_an_empty_message_and_tolerates_delivery_failure(
         ("unavailable", "runtime_unavailable"),
     ],
 )
-@pytest.mark.parametrize("action", ["activity", "reveal"])
+@pytest.mark.parametrize("action", ["start_activity", "reveal"])
 def test_cell_attention_requires_an_exact_runtime_cell(
     monkeypatch: pytest.MonkeyPatch,
     status: str,
@@ -312,7 +366,7 @@ def test_cell_attention_requires_an_exact_runtime_cell(
         ("cell-view", "\ud800", ValueError, "valid Unicode text"),
     ],
 )
-@pytest.mark.parametrize("action", ["activity", "reveal"])
+@pytest.mark.parametrize("action", ["start_activity", "reveal"])
 def test_cell_attention_validates_arguments_before_runtime_access(
     monkeypatch: pytest.MonkeyPatch,
     cell_id: Any,
@@ -343,8 +397,8 @@ def test_cell_attention_validates_arguments_before_runtime_access(
 @pytest.mark.parametrize(
     ("action", "message", "maximum"),
     [
-        ("activity", "x" * 241, 240),
-        ("activity", "\U0001f642" * 121, 240),
+        ("start_activity", "x" * 241, 240),
+        ("start_activity", "\U0001f642" * 121, 240),
         ("reveal", "x" * 1_001, 1_000),
         ("reveal", "\U0001f642" * 501, 1_000),
     ],
@@ -384,8 +438,8 @@ def test_cell_attention_enforces_its_message_bound_before_runtime_access(
         (True, TypeError, "duration_ms must be an integer"),
         (1.5, TypeError, "duration_ms must be an integer"),
         ("8000", TypeError, "duration_ms must be an integer"),
-        (0, ValueError, "between 1 and 60000 milliseconds"),
-        (60_001, ValueError, "between 1 and 60000 milliseconds"),
+        (0, ValueError, "between 1 and 300000 milliseconds"),
+        (300_001, ValueError, "between 1 and 300000 milliseconds"),
     ],
 )
 def test_reveal_validates_duration_before_runtime_access(
@@ -415,6 +469,27 @@ def test_reveal_validates_duration_before_runtime_access(
     assert not runtime_accessed
 
 
+def test_start_activity_validates_a_supplied_duration_before_runtime_access(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    runtime_accessed = False
+
+    def access_runtime(_self: object, _cell_id: str) -> str:
+        nonlocal runtime_accessed
+        runtime_accessed = True
+        return "available"
+
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", access_runtime)
+    lens = RecordingLens()
+
+    with pytest.raises(ValueError, match="between 1 and 300000 milliseconds"):
+        lens.start_activity("cell-view", duration_ms=0)
+
+    assert not runtime_accessed
+
+
 @pytest.mark.parametrize(
     ("label", "error_type", "message"),
     [
@@ -424,7 +499,7 @@ def test_reveal_validates_duration_before_runtime_access(
         ("\ud800", ValueError, "valid Unicode text"),
     ],
 )
-@pytest.mark.parametrize("action", ["activity", "reveal"])
+@pytest.mark.parametrize("action", ["start_activity", "reveal"])
 def test_cell_attention_validates_its_label_before_runtime_access(
     monkeypatch: pytest.MonkeyPatch,
     label: Any,
@@ -451,7 +526,7 @@ def test_cell_attention_validates_its_label_before_runtime_access(
     assert not runtime_accessed
 
 
-@pytest.mark.parametrize("action", ["activity", "reveal"])
+@pytest.mark.parametrize("action", ["start_activity", "reveal"])
 def test_cell_attention_rejects_a_closed_lens_before_runtime_access(
     monkeypatch: pytest.MonkeyPatch,
     action: str,
@@ -477,6 +552,16 @@ def test_cell_attention_rejects_a_closed_lens_before_runtime_access(
     assert not runtime_accessed
 
 
+def test_stop_activity_rejects_a_closed_lens() -> None:
+    lens = RecordingLens()
+    lens.close()
+
+    with pytest.raises(LensError) as raised:
+        lens.stop_activity("cell-view")
+
+    assert raised.value.code == "lens_closed"
+
+
 def test_pointer_release_selection_exists_before_image_capture() -> None:
     lens = RecordingLens()
 
@@ -493,7 +578,7 @@ def test_pointer_release_selection_exists_before_image_capture() -> None:
     context = lens.context()
     assert context.current is not None
     assert context.current["label"] == "S1"
-    assert context.images == ()
+    assert context.images == {}
 
 
 def test_async_image_replace_does_not_steal_current_selection() -> None:
@@ -521,8 +606,7 @@ def test_async_image_replace_does_not_steal_current_selection() -> None:
     context = lens.context()
     assert context.current is not None
     assert context.current["label"] == "S2"
-    assert context.images[0].selection_id == "selection-1"
-    assert context.images[0].data == data
+    assert context.images == {"selection-1": data}
 
 
 def test_synced_state_is_a_python_owned_projection() -> None:
@@ -620,7 +704,7 @@ def test_selection_growth_is_rejected_before_state_changes() -> None:
     assert _state(lens)["revision"] == accepted
     assert _state(lens)["nextLabel"] == f"S{accepted + 1}"
     assert len(_selections(lens)) == accepted
-    assert lens.context().images == ()
+    assert lens.context().images == {}
 
 
 def test_identifier_heavy_growth_is_rejected_before_state_changes() -> None:
@@ -724,7 +808,7 @@ def test_resolve_removes_selection_and_image_and_preserves_label_allocation() ->
         },
         "resolutionRevision": 4,
     }
-    assert lens.context().images == ()
+    assert lens.context().images == {}
 
     created = _put(
         lens,
@@ -941,7 +1025,7 @@ def test_resolve_rejects_stale_revision_without_changing_state() -> None:
     assert error.value.code == "revision_conflict"
     assert error.value.revision == 1
     assert _state(lens) == before
-    assert lens.context().images[0].data == data
+    assert lens.context().images["selection-1"] == data
     assert len(lens.sent) == sent_before
 
 
@@ -1106,7 +1190,7 @@ def test_resolve_rolls_back_when_authoritative_state_cannot_publish() -> None:
         lens.resolve("selection-1", expected_revision=3)
 
     assert _state(lens) == before
-    assert lens.context().images[0].data == data
+    assert lens.context().images["selection-1"] == data
     assert len(lens.sent) == sent_before
 
 
@@ -1181,7 +1265,7 @@ def test_preserve_can_change_note_without_changing_capture_geometry() -> None:
 
     assert response["ok"] is True
     assert _selections(lens)[0]["note"] == edited["note"]
-    assert lens.context().images[0].data == data
+    assert lens.context().images["selection-1"] == data
 
     moved = copy.deepcopy(_selections(lens)[0])
     moved["anchor"]["x"] = 0.5
@@ -1222,8 +1306,8 @@ def test_outdated_snapshot_retains_capture_bytes() -> None:
     references = cast(dict[str, Any], context.references)
     assert references["selections"][0]["snapshot"] == {"status": "outdated"}
     assert references["selections"][0]["anchor"]["x"] == 0.5
-    assert context.images[0].data == data
-    assert context.images[0].outdated is True
+    assert context.images["selection-1"] == data
+    assert context.references["selections"][0]["snapshot"]["status"] == "outdated"
 
 
 def test_every_mutation_rejects_stale_revision_before_changing_state() -> None:
@@ -1269,7 +1353,7 @@ def test_trait_publish_failure_rolls_back_selection_current_mru_and_image() -> N
         "selections": [],
         "history": [],
     }
-    assert lens.context().images == ()
+    assert lens.context().images == {}
 
     for index in range(3):
         _put(

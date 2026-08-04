@@ -1,4 +1,4 @@
-import type { CellActivityEvent, CellRevealEvent } from "@marimo-lens/protocol";
+import type { CellActivityStartEvent, CellRevealEvent } from "@marimo-lens/protocol";
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -81,7 +81,7 @@ describe("cell attention presentation", () => {
     expect(view?.label.maxWidth).toBe(250);
   });
 
-  test("uses the dock fallback when the viewport has no room above the target", () => {
+  test("waits for the controller to create room above the target", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
     document.body.appendChild(target);
@@ -90,7 +90,7 @@ describe("cell attention presentation", () => {
     expect(projectCellAttention(activityPresentation(target), ownerWindow)).toBeNull();
   });
 
-  test("uses the dock fallback when the rendered label cannot fit above the target", () => {
+  test("suppresses a rendered label that cannot fit above the target", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
     document.body.appendChild(target);
@@ -256,9 +256,7 @@ describe("cell attention presentation", () => {
       ),
     );
 
-    expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe(
-      "Updated chart",
-    );
+    expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe("Updated chart");
     expect(document.querySelector(".ml-cell-attention-notice__status")?.textContent).toBe(
       "Updated chart",
     );
@@ -296,7 +294,7 @@ describe("cell attention presentation", () => {
 function activityPresentation(target: HTMLElement, label?: string): CellAttentionPresentation {
   return {
     kind: "activity",
-    event: activityEvent(label),
+    event: startActivityEvent(label),
     sequence: 1,
     target,
     expiresAt: null,
@@ -304,11 +302,11 @@ function activityPresentation(target: HTMLElement, label?: string): CellAttentio
   };
 }
 
-function activityEvent(label?: string): CellActivityEvent {
+function startActivityEvent(label?: string): CellActivityStartEvent {
   return {
     protocol: "marimo-lens.event",
     version: 1,
-    type: "cell.activity",
+    type: "cell.activity.start",
     revision: 7,
     payload: {
       cellId: "BYtC",

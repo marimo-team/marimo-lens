@@ -148,7 +148,7 @@ def test_runtime_and_lens_context_do_not_probe_unrelated_globals(
         lens.close()
 
     assert runtime.controls == ()
-    assert lens_context.images == ()
+    assert lens_context.images == {}
     assert hostile.probes == []
 
 

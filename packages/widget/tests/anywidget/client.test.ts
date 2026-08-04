@@ -163,30 +163,34 @@ describe("Lens protocol client", () => {
     client.dispose();
   });
 
-  test("rejects a concurrent capture before invoking the handler twice", async () => {
+  test("supersedes a pending capture with the newest request", async () => {
     const model = new FakeModel();
     const client = new LensProtocolClient(model.asAnyModel(), window);
-    let finish!: (asset: OutputCaptureAsset) => void;
-    const handler = vi.fn(
-      () =>
-        new Promise<OutputCaptureAsset>((resolve) => {
-          finish = resolve;
-        }),
-    );
+    let firstSignal: AbortSignal | undefined;
+    let finishSecond!: (asset: OutputCaptureAsset) => void;
+    const handler = vi.fn((command: OutputCaptureCommand, signal: AbortSignal) => {
+      if (command.requestId === "capture-1") {
+        firstSignal = signal;
+        return new Promise<OutputCaptureAsset>(() => undefined);
+      }
+      return new Promise<OutputCaptureAsset>((resolve) => {
+        finishSecond = resolve;
+      });
+    });
     client.start();
     client.onOutputCapture(handler);
 
     model.emit(outputCaptureCommand());
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledOnce());
     model.emit(outputCaptureCommand({ requestId: "capture-2", outputCellId: "cell-2" }));
+    await vi.waitFor(() => expect(handler).toHaveBeenCalledTimes(2));
+
+    expect(firstSignal?.aborted).toBe(true);
+    expect(model.sent).toHaveLength(0);
+
+    finishSecond(outputCaptureAsset("capture-2"));
     await vi.waitFor(() => expect(model.sent).toHaveLength(1));
-
-    expect(handler).toHaveBeenCalledOnce();
-    expect(model.sent[0]?.message).toEqual(
-      captureFailure("capture-2", "cell-2", "capture_busy", expect.any(String)),
-    );
-
-    finish(outputCaptureAsset("capture-1"));
-    await vi.waitFor(() => expect(model.sent).toHaveLength(2));
+    expect(model.sent[0]?.message).toMatchObject({ requestId: "capture-2", ok: true });
     client.dispose();
   });
 
@@ -395,13 +399,21 @@ describe("Lens protocol client", () => {
     model.emit({
       protocol: "marimo-lens.event",
       version: 1,
-      type: "cell.activity",
+      type: "cell.activity.start",
       revision: 4,
       payload: {
         cellId: "cell-3",
+        durationMs: 8_000,
         label: "On it",
         message: "Updating the table.",
       },
+    });
+    model.emit({
+      protocol: "marimo-lens.event",
+      version: 1,
+      type: "cell.activity.stop",
+      revision: 4,
+      payload: { cellId: "cell-3" },
     });
     model.emit({
       ...success(command, { selectionId: "selection-2", trace: "python" }),
@@ -410,10 +422,11 @@ describe("Lens protocol client", () => {
 
     await expect(request).resolves.toMatchObject({ revision: 5 });
     expect(resolved).toHaveBeenCalledOnce();
-    expect(attended).toHaveBeenCalledTimes(2);
+    expect(attended).toHaveBeenCalledTimes(3);
     expect(attended.mock.calls.map(([event]) => event.type)).toEqual([
       "cell.reveal",
-      "cell.activity",
+      "cell.activity.start",
+      "cell.activity.stop",
     ]);
     expect(attended.mock.calls[0]?.[0]).toEqual({
       protocol: "marimo-lens.event",
@@ -426,6 +439,40 @@ describe("Lens protocol client", () => {
         durationMs: 8_000,
       },
     });
+    expect(attended.mock.calls[1]?.[0]).toMatchObject({
+      type: "cell.activity.start",
+      payload: { cellId: "cell-3", durationMs: 8_000 },
+    });
+    client.dispose();
+  });
+
+  test("reports listener failures after notifying the remaining subscribers", () => {
+    const model = new FakeModel();
+    const client = new LensProtocolClient(model.asAnyModel(), window);
+    const event = {
+      protocol: "marimo-lens.event",
+      version: 1,
+      type: "selection.resolved",
+      revision: 4,
+      payload: {
+        selections: [
+          {
+            selectionId: "selection-1",
+            label: "S1",
+            resolutionRevision: 4,
+          },
+        ],
+      },
+    };
+    const second = vi.fn();
+    client.start();
+    client.onSelectionResolved(() => {
+      throw new Error("listener failed");
+    });
+    client.onSelectionResolved(second);
+
+    expect(() => model.emit(event)).toThrow("listener failed");
+    expect(second).toHaveBeenCalledWith(event);
     client.dispose();
   });
 
@@ -522,7 +569,6 @@ function outputCaptureCommand(
     type: "output.capture",
     payload: {
       outputCellId: overrides.outputCellId ?? "cell-1",
-      selections: [],
     },
   };
 }

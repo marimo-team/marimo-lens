@@ -9,8 +9,8 @@ from collections.abc import Callable
 import pytest
 from marimo_lens._images import (
     ImageError,
-    prepare_output_image,
     prepare_selection_image,
+    validate_output_png,
 )
 
 from tests.support.factories import png, snapshot_metadata
@@ -186,30 +186,23 @@ def test_selection_image_enforces_total_budget() -> None:
     assert first.data == first_data
 
 
-def test_output_image_is_a_detached_validated_capture() -> None:
+def test_output_image_validation_returns_raw_bytes() -> None:
     data = png(3, 3)
-    image = prepare_output_image(
+    captured = validate_output_png(
         "request-1",
-        "cell-view",
         _output_metadata(data, request_id="request-1", width=3, height=3),
         data,
     )
 
-    assert image.request_id == "request-1"
-    assert image.cell_id == "cell-view"
-    assert image.data == data
-    assert image.width == 3
-    assert image.height == 3
-    assert image.sha256 == hashlib.sha256(data).hexdigest()
+    assert captured == data
 
 
 def test_output_image_rejects_another_request_identity() -> None:
     data = png()
 
     with pytest.raises(ImageError) as raised:
-        prepare_output_image(
+        validate_output_png(
             "request-1",
-            "cell-view",
             _output_metadata(data, request_id="request-2", width=2, height=2),
             data,
         )

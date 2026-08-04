@@ -4,56 +4,44 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
-from typing import Any, Literal, Self, cast
+from types import MappingProxyType
+from typing import Literal, NotRequired, Self, TypedDict, cast
 
-from marimo import Html
 from pydantic import ValidationError
 
 from ._protocol_models import REVISION_ADAPTER
 
 
-class _RenderablePng:
-    """Render immutable PNG bytes through marimo's native image output."""
+class NotebookReference(TypedDict):
+    """Bounded notebook metadata captured by one :class:`LensContext`."""
 
-    __slots__ = ()
-
-    @property
-    def data(self) -> bytes:
-        raise NotImplementedError
-
-    def render(
-        self,
-        *,
-        alt: str | None = None,
-        width: int | str | None = None,
-        height: int | str | None = None,
-    ) -> Html:
-        """Return a marimo image for these PNG bytes."""
-
-        import marimo as mo
-
-        return mo.image(self.data, alt=alt, width=width, height=height)
-
-    def _display_(self) -> Html:
-        """Render the image when it is the value of a marimo cell."""
-
-        return self.render()
+    path: str
+    available: bool
+    reason: NotRequired[str]
 
 
-@dataclass(frozen=True, slots=True)
-class SelectionImage(_RenderablePng):
-    """One successfully captured PNG associated with a selection."""
+class SelectionReference(TypedDict):
+    """One JSON-safe reference to an open Lens selection."""
 
     id: str
-    selection_id: str
-    media_type: Literal["image/png"]
-    data: bytes = field(repr=False)
-    width: int
-    height: int
-    sha256: str
-    captured_at: str
-    outdated: bool
+    label: str
+    note: str
+    outputCellId: str
+    cellStatus: Literal["available", "missing", "unavailable"]
+    anchor: Mapping[str, object]
+    snapshot: Mapping[str, object]
+    domHint: NotRequired[Mapping[str, object]]
+    previousResolution: NotRequired[Mapping[str, object]]
+
+
+class LensReferences(TypedDict):
+    """JSON-safe references captured by one :class:`LensContext`."""
+
+    revision: int
+    generatedAt: str
+    notebook: NotebookReference
+    currentSelectionId: str | None
+    selections: list[SelectionReference]
 
 
 class LensContext:
@@ -61,48 +49,47 @@ class LensContext:
 
     ``references`` contains compact cell-backed selections for a live notebook
     consumer. ``text`` contains bounded source and runtime context for a
-    text-only handoff. ``images`` contains successful PNG captures in selection
-    order and may be empty.
+    text-only handoff. ``images`` maps selection IDs to captured PNG bytes.
     """
 
     __slots__ = ("_images", "_lock", "_references", "_text", "_text_factory")
 
-    _references: Mapping[str, object]
+    _references: LensReferences
     _text: str | None
     _text_factory: Callable[[], str] | None
-    _images: tuple[SelectionImage, ...]
+    _images: Mapping[str, bytes]
     _lock: threading.RLock
 
     def __init__(
         self,
         references: Mapping[str, object],
         text: str,
-        images: tuple[SelectionImage, ...],
+        images: Mapping[str, bytes],
     ) -> None:
-        self._references = references
+        self._references = cast(LensReferences, references)
         self._text = text
         self._text_factory: Callable[[], str] | None = None
-        self._images = images
+        self._images = MappingProxyType(dict(images))
         self._lock = threading.RLock()
 
     @classmethod
     def _create_lazy(
         cls,
         *,
-        references: Mapping[str, object],
+        references: LensReferences,
         text_factory: Callable[[], str],
-        images: tuple[SelectionImage, ...],
+        images: Mapping[str, bytes],
     ) -> Self:
         self = object.__new__(cls)
         self._references = references
         self._text = None
         self._text_factory = text_factory
-        self._images = images
+        self._images = MappingProxyType(dict(images))
         self._lock = threading.RLock()
         return self
 
     @property
-    def references(self) -> Mapping[str, object]:
+    def references(self) -> LensReferences:
         """Return compact cell-backed selection references."""
 
         return self._references
@@ -121,8 +108,8 @@ class LensContext:
             return self._text
 
     @property
-    def images(self) -> tuple[SelectionImage, ...]:
-        """Return successful selection captures in selection order."""
+    def images(self) -> Mapping[str, bytes]:
+        """Return captured PNG bytes indexed by selection ID."""
 
         return self._images
 
@@ -138,7 +125,7 @@ class LensContext:
             ) from None
 
     @property
-    def current(self) -> Mapping[str, Any] | None:
+    def current(self) -> SelectionReference | None:
         """Return the current selection reference, if one exists."""
 
         current_id = self.references.get("currentSelectionId")
@@ -147,7 +134,7 @@ class LensContext:
             return None
         for selection in selections:
             if isinstance(selection, Mapping) and selection.get("id") == current_id:
-                return cast(Mapping[str, Any], selection)
+                return selection
         return None
 
     def __repr__(self) -> str:
@@ -158,7 +145,7 @@ class LensContext:
             and not isinstance(selections, (str, bytes, bytearray))
             else 0
         )
-        image_bytes = sum(len(image.data) for image in self.images)
+        image_bytes = sum(len(data) for data in self.images.values())
         text_chars: int | str = len(self._text) if self._text is not None else "pending"
         return (
             "LensContext("
@@ -172,5 +159,7 @@ class LensContext:
 
 __all__ = [
     "LensContext",
-    "SelectionImage",
+    "LensReferences",
+    "NotebookReference",
+    "SelectionReference",
 ]
