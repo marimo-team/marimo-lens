@@ -43,6 +43,8 @@ Connect to the mounted Lens and take one detached context snapshot in the same
 kernel call:
 
 ```python
+import json
+
 import marimo_lens.agent as lens_agent
 import marimo._code_mode as cm
 
@@ -56,9 +58,25 @@ async with cm.get_context() as ctx:
             label="Inspecting selected output",
             message="Reading the marked view and its producing cell.",
         )
-    print(mounted.identity)
-    print(snapshot.revision)
-    print(snapshot.current)
+    print(
+        json.dumps(
+            {
+                "identity": mounted.identity,
+                "revision": snapshot.revision,
+                "current": snapshot.current,
+                "selections": [
+                    {
+                        "id": selection["id"],
+                        "outputCellId": selection["outputCellId"],
+                    }
+                    for selection in snapshot.references["selections"]
+                ],
+                "selectionCount": len(snapshot.references["selections"]),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+    )
 ```
 
 Keep `mounted.identity` and `snapshot.revision` together. Reconnect in later
@@ -100,7 +118,7 @@ activity again when the primary target changes. A direct result can proceed to
 `reveal()`.
 
 Leave `duration_ms` unset for work spanning context, edits, execution, and
-verification, then call `stop_activity()` when that work finishes. Pass
+verification, then call `stop_activity(cell_id)` when that work finishes. Pass
 `duration_ms` for a bounded status that should clear itself after its hold.
 
 When the result needs a new cell, first create a visible comment-only
@@ -139,6 +157,27 @@ cell_png = None
 
 A `selection_status` of `outdated` means the marker moved after
 `selection_png` was captured.
+
+### Address every open selection
+
+In address mode, build one workset from every open selection and its annotated
+capture-time image:
+
+```python
+address_workset = [
+    {
+        "selection": selection,
+        "selection_png": snapshot.images.get(selection["id"]),
+    }
+    for selection in snapshot.references["selections"]
+]
+```
+
+Inspect each workset item's note, output cell, cell status, and snapshot status.
+Open each available `selection_png` before making a visual claim about that
+selection. Several selections can point to one output cell while marking
+different evidence, so inspect each annotated image. Keep blocked or ambiguous
+items in the workset until they can be reported as open.
 
 Request a fresh cell PNG after confirming that the output cell is available:
 
@@ -222,12 +261,24 @@ Reveal verified results in reading order. Set each `duration_ms` long enough for
 the user to orient to the cell and read its message comfortably. Use one kernel
 call per reveal, print the hold, and wait for it before sending the next.
 
-Reveal the primary result before resolving its selections. After the final
-hold, call `resolve()` with the revision captured before the work. The addressed
-receipt is the final presentation. Keep its summary to one short sentence of at
-most 240 UTF-16 code units. Put detailed evidence in notebook cells and reveal
-messages. On `revision_conflict`, leave selections open, reconnect, and reassess
-a fresh context.
+Reveal the primary result before resolving its selections. Start with
+`revision = snapshot.revision`. Resolve selections together when they share one
+verified result. When results or rationales differ, assign the revision returned
+by each call and carry it into the next call:
+
+```python
+revision = mounted.resolve(
+    selection_ids,
+    expected_revision=revision,
+    summary=summary,
+)
+print(revision)
+```
+
+The addressed receipt is the final presentation. Keep its summary to one short
+sentence of at most 240 UTF-16 code units. Put detailed evidence in notebook
+cells and reveal messages. On `revision_conflict`, leave selections open,
+reconnect, and reassess a fresh context.
 
 Finish after the walkthrough when no selection was addressed. Keep selections
 open when verification fails or the next step needs user input. Leave activity

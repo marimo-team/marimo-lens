@@ -419,6 +419,7 @@ if handoff_to_agent.value:
         await asyncio.sleep(5)
         if _color_supported:
             set_bar_color(_color_candidate)
+        lens.stop_activity(_handoff_cell_id)
         set_response_request(
             {
                 "selectionIds": [
