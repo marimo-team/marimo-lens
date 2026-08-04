@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import inspect
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from types import SimpleNamespace
 from typing import cast
 
@@ -263,6 +263,52 @@ def test_mounted_lens_forwards_attention_workflow(
             8_000,
             "Updated chart",
             "Updated the chart and verified its labels.",
+        ),
+    ]
+    lens.close()
+
+
+def test_mounted_lens_returns_revision_for_sequential_resolution_groups(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[object, ...]] = []
+    lens = Lens()
+
+    def resolve(
+        _self: Lens,
+        selection_ids: str | Sequence[str],
+        *,
+        expected_revision: int,
+        summary: str | None = None,
+    ) -> int:
+        calls.append((selection_ids, expected_revision, summary))
+        return expected_revision + 1
+
+    monkeypatch.setattr(Lens, "resolve", resolve)
+    mounted = agent.connect(_context(lens))
+
+    revision = mounted.resolve(
+        "selection-1",
+        expected_revision=8,
+        summary="Updated the first request and verified the chart.",
+    )
+    revision = mounted.resolve(
+        "selection-2",
+        expected_revision=revision,
+        summary="Updated the second request and verified the chart.",
+    )
+
+    assert revision == 10
+    assert calls == [
+        (
+            "selection-1",
+            8,
+            "Updated the first request and verified the chart.",
+        ),
+        (
+            "selection-2",
+            9,
+            "Updated the second request and verified the chart.",
         ),
     ]
     lens.close()

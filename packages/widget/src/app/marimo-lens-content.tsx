@@ -24,7 +24,7 @@ import {
   CellAttentionAnnouncement,
   CellAttentionFallback,
   CellAttentionIndicator,
-  projectCellAttention,
+  projectCellAttentionSurface,
 } from "@/transient/cell-attention-indicator";
 import { LensDock } from "@/ui/components/lens-dock";
 import { LensPortal } from "@/ui/components/lens-portal";
@@ -97,7 +97,7 @@ export function MarimoLensContent() {
     invalidateSnapshotCapture,
     attentionKind: cellAttention?.kind ?? null,
   });
-  const cellAttentionView = projectCellAttention(
+  const cellAttentionSurface = projectCellAttentionSurface(
     cellAttention,
     dom.window,
     cellAttentionLabel !== null && cellAttentionLabel.sequence === cellAttention?.sequence
@@ -203,8 +203,8 @@ export function MarimoLensContent() {
           resolutionReceipt={resolutionReceipt.receipt}
           onResolutionReceiptInteractionChange={resolutionReceipt.setInteraction}
           cellAttentionFallback={
-            cellAttention && cellAttention.target === null ? (
-              <CellAttentionFallback presentation={cellAttention} />
+            cellAttentionSurface.fallback ? (
+              <CellAttentionFallback {...cellAttentionSurface.fallback} />
             ) : null
           }
           onToggleArmed={() =>
@@ -258,7 +258,7 @@ export function MarimoLensContent() {
         />
 
         <CellAttentionIndicator
-          view={cellAttentionView}
+          view={cellAttentionSurface.view}
           onLabelMeasure={measureCellAttentionLabel}
         />
 

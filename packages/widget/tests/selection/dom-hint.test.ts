@@ -47,9 +47,10 @@ describe("generic DOM hints", () => {
   test("collects readable labels from styled output", () => {
     const output = document.createElement("div");
     const legend = document.createElement("div");
+    legend.className = "plot-swatches";
     legend.innerHTML = [
       "<style>:where(.plot-swatches) { display: flex; }</style>",
-      "<span>Public</span>",
+      "<span>Public</span> ",
       "<span>Private</span>",
     ].join("");
     output.appendChild(legend);

@@ -24,7 +24,7 @@ from pydantic_core import PydanticCustomError
 COMMAND_PROTOCOL = "marimo-lens.command"
 RESPONSE_PROTOCOL = "marimo-lens.response"
 EVENT_PROTOCOL = "marimo-lens.event"
-PROTOCOL_VERSION = 1
+PROTOCOL_VERSION = 2
 
 MAX_SELECTIONS = 64
 MAX_HISTORY = 64

@@ -29,6 +29,42 @@ export type CellAttentionLabelMeasurement = {
   maxWidth: number;
 };
 
+export type CellAttentionSurface = {
+  view: CellAttentionView | null;
+  fallback: CellAttentionFallbackView | null;
+};
+
+export type CellAttentionFallbackView = {
+  presentation: CellAttentionPresentation;
+  reason: "target-unavailable" | "offscreen" | "label-space";
+};
+
+export function projectCellAttentionSurface(
+  presentation: CellAttentionPresentation | null,
+  ownerWindow: Window,
+  measurement?: CellAttentionLabelMeasurement,
+): CellAttentionSurface {
+  const view = projectCellAttention(presentation, ownerWindow, measurement);
+  if (view !== null || presentation === null) {
+    return { view, fallback: null };
+  }
+  const target = presentation.target;
+  return {
+    view: null,
+    fallback:
+      presentation.framing === "pending"
+        ? null
+        : {
+            presentation,
+            reason: !target?.isConnected
+              ? "target-unavailable"
+              : intersectsViewport(target.getBoundingClientRect(), ownerWindow)
+                ? "label-space"
+                : "offscreen",
+          },
+  };
+}
+
 export function projectCellAttention(
   presentation: CellAttentionPresentation | null,
   ownerWindow: Window,
@@ -121,15 +157,15 @@ export function CellAttentionIndicator({
   );
 }
 
-export function CellAttentionFallback({
-  presentation,
-}: {
-  presentation: CellAttentionPresentation;
-}) {
+export function CellAttentionFallback({ presentation, reason }: CellAttentionFallbackView) {
   const { cellId, message } = presentation.event.payload;
   const status =
     presentation.event.payload.label ??
-    (presentation.event.type === "cell.activity.start" ? "Working" : "Not visible");
+    (presentation.event.type === "cell.activity.start"
+      ? "Working"
+      : reason === "label-space"
+        ? "Ready"
+        : "Not visible");
   return (
     <div
       className="ml-cell-attention-notice"

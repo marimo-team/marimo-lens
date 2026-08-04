@@ -60,8 +60,8 @@ widgets are mounted and no identity selects one.
 
 The handle exposes context reads, cell feedback, and revision-checked actions:
 
-| Method                                                                                       | Behavior                                                    |
-| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| Method                                                                   | Behavior                                                     |
+| ------------------------------------------------------------------------ | ------------------------------------------------------------ |
 | `context()`                                                              | Returns the current detached `LensContext`                   |
 | `cell_image(cell_id, *, expected_revision)`                              | Returns fresh cell PNG bytes after browser capture completes |
 | `start_activity(cell_id, *, duration_ms=None, label=None, message=None)` | Shows the current agent work target                          |
@@ -483,8 +483,9 @@ if selection is not None and selection["cellStatus"] == "available":
 ```
 
 Activity preserves selection state. It keeps the current scroll position when
-the work cell has room for the label above it. It reframes offscreen and
-near-top work cells once so the label stays outside the cell.
+the work cell has room for the label above it. It frames offscreen and near-top
+work cells so the label stays outside the cell. Later target growth triggers a
+corrective reframe when it clips the cell.
 Another `start_activity()` call updates the label and message or marks a
 different cell. Starting timed activity again on the same cell restarts its
 hold.

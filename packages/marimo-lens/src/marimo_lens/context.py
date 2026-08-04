@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from types import MappingProxyType
 from typing import Literal, NotRequired, Self, TypedDict, cast
 
@@ -66,7 +67,7 @@ class LensContext:
         text: str,
         images: Mapping[str, bytes],
     ) -> None:
-        self._references = cast(LensReferences, references)
+        self._references = cast(LensReferences, deepcopy(references))
         self._text = text
         self._text_factory: Callable[[], str] | None = None
         self._images = MappingProxyType(dict(images))
@@ -81,7 +82,7 @@ class LensContext:
         images: Mapping[str, bytes],
     ) -> Self:
         self = object.__new__(cls)
-        self._references = references
+        self._references = deepcopy(references)
         self._text = None
         self._text_factory = text_factory
         self._images = MappingProxyType(dict(images))

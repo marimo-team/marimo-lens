@@ -454,7 +454,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.reveal",
         revision: 7,
         payload: {
@@ -519,7 +519,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.reveal",
         revision: 7,
         payload: {
@@ -545,7 +545,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.reveal",
         revision: 7,
         payload: {
@@ -561,7 +561,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.activity.start",
         revision: 7,
         payload: { cellId: "BYtC", message: "Updating the aggregation." },
@@ -578,7 +578,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.activity.stop",
         revision: 7,
         payload: { cellId: "other" },
@@ -589,7 +589,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.activity.stop",
         revision: 7,
         payload: { cellId: "BYtC" },
@@ -601,7 +601,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.activity.start",
         revision: 7,
         payload: { cellId: "BYtC", message: "Finishing the aggregation." },
@@ -618,7 +618,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.activity.stop",
         revision: 7,
         payload: { cellId: "BYtC" },
@@ -836,7 +836,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.reveal",
         revision: 3,
         payload: {
@@ -873,7 +873,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.reveal",
         revision: 4,
         payload: {
@@ -896,7 +896,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.activity.start",
         revision: 4,
         payload: {
@@ -912,7 +912,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.reveal",
         revision: 4,
         payload: {
@@ -970,7 +970,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.activity.start",
         revision: 3,
         payload: {
@@ -1282,7 +1282,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 1,
+        version: 2,
         type: "cell.reveal",
         revision: 3,
         payload: {
@@ -1493,7 +1493,7 @@ function resolvedEvent(
   } = overrides;
   return {
     protocol: "marimo-lens.event",
-    version: 1,
+    version: 2,
     type: "selection.resolved",
     revision,
     payload: {
@@ -1522,7 +1522,7 @@ function addressedReceipt(selection: Selection, event: SelectionResolvedEvent): 
 function outputCaptureCommand(): OutputCaptureCommand {
   return {
     protocol: "marimo-lens.command",
-    version: 1,
+    version: 2,
     requestId: "capture-1",
     type: "output.capture",
     payload: { outputCellId: "cell-1" },

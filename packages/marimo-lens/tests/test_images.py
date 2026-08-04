@@ -197,6 +197,26 @@ def test_output_image_validation_returns_raw_bytes() -> None:
     assert captured == data
 
 
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda metadata: metadata.update(width=9),
+        lambda metadata: metadata.update(sha256="0" * 64),
+    ],
+)
+def test_output_image_rejects_metadata_that_does_not_match_png(
+    mutate: Callable[[dict[str, object]], None],
+) -> None:
+    data = png()
+    metadata = _output_metadata(data, request_id="request-1", width=2, height=2)
+    mutate(metadata)
+
+    with pytest.raises(ImageError) as raised:
+        validate_output_png("request-1", metadata, data)
+
+    assert raised.value.code == "image_metadata_mismatch"
+
+
 def test_output_image_rejects_another_request_identity() -> None:
     data = png()
 

@@ -95,7 +95,7 @@ Unqualified Python filenames in this table live in
 - PNG bytes stay outside trait state, JSON references, local storage, and text
   prompts. Full-cell capture is a one-use agent transfer.
 - Selection mutations are revision checked. Python and TypeScript transport
-  schemas remain aligned at protocol version 1.
+  schemas remain aligned at protocol version 2.
 
 ## Validation
 
