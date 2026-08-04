@@ -97,14 +97,21 @@ if selection_png is not None:
 
 Open the printed path with the image reader, then delete it. The kernel and
 image reader must share a filesystem. Make visual claims after the reader
-returns visible pixels. When the reader cannot display the image, use code,
-data, cell status, and errors as nonvisual evidence and report that visual
-inspection was unavailable.
+returns visible pixels.
+
+When the reader reports that the current model or session cannot display
+images, treat visual inspection as unavailable for the rest of that session.
+Delete the temporary path and skip later image-reader calls unless the reader
+capability changes. Use code, data, cell status, and errors as nonvisual
+evidence. State the visual coverage limit in the final response, and attribute
+appearance claims supplied by the user or a source to that observer.
 
 ## Inspect a fresh cell image
 
 `cell_image()` captures the current rendered cell without Lens markers. Start
-capture after taking the context snapshot:
+capture after taking the context snapshot when the task requires the current
+full-cell rendering. Do not start a full-cell capture as an optional side
+effect:
 
 ```python
 png = mounted.cell_image(
@@ -134,9 +141,11 @@ async with cm.get_context() as ctx:
             print(image_file.name)
 ```
 
-Pending calls share the same browser capture. Lens has one full-cell capture
-slot. Finish the current cell with bytes or a terminal `LensError` before
-starting another cell. A different cell while capture is pending raises
+After the first call returns `None`, save the Lens identity, cell ID, and
+revision. Repeat the same call until it returns bytes or raises a terminal
+`LensError`. A pending capture owns Lens's single full-cell capture slot. Finish
+it before requesting another cell, even when the task no longer needs the
+bytes. A different cell while capture is pending raises
 `LensError(code="capture_busy")`. Capture several cells sequentially.
 
 ## Start activity on the work cell
@@ -288,7 +297,8 @@ state.
 - Pending cell PNG: repeat `cell_image()` with the same cell and revision.
 - Cell-image `LensError`: continue from nonvisual evidence or retry after the
   output settles.
-- Image-reader failure: continue from nonvisual evidence and report the visual
+- Image-reader capability failure: delete the temporary path, skip later calls
+  to the same reader, continue from nonvisual evidence, and report the visual
   coverage limit.
 
 Delete every temporary image path after its final image-reader call.

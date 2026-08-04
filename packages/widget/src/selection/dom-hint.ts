@@ -7,12 +7,13 @@ const MAX_TEXT_LENGTH = 240;
 const MAX_LABEL_LENGTH = 160;
 const MAX_PATH_LENGTH = 240;
 const MAX_PATH_DEPTH = 6;
+const NON_CONTENT_TEXT_ELEMENTS = new Set(["noscript", "script", "style", "template"]);
 
 export function collectDomHint(element: Element, output: HTMLElement): DomHint {
   const role = boundedAttribute(element, "role");
   const ariaLabel = boundedAttribute(element, "aria-label");
   const title = boundedAttribute(element, "title");
-  const text = boundedUtf16(normalizeText(element.textContent ?? ""), MAX_TEXT_LENGTH);
+  const text = boundedUtf16(normalizeText(contentText(element)), MAX_TEXT_LENGTH);
   const path = boundedUtf16(elementPath(element, output), MAX_PATH_LENGTH);
   return compact({
     tag: element.tagName.toLowerCase(),
@@ -60,6 +61,28 @@ function pathPart(element: Element): string {
 function boundedAttribute(element: Element, name: string): string | undefined {
   const value = boundedUtf16(normalizeText(element.getAttribute(name) ?? ""), MAX_LABEL_LENGTH);
   return value || undefined;
+}
+
+function contentText(element: Element): string {
+  const ownerWindow = element.ownerDocument.defaultView;
+  const renderedText =
+    ownerWindow && element instanceof ownerWindow.HTMLElement ? element.innerText : null;
+  if (typeof renderedText === "string") return renderedText;
+  if (NON_CONTENT_TEXT_ELEMENTS.has(element.localName)) return "";
+  const text: string[] = [];
+  const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    let parent = node.parentElement;
+    while (parent && parent !== element) {
+      if (NON_CONTENT_TEXT_ELEMENTS.has(parent.localName)) {
+        parent = null;
+        break;
+      }
+      parent = parent.parentElement;
+    }
+    if (parent === element) text.push(node.nodeValue ?? "");
+  }
+  return text.join(" ");
 }
 
 function normalizeText(value: string): string {

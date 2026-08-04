@@ -120,7 +120,7 @@ export class CellAttentionController {
     this.#emit(active);
   }
 
-  #refresh(active: ActiveAttention): void {
+  #refresh(active: ActiveAttention, reframe = false): void {
     if (this.#active !== active) return;
     if (active.expiresAt !== null && this.#now() >= active.expiresAt) {
       this.#clear(true);
@@ -129,7 +129,7 @@ export class CellAttentionController {
     const target = attentionTarget(this.#dom, active.event.payload.cellId);
     const targetBecameAvailable = active.observedTarget === null && target !== null;
     active.target = target;
-    if (targetBecameAvailable) this.#reframe(active.kind, target);
+    if (targetBecameAvailable || reframe) this.#reframe(active.kind, target);
     this.#observeTarget(active, target);
     this.#emit(active);
   }
@@ -137,11 +137,7 @@ export class CellAttentionController {
   #reframe(kind: CellAttentionKind, target: HTMLElement | null): void {
     if (!target) return;
     const rect = target.getBoundingClientRect();
-    if (
-      kind !== "reveal" &&
-      intersectsViewport(this.#dom.window, target) &&
-      rect.top >= CELL_ATTENTION_TOP_GUTTER
-    ) {
+    if (kind !== "reveal" && isFullyVisible(this.#dom.window, rect)) {
       return;
     }
     target.scrollIntoView({
@@ -210,7 +206,7 @@ export class CellAttentionController {
     active.observedTarget = target;
     const ResizeObserverClass = this.#dom.window.ResizeObserver;
     if (!target || !ResizeObserverClass) return;
-    active.resizeObserver = new ResizeObserverClass(() => this.#refresh(active));
+    active.resizeObserver = new ResizeObserverClass(() => this.#refresh(active, true));
     active.resizeObserver.observe(target);
   }
 
@@ -249,13 +245,12 @@ function isRendered(ownerWindow: Window, element: HTMLElement): boolean {
   );
 }
 
-function intersectsViewport(ownerWindow: Window, element: HTMLElement): boolean {
-  const rect = element.getBoundingClientRect();
+function isFullyVisible(ownerWindow: Window, rect: DOMRect): boolean {
   return (
-    rect.bottom > 0 &&
-    rect.right > 0 &&
-    rect.top < ownerWindow.innerHeight &&
-    rect.left < ownerWindow.innerWidth
+    rect.top >= CELL_ATTENTION_TOP_GUTTER &&
+    rect.bottom <= ownerWindow.innerHeight &&
+    rect.left >= 0 &&
+    rect.right <= ownerWindow.innerWidth
   );
 }
 
