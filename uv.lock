@@ -886,7 +886,7 @@ recommended = [
 
 [[package]]
 name = "marimo-lens"
-version = "0.0.4"
+version = "0.0.5"
 source = { editable = "packages/marimo-lens" }
 dependencies = [
     { name = "anywidget" },
