@@ -37,7 +37,7 @@ def test_cell_reveal_event_uses_transient_transport() -> None:
         revision=3,
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 1,
+        "version": 2,
         "type": "cell.reveal",
         "revision": 3,
         "payload": {
@@ -68,7 +68,7 @@ def test_cell_activity_start_event_uses_transient_transport() -> None:
         revision=3,
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 1,
+        "version": 2,
         "type": "cell.activity.start",
         "revision": 3,
         "payload": {
@@ -96,7 +96,7 @@ def test_cell_activity_stop_event_targets_one_cell() -> None:
         revision=3,
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 1,
+        "version": 2,
         "type": "cell.activity.stop",
         "revision": 3,
         "payload": {"cellId": "cell-view"},
@@ -245,7 +245,8 @@ def test_command_ignores_unrelated_envelopes() -> None:
 @pytest.mark.parametrize(
     ("updates", "code"),
     [
-        ({"version": 2}, "unsupported_version"),
+        ({"version": 1}, "unsupported_version"),
+        ({"version": 3}, "unsupported_version"),
         ({"version": True}, "unsupported_version"),
         ({"type": "selection.unknown"}, "unsupported_command"),
     ],
@@ -616,7 +617,7 @@ def test_positive_subnormal_geometry_is_valid() -> None:
     assert command.payload["selection"]["anchor"]["width"] == 1e-20
 
 
-def test_responses_use_version_one_and_include_an_object_payload() -> None:
+def test_responses_use_current_version_and_include_an_object_payload() -> None:
     success = success_response(request_id="r1", revision=2)
     error = error_response(
         request_id="r2",
@@ -625,9 +626,9 @@ def test_responses_use_version_one_and_include_an_object_payload() -> None:
         message="Bad request.",
     )
 
-    assert success["version"] == 1
+    assert success["version"] == 2
     assert success["payload"] == {}
-    assert error["version"] == 1
+    assert error["version"] == 2
     assert error["payload"] == {}
     assert error["error"] == {
         "code": "invalid_request",
@@ -692,7 +693,7 @@ def test_output_capture_uses_a_separate_outgoing_command_path() -> None:
 
     assert command == {
         "protocol": "marimo-lens.command",
-        "version": 1,
+        "version": 2,
         "requestId": "request-1",
         "type": "output.capture",
         "payload": {"outputCellId": "cell-view"},
@@ -707,7 +708,7 @@ def test_output_capture_response_requires_metadata_and_one_png() -> None:
     response = parse_capture_response(
         {
             "protocol": "marimo-lens.response",
-            "version": 1,
+            "version": 2,
             "requestId": "request-1",
             "ok": True,
             "revision": 4,
@@ -739,7 +740,7 @@ def test_output_capture_response_rejects_image_for_another_request() -> None:
         parse_capture_response(
             {
                 "protocol": "marimo-lens.response",
-                "version": 1,
+                "version": 2,
                 "requestId": "request-1",
                 "ok": True,
                 "revision": 4,
@@ -767,7 +768,7 @@ def test_output_capture_failure_rejects_binary_buffers() -> None:
         parse_capture_response(
             {
                 "protocol": "marimo-lens.response",
-                "version": 1,
+                "version": 2,
                 "requestId": "request-1",
                 "ok": False,
                 "revision": 4,
@@ -784,7 +785,7 @@ def test_output_capture_response_accepts_additive_fields() -> None:
     response = parse_capture_response(
         {
             "protocol": "marimo-lens.response",
-            "version": 1,
+            "version": 2,
             "requestId": "request-1",
             "ok": False,
             "revision": 4,
@@ -828,7 +829,7 @@ def test_invalid_request_id_is_not_echoed(request_id: str) -> None:
 def _command(command_type: str, payload: dict[str, object]) -> dict[str, object]:
     return {
         "protocol": "marimo-lens.command",
-        "version": 1,
+        "version": 2,
         "requestId": "request-1",
         "type": command_type,
         "payload": payload,

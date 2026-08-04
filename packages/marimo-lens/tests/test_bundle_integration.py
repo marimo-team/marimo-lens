@@ -43,7 +43,7 @@ def test_lens_loads_esbuild_assets_and_handles_lens_messages() -> None:
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.command",
-            "version": 1,
+            "version": 2,
             "requestId": "clear-request",
             "type": "selections.clear",
             "payload": {"expectedRevision": 0},

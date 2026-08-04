@@ -18,12 +18,15 @@ from ._protocol import (
 from ._runtime import RuntimeCellStatus
 from .errors import LensError
 
+CAPTURE_TIMEOUT_SECONDS = 20.0
+
 
 @dataclass(slots=True)
 class _Capture:
     request_id: str
     cell_id: str
     revision: int
+    timeout: threading.Timer
     image: bytes | None = None
     error_code: str | None = None
     error: str | None = None
@@ -40,6 +43,7 @@ class OutputCaptureSlot:
         "_record",
         "_revision",
         "_send",
+        "_timeout_seconds",
     )
 
     def __init__(
@@ -49,11 +53,13 @@ class OutputCaptureSlot:
         send: Callable[[dict[str, Any]], None],
         revision: Callable[[], int],
         cell_status: Callable[[str], RuntimeCellStatus],
+        timeout_seconds: float = CAPTURE_TIMEOUT_SECONDS,
     ) -> None:
         self._lock = lock
         self._send = send
         self._revision = revision
         self._cell_status = cell_status
+        self._timeout_seconds = timeout_seconds
         self._record: _Capture | None = None
         self._browser_ready = False
         self._closed = False
@@ -70,9 +76,9 @@ class OutputCaptureSlot:
             self._require_open()
             revision = self._revision()
             if revision != expected_revision:
-                self._record = None
+                self._release_record()
                 self._raise_revision_conflict(expected_revision, revision)
-            record = self._record
+            record = self._record_for_revision(revision)
             if (
                 record is not None
                 and record.cell_id == cell_id
@@ -88,9 +94,9 @@ class OutputCaptureSlot:
             self._require_open()
             revision = self._revision()
             if revision != expected_revision:
-                self._record = None
+                self._release_record()
                 self._raise_revision_conflict(expected_revision, revision)
-            record = self._record
+            record = self._record_for_revision(revision)
             if (
                 record is not None
                 and record.cell_id == cell_id
@@ -99,7 +105,7 @@ class OutputCaptureSlot:
                 return self._read(record)
             if record is not None and _capture_pending(record):
                 self._raise_busy(record)
-            self._record = None
+            self._release_record()
             if cell_status == "unavailable":
                 raise LensError(
                     "runtime_unavailable",
@@ -124,15 +130,23 @@ class OutputCaptureSlot:
                 request_id=request_id,
                 cell_id=cell_id,
             )
+            timeout = threading.Timer(
+                self._timeout_seconds,
+                self._timed_out,
+                args=(request_id,),
+            )
+            timeout.daemon = True
             self._record = _Capture(
                 request_id=request_id,
                 cell_id=cell_id,
                 revision=revision,
+                timeout=timeout,
             )
+            timeout.start()
             try:
                 self._send(command)
             except Exception:  # noqa: BLE001 - transport callbacks are untrusted
-                self._record = None
+                self._release_record()
                 raise LensError(
                     "capture_failed",
                     "Lens could not send the capture request to the browser.",
@@ -168,6 +182,8 @@ class OutputCaptureSlot:
         except ProtocolError:
             return
         with self._lock:
+            if self._closed:
+                return
             record = self._record
             if (
                 record is None
@@ -196,6 +212,7 @@ class OutputCaptureSlot:
                     response.image,
                     buffers[0],
                 )
+                record.timeout.cancel()
             except (ProtocolError, ImageError) as error:
                 _fail_capture(record, code="capture_failed", message=str(error))
             except Exception:  # noqa: BLE001 - isolate malformed browser replies
@@ -207,13 +224,15 @@ class OutputCaptureSlot:
 
     def close(self) -> None:
         with self._lock:
+            if self._closed:
+                return
             self._closed = True
-            self._record = None
+            self._release_record()
             self._browser_ready = False
 
     def _read(self, record: _Capture) -> bytes | None:
         if record.error_code is not None:
-            self._record = None
+            self._release_record()
             raise LensError(
                 record.error_code,
                 record.error or "Cell output capture failed.",
@@ -222,8 +241,36 @@ class OutputCaptureSlot:
         if record.image is None:
             return None
         image = record.image
-        self._record = None
+        self._release_record()
         return image
+
+    def _timed_out(self, request_id: str) -> None:
+        with self._lock:
+            record = self._record
+            if (
+                record is None
+                or record.request_id != request_id
+                or not _capture_pending(record)
+            ):
+                return
+            _fail_capture(
+                record,
+                code="capture_timeout",
+                message="The browser did not finish the cell capture in time.",
+            )
+
+    def _release_record(self) -> None:
+        record = self._record
+        if record is not None:
+            record.timeout.cancel()
+        self._record = None
+
+    def _record_for_revision(self, revision: int) -> _Capture | None:
+        record = self._record
+        if record is not None and record.revision != revision:
+            self._release_record()
+            return None
+        return record
 
     def _require_open(self) -> None:
         if self._closed:
@@ -263,6 +310,7 @@ def _capture_pending(record: _Capture) -> bool:
 
 
 def _fail_capture(record: _Capture, *, code: str, message: str) -> None:
+    record.timeout.cancel()
     record.image = None
     record.error_code = code
     record.error = message

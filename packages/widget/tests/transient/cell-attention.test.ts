@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import { CellAttentionController } from "@/transient/cell-attention";
+import { projectCellAttentionSurface } from "@/transient/cell-attention-indicator";
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -55,6 +56,56 @@ describe("cell attention", () => {
       block: "center",
       inline: "nearest",
       behavior: "smooth",
+    });
+    controller.dispose();
+  });
+
+  test("does not restart offscreen activity framing on the initial resize observation", () => {
+    vi.useFakeTimers();
+    const resizeCallbacks: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resizeCallbacks.push(callback);
+        }
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+    const cell = setupCell("new-cell");
+    cell.getBoundingClientRect = () => new DOMRect(20, window.innerHeight + 100, 400, 300);
+    cell.scrollIntoView = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
+
+    controller.startActivity(startActivityEvent("new-cell"));
+    for (const resize of resizeCallbacks) resize([], {} as ResizeObserver);
+
+    expect(cell.scrollIntoView).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  test("shows fallback when offscreen activity framing settles without movement", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const cell = setupCell("fixed-cell");
+    cell.getBoundingClientRect = () => new DOMRect(20, window.innerHeight + 100, 400, 300);
+    cell.scrollIntoView = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+
+    controller.startActivity(startActivityEvent("fixed-cell"));
+    const pending = onChange.mock.lastCall?.[0];
+    expect(projectCellAttentionSurface(pending, window)).toEqual({
+      view: null,
+      fallback: null,
+    });
+
+    vi.runOnlyPendingTimers();
+    const settled = onChange.mock.lastCall?.[0];
+
+    expect(projectCellAttentionSurface(settled, window)).toEqual({
+      view: null,
+      fallback: { presentation: settled, reason: "offscreen" },
     });
     controller.dispose();
   });
@@ -255,6 +306,26 @@ describe("cell attention", () => {
     controller.dispose();
   });
 
+  test("reframes activity when its output target is replaced by the rendered cell", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const output = setupOutput("promoted");
+    output.scrollIntoView = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    controller.startActivity(startActivityEvent("promoted"));
+
+    const cell = setupCell("promoted");
+    cell.getBoundingClientRect = () => new DOMRect(20, window.innerHeight + 100, 400, 300);
+    cell.scrollIntoView = vi.fn();
+    window.dispatchEvent(new Event("scroll"));
+    vi.advanceTimersByTime(20);
+
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ target: cell }));
+    expect(output.scrollIntoView).not.toHaveBeenCalled();
+    expect(cell.scrollIntoView).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
   test("re-resolves a replaced reveal target without scrolling again", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
@@ -264,6 +335,8 @@ describe("cell attention", () => {
     controller.reveal(revealEvent("replaced"));
 
     first.remove();
+    window.dispatchEvent(new Event("scroll"));
+    vi.advanceTimersByTime(20);
     const replacement = setupCell("replaced");
     replacement.scrollIntoView = vi.fn();
     window.dispatchEvent(new Event("scroll"));
@@ -272,6 +345,46 @@ describe("cell attention", () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ target: replacement }));
     expect(first.scrollIntoView).toHaveBeenCalledOnce();
     expect(replacement.scrollIntoView).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
+  test("updates reveal geometry after resize without scrolling again", () => {
+    vi.useFakeTimers();
+    const resizeCallbacks: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: ResizeObserverCallback) {
+          resizeCallbacks.push(callback);
+        }
+        observe = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+    const cell = setupCell("resized-reveal");
+    cell.scrollIntoView = vi.fn();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
+
+    controller.reveal(revealEvent("resized-reveal"));
+    for (const resize of resizeCallbacks) resize([], {} as ResizeObserver);
+
+    expect(cell.scrollIntoView).toHaveBeenCalledOnce();
+    controller.dispose();
+  });
+
+  test("frames an initially missing reveal once when its target appears", () => {
+    vi.useFakeTimers();
+    const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
+    controller.reveal(revealEvent("late"));
+
+    const cell = setupCell("late");
+    cell.scrollIntoView = vi.fn();
+    window.dispatchEvent(new Event("scroll"));
+    vi.advanceTimersByTime(20);
+    window.dispatchEvent(new Event("scroll"));
+    vi.advanceTimersByTime(20);
+
+    expect(cell.scrollIntoView).toHaveBeenCalledOnce();
     controller.dispose();
   });
 
@@ -442,7 +555,7 @@ function startActivityEvent(
 ): CellActivityStartEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 1,
+    version: 2,
     type: "cell.activity.start",
     revision: 7,
     payload: {
@@ -456,7 +569,7 @@ function startActivityEvent(
 function activityStopEvent(cellId: string): CellActivityStopEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 1,
+    version: 2,
     type: "cell.activity.stop",
     revision: 7,
     payload: { cellId },
@@ -466,7 +579,7 @@ function activityStopEvent(cellId: string): CellActivityStopEvent {
 function revealEvent(cellId: string, message?: string, durationMs = 4_000): CellRevealEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 1,
+    version: 2,
     type: "cell.reveal",
     revision: 7,
     payload: {

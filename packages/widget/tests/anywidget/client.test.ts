@@ -114,7 +114,7 @@ describe("Lens protocol client", () => {
     expect(handler).toHaveBeenCalledWith(command, expect.any(AbortSignal));
     expect(model.sent[0]?.message).toEqual({
       protocol: "marimo-lens.response",
-      version: 1,
+      version: 2,
       requestId: "capture-1",
       ok: true,
       revision: 7,
@@ -282,7 +282,7 @@ describe("Lens protocol client", () => {
     expect(handler).toHaveBeenCalledOnce();
     expect(model.sent[1]?.message).toEqual({
       protocol: "marimo-lens.response",
-      version: 1,
+      version: 2,
       requestId: "capture-1",
       ok: true,
       revision: 7,
@@ -370,7 +370,7 @@ describe("Lens protocol client", () => {
     if (!isLensCommand(command)) throw new Error("Expected Lens command");
     model.emit({
       protocol: "marimo-lens.event",
-      version: 1,
+      version: 2,
       type: "selection.resolved",
       revision: 4,
       payload: {
@@ -385,7 +385,7 @@ describe("Lens protocol client", () => {
     });
     model.emit({
       protocol: "marimo-lens.event",
-      version: 1,
+      version: 2,
       type: "cell.reveal",
       revision: 4,
       payload: {
@@ -398,7 +398,7 @@ describe("Lens protocol client", () => {
     });
     model.emit({
       protocol: "marimo-lens.event",
-      version: 1,
+      version: 2,
       type: "cell.activity.start",
       revision: 4,
       payload: {
@@ -410,7 +410,7 @@ describe("Lens protocol client", () => {
     });
     model.emit({
       protocol: "marimo-lens.event",
-      version: 1,
+      version: 2,
       type: "cell.activity.stop",
       revision: 4,
       payload: { cellId: "cell-3" },
@@ -430,7 +430,7 @@ describe("Lens protocol client", () => {
     ]);
     expect(attended.mock.calls[0]?.[0]).toEqual({
       protocol: "marimo-lens.event",
-      version: 1,
+      version: 2,
       type: "cell.reveal",
       revision: 4,
       payload: {
@@ -451,7 +451,7 @@ describe("Lens protocol client", () => {
     const client = new LensProtocolClient(model.asAnyModel(), window);
     const event = {
       protocol: "marimo-lens.event",
-      version: 1,
+      version: 2,
       type: "selection.resolved",
       revision: 4,
       payload: {
@@ -504,7 +504,7 @@ describe("Lens protocol client", () => {
     model.onCommand = (command) =>
       model.emit({
         protocol: "marimo-lens.response",
-        version: 1,
+        version: 2,
         requestId: command.requestId,
         ok: false,
         revision: 7,
@@ -551,7 +551,7 @@ function success(command: LensCommand, payload: Record<string, unknown> = {}) {
     command.type === "history.clear";
   return {
     protocol: "marimo-lens.response",
-    version: 1,
+    version: 2,
     requestId: command.requestId,
     ok: true,
     revision: typeof expectedRevision === "number" ? expectedRevision + (mutates ? 1 : 0) : 4,
@@ -564,7 +564,7 @@ function outputCaptureCommand(
 ): OutputCaptureCommand {
   return {
     protocol: "marimo-lens.command",
-    version: 1,
+    version: 2,
     requestId: overrides.requestId ?? "capture-1",
     type: "output.capture",
     payload: {
@@ -599,7 +599,7 @@ function captureFailure(
 ): unknown {
   return {
     protocol: "marimo-lens.response",
-    version: 1,
+    version: 2,
     requestId,
     ok: false,
     revision: 7,
@@ -609,7 +609,7 @@ function captureFailure(
 }
 
 function readinessEvent(type: "output.capture.ready" | "output.capture.unready"): unknown {
-  return { protocol: "marimo-lens.event", version: 1, type, payload: {} };
+  return { protocol: "marimo-lens.event", version: 2, type, payload: {} };
 }
 
 function isReadinessEvent(message: unknown): boolean {

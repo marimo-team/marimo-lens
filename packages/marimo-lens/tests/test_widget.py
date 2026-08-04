@@ -178,7 +178,7 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
-            "version": 1,
+            "version": 2,
             "type": "cell.reveal",
             "revision": 1,
             "payload": {
@@ -250,7 +250,7 @@ def test_start_activity_sends_one_transient_event_without_changing_selection_sta
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
-            "version": 1,
+            "version": 2,
             "type": "cell.activity.start",
             "revision": 1,
             "payload": {
@@ -290,7 +290,7 @@ def test_stop_activity_sends_one_matching_cell_event_without_runtime_access(
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
-            "version": 1,
+            "version": 2,
             "type": "cell.activity.stop",
             "revision": 1,
             "payload": {"cellId": "cell-view"},
@@ -568,7 +568,7 @@ def test_pointer_release_selection_exists_before_image_capture() -> None:
     response = _put(lens, revision=0, selection_value=selection(note=""))
 
     assert response["ok"] is True
-    assert response["version"] == 1
+    assert response["version"] == 2
     assert response["revision"] == 1
     assert response["payload"]["selection"]["label"] == "S1"
     assert _state(lens)["nextLabel"] == "S2"
@@ -833,7 +833,7 @@ def test_resolve_emits_one_transient_resolution_receipt() -> None:
     event, buffers = lens.sent[-1]
     assert event == {
         "protocol": "marimo-lens.event",
-        "version": 1,
+        "version": 2,
         "type": "selection.resolved",
         "revision": 2,
         "payload": {
@@ -1388,7 +1388,7 @@ def test_snapshot_get_returns_the_exact_stored_png() -> None:
     response, buffers = lens.sent[-1]
 
     assert response["ok"] is True
-    assert response["version"] == 1
+    assert response["version"] == 2
     assert response["payload"]["selectionId"] == "selection-1"
     assert (
         response["payload"]["snapshot"]["sha256"] == snapshot_metadata(data)["sha256"]
@@ -1485,7 +1485,7 @@ def _send(
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.command",
-            "version": 1,
+            "version": 2,
             "requestId": f"request-{len(lens.sent) + 1}",
             "type": command_type,
             "payload": payload,

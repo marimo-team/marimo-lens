@@ -2,7 +2,7 @@
 members = ["packages/marimo-lens"]
 
 [dependency-groups]
-# mdx-marimo 0.0.2 imports marimo._server.export while compiling docs.
+# mdx-marimo compiles docs through marimo's private export API.
 dev = ["marimo[recommended]==0.23.15", "pyrefly>=1", "pytest>=9.0.3", "ruff>=0.15.14", "ty>=0.0.39"]
 
 [tool.uv]

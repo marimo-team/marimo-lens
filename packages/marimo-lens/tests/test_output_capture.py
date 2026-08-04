@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Mapping, Sequence
-from typing import Any, cast
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, ClassVar, cast
 
 import pytest
 from marimo_lens import Lens, LensError
@@ -36,6 +36,36 @@ class FailingCaptureLens(RecordingLens):
         if content.get("type") == "output.capture":
             raise RuntimeError("browser disconnected")
         super().send(content, buffers)
+
+
+class ManualTimer:
+    instances: ClassVar[list[ManualTimer]] = []
+
+    def __init__(
+        self,
+        interval: float,
+        function: Callable[..., object],
+        args: tuple[object, ...] | None = None,
+        kwargs: dict[str, object] | None = None,
+    ) -> None:
+        self.interval = interval
+        self.function = function
+        self.args = args or ()
+        self.kwargs = kwargs or {}
+        self.daemon = False
+        self.started = False
+        self.cancelled = False
+        self.instances.append(self)
+
+    def start(self) -> None:
+        self.started = True
+
+    def cancel(self) -> None:
+        self.cancelled = True
+
+    def fire(self) -> None:
+        if self.started and not self.cancelled:
+            self.function(*self.args, **self.kwargs)
 
 
 def test_cell_image_reuses_pending_capture_and_consumes_completed_bytes(
@@ -188,6 +218,85 @@ def test_unrelated_response_does_not_change_the_pending_capture(
     assert len(_capture_commands(lens)) == 1
 
 
+def test_stalled_capture_reports_timeout_and_ignores_late_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo_lens._output_capture as capture_module
+
+    ManualTimer.instances = []
+    monkeypatch.setattr(capture_module.threading, "Timer", ManualTimer)
+    _install_runtime(monkeypatch, "cell-view", "cell-other")
+    lens = RecordingLens()
+    assert lens._cell_image("cell-view", expected_revision=0) is None
+    command = _capture_commands(lens)[0]
+    timer = ManualTimer.instances[-1]
+
+    timer.fire()
+    _reply(lens, command, data=png())
+
+    with pytest.raises(LensError) as raised:
+        lens._cell_image("cell-view", expected_revision=0)
+    assert raised.value.code == "capture_timeout"
+    assert timer.daemon is True
+
+
+def test_timed_out_capture_does_not_block_another_cell(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo_lens._output_capture as capture_module
+
+    ManualTimer.instances = []
+    monkeypatch.setattr(capture_module.threading, "Timer", ManualTimer)
+    _install_runtime(monkeypatch, "cell-view", "cell-other")
+    lens = RecordingLens()
+    assert lens._cell_image("cell-view", expected_revision=0) is None
+    timer = ManualTimer.instances[-1]
+
+    timer.fire()
+
+    assert lens._cell_image("cell-other", expected_revision=0) is None
+    assert len(_capture_commands(lens)) == 2
+
+
+def test_timeout_callback_cannot_replace_completed_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import marimo_lens._output_capture as capture_module
+
+    ManualTimer.instances = []
+    monkeypatch.setattr(capture_module.threading, "Timer", ManualTimer)
+    _install_runtime(monkeypatch)
+    lens = RecordingLens()
+    data = png()
+    assert lens._cell_image("cell-view", expected_revision=0) is None
+    command = _capture_commands(lens)[0]
+    timer = ManualTimer.instances[-1]
+
+    _reply(lens, command, data=data)
+    timer.function(*timer.args, **timer.kwargs)
+
+    assert lens._cell_image("cell-view", expected_revision=0) == data
+
+
+def test_stale_revision_capture_does_not_block_a_fresh_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_runtime(monkeypatch)
+    lens = RecordingLens()
+    old_data = png(2, 2)
+    fresh_data = png(3, 2)
+    assert lens._cell_image("cell-view", expected_revision=0) is None
+    old_command = _capture_commands(lens)[0]
+    _put_selection(lens, selection(), revision=0)
+
+    assert lens._cell_image("cell-view", expected_revision=1) is None
+    fresh_command = _capture_commands(lens)[1]
+    _reply(lens, old_command, data=old_data)
+    _reply(lens, fresh_command, data=fresh_data, width=3, height=2)
+
+    assert lens._cell_image("cell-view", expected_revision=1) == fresh_data
+
+
 @pytest.mark.parametrize(
     ("runtime_status", "code"),
     [("missing", "cell_not_found"), ("unavailable", "runtime_unavailable")],
@@ -240,15 +349,25 @@ def test_capture_send_failure_raises_immediately(
 def test_close_releases_cell_image_capture(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import marimo_lens._output_capture as capture_module
+
+    ManualTimer.instances = []
+    monkeypatch.setattr(capture_module.threading, "Timer", ManualTimer)
     _install_runtime(monkeypatch)
     lens = RecordingLens()
     assert lens._cell_image("cell-view", expected_revision=0) is None
+    command = _capture_commands(lens)[0]
+    slot = lens._output_capture
+    timer = ManualTimer.instances[-1]
 
     lens.close()
+    _reply(lens, command, data=png())
 
     with pytest.raises(LensError) as raised:
-        lens._cell_image("cell-view", expected_revision=0)
+        slot.image("cell-view", expected_revision=0)
     assert raised.value.code == "lens_closed"
+    assert timer.cancelled is True
+    assert slot._record is None
 
 
 @pytest.mark.parametrize(
@@ -304,7 +423,7 @@ def _put_selection(
         lens,
         {
             "protocol": "marimo-lens.command",
-            "version": 1,
+            "version": 2,
             "requestId": f"put-{revision}",
             "type": "selection.put",
             "payload": {
@@ -322,7 +441,7 @@ def _set_browser_ready(lens: RecordingLens, ready: bool) -> None:
         lens,
         {
             "protocol": "marimo-lens.event",
-            "version": 1,
+            "version": 2,
             "type": f"output.capture.{'ready' if ready else 'unready'}",
             "payload": {},
         },
@@ -345,7 +464,7 @@ def _reply(
         lens,
         {
             "protocol": "marimo-lens.response",
-            "version": 1,
+            "version": 2,
             "requestId": command["requestId"],
             "ok": True,
             "revision": 0,
@@ -379,7 +498,7 @@ def _fail_reply(
         lens,
         {
             "protocol": "marimo-lens.response",
-            "version": 1,
+            "version": 2,
             "requestId": command["requestId"],
             "ok": False,
             "revision": 0,

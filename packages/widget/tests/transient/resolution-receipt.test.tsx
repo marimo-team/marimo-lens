@@ -18,7 +18,7 @@ describe("resolution receipt", () => {
   test("renders a quiet visual receipt outside the live region", () => {
     const event: SelectionResolvedEvent = {
       protocol: "marimo-lens.event",
-      version: 1,
+      version: 2,
       type: "selection.resolved",
       revision: 4,
       payload: {
@@ -52,7 +52,7 @@ describe("resolution receipt", () => {
   test("summarizes one atomic batch", () => {
     const event: SelectionResolvedEvent = {
       protocol: "marimo-lens.event",
-      version: 1,
+      version: 2,
       type: "selection.resolved",
       revision: 6,
       payload: {

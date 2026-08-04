@@ -58,6 +58,21 @@ def test_context_exposes_immutable_png_bytes_by_selection_id() -> None:
         cast(Any, context.images)["selection-2"] = b"other"
 
 
+def test_context_detaches_nested_references_from_its_input() -> None:
+    references = {
+        "revision": 3,
+        "currentSelectionId": "selection-1",
+        "selections": [{"id": "selection-1", "note": "Original note"}],
+    }
+    context = LensContext(references=references, text="", images={})
+
+    references["revision"] = 4
+    cast(list[dict[str, object]], references["selections"])[0]["note"] = "Changed note"
+
+    assert context.revision == 3
+    assert context.current == {"id": "selection-1", "note": "Original note"}
+
+
 def test_context_current_returns_the_authoritative_selection() -> None:
     context = LensContext(
         references={

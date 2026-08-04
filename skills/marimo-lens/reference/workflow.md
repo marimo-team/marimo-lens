@@ -30,6 +30,13 @@ async with cm.get_context() as ctx:
                 "identity": mounted.identity,
                 "revision": snapshot.revision,
                 "current": snapshot.current,
+                "selections": [
+                    {
+                        "id": selection["id"],
+                        "outputCellId": selection["outputCellId"],
+                    }
+                    for selection in snapshot.references["selections"]
+                ],
                 "selectionCount": len(snapshot.references["selections"]),
                 "imageSelectionIds": list(snapshot.images),
             },
@@ -90,6 +97,26 @@ selection_status = selection["snapshot"]["status"] if selection is not None else
 
 A `selection_status` of `outdated` means the marker moved after
 `selection_png` was captured.
+
+### Address every open selection
+
+In address mode, pair every open selection with its annotated capture-time
+image:
+
+```python
+address_workset = [
+    {
+        "selection": selection,
+        "selection_png": snapshot.images.get(selection["id"]),
+    }
+    for selection in snapshot.references["selections"]
+]
+```
+
+Inspect each item's note, output cell, cell status, and snapshot status. Open
+each available `selection_png` before making a visual claim about that
+selection. Multiple selections on one cell can mark different evidence. Keep
+blocked or ambiguous items open and report why.
 
 For a point or region request about visible content, open `selection_png`
 before naming the mark, interval, trend, layout, or task. DOM-hint text locates
@@ -296,18 +323,20 @@ import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
     mounted = lens_agent.connect(ctx, identity="F3n...")
-    mounted.resolve(
+    revision = mounted.resolve(
         ["243110...", "8b20f4..."],
         expected_revision=8,
         summary="Updated the aggregation and verified the chart.",
     )
+    print(revision)
 ```
 
 Resolve selections together when they share one verified result. Use separate
-calls when changes or rationales differ. Resolve after the final reveal hold so
-the receipt is the final presentation. Keep `summary` to one short sentence of
-at most 240 UTF-16 code units. Put detailed evidence in notebook cells and
-reveal messages.
+calls when changes or rationales differ. For each separate group, pass the
+revision returned by the previous `resolve()` call. Resolve after the final
+reveal hold so the receipt is the final presentation. Keep `summary` to one
+short sentence of at most 240 UTF-16 code units. Put detailed evidence in
+notebook cells and reveal messages.
 
 On `revision_conflict`, leave selections open, reconnect, and take a fresh
 context. Keep selections open and activity visible when verification fails or

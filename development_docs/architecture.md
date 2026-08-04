@@ -52,18 +52,18 @@ no notebook graph work.
 
 ## State ownership
 
-| State                                      | Authority                         | Lifetime                                           |
-| ------------------------------------------ | --------------------------------- | -------------------------------------------------- |
-| Open selections and marked PNG bytes       | Python `SelectionStore`           | Until delete, clear, resolve, or teardown          |
-| Current selection and activation order     | Python `SelectionStore`           | Until activation or current-selection fallback     |
-| Addressed selection receipts               | Python `SelectionStore`           | Until History clear, bounded eviction, or teardown |
-| Selection gesture and sheet workflow       | Browser reducer                   | Current mounted owner view                         |
-| Marked PNG capture job                     | Browser `SelectionCapture`        | Until commit, supersession, removal, or teardown   |
-| Shared snapshot preview read               | Browser `SelectionSnapshotLoader` | While a preview holds a lease                      |
-| Agent output-capture slot                  | Python `OutputCaptureSlot`        | Until byte read, supersession, or teardown         |
-| Active output raster                       | Browser output-capture transport  | Until reply, timeout, replacement, or teardown     |
-| Cell activity, reveal, and receipt display | Browser transient effects         | Until replacement, presentation end, or teardown   |
-| Request interpretation and notebook edits  | Agent client                      | Agent task                                         |
+| State                                      | Authority                         | Lifetime                                            |
+| ------------------------------------------ | --------------------------------- | --------------------------------------------------- |
+| Open selections and marked PNG bytes       | Python `SelectionStore`           | Until delete, clear, resolve, or teardown           |
+| Current selection and activation order     | Python `SelectionStore`           | Until activation or current-selection fallback      |
+| Addressed selection receipts               | Python `SelectionStore`           | Until History clear, bounded eviction, or teardown  |
+| Selection gesture and sheet workflow       | Browser reducer                   | Current mounted owner view                          |
+| Marked PNG capture job                     | Browser `SelectionCapture`        | Until commit, supersession, removal, or teardown    |
+| Shared snapshot preview read               | Browser `SelectionSnapshotLoader` | While a preview holds a lease                       |
+| Agent output-capture slot                  | Python `OutputCaptureSlot`        | Until byte read, timeout, supersession, or teardown |
+| Active output raster                       | Browser output-capture transport  | Until reply, timeout, replacement, or teardown      |
+| Cell activity, reveal, and receipt display | Browser transient effects         | Until replacement, presentation end, or teardown    |
+| Request interpretation and notebook edits  | Agent client                      | Agent task                                          |
 
 The synchronized `_state` trait projects open selections, addressed History,
 the current selection, the next stable label, and the revision. Activation
@@ -150,7 +150,10 @@ revision. `OutputCaptureSlot` stores one capture per Lens. The first
 with the same cell and revision returns the PNG bytes when available and keeps
 the slot pending otherwise. A different cell receives `capture_busy` while the
 slot is pending. Reading terminal bytes or an error releases the slot for the
-next cell. The browser captures the rendered cell without Lens markers.
+next cell. A kernel deadline marks a stalled request as `capture_timeout`. A
+new cell can replace that terminal record, and a fresh revision supersedes an
+obsolete pending record. The browser captures the rendered cell without Lens
+markers.
 
 The browser transport resolves the displayed Lens handler, enforces its raster
 deadline, and replies with a validated PNG buffer or bounded failure. Request
@@ -177,9 +180,11 @@ files.
 preserve selection state, and send best-effort events. `Lens.stop_activity()`
 targets the activity cell even after that cell leaves the graph.
 
-Activity keeps the current scroll position for a visible target, brings an
-offscreen target into view once, and remains until a matching stop, later
-activity, reveal, or teardown replaces it. A short
+Activity keeps the current scroll position for a visible target and frames an
+offscreen or near-top target. Target growth can trigger a corrective reframe.
+A framing attempt that leaves the target offscreen settles to a quiet dock
+notice. Activity remains until a matching stop, later activity, reveal, or
+teardown replaces it. A short
 caller-supplied label describes the current task or result. Reveal replaces the
 active presentation, scrolls once, and exits after the caller-supplied hold.
 Python validates and sends the label and duration with every reveal event, and
@@ -217,7 +222,7 @@ after teardown. Another document has an independent owner registry.
 
 Python and the browser exchange Lens messages through the AnyWidget custom
 message channel. Commands, responses, and events carry a protocol
-discriminator, version 1, a type, and a bounded payload. Correlated requests
+discriminator, version 2, a type, and a bounded payload. Correlated requests
 also carry a request ID.
 
 Selection and History mutations carry `expectedRevision`. Python validates

@@ -11,6 +11,7 @@ import {
   CellAttentionFallback,
   CellAttentionIndicator,
   projectCellAttention,
+  projectCellAttentionSurface,
 } from "@/transient/cell-attention-indicator";
 
 let root: Root | null = null;
@@ -39,6 +40,48 @@ describe("cell attention presentation", () => {
     expect(view?.label.top).toBeUndefined();
   });
 
+  test("uses fallback for a visible target whose measured label does not fit", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
+    document.body.appendChild(target);
+    const presentation = activityPresentation(target);
+    const ownerWindow = { innerWidth: 480, innerHeight: 720 } as Window;
+
+    const surface = projectCellAttentionSurface(presentation, ownerWindow, {
+      height: 226,
+      maxWidth: 400,
+    });
+
+    expect(surface.view).toBeNull();
+    expect(surface.fallback).toEqual({ presentation, reason: "label-space" });
+  });
+
+  test("waits for an offscreen target to finish scrolling before using fallback", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 740, 400, 240);
+    document.body.appendChild(target);
+    const presentation = { ...activityPresentation(target), framing: "pending" as const };
+    const ownerWindow = { innerWidth: 480, innerHeight: 720 } as Window;
+
+    expect(projectCellAttentionSurface(presentation, ownerWindow)).toEqual({
+      view: null,
+      fallback: null,
+    });
+  });
+
+  test("uses fallback after offscreen framing settles", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 740, 400, 240);
+    document.body.appendChild(target);
+    const presentation = activityPresentation(target);
+    const ownerWindow = { innerWidth: 480, innerHeight: 720 } as Window;
+
+    expect(projectCellAttentionSurface(presentation, ownerWindow)).toEqual({
+      view: null,
+      fallback: { presentation, reason: "offscreen" },
+    });
+  });
+
   test("anchors an above-target label by its bottom edge", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
@@ -62,7 +105,10 @@ describe("cell attention presentation", () => {
     };
     const ownerWindow = { innerWidth: 1280, innerHeight: 720 } as Window;
 
-    const view = projectCellAttention(presentation, ownerWindow);
+    const view = projectCellAttention(presentation, ownerWindow, {
+      height: 226,
+      maxWidth: 400,
+    });
 
     expect(view?.label.bottom).toBe(428);
     expect(view?.label.top).toBeUndefined();
@@ -199,7 +245,9 @@ describe("cell attention presentation", () => {
     root = createRoot(container);
 
     expect(projectCellAttention(presentation, window)).toBeNull();
-    act(() => root?.render(<CellAttentionFallback presentation={presentation} />));
+    act(() =>
+      root?.render(<CellAttentionFallback presentation={presentation} reason="offscreen" />),
+    );
     expect(document.querySelector("[data-marimo-lens-cell-attention-notice]")?.textContent).toBe(
       "WorkingBYtCUpdating the aggregation.",
     );
@@ -218,7 +266,7 @@ describe("cell attention presentation", () => {
       root?.render(
         <>
           <CellAttentionIndicator view={projectCellAttention(presentation, window)} />
-          <CellAttentionFallback presentation={presentation} />
+          <CellAttentionFallback presentation={presentation} reason="target-unavailable" />
           <CellAttentionAnnouncement presentation={presentation} />
         </>,
       ),
@@ -250,7 +298,7 @@ describe("cell attention presentation", () => {
       root?.render(
         <>
           <CellAttentionIndicator view={projectCellAttention(presentation, window)} />
-          <CellAttentionFallback presentation={presentation} />
+          <CellAttentionFallback presentation={presentation} reason="target-unavailable" />
           <CellAttentionAnnouncement presentation={presentation} />
         </>,
       ),
@@ -289,6 +337,34 @@ describe("cell attention presentation", () => {
 
     expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe("Ready");
   });
+
+  test("uses a neutral reveal fallback when a visible label cannot fit", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
+    document.body.appendChild(target);
+    const presentation: CellAttentionPresentation = {
+      ...activityPresentation(target),
+      kind: "reveal",
+      event: {
+        ...revealEvent(),
+        payload: { cellId: "BYtC", durationMs: 4_000 },
+      },
+    };
+    const surface = projectCellAttentionSurface(
+      presentation,
+      { innerWidth: 480, innerHeight: 720 } as Window,
+      { height: 226, maxWidth: 400 },
+    );
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() =>
+      root?.render(surface.fallback ? <CellAttentionFallback {...surface.fallback} /> : null),
+    );
+
+    expect(document.querySelector(".ml-cell-attention-notice__status")?.textContent).toBe("Ready");
+  });
 });
 
 function activityPresentation(target: HTMLElement, label?: string): CellAttentionPresentation {
@@ -298,6 +374,7 @@ function activityPresentation(target: HTMLElement, label?: string): CellAttentio
     sequence: 1,
     target,
     expiresAt: null,
+    framing: "settled",
     phase: "active",
   };
 }
@@ -305,7 +382,7 @@ function activityPresentation(target: HTMLElement, label?: string): CellAttentio
 function startActivityEvent(label?: string): CellActivityStartEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 1,
+    version: 2,
     type: "cell.activity.start",
     revision: 7,
     payload: {
@@ -319,7 +396,7 @@ function startActivityEvent(label?: string): CellActivityStartEvent {
 function revealEvent(message = "Updated the aggregation."): CellRevealEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 1,
+    version: 2,
     type: "cell.reveal",
     revision: 7,
     payload: {

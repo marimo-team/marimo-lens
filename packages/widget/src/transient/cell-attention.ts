@@ -8,6 +8,7 @@ import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
 const ACTIVITY_EXIT_MS = 120;
 const REVEAL_EXIT_MS = 180;
+const FRAMING_SETTLE_MS = 600;
 export const CELL_ATTENTION_TOP_GUTTER = 48;
 
 export type CellAttentionKind = "activity" | "reveal";
@@ -20,12 +21,17 @@ export type CellAttentionPresentation = {
   sequence: number;
   target: HTMLElement | null;
   expiresAt: number | null;
+  framing: "pending" | "settled";
   phase: CellAttentionPhase;
 };
 
 type ActiveAttention = CellAttentionPresentation & {
   exitDuration: number;
+  framingTimeout: number;
   observedTarget: HTMLElement | null;
+  observedTargetSize: { width: number; height: number } | null;
+  reframeAfterPending: boolean;
+  revealFramed: boolean;
   resizeObserver: ResizeObserver | null;
   stopLayout: () => void;
   timeout: number;
@@ -73,7 +79,7 @@ export class CellAttentionController {
   #start(kind: CellAttentionKind, event: CellAttentionPresentationEvent): void {
     this.#clear(false);
     const target = attentionTarget(this.#dom, event.payload.cellId);
-    this.#reframe(kind, target);
+    const frameRequested = this.#reframe(kind, target);
 
     const exitDuration = kind === "activity" ? ACTIVITY_EXIT_MS : REVEAL_EXIT_MS;
     const duration = event.payload.durationMs ?? null;
@@ -85,14 +91,20 @@ export class CellAttentionController {
       target,
       expiresAt,
       exitDuration,
+      framing: frameRequested ? "pending" : "settled",
+      framingTimeout: 0,
       observedTarget: null,
+      observedTargetSize: null,
       phase: "active",
+      reframeAfterPending: false,
+      revealFramed: kind === "reveal" && frameRequested,
       resizeObserver: null,
       stopLayout: () => undefined,
       timeout: 0,
       visibilityListener: () => this.#handleVisibility(active),
     };
     this.#active = active;
+    this.#scheduleFraming(active);
     this.#observeTarget(active, target);
     active.stopLayout = this.#dom.subscribeLayout(() => this.#refresh(active));
     this.#dom.document.addEventListener("visibilitychange", active.visibilityListener);
@@ -108,7 +120,7 @@ export class CellAttentionController {
     const target = attentionTarget(this.#dom, event.payload.cellId);
     active.event = event;
     active.target = target;
-    this.#reframe("activity", target);
+    if (active.framing === "settled") this.#beginFraming(active, target);
     this.#observeTarget(active, target);
     active.phase = "active";
     active.expiresAt =
@@ -127,24 +139,71 @@ export class CellAttentionController {
       return;
     }
     const target = attentionTarget(this.#dom, active.event.payload.cellId);
-    const targetBecameAvailable = active.observedTarget === null && target !== null;
+    const activityTargetChanged = target !== null && active.observedTarget !== target;
     active.target = target;
-    if (targetBecameAvailable || reframe) this.#reframe(active.kind, target);
+    if (
+      active.framing === "pending" &&
+      target !== null &&
+      isFullyVisible(this.#dom.window, target.getBoundingClientRect())
+    ) {
+      this.#finishFraming(active);
+    }
+    if (active.kind === "activity" && activityTargetChanged) {
+      this.#beginFraming(active, target);
+    } else if (active.kind === "activity" && reframe) {
+      if (active.framing === "pending") active.reframeAfterPending = true;
+      else this.#beginFraming(active, target);
+    } else if (active.kind === "reveal" && !active.revealFramed && target !== null) {
+      active.revealFramed = this.#beginFraming(active, target);
+    }
     this.#observeTarget(active, target);
     this.#emit(active);
   }
 
-  #reframe(kind: CellAttentionKind, target: HTMLElement | null): void {
-    if (!target) return;
+  #reframe(kind: CellAttentionKind, target: HTMLElement | null): boolean {
+    if (!target) return false;
     const rect = target.getBoundingClientRect();
     if (kind !== "reveal" && isFullyVisible(this.#dom.window, rect)) {
-      return;
+      return false;
     }
     target.scrollIntoView({
       block: "center",
       inline: "nearest",
       behavior: prefersReducedMotion(this.#dom.window) ? "auto" : "smooth",
     });
+    return true;
+  }
+
+  #beginFraming(active: ActiveAttention, target: HTMLElement | null): boolean {
+    const requested = this.#reframe(active.kind, target);
+    if (!requested) return false;
+    active.framing = "pending";
+    active.reframeAfterPending = false;
+    this.#scheduleFraming(active);
+    return true;
+  }
+
+  #scheduleFraming(active: ActiveAttention): void {
+    this.#dom.window.clearTimeout(active.framingTimeout);
+    if (active.framing !== "pending") return;
+    active.framingTimeout = this.#dom.window.setTimeout(
+      () => this.#settleFraming(active),
+      FRAMING_SETTLE_MS,
+    );
+  }
+
+  #settleFraming(active: ActiveAttention): void {
+    if (this.#active !== active || active.framing !== "pending") return;
+    const reframe = active.kind === "activity" && active.reframeAfterPending;
+    this.#finishFraming(active);
+    this.#refresh(active, reframe);
+  }
+
+  #finishFraming(active: ActiveAttention): void {
+    this.#dom.window.clearTimeout(active.framingTimeout);
+    active.framingTimeout = 0;
+    active.framing = "settled";
+    active.reframeAfterPending = false;
   }
 
   #handleVisibility(active: ActiveAttention): void {
@@ -195,6 +254,7 @@ export class CellAttentionController {
       sequence: active.sequence,
       target: active.target,
       expiresAt: active.expiresAt,
+      framing: active.framing,
       phase: active.phase,
     });
   }
@@ -204,9 +264,16 @@ export class CellAttentionController {
     active.resizeObserver?.disconnect();
     active.resizeObserver = null;
     active.observedTarget = target;
+    active.observedTargetSize = target ? targetSize(target) : null;
     const ResizeObserverClass = this.#dom.window.ResizeObserver;
     if (!target || !ResizeObserverClass) return;
-    active.resizeObserver = new ResizeObserverClass(() => this.#refresh(active, true));
+    active.resizeObserver = new ResizeObserverClass(() => {
+      if (this.#active !== active || active.observedTarget !== target) return;
+      const size = targetSize(target);
+      const changed = !sameSize(active.observedTargetSize, size);
+      active.observedTargetSize = size;
+      this.#refresh(active, changed);
+    });
     active.resizeObserver.observe(target);
   }
 
@@ -215,6 +282,7 @@ export class CellAttentionController {
     if (!active) return;
     this.#active = null;
     this.#dom.window.clearTimeout(active.timeout);
+    this.#dom.window.clearTimeout(active.framingTimeout);
     active.resizeObserver?.disconnect();
     active.stopLayout();
     this.#dom.document.removeEventListener("visibilitychange", active.visibilityListener);
@@ -252,6 +320,18 @@ function isFullyVisible(ownerWindow: Window, rect: DOMRect): boolean {
     rect.left >= 0 &&
     rect.right <= ownerWindow.innerWidth
   );
+}
+
+function targetSize(target: HTMLElement): { width: number; height: number } {
+  const rect = target.getBoundingClientRect();
+  return { width: rect.width, height: rect.height };
+}
+
+function sameSize(
+  left: { width: number; height: number } | null,
+  right: { width: number; height: number },
+): boolean {
+  return left?.width === right.width && left.height === right.height;
 }
 
 function prefersReducedMotion(ownerWindow: Window): boolean {

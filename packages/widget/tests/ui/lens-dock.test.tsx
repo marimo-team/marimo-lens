@@ -624,7 +624,7 @@ function defaultProps(): React.ComponentProps<typeof LensDock> {
 function resolutionEvent(): SelectionResolvedEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 1,
+    version: 2,
     type: "selection.resolved",
     revision: 2,
     payload: {

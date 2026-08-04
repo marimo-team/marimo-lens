@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { hasTextContent } from "./bounded-text";
 
-export const WIDGET_TRANSPORT_VERSION = 1;
+export const WIDGET_TRANSPORT_VERSION = 2;
 
 const TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/;

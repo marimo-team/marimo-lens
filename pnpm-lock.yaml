@@ -13,8 +13,8 @@ catalogs:
       specifier: ^0.4.0
       version: 0.4.0
     '@marimo-team/mdx-marimo':
-      specifier: 0.0.2
-      version: 0.0.2
+      specifier: 0.0.3
+      version: 0.0.3
     '@types/node':
       specifier: ^22.20.1
       version: 22.20.1
@@ -89,7 +89,7 @@ importers:
     devDependencies:
       '@marimo-team/mdx-marimo':
         specifier: 'catalog:'
-        version: 0.0.2
+        version: 0.0.3
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
@@ -759,8 +759,8 @@ packages:
     resolution: {integrity: sha512-pT6kFOg55G65QqZC9Wf84Jh/tDJFvQEPbrJD5rER/YLIB6teLqO8Oxj88hdhvkUzDDBP5pxxzQ7b69gKot1l2g==}
     hasBin: true
 
-  '@marimo-team/mdx-marimo@0.0.2':
-    resolution: {integrity: sha512-K9/rKsKjYUPIVS3UuK+BAPV7pM6sbh+BAwJ3eT3oKAKs5r0gWKVY3kmu3U6jY3nK5aQIDgUxVCX31lrHF1W3Zw==}
+  '@marimo-team/mdx-marimo@0.0.3':
+    resolution: {integrity: sha512-40xPv6Y3CbsBXZAwPPMBAw2OpJpqOLN8/cgeaMF7hr/CpCKfHTig28U1u7S1UGN/vJtDLLNiTvh2+K9PsOLBUQ==}
     peerDependencies:
       react: ^18.3.0 || ^19.0.0
     peerDependenciesMeta:
@@ -2666,7 +2666,7 @@ snapshots:
       '@manzt/uv-win32-ia32': 0.8.13
       '@manzt/uv-win32-x64': 0.8.13
 
-  '@marimo-team/mdx-marimo@0.0.2':
+  '@marimo-team/mdx-marimo@0.0.3':
     dependencies:
       '@manzt/uv': 0.8.13
       '@types/mdast': 4.0.4
