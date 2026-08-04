@@ -5,9 +5,10 @@ description: >-
   existing outputs in a live marimo notebook. Inspect relevant cells and
   optional images, show agent activity, reveal results in reading order, and
   move addressed selections to Lens History. Use with a live marimo kernel
-  executor when the user mentions a Lens selection, asks to resolve a Lens
-  request, points to "this" notebook output, requests a notebook overview, or
-  asks for a guided walkthrough across notebook cells.
+  executor. The `address` mode, written `marimo-lens address`, sweeps every
+  outstanding selection. Use this skill when the user mentions a Lens selection,
+  asks to resolve a Lens request, points to "this" notebook output, requests a
+  notebook overview, or asks for a guided walkthrough across notebook cells.
 ---
 
 # Work with marimo Lens
@@ -25,6 +26,17 @@ Use [reference/workflow.md](reference/workflow.md) for complete mutation
 templates, operation failures, and multi-cell walkthroughs. The workflow here
 covers inspection and straightforward changes.
 
+## Modes
+
+Read the word that follows the skill name as the mode. `marimo-lens` alone
+routes from the request and `snapshot.current`.
+
+`marimo-lens address` inspects every outstanding selection in
+`snapshot.references["selections"]`, including its note and cell or image
+evidence. Address each actionable request, verify the result, then resolve its
+selection. Keep ambiguous, blocked, or unverified selections open and report
+why.
+
 ## Connect and read the request
 
 Connect to the mounted Lens and take one detached context snapshot in the same
@@ -41,8 +53,8 @@ async with cm.get_context() as ctx:
     if selection is not None and selection["cellStatus"] == "available":
         mounted.start_activity(
             selection["outputCellId"],
-            label="Tracing selected result",
-            message="Reading its producing cell and relevant inputs.",
+            label="Inspecting selected output",
+            message="Reading the marked view and its producing cell.",
         )
     print(mounted.identity)
     print(snapshot.revision)
@@ -52,6 +64,16 @@ async with cm.get_context() as ctx:
 Keep `mounted.identity` and `snapshot.revision` together. Reconnect in later
 kernel calls with `connect(ctx, identity=identity)`. Read a fresh context when
 `connect()` reports `lens_unavailable`.
+
+Keep the first read compact. Print the identity, revision, current selection,
+and selection count. Do not print `snapshot.text`, every cell body, or the full
+notebook graph during connection. Read the selected cell and the bounded graph
+ancestors needed for the request, then expand only when a concrete uncertainty
+requires another cell.
+
+In selection-address mode, do not iterate over `ctx.cells` or print a notebook
+inventory. Notebook-order enumeration belongs to explicit overview and
+walkthrough requests.
 
 Ask the user to leave one Lens mounted when `connect()` reports
 `lens_ambiguous`. Report Lens as unavailable when the request explicitly
@@ -65,10 +87,12 @@ graph.
 
 ## Start meaningful activity
 
-Call `start_activity()` as soon as the primary work cell and a meaningful label
-are known. Start it in the initial context call when the current selection
-already identifies that cell. Do this before extended context loading, image
-inspection, planning, mutation, or verification.
+Call `start_activity()` as soon as the primary work cell is known. Start it in
+the initial context call when the current selection already identifies that
+cell. For a visual or deictic request, begin with a neutral cell-grounded label
+such as `Inspecting selected output`. Update the activity after image inspection
+when a more specific label is supported. Do this before extended context
+loading, planning, mutation, or verification.
 
 Use the selected or edited cell as the activity target. For an overview, use
 the first inspected cell whose ID is present in `ctx.graph.cells`. Start
@@ -100,6 +124,12 @@ when it supplies the required visual context. Start a fresh cell capture when
 the task depends on the current full-cell rendering, such as after a mutation.
 Do not start a full-cell capture as an optional side effect.
 
+For a point or region request about a visible mark, open the selection PNG
+before naming the mark, chart interval, trend, color, layout, or activity task.
+A DOM hint locates nearby rendered content. Treat its text and path as supporting
+evidence, not visual truth. Make visual claims only after the image reader
+returns visible pixels.
+
 ```python
 selection = snapshot.current
 selection_png = snapshot.images.get(selection["id"]) if selection is not None else None
@@ -118,14 +148,18 @@ cell_png = mounted.cell_image(
     cell_id,
     expected_revision=snapshot.revision,
 )
+print("ready" if cell_png is not None else "capture_pending")
 ```
 
-The first call starts capture and returns `None`. Save the Lens identity, cell
-ID, and revision, then repeat the same call in later kernel executions until it
-returns bytes or raises a terminal `LensError`. A pending capture owns Lens's
-single full-cell capture slot. Finish it before requesting another cell, even
-when the task no longer needs the bytes. A different cell while capture is
-pending raises `LensError(code="capture_busy")`.
+When the call prints `capture_pending`, end that kernel execution immediately
+so marimo can dispatch the browser response. Repeat the same call with the saved
+Lens identity, cell ID, and revision in a fresh execution. Let the returned
+state drive the loop. Do not sleep inside a kernel execution. Continue until
+the call returns bytes or raises a terminal `LensError`.
+
+A pending capture owns Lens's single full-cell capture slot. Finish the current
+cell before requesting another one. A different cell while capture is pending
+raises `LensError(code="capture_busy")`.
 
 Write PNG bytes to a private temporary path visible to the image reader:
 
@@ -163,6 +197,24 @@ Give each activity and reveal a contextual `label`. Name the notebook object
 and action or result, such as `Joining artist records`, `Checking image
 coverage`, `Source tables`, or `Updated chart`. Use `message` for one concise
 supporting sentence. Vary labels across a walkthrough.
+
+Keep labels within 40 UTF-16 code units. Activity messages accept 240 UTF-16
+code units, reveal messages accept 1,000, and resolution summaries accept 240.
+Prefer short text that leaves detailed evidence in the notebook cell.
+
+When the request asks for the next view, add the smallest view that answers the
+immediate uncertainty. Verify and return that result before pursuing analyses
+that belong to likely follow-up questions.
+
+Create output-facing result cells with `hide_code=True` and a rendered
+placeholder. Keep code hidden when replacing the placeholder unless the user
+asks to inspect the implementation. This keeps the result cell compact enough
+for activity and reveal framing.
+
+When an existing verified cell already answers the request, take the no-change
+path. Read that cell, confirm its status and relevant errors, inspect a fresh
+cell image when the claim is visual, then reveal and resolve. Do not enumerate
+the full notebook or create a duplicate cell.
 
 After verification succeeds, call `stop_activity(cell_id)` for persistent
 activity. Timed activity may be stopped early or allowed to finish its hold.

@@ -1,4 +1,4 @@
 interface:
   display_name: "marimo Lens"
   short_description: "Ground requests and guide live marimo notebooks"
-  default_prompt: "Use $marimo-lens to work from my current selection or guide me through the live notebook."
+  default_prompt: "Use $marimo-lens to work from my current selection, or $marimo-lens address to work through every outstanding selection."

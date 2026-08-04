@@ -42,6 +42,14 @@ async with cm.get_context() as ctx:
 Keep the returned identity and revision. When a current selection exists, also
 keep its `id` and `outputCellId`.
 
+Keep this connection payload compact. Do not print `snapshot.text`, every cell
+body, or the complete graph. Read the selected cell and required bounded
+ancestors after routing the request.
+
+In selection-address mode, do not iterate over `ctx.cells` or print a notebook
+inventory. Reserve notebook-order enumeration for explicit overview and
+walkthrough requests.
+
 Reconnect to the same Lens in later calls:
 
 ```python
@@ -54,13 +62,14 @@ async with cm.get_context() as ctx:
 
 Route the request from the context and the user's instruction:
 
-| Request and context                                     | Continue with                    |
-| ------------------------------------------------------- | -------------------------------- |
-| Overview or walkthrough with any selection count        | Ordered notebook cells and graph |
-| Request referring to "this" or the selected output      | `snapshot.current` and its cell  |
-| Explicit task with an unrelated older current selection | Explicit task                    |
+| Request and context                                     | Continue with                             |
+| ------------------------------------------------------- | ----------------------------------------- |
+| `address` mode                                          | Every entry in `references["selections"]` |
+| Overview or walkthrough with any selection count        | Ordered notebook cells and graph          |
+| Request referring to "this" or the selected output      | `snapshot.current` and its cell           |
+| Explicit task with an unrelated older current selection | Explicit task                             |
 
-Leave an unrelated selection open.
+Outside `address` mode, leave an unrelated selection open.
 
 ## Inspect selection evidence
 
@@ -81,6 +90,10 @@ selection_status = selection["snapshot"]["status"] if selection is not None else
 
 A `selection_status` of `outdated` means the marker moved after
 `selection_png` was captured.
+
+For a point or region request about visible content, open `selection_png`
+before naming the mark, interval, trend, layout, or task. DOM-hint text locates
+nearby rendered content and does not establish a visual claim by itself.
 
 Write available bytes to a private temporary PNG:
 
@@ -118,11 +131,12 @@ png = mounted.cell_image(
     selection["outputCellId"],
     expected_revision=snapshot.revision,
 )
-print("ready" if png is not None else "pending")
+print("ready" if png is not None else "capture_pending")
 ```
 
-The first call starts capture and returns `None`. Repeat the call in later
-kernel executions:
+The first call starts capture and returns `None`. End that kernel execution so
+marimo can dispatch the browser response. Reconnect in a fresh execution with
+the saved Lens identity, then repeat the same call:
 
 ```python
 import marimo_lens.agent as lens_agent
@@ -131,21 +145,13 @@ import marimo._code_mode as cm
 async with cm.get_context() as ctx:
     mounted = lens_agent.connect(ctx, identity="F3n...")
     png = mounted.cell_image("BYtC", expected_revision=8)
-    if png is not None:
-        from tempfile import NamedTemporaryFile
-
-        with NamedTemporaryFile(
-            prefix="marimo-lens-", suffix=".png", delete=False
-        ) as image_file:
-            image_file.write(png)
-            print(image_file.name)
+    print("ready" if png is not None else "capture_pending")
 ```
 
-After the first call returns `None`, save the Lens identity, cell ID, and
-revision. Repeat the same call until it returns bytes or raises a terminal
-`LensError`. A pending capture owns Lens's single full-cell capture slot. Finish
-it before requesting another cell, even when the task no longer needs the
-bytes. A different cell while capture is pending raises
+Let `ready`, `capture_pending`, or a terminal `LensError` drive each next step.
+Do not sleep inside a kernel execution. A pending capture owns Lens's single
+full-cell capture slot. Finish that cell before requesting another one. A
+different cell while capture is pending raises
 `LensError(code="capture_busy")`. Capture several cells sequentially.
 
 ## Start activity on the work cell
@@ -160,6 +166,11 @@ mounted.start_activity(
 )
 ```
 
+For visual or deictic requests, begin with a neutral label such as `Inspecting
+selected output`. Update it after opening the selection PNG when the visible
+evidence supports a more specific task name. Labels accept at most 40 UTF-16
+code units. Activity messages accept 240.
+
 Start it in the initial connection call when `snapshot.current` identifies the
 work cell. Keep it visible through extended context, images, planning, edits,
 execution, and verification. Start activity again when the primary target
@@ -170,16 +181,16 @@ Persistent activity leaves `duration_ms` unset and ends with
 clear itself after that hold. Starting timed activity again on the same cell
 restarts its hold.
 
-For a new result cell, create a visible comment-only placeholder in its own
-kernel call:
+For a new result cell, create a rendered placeholder with hidden code in its
+own kernel call:
 
 ```python
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
     cell_id = ctx.create_cell(
-        "# Preparing the requested chart",
-        hide_code=False,
+        '"Preparing the requested chart"',
+        hide_code=True,
     )
     print(cell_id)
 ```
@@ -198,12 +209,27 @@ async with cm.get_context() as ctx:
         label="Building requested chart",
         message="Replacing the placeholder with the chart implementation.",
     )
-    ctx.edit_cell(cell_id, "chart = build_chart(source_df)\nchart")
+    ctx.edit_cell(
+        cell_id,
+        "chart = build_chart(source_df)\nchart",
+        hide_code=True,
+    )
     ctx.run_cell(cell_id)
 ```
 
 Read each current cell body before replacing it. Submit the full new body and
 queue affected cells to run in one code-mode block.
+
+Keep output-facing result code hidden unless the user asks to inspect the
+implementation. A compact cell lets activity and reveal framing show the full
+result when its rendered height fits in the viewport.
+
+When the user asks for the next view, add the smallest view that resolves the
+current uncertainty. Return it before pursuing likely follow-up analyses.
+
+When a verified cell already answers the request, inspect that cell and its
+status, capture it when the claim is visual, then reveal and resolve. Skip full
+notebook enumeration and duplicate cell creation.
 
 ## Walk through an existing notebook
 
@@ -258,6 +284,9 @@ async with cm.get_context() as ctx:
     print(hold_ms)
 ```
 
+Reveal labels accept at most 40 UTF-16 code units and reveal messages accept
+1,000. Resolution summaries accept 240.
+
 Wait for `hold_ms`, then resolve through a fresh kernel call using the revision
 captured before the work:
 
@@ -294,7 +323,8 @@ state.
 - `selection_not_found`: reconnect and inspect the current selection.
 - `capture_busy`: finish polling the current cell before requesting another.
 - Missing selection PNG: continue from text and graph evidence.
-- Pending cell PNG: repeat `cell_image()` with the same cell and revision.
+- Pending cell PNG: end the current execution and repeat `cell_image()` with
+  the same cell and revision in a fresh execution.
 - Cell-image `LensError`: continue from nonvisual evidence or retry after the
   output settles.
 - Image-reader capability failure: delete the temporary path, skip later calls
