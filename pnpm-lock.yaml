@@ -13,8 +13,8 @@ catalogs:
       specifier: ^0.4.0
       version: 0.4.0
     '@marimo-team/mdx-marimo':
-      specifier: 0.0.3
-      version: 0.0.3
+      specifier: 0.0.4
+      version: 0.0.4
     '@types/node':
       specifier: ^22.20.1
       version: 22.20.1
@@ -89,7 +89,7 @@ importers:
     devDependencies:
       '@marimo-team/mdx-marimo':
         specifier: 'catalog:'
-        version: 0.0.3
+        version: 0.0.4
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
@@ -759,15 +759,13 @@ packages:
     resolution: {integrity: sha512-pT6kFOg55G65QqZC9Wf84Jh/tDJFvQEPbrJD5rER/YLIB6teLqO8Oxj88hdhvkUzDDBP5pxxzQ7b69gKot1l2g==}
     hasBin: true
 
-  '@marimo-team/mdx-marimo@0.0.3':
-    resolution: {integrity: sha512-40xPv6Y3CbsBXZAwPPMBAw2OpJpqOLN8/cgeaMF7hr/CpCKfHTig28U1u7S1UGN/vJtDLLNiTvh2+K9PsOLBUQ==}
+  '@marimo-team/mdx-marimo@0.0.4':
+    resolution: {integrity: sha512-saMXHYbSfa7GjQvmVzVRbSls2qU4KsFznvn5pOmqYmygGU/TOXjgQhcqWaAbxw/fbEenA7FWJebNZXzQ+MzKpQ==}
     peerDependencies:
       react: ^18.3.0 || ^19.0.0
     peerDependenciesMeta:
       react:
         optional: true
-    bundledDependencies:
-      - '@marimo-team/islands-bridge'
 
   '@oxc-project/runtime@0.138.0':
     resolution: {integrity: sha512-yHhoXsN8tYxgdJCdD91PbySNjEEaBX/tH2OQRDXJpsQv5b184oC4/qVbU7qlblvfil/JP15Lh2HW7+HN5DS90Q==}
@@ -2666,7 +2664,7 @@ snapshots:
       '@manzt/uv-win32-ia32': 0.8.13
       '@manzt/uv-win32-x64': 0.8.13
 
-  '@marimo-team/mdx-marimo@0.0.3':
+  '@marimo-team/mdx-marimo@0.0.4':
     dependencies:
       '@manzt/uv': 0.8.13
       '@types/mdast': 4.0.4
