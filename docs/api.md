@@ -60,8 +60,8 @@ widgets are mounted and no identity selects one.
 
 The handle exposes context reads, cell feedback, and revision-checked actions:
 
-| Method                                                                   | Behavior                                                     |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| Method                                                                                       | Behavior                                                    |
+| -------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `context()`                                                              | Returns the current detached `LensContext`                   |
 | `cell_image(cell_id, *, expected_revision)`                              | Returns fresh cell PNG bytes after browser capture completes |
 | `start_activity(cell_id, *, duration_ms=None, label=None, message=None)` | Shows the current agent work target                          |
@@ -75,10 +75,10 @@ when its marker changed after those bytes were captured. `cell_image()`
 captures the current rendered output without Lens markers.
 
 The first `cell_image()` call starts a fresh browser capture and returns `None`.
-Repeat the same call in later kernel executions. Pending calls share one
-in-flight capture. Complete that capture before requesting another cell. A
-completed call returns the bytes, while a failed or stalled capture raises
-`LensError`.
+End that kernel execution so marimo can dispatch the browser response, then
+repeat the same call in a fresh execution. Pending calls share one in-flight
+capture. Complete that capture before requesting another cell. A completed call
+returns the bytes, while a failed or stalled capture raises `LensError`.
 
 Write PNG bytes to a private temporary path in the active kernel before opening
 them with an agent image reader. The kernel and image reader must share a
