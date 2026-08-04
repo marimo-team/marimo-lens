@@ -172,19 +172,7 @@ describe("marimo-lens content", () => {
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => root?.render(<MarimoLensContent />));
-    const selections: OutputCaptureCommand["payload"]["selections"] = [
-      {
-        selectionId: "selection-1",
-        label: "S1",
-        anchor: { kind: "point", x: 0.25, y: 0.5 },
-      },
-      {
-        selectionId: "selection-2",
-        label: "S2",
-        anchor: { kind: "rect", x: 0.4, y: 0.2, width: 0.3, height: 0.4 },
-      },
-    ];
-    const command = outputCaptureCommand(selections);
+    const command = outputCaptureCommand();
     const controller = new AbortController();
     const capture = captureHandler!(command, controller.signal);
 
@@ -198,7 +186,6 @@ describe("marimo-lens content", () => {
     expect(captureOutputSnapshot).toHaveBeenCalledWith({
       imageId: "image:capture-1",
       output,
-      selections,
       signal: controller.signal,
     });
 

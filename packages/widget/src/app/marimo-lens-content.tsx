@@ -311,7 +311,6 @@ function useOutputCapture(protocol: LensProtocolClient, dom: NotebookDomAdapter)
         const result = await captureOutputSnapshot({
           imageId: `image:${command.requestId}`,
           output: element,
-          selections: command.payload.selections,
           signal,
         });
         const current = dom.getOutputCell(command.payload.outputCellId);
