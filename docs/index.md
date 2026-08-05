@@ -44,6 +44,18 @@ dependencies = [
 ]
 ```
 
+<section id="demo" class="lens-video-demo" aria-labelledby="see-lens-in-action">
+
+## See Lens in action
+
+Mark a chart region, hand the request to a notebook agent, and review the result it brings back into view.
+
+<div class="lens-video-frame">
+<video aria-label="marimo-lens demo showing a chart selection, an agent request, and the reviewed notebook result" controls height="2160" playsinline poster="/lens-demo-poster.jpg" preload="metadata" src="/lens-demo-min.mp4" width="3592"></video>
+</div>
+
+</section>
+
 <section id="try-lens" class="lens-demo">
 
 ## Try Lens on this chart

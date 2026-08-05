@@ -664,6 +664,37 @@ body {
   font-size: 13px;
 }
 
+.lens-video-demo {
+  scroll-margin-top: 88px;
+  padding: 24px 0 0;
+}
+
+.lens-video-demo h2 {
+  margin: 0;
+  padding: 0;
+}
+
+.lens-video-demo h2 + p {
+  max-width: 680px;
+  margin: 16px 0 0;
+  color: var(--vp-c-text-2);
+  font-size: 17px;
+  line-height: 1.65;
+}
+
+.lens-video-frame {
+  margin-top: 24px;
+}
+
+.lens-video-frame video {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 8px;
+  background: var(--vp-c-bg-soft);
+}
+
 .lens-demo {
   scroll-margin-top: 88px;
   padding: 56px 0 72px;
@@ -865,6 +896,14 @@ body {
 
   .VPHome .vp-doc div[class*="language-"] {
     margin-inline: 0;
+  }
+
+  .lens-video-demo {
+    padding: 16px 0 0;
+  }
+
+  .lens-video-demo h2 {
+    padding-top: 0;
   }
 
   .lens-demo {
