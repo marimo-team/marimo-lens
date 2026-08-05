@@ -31,13 +31,13 @@ Mark a chart region, tell the agent what to inspect, and review the result it
 brings back into view.
 
 <p align="center">
-  <a href="https://marimo-team.github.io/marimo-lens/#demo">
+  <a href="https://marimo-team.github.io/marimo-lens/#see-lens-in-action">
     <img alt="Watch the marimo-lens demo: select a chart region, add a request, and review the agent's work" src="apps/docs/public/lens-demo-poster.jpg" width="900">
   </a>
 </p>
 
 <p align="center">
-  <a href="https://marimo-team.github.io/marimo-lens/#demo"><strong>Watch the 25-second demo</strong></a>
+  <a href="https://marimo-team.github.io/marimo-lens/#see-lens-in-action"><strong>Watch the 25-second demo</strong></a>
 </p>
 
 ## Quick start
