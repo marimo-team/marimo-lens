@@ -1,26 +1,25 @@
 ---
 name: marimo-lens
 description: >-
-  Ground work in a user's point or region selections, or guide the user through
-  existing outputs in a live marimo notebook. Inspect relevant cells and
-  optional images, show agent activity, reveal results in reading order, and
-  move addressed selections to Lens History. Use with a live marimo kernel
-  executor. The `address` mode, written `marimo-lens address`, sweeps every
-  outstanding selection. Use this skill when the user mentions a Lens selection,
-  asks to resolve a Lens request, points to "this" notebook output, requests a
-  notebook overview, or asks for a guided walkthrough across notebook cells.
+  Use Lens to turn a user's point, region, or note on rendered notebook output
+  into a bounded task against the producing cells. Connect through
+  `marimo._code_mode`, inspect the selected cell, upstream context, and
+  available images, then show activity, verify the notebook result, reveal it,
+  and resolve the addressed selection to History. Use when the user refers to
+  "this" output, asks to address Lens selections, requests an overview or
+  walkthrough, or invokes `marimo-lens address` for every open selection. Treat
+  the human's mark and note as the request, and return notebook evidence for
+  their review.
 ---
 
 # Work with marimo Lens
 
-Run this skill alongside a live marimo kernel executor such as `marimo-pair`.
-The executor supplies kernel calls, code-mode mutation, and runtime
-verification. This skill owns Lens grounding, images, activity, reveals, and
-resolution.
+Run this skill through `marimo._code_mode` in a live marimo kernel. Code mode
+supplies notebook inspection, mutation, execution, and runtime verification.
+This skill owns Lens grounding, images, activity, reveals, and resolution.
 
 Activate this workflow after the request identifies Lens work through a
-selection, output reference, overview, or walkthrough. A generic kernel
-connection or toast remains with the executor.
+selection, output reference, overview, or walkthrough.
 
 Use [reference/workflow.md](reference/workflow.md) for complete mutation
 templates, operation failures, and multi-cell walkthroughs. The workflow here
@@ -121,10 +120,6 @@ Leave `duration_ms` unset for work spanning context, edits, execution, and
 verification, then call `stop_activity(cell_id)` when that work finishes. Pass
 `duration_ms` for a bounded status that should clear itself after its hold.
 
-When the result needs a new cell, first create a visible comment-only
-placeholder such as `# Preparing the requested chart`. Start activity on its
-returned cell ID in the next kernel call, then replace and run that same cell.
-
 ## Inspect the required evidence
 
 Read the selected cell and its required graph neighbors before planning a
@@ -133,7 +128,7 @@ mark, identify the plotted measure and its entity key. When an upstream join
 can multiply entities, compare the row count with the distinct entity count and
 name the plotted unit precisely.
 
-For an overview, inspect ordered cells and graph edges through the executor.
+For an overview, inspect ordered cells and graph edges through code mode.
 Choose a short route through setup, inputs, transformations, and results.
 Reveal those cells in notebook order when the selection list is empty too.
 
@@ -245,10 +240,9 @@ When the request asks for the next view, add the smallest view that answers the
 immediate uncertainty. Verify and return that result before pursuing analyses
 that belong to likely follow-up questions.
 
-Create output-facing result cells with `hide_code=True` and a rendered
-placeholder. Keep code hidden when replacing the placeholder unless the user
-asks to inspect the implementation. This keeps the result cell compact enough
-for activity and reveal framing.
+Create output-facing result cells with `hide_code=True` unless the user asks to
+inspect the implementation. This keeps the result cell compact enough for
+activity and reveal framing.
 
 When an existing verified cell already answers the request, take the no-change
 path. Read that cell, confirm its status and relevant errors, inspect a fresh

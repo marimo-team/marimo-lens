@@ -122,6 +122,15 @@ def test_connect_deduplicates_aliases_and_preserves_identity() -> None:
     lens.close()
 
 
+def test_connected_handle_exposes_a_read_only_identity() -> None:
+    lens = Lens()
+    mounted = agent.connect(_context(lens))
+
+    assert agent.MountedLens.identity.fset is None
+    assert mounted.identity
+    lens.close()
+
+
 def test_connect_reports_an_unavailable_lens() -> None:
     lens = Lens()
     lens.close()

@@ -1,25 +1,36 @@
-"""Agent adapter for mounted marimo Lens widgets.
+"""Connect agents to Lens so humans direct analysis and judge evidence agents return.
 
-Example:
-    import marimo_lens.agent as lens_agent
+Treat a Lens selection as both a visual request and a computational address.
+The marked output and note capture what drew the human's attention. Stable
+output-cell identity names the producing cell. Lens follows the current marimo
+dependency graph upstream from that cell and supplies a bounded closure of the
+code that produced the result. Start with this graph-grounded context before
+inspecting live values or changing the notebook.
+
+Use Lens to expose your work, return focus to verified results, and preserve
+addressed requests in History so the human can review, repair, and continue the
+analysis across turns.
+
+Use this module inside a live marimo code-mode kernel call:
+
     import marimo._code_mode as cm
+    import marimo_lens.agent as lens_agent
 
     async with cm.get_context() as ctx:
         mounted = lens_agent.connect(ctx)
         snapshot = mounted.context()
 
-``connect(ctx, identity=...)`` reconnects to the exact Lens from an earlier
-kernel call.
+Keep mounted.identity and snapshot.revision together when work spans kernel
+calls. Reconnect with connect(ctx, identity=identity).
 
-Use :meth:`MountedLens.context` for standalone text, selection context, and
-captured selection PNG bytes. :meth:`MountedLens.cell_image` returns fresh
-unannotated cell PNG bytes after capture completes in a later kernel call.
+Use code mode to inspect, edit, and run notebook cells. The Lens snapshot
+supplies bounded text, selection references, and annotated selection PNG bytes.
+MountedLens.cell_image() transfers a fresh unannotated cell PNG across kernel
+calls.
 
-Call :meth:`MountedLens.start_activity` as soon as the work cell is known.
-After the mutation and a fresh runtime check, call
-:meth:`MountedLens.stop_activity`, present the result with
-:meth:`MountedLens.reveal`, then call :meth:`MountedLens.resolve` after the
-reveal hold for addressed selections.
+Start activity when the work cell is known. After a fresh runtime check, stop
+activity and reveal the verified result. Wait for the reveal hold before
+resolving the addressed selections.
 """
 
 from __future__ import annotations
@@ -28,7 +39,6 @@ import secrets
 import threading
 import weakref
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
 
 from .context import LensContext
 from .errors import LensError
@@ -38,20 +48,58 @@ _IDENTITIES: weakref.WeakKeyDictionary[Lens, str] = weakref.WeakKeyDictionary()
 _IDENTITIES_LOCK = threading.RLock()
 
 
-@dataclass(frozen=True, slots=True)
 class MountedLens:
-    """One mounted Lens connected through a live marimo code-mode context."""
+    """A live Lens handle returned by connect().
 
-    identity: str
-    _lens: Lens = field(repr=False)
+    Keep identity to reconnect to the same mounted Lens in a later kernel call.
+    """
+
+    __slots__ = ("_identity", "_lens")
+
+    def __init__(self, identity: str, lens: Lens) -> None:
+        """Initialize a handle for a Lens resolved by connect()."""
+
+        self._identity = identity
+        self._lens = lens
+
+    @property
+    def identity(self) -> str:
+        """Return the opaque identity used to reconnect this mounted Lens."""
+
+        return self._identity
+
+    def __repr__(self) -> str:
+        """Return a diagnostic representation containing the opaque identity."""
+
+        return f"MountedLens(identity={self.identity!r})"
 
     def context(self) -> LensContext:
-        """Return the current detached Lens context."""
+        """Return a detached snapshot of the current Lens context.
+
+        The snapshot carries its revision, bounded notebook text, selection
+        references, and annotated selection PNG bytes. Read another snapshot
+        after the notebook or Lens state changes.
+
+        Raises:
+            LensError: The mounted Lens is closed.
+        """
 
         return self._lens.context()
 
     def cell_image(self, cell_id: str, *, expected_revision: int) -> bytes | None:
-        """Return fresh cell PNG bytes when capture has completed."""
+        """Return a fresh unannotated cell PNG across kernel calls.
+
+        The first call starts browser capture and returns None. End the current
+        kernel call so the browser can respond, then repeat the call with the
+        same cell ID and revision. A completed call returns and consumes the
+        PNG bytes.
+
+        Raises:
+            LensError: The revision changed, another capture is pending, or
+                the Lens, runtime, cell, browser, or capture is unavailable.
+            TypeError: The cell ID or revision has the wrong type.
+            ValueError: The cell ID or revision is outside its accepted range.
+        """
 
         return self._lens._cell_image(
             cell_id,
@@ -66,7 +114,18 @@ class MountedLens:
         label: str | None = None,
         message: str | None = None,
     ) -> None:
-        """Show one work cell until stopped or the optional duration ends."""
+        """Show one cell as the current work target.
+
+        Leave duration_ms unset to keep activity visible until stop_activity()
+        or another attention event replaces it. A supplied duration clears the
+        activity after that hold.
+
+        Raises:
+            LensError: The Lens is closed or the runtime cannot resolve the
+                supplied cell.
+            TypeError: An argument has the wrong type.
+            ValueError: An argument is outside its accepted range.
+        """
 
         self._lens.start_activity(
             cell_id,
@@ -76,7 +135,13 @@ class MountedLens:
         )
 
     def stop_activity(self, cell_id: str) -> None:
-        """Stop activity attached to the supplied work cell."""
+        """Stop activity when it is attached to the supplied cell.
+
+        Raises:
+            LensError: The mounted Lens is closed.
+            TypeError: The cell ID has the wrong type.
+            ValueError: The cell ID is outside its accepted range.
+        """
 
         self._lens.stop_activity(cell_id)
 
@@ -87,7 +152,17 @@ class MountedLens:
         expected_revision: int,
         summary: str | None = None,
     ) -> int:
-        """Move verified selections to History and return the new revision."""
+        """Move verified selections to History and return the new revision.
+
+        Pass the returned revision to the next guarded Lens mutation. The state
+        transition commits before Lens sends its browser receipt.
+
+        Raises:
+            LensError: The Lens is closed, the revision changed, or a selection
+                cannot be resolved.
+            TypeError: An argument has the wrong type.
+            ValueError: An argument is outside its accepted range.
+        """
 
         return self._lens.resolve(
             selection_ids,
@@ -103,7 +178,17 @@ class MountedLens:
         label: str | None = None,
         message: str | None = None,
     ) -> None:
-        """Bring one cell into view for the supplied hold."""
+        """Bring one exact cell into view for the supplied hold.
+
+        Wait for duration_ms before resolving addressed selections when the
+        resolution receipt should follow the revealed result.
+
+        Raises:
+            LensError: The Lens is closed or the runtime cannot resolve the
+                supplied cell.
+            TypeError: An argument has the wrong type.
+            ValueError: An argument is outside its accepted range.
+        """
 
         self._lens.reveal(
             cell_id,
@@ -118,10 +203,18 @@ def connect(
     *,
     identity: str | None = None,
 ) -> MountedLens:
-    """Return one mounted Lens from a live marimo code-mode context.
+    """Return the mounted Lens selected from a live code-mode context.
 
-    Pass an earlier handle's ``identity`` to reconnect to the same Lens in a
-    later kernel call.
+    With no identity, the context must contain exactly one mounted Lens. Pass
+    an earlier handle's identity to reconnect to that Lens in a later kernel
+    call.
+
+    Raises:
+        LensError: No mounted Lens matches, or several are mounted without an
+            identity selecting one.
+        TypeError: The context lacks a globals mapping or identity has the
+            wrong type.
+        ValueError: Identity is empty.
     """
 
     namespace = getattr(context, "globals", None)
@@ -143,7 +236,7 @@ def connect(
     mounted = tuple(
         MountedLens(
             identity=_identity(lens),
-            _lens=lens,
+            lens=lens,
         )
         for lens in candidates.values()
     )
