@@ -23,14 +23,14 @@ bring the result into view for review, and keep completed requests in
 **History** for another pass.
 
 [Read the user guide](https://marimo-team.github.io/marimo-lens/) for the
-notebook-agent workflow.
+code-mode agent workflow.
 
 ## Quick start
 
 Open a local marimo notebook with Lens available:
 
 ```sh
-uvx --with marimo-lens marimo edit --no-token notebook.py
+uvx --with marimo-lens marimo edit notebook.py
 ```
 
 Mount Lens in one notebook cell:
@@ -46,17 +46,12 @@ Keep the cell mounted. Press **Select**, then click a point or drag a region
 inside a rendered output. Add a note with what you want the agent to inspect or
 change.
 
-`--no-token` lets [marimo Pair](https://marimo.io/pair) discover this local
-notebook. [Getting started](https://marimo-team.github.io/marimo-lens/getting-started)
-covers existing projects and includes a live selection example.
-
 ## Connect an agent
 
-Install the Lens skill and [marimo Pair](https://marimo.io/pair):
+Install the Lens skill:
 
 ```bash
 npx skills add marimo-team/marimo-lens
-npx skills add marimo-team/marimo-pair
 ```
 
 After selecting an output and adding a note, ask the agent:
@@ -65,16 +60,15 @@ After selecting an output and adding a note, ask the agent:
 Resolve my Lens request.
 ```
 
-The [marimo Pair guide](https://marimo-team.github.io/marimo-lens/pair)
-covers the ready-made workflow. [Overview](https://marimo-team.github.io/marimo-lens/overview)
-shows how another agent can read the request, show its activity, return a
-result, and keep completed feedback available for another pass.
+See [Agent workflow](https://marimo-team.github.io/marimo-lens/agents) to
+connect a code-mode agent.
 
 ## Python API
 
 The package exports `Lens`, `LensContext`, `LensError`, `LensReferences`,
 `NotebookReference`, `SelectionReference`, and `__version__`. The version string
 comes from the installed `marimo-lens` distribution metadata.
+
 Agent integrations use five methods:
 
 | Method                                                                        | Behavior                                                         |

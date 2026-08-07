@@ -33,7 +33,7 @@ features:
 
   - icon: 🔌
     title: Connect your notebook agent
-    details: Use Lens with <a href="https://marimo.io/pair">marimo Pair</a> or another agent that can call the Lens Python API in a marimo notebook.
+    details: Use Lens with a code-mode agent that can inspect, edit, run, and verify cells in the live marimo kernel.
 ---
 
 ```marimo-config
@@ -66,7 +66,7 @@ Select part of the chart, add a note, and see what your notebook agent receives.
   <span><strong>1</strong> Press <strong>Select</strong></span>
   <span><strong>2</strong> Click a bar</span>
   <span><strong>3</strong> Add "Make bars blue"</span>
-  <span><strong>4</strong> Mark another</span>
+  <span><strong>4</strong> Hand off to agent</span>
 </div>
 
 ```python marimo output=false
@@ -252,7 +252,7 @@ if _state == "empty":
     _handoff_output = mo.Html(_handoff_html)
 elif _state == "complete":
     _completed_summary = escape(_view["summary"])
-    _completed_noun = "request" if int(_view["count"]) == 1 else "requests"
+    _completed_noun = "selection" if int(_view["count"]) == 1 else "selections"
     _handoff_html = f"""
     <aside
       aria-labelledby="lens-demo-complete-title"
@@ -264,7 +264,7 @@ elif _state == "complete":
       </span>
       <strong style="display:block;margin-top:0.625rem;font-size:0.9375rem">{_completed_summary}</strong>
       <p style="margin:0.5rem 0 0;color:var(--marimo-island-muted-foreground,#64748b);font-size:0.8125rem">
-        Lens moved the {_completed_noun} to history and brought the chart back
+        Lens moved the {_completed_noun} to History and brought the chart back
         into view. Reopen one for another pass.
       </p>
     </aside>
@@ -274,7 +274,7 @@ else:
     _reopened_notice = (
         """
         <p data-demo-reopened="true" style="margin:0 0 0.75rem;border-left:2px solid #1d7363;padding-left:0.625rem;color:#1d7363;font-size:0.8125rem;font-weight:600">
-          Reopened from history. Update the request or hand it off again.
+          Reopened from History. Update the note or hand it off again.
         </p>
         """
         if _view["reopened"]
@@ -326,7 +326,7 @@ else:
         """
         _handoff_output = mo.Html(f"{_panel_open}{_handoff_body}{_panel_close}")
     else:
-        _request_noun = "request" if len(_view["items"]) == 1 else "requests"
+        _selection_noun = "selection" if len(_view["items"]) == 1 else "selections"
         _handoff_button = mo.md(
             f"""
             <span data-demo-handoff-button style="display:inline-flex;overflow:hidden;align-items:center;border:1px solid #0880ea;border-radius:6px;background:light-dark(#edf6ff,#1d5b6a);line-height:1;cursor:pointer">
@@ -351,7 +351,7 @@ else:
           <div style="margin-top:1rem;border-top:1px solid var(--marimo-island-border,#e2e8f0);padding-top:0.875rem">
             <strong style="display:block;font-size:0.875rem">Hand off to the demo agent</strong>
             <span style="display:block;margin-top:0.25rem;color:var(--marimo-island-muted-foreground,#64748b);font-size:0.8125rem;line-height:1.45">
-              It will use the {_request_noun} to recolor the bars, show where
+              It will use the {_selection_noun} to recolor the bars, show where
               it is working, and return the updated chart for review.
             </span>
           </div>
@@ -420,7 +420,7 @@ if handoff_to_agent.value:
         _activity_message = (
             str(_noted_selections[0]["note"])[:120]
             if _selection_count == 1
-            else f"Working through {_selection_count} requests"
+            else f"Working through {_selection_count} selections"
         )
         set_response_completion(None)
         lens.start_activity(
@@ -472,18 +472,18 @@ if _verified_request is not None:
             elif _verified_count == 2:
                 _verified_summary = (
                     f"Changed the bars to {_verified_color} "
-                    "and checked the result for both requests."
+                    "and checked the result for both selections."
                 )
             else:
                 _verified_summary = (
                     f"Changed the bars to {_verified_color} "
                     f"and checked the result for all {_verified_count} "
-                    "requests."
+                    "selections."
                 )
         else:
             _verified_summary = (
                 "This demo can recolor the bars. "
-                "Add a color to one request, such as "
+                "Add a color to a selection note, such as "
                 '"Make bars blue."'
             )
         _verification_message = (

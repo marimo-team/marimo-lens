@@ -91,7 +91,7 @@ export default defineConfig({
         text: "Guide",
         items: [
           { text: "Getting started", link: "/getting-started" },
-          { text: "Use with marimo Pair", link: "/pair" },
+          { text: "Agent workflow", link: "/agents" },
           { text: "Selections", link: "/selections" },
         ],
       },
@@ -108,7 +108,7 @@ export default defineConfig({
         text: "Guide",
         items: [
           { text: "Getting started", link: "/getting-started" },
-          { text: "Use with marimo Pair", link: "/pair" },
+          { text: "Agent workflow", link: "/agents" },
           { text: "Selections", link: "/selections" },
         ],
       },
