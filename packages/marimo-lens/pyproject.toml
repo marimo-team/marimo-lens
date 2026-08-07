@@ -20,6 +20,9 @@ classifiers = [
 ]
 dependencies = ["anywidget>=0.11.0", "marimo>=0.23.0", "pydantic>=2", "traitlets>=5"]
 
+[project.entry-points."marimo.agent.capability"]
+lens = "marimo_lens.agent"
+
 [project.urls]
 Documentation = "https://marimo-team.github.io/marimo-lens/"
 Issues = "https://github.com/marimo-team/marimo-lens/issues"

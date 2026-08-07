@@ -1,15 +1,13 @@
 # marimo Lens agent workflow
 
-Use these snippets through a live marimo kernel executor. With `marimo-pair`,
-resolve `PAIR_EXECUTE` to its `scripts/execute-code.sh` and target the notebook
-with its URL, port, or session arguments.
+Use these snippets through `marimo._code_mode` in a live marimo kernel. Use the
+active code-mode context to inspect, edit, run, and verify notebook cells.
 
 Each kernel call has a fresh scratchpad namespace. Import
 `marimo_lens.agent` in every snippet that uses it.
 
 Enter this workflow after the request identifies Lens work through a selection,
-output reference, overview, or walkthrough. Leave a generic kernel connection
-or toast to the executor.
+output reference, overview, or walkthrough.
 
 ## Connect and take a context snapshot
 
@@ -81,7 +79,7 @@ Outside `address` mode, leave an unrelated selection open.
 ## Inspect selection evidence
 
 `snapshot.text` contains bounded standalone text. Read selected cell code and
-graph neighbors through the executor's code-mode API. For an aggregate mark,
+graph neighbors through `marimo._code_mode`. For an aggregate mark,
 identify the plotted measure and its entity key. When an upstream join can
 multiply entities, compare row count with distinct entity count before naming
 the plotted unit.
@@ -208,41 +206,23 @@ Persistent activity leaves `duration_ms` unset and ends with
 clear itself after that hold. Starting timed activity again on the same cell
 restarts its hold.
 
-For a new result cell, create a rendered placeholder with hidden code in its
-own kernel call:
+For a new result cell, create its complete body and queue it to run in one
+code-mode call:
 
 ```python
 import marimo._code_mode as cm
 
 async with cm.get_context() as ctx:
     cell_id = ctx.create_cell(
-        '"Preparing the requested chart"',
-        hide_code=True,
-    )
-    print(cell_id)
-```
-
-Start activity on that cell in the next call, then replace and run it:
-
-```python
-import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
-
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx, identity="F3n...")
-    cell_id = "new-cell-id"
-    mounted.start_activity(
-        cell_id,
-        label="Building requested chart",
-        message="Replacing the placeholder with the chart implementation.",
-    )
-    ctx.edit_cell(
-        cell_id,
         "chart = build_chart(source_df)\nchart",
         hide_code=True,
     )
     ctx.run_cell(cell_id)
+    print(cell_id)
 ```
+
+Use the returned cell ID to start activity in the next kernel call, then verify
+and reveal the result.
 
 Read each current cell body before replacing it. Submit the full new body and
 queue affected cells to run in one code-mode block.
