@@ -122,13 +122,32 @@ def test_connect_deduplicates_aliases_and_preserves_identity() -> None:
     lens.close()
 
 
-def test_connected_handle_exposes_a_read_only_identity() -> None:
+def test_connected_handle_keeps_its_identity_and_lens_target(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     lens = Lens()
+    replacement = Lens()
     mounted = agent.connect(_context(lens))
+    identity = mounted.identity
+    expected_context = _lens_context(revision=4)
+    replacement_context = _lens_context(revision=9)
 
-    assert agent.MountedLens.identity.fset is None
-    assert mounted.identity
+    def context(target: Lens) -> LensContext:
+        if target is lens:
+            return expected_context
+        return replacement_context
+
+    monkeypatch.setattr(Lens, "context", context)
+
+    with pytest.raises(AttributeError):
+        mounted.__setattr__("_identity", "another-lens")
+    with pytest.raises(AttributeError):
+        mounted.__setattr__("_lens", replacement)
+
+    assert mounted.identity == identity
+    assert mounted.context().revision == expected_context.revision
     lens.close()
+    replacement.close()
 
 
 def test_connect_reports_an_unavailable_lens() -> None:

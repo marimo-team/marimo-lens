@@ -51,22 +51,27 @@ _IDENTITIES_LOCK = threading.RLock()
 class MountedLens:
     """A live Lens handle returned by connect().
 
+    Its identity and mounted Lens remain fixed for the handle's lifetime.
     Keep identity to reconnect to the same mounted Lens in a later kernel call.
     """
 
-    __slots__ = ("_identity", "_lens")
+    __slots__ = ("__identity", "__lens")
 
     def __init__(self, identity: str, lens: Lens) -> None:
         """Initialize a handle for a Lens resolved by connect()."""
 
-        self._identity = identity
-        self._lens = lens
+        self.__identity = identity
+        self.__lens = lens
 
     @property
     def identity(self) -> str:
         """Return the opaque identity used to reconnect this mounted Lens."""
 
-        return self._identity
+        return self.__identity
+
+    @property
+    def _lens(self) -> Lens:
+        return self.__lens
 
     def __repr__(self) -> str:
         """Return a diagnostic representation containing the opaque identity."""
