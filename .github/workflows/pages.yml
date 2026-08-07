@@ -60,10 +60,11 @@ jobs:
         run: |
           index=apps/docs/.vitepress/dist/index.html
           test -f apps/docs/.vitepress/dist/getting-started.html
-          test -f apps/docs/.vitepress/dist/pair.html
+          test -f apps/docs/.vitepress/dist/agents.html
           grep -q "href=\"${BASE_PATH}/assets/" "$index"
           grep -q "src=\"${BASE_PATH}/assets/" "$index"
           grep -q "href=\"${BASE_PATH}/getting-started\"" "$index"
+          grep -q 'href="./getting-started"' "$index"
 
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request'

@@ -1,8 +1,13 @@
+---
+title: Selections
+description: Mark points and regions in notebook outputs, add notes, and manage open or addressed selections.
+---
+
 # Selections
 
 A selection points an agent to one part of a rendered notebook output. Click to
 mark a point, drag to mark a region, and add a note when the mark needs more
-context.
+context. One request can refer to several selections.
 
 ```marimo-config
 requires-python = ">=3.11"
@@ -176,9 +181,9 @@ refine its point or region.
 
 ## Work with open selections
 
-Open **Selections** to review your requests. Lens focuses the current selection
-in the **Open** tab. That selection is the likely target when you ask an agent
-to change "this" or inspect "here."
+Open **Selections** to review open selections and their notes. Lens focuses the
+current selection in the **Open** tab. That selection is the likely target when
+you ask an agent to change "this" or inspect "here."
 
 Choose another row to make it current. Editing its note, moving it, or resizing
 it also makes it current. If the current selection leaves **Open**, Lens focuses
@@ -187,9 +192,8 @@ the most recently active selection that remains.
 Open the note editor from a row, describe what the agent should inspect or
 change, then press **Done**.
 
-Press **Select** again to add another point or region. Several selections can
-describe one request, and an agent can address them together after one verified
-change.
+Press **Select** again when the request refers to another point or region. An
+agent can resolve those selections together after one verified change.
 
 Lens keeps each open selection connected as the notebook changes:
 

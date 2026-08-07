@@ -581,26 +581,26 @@ body {
   );
 }
 
-.lens-api-demo-chart {
-  margin-top: 48px;
-}
-
-.lens-api-demo-actions {
-  display: flex;
-  flex-wrap: wrap;
+.lens-agent-api-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--vp-c-divider);
 }
 
-.lens-api-demo-button {
-  display: inline-flex;
-  overflow: hidden;
-  align-items: center;
-  border: 1px solid var(--lens-selection-color);
-  border-radius: 6px;
-  background: var(--vp-c-brand-soft);
-  line-height: 1;
-  cursor: pointer;
+.lens-agent-api-card {
+  display: block;
+  min-width: 0;
+}
+
+.lens-agent-api-card marimo-button {
+  width: 100%;
+}
+
+.lens-agent-api-card-resolve {
+  grid-column: 3;
 }
 
 .lens-doc-demo-status {
@@ -858,6 +858,14 @@ body {
 
   .lens-doc-demo-context {
     grid-template-columns: 1fr;
+  }
+
+  .lens-agent-api-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .lens-agent-api-card-resolve {
+    grid-column: auto;
   }
 
   .lens-selection-demo-progress {

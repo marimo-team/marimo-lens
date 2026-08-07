@@ -1,7 +1,12 @@
+---
+title: Getting started
+description: Mount Lens in a marimo notebook and create a visual request for an agent.
+---
+
 # Getting started
 
-Start a marimo notebook with **Lens**, create one visual request, and inspect what
-your notebook agent receives.
+Mount Lens in a marimo notebook, create one visual request, and inspect the
+context available to a code-mode agent.
 
 ```marimo-config
 requires-python = ">=3.11"
@@ -13,13 +18,13 @@ dependencies = [
 
 ## Start a notebook
 
-Open a notebook with marimo and Lens
+Open a local notebook with Lens installed:
 
 ```sh
-uvx --with marimo-lens marimo edit --no-token notebook.py
+uvx --with marimo-lens marimo edit notebook.py
 ```
 
-We create an isolated environment for this notebook and configure `--no-token` to let an agent [pair](https://marimo.io/pair) with us on this notebook.
+This command creates an isolated environment for marimo and Lens.
 
 ::: details Use an existing uv project
 
@@ -27,14 +32,14 @@ Add Lens to the project, then run marimo in that environment:
 
 ```sh
 uv add marimo-lens
-uv run marimo edit --no-token notebook.py
+uv run marimo edit notebook.py
 ```
 
 :::
 
-## Make notebook results selectable
+## Mount Lens
 
-1. Render a result in the first cell
+Render a result in one cell:
 
 ```python
 import marimo as mo
@@ -52,7 +57,7 @@ mo.md(
 )
 ```
 
-2. Mount Lens in the second cell
+Mount Lens in another cell:
 
 ```python
 from marimo_lens import Lens
@@ -61,7 +66,8 @@ lens = Lens()
 lens
 ```
 
-This creates a dock that appears at the bottom of your notebook.
+Keep this cell mounted. Lens adds its dock to the bottom of the notebook and
+makes rendered output cells selectable.
 
 ## Create a selection
 
@@ -160,7 +166,7 @@ else:
         <div><dt>Requested change</dt><dd>{_starter_note}</dd></div>
         <div><dt>Producing cell</dt><dd><code>{_starter_cell}</code></dd></div>
         <div><dt>Annotated image</dt><dd>{_starter_image_status}</dd></div>
-        <div><dt>Open requests</dt><dd>{_starter_open_count}</dd></div>
+        <div><dt>Open selections</dt><dd>{_starter_open_count}</dd></div>
       </dl>
     """
 
@@ -183,14 +189,24 @@ mo.Html(
 
 </div>
 
-You can create multiple selections to batch a request. Press **Select** again to add another point or region.
+Press **Select** again when the request refers to another point or region. An
+agent can resolve those selections together after one verified change.
 
 ## Connect an agent
 
-You can use any AI agent to work with this notebook including Claude Code, OpenCode or Codex.
+Install the Lens skill for an agent that can use marimo code mode:
 
-[marimo pair](https://marimo.io/pair) is a skill that teaches your agent on how to work with marimo notebooks.
-Follow the [instructions](./pair) to connect to this notebook and complete the first request.
+```bash
+npx skills add marimo-team/marimo-lens
+```
 
-The [overview section](./overview) explains the mechanism and feedback loop of Lens and the [Python reference](./api)
-defines the methods to read a request, show the activity, complete it, and return a result.
+Then ask the agent to resolve the current request:
+
+```text
+Resolve my Lens request.
+```
+
+The [Agent workflow](./agents) shows how a code-mode agent connects to Lens,
+edits and verifies cells, and returns the result for review. The
+[Overview](./overview) explains the collaboration loop. The [Python API
+reference](./api) defines each handoff method.
