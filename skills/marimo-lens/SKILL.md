@@ -222,10 +222,11 @@ claims supplied by the user or a source to that observer.
 
 ## Apply, verify, and present
 
-Keep activity visible through context gathering, edits, cell creation,
-execution, and fresh verification. Verify changed cells in a fresh kernel call.
-Each claimed result must be idle and free of relevant errors. Inspect a fresh
-cell image for visual work.
+Keep activity visible through context gathering, edits, execution, and fresh
+verification. Start activity on a new result cell as soon as its returned cell
+ID is available. Verify changed cells in a fresh kernel call. Each claimed
+result must be idle and free of relevant errors. Inspect a fresh cell image for
+visual work.
 
 Give each activity and reveal a contextual `label`. Name the notebook object
 and action or result, such as `Joining artist records`, `Checking image

@@ -206,6 +206,24 @@ Persistent activity leaves `duration_ms` unset and ends with
 clear itself after that hold. Starting timed activity again on the same cell
 restarts its hold.
 
+For a new result cell, create its complete body and queue it to run in one
+code-mode call:
+
+```python
+import marimo._code_mode as cm
+
+async with cm.get_context() as ctx:
+    cell_id = ctx.create_cell(
+        "chart = build_chart(source_df)\nchart",
+        hide_code=True,
+    )
+    ctx.run_cell(cell_id)
+    print(cell_id)
+```
+
+Use the returned cell ID to start activity in the next kernel call, then verify
+and reveal the result.
+
 Read each current cell body before replacing it. Submit the full new body and
 queue affected cells to run in one code-mode block.
 
