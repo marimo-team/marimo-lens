@@ -13,15 +13,16 @@ analysis across turns.
 
 Use this module inside a live marimo code-mode kernel call:
 
-    import marimo._code_mode as cm
     import marimo_lens.agent as lens_agent
 
-    async with cm.get_context() as ctx:
-        mounted = lens_agent.connect(ctx)
-        snapshot = mounted.context()
+    mounted = lens_agent.connect()
+    snapshot = mounted.context()
+
+Call add_lens_cell(ctx) after an initial lens_unavailable result, end that
+kernel call, then connect again after the browser renders Lens.
 
 Keep mounted.identity and snapshot.revision together when work spans kernel
-calls. Reconnect with connect(ctx, identity=identity).
+calls. Reconnect with connect(identity=identity).
 
 Use code mode to inspect, edit, and run notebook cells. The Lens snapshot
 supplies bounded text, selection references, and annotated selection PNG bytes.
@@ -38,14 +39,22 @@ from __future__ import annotations
 import secrets
 import threading
 import weakref
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
 from .context import LensContext
 from .errors import LensError
-from .widget import Lens
+from .widget import Lens, _mounted_lenses
 
 _IDENTITIES: weakref.WeakKeyDictionary[Lens, str] = weakref.WeakKeyDictionary()
 _IDENTITIES_LOCK = threading.RLock()
+# Private bindings introduce no public names into marimo's dataflow graph.
+_LENS_CELL_CODE = """\
+import marimo as _mo
+from marimo_lens import Lens as _Lens
+
+_lens = _Lens()
+_mo.output.append(_lens)
+"""
 
 
 class MountedLens:
@@ -203,47 +212,55 @@ class MountedLens:
         )
 
 
-def connect(
-    context: object,
-    *,
-    identity: str | None = None,
-) -> MountedLens:
-    """Return the mounted Lens selected from a live code-mode context.
+def add_lens_cell(ctx: object) -> str:
+    """Queue a collapsed notebook cell that mounts a Lens.
 
-    With no identity, the context must contain exactly one mounted Lens. Pass
-    an earlier handle's identity to reconnect to that Lens in a later kernel
-    call.
+    The code-mode context creates and runs the cell when its async context
+    manager exits. Call connect() in a later kernel call after the browser has
+    rendered the cell.
+
+    Returns:
+        The queued cell ID.
+
+    Raises:
+        TypeError: The context lacks the code-mode cell mutation methods.
+    """
+
+    create_cell = getattr(ctx, "create_cell", None)
+    run_cell = getattr(ctx, "run_cell", None)
+    if not callable(create_cell) or not callable(run_cell):
+        raise TypeError("context must be a live marimo code-mode context")
+
+    cell_id = create_cell(_LENS_CELL_CODE, hide_code=True)
+    run_cell(cell_id)
+    return str(cell_id)
+
+
+def connect(*, identity: str | None = None) -> MountedLens:
+    """Return the mounted Lens selected from the active marimo runtime.
+
+    Pass an earlier handle's identity to reconnect to that Lens in a later
+    kernel call.
 
     Raises:
         LensError: No mounted Lens matches, or several are mounted without an
             identity selecting one.
-        TypeError: The context lacks a globals mapping or identity has the
-            wrong type.
+        TypeError: Identity has the wrong type.
         ValueError: Identity is empty.
     """
 
-    namespace = getattr(context, "globals", None)
-    if not isinstance(namespace, Mapping):
-        raise TypeError("context must expose a globals mapping")
     if identity is not None:
         if not isinstance(identity, str):
             raise TypeError("identity must be a string or None")
         if not identity:
             raise ValueError("identity must not be empty")
 
-    candidates: dict[int, Lens] = {}
-    for value in namespace.values():
-        lens = _as_lens(value)
-        if lens is None:
-            continue
-        candidates.setdefault(id(lens), lens)
-
     mounted = tuple(
         MountedLens(
             identity=_identity(lens),
             lens=lens,
         )
-        for lens in candidates.values()
+        for lens in _mounted_lenses()
     )
     if identity is not None:
         for lens in mounted:
@@ -272,20 +289,6 @@ def connect(
     )
 
 
-def _as_lens(value: object) -> Lens | None:
-    if isinstance(value, Lens):
-        lens = value
-    elif type(value).__module__.startswith("marimo."):
-        lens = getattr(value, "widget", None)
-        if not isinstance(lens, Lens):
-            return None
-    else:
-        return None
-    if getattr(lens, "_lens_closed", False) or getattr(lens, "comm", None) is None:
-        return None
-    return lens
-
-
 def _identity(lens: Lens) -> str:
     with _IDENTITIES_LOCK:
         identity = _IDENTITIES.get(lens)
@@ -297,5 +300,6 @@ def _identity(lens: Lens) -> str:
 
 __all__ = [
     "MountedLens",
+    "add_lens_cell",
     "connect",
 ]

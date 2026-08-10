@@ -13,7 +13,7 @@ from marimo_lens import (
     SelectionReference,
     __version__,
 )
-from marimo_lens.agent import MountedLens, connect
+from marimo_lens.agent import MountedLens, add_lens_cell, connect
 
 
 def verify_release(expected_version: str) -> None:
@@ -67,8 +67,8 @@ def verify_release(expected_version: str) -> None:
         raise SystemExit(
             f"marimo-lens exports are not classes: {', '.join(invalid_types)}"
         )
-    if not callable(connect):
-        raise SystemExit("marimo_lens.agent.connect is not callable")
+    if not all(callable(function) for function in (add_lens_cell, connect)):
+        raise SystemExit("marimo_lens.agent handoff exports are not callable")
 
     lens = Lens()
     try:

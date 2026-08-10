@@ -31,6 +31,21 @@ class MarimoRuntimeAdapter:
         return runtime_cell_status(cell_id)
 
 
+def current_runtime_scope() -> object | None:
+    """Return the active marimo UI registry as an opaque runtime identity."""
+
+    try:
+        from marimo._runtime.context import get_context
+        from marimo._runtime.context.types import ContextNotInitializedError
+    except ImportError:
+        return None
+
+    try:
+        return get_context().ui_element_registry
+    except ContextNotInitializedError:
+        return None
+
+
 class _RuntimeReadError(RuntimeError):
     """A host-owned runtime value could not be read."""
 

@@ -17,31 +17,29 @@ Connect and read the current Lens state in one kernel call:
 import json
 
 import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
 
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx)
-    snapshot = mounted.context()
-    print(
-        json.dumps(
-            {
-                "identity": mounted.identity,
-                "revision": snapshot.revision,
-                "current": snapshot.current,
-                "selections": [
-                    {
-                        "id": selection["id"],
-                        "outputCellId": selection["outputCellId"],
-                    }
-                    for selection in snapshot.references["selections"]
-                ],
-                "selectionCount": len(snapshot.references["selections"]),
-                "imageSelectionIds": list(snapshot.images),
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+mounted = lens_agent.connect()
+snapshot = mounted.context()
+print(
+    json.dumps(
+        {
+            "identity": mounted.identity,
+            "revision": snapshot.revision,
+            "current": snapshot.current,
+            "selections": [
+                {
+                    "id": selection["id"],
+                    "outputCellId": selection["outputCellId"],
+                }
+                for selection in snapshot.references["selections"]
+            ],
+            "selectionCount": len(snapshot.references["selections"]),
+            "imageSelectionIds": list(snapshot.images),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
     )
+)
 ```
 
 Keep the returned identity and revision. When a current selection exists, also
@@ -59,10 +57,8 @@ Reconnect to the same Lens in later calls:
 
 ```python
 import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
 
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx, identity="F3n...")
+mounted = lens_agent.connect(identity="F3n...")
 ```
 
 Route the request from the context and the user's instruction:
@@ -165,12 +161,10 @@ the saved Lens identity, then repeat the same call:
 
 ```python
 import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
 
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx, identity="F3n...")
-    png = mounted.cell_image("BYtC", expected_revision=8)
-    print("ready" if png is not None else "capture_pending")
+mounted = lens_agent.connect(identity="F3n...")
+png = mounted.cell_image("BYtC", expected_revision=8)
+print("ready" if png is not None else "capture_pending")
 ```
 
 Let `ready`, `capture_pending`, or a terminal `LensError` drive each next step.
@@ -249,18 +243,16 @@ Reveal one cell per kernel call and wait for its hold before continuing:
 
 ```python
 import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
 
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx, identity="F3n...")
-    hold_ms = 8_000
-    mounted.reveal(
-        "setup-cell",
-        duration_ms=hold_ms,
-        label="Source tables",
-        message="Loads the tables used by the analysis.",
-    )
-    print(hold_ms)
+mounted = lens_agent.connect(identity="F3n...")
+hold_ms = 8_000
+mounted.reveal(
+    "setup-cell",
+    duration_ms=hold_ms,
+    label="Source tables",
+    message="Loads the tables used by the analysis.",
+)
+print(hold_ms)
 ```
 
 Set the hold long enough for the user to orient to the cell and read the
@@ -276,19 +268,17 @@ After verification succeeds, stop activity and reveal the result:
 
 ```python
 import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
 
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx, identity="F3n...")
-    mounted.stop_activity("BYtC")
-    hold_ms = 8_000
-    mounted.reveal(
-        "BYtC",
-        duration_ms=hold_ms,
-        label="Updated aggregation",
-        message="Updated the aggregation and verified the output.",
-    )
-    print(hold_ms)
+mounted = lens_agent.connect(identity="F3n...")
+mounted.stop_activity("BYtC")
+hold_ms = 8_000
+mounted.reveal(
+    "BYtC",
+    duration_ms=hold_ms,
+    label="Updated aggregation",
+    message="Updated the aggregation and verified the output.",
+)
+print(hold_ms)
 ```
 
 Reveal labels accept at most 40 UTF-16 code units and reveal messages accept
@@ -299,16 +289,14 @@ captured before the work:
 
 ```python
 import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
 
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx, identity="F3n...")
-    revision = mounted.resolve(
-        ["243110...", "8b20f4..."],
-        expected_revision=8,
-        summary="Updated the aggregation and verified the chart.",
-    )
-    print(revision)
+mounted = lens_agent.connect(identity="F3n...")
+revision = mounted.resolve(
+    ["243110...", "8b20f4..."],
+    expected_revision=8,
+    summary="Updated the aggregation and verified the chart.",
+)
+print(revision)
 ```
 
 Resolve selections together when they share one verified result. Use separate
@@ -325,8 +313,9 @@ state.
 
 ## Operation failures
 
-- `lens_unavailable`: connect again without an identity, or report that Lens is
-  unavailable when no instance is mounted.
+- `lens_unavailable`: retry without an identity, then call
+  `add_lens_cell(ctx)` when no Lens is mounted. End that kernel call and
+  reconnect after the browser renders Lens.
 - `lens_ambiguous`: ask the user to leave one Lens mounted.
 - `revision_conflict`: reconnect and reassess a fresh context.
 - `selection_not_found`: reconnect and inspect the current selection.

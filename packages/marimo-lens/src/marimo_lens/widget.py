@@ -17,7 +17,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from ._context import build_lens_context
 from ._images import ImageError
-from ._marimo_runtime import MarimoRuntimeAdapter
+from ._marimo_runtime import MarimoRuntimeAdapter, current_runtime_scope
 from ._output_capture import OutputCaptureSlot
 from ._protocol import (
     Command,
@@ -62,6 +62,34 @@ from .errors import LensError
 
 _LOGGER = logging.getLogger(__name__)
 _STATIC = pathlib.Path(__file__).parent / "static"
+_MOUNTED_LENSES_LOCK = threading.RLock()
+_MOUNTED_LENSES: weakref.WeakKeyDictionary[
+    Lens,
+    weakref.ReferenceType[object],
+] = weakref.WeakKeyDictionary()
+
+
+def _mounted_lenses() -> tuple[Lens, ...]:
+    scope = current_runtime_scope()
+    if scope is None:
+        return ()
+    with _MOUNTED_LENSES_LOCK:
+        return tuple(
+            lens for lens, scope_ref in _MOUNTED_LENSES.items() if scope_ref() is scope
+        )
+
+
+def _register_mounted_lens(lens: Lens) -> None:
+    scope = current_runtime_scope()
+    if scope is None:
+        return
+    with _MOUNTED_LENSES_LOCK:
+        _MOUNTED_LENSES[lens] = weakref.ref(scope)
+
+
+def _unregister_mounted_lens(lens: Lens) -> None:
+    with _MOUNTED_LENSES_LOCK:
+        _MOUNTED_LENSES.pop(lens, None)
 
 
 class Lens(anywidget.AnyWidget):
@@ -84,6 +112,8 @@ class Lens(anywidget.AnyWidget):
     def __init__(self) -> None:
         self._lock = threading.RLock()
         self._lens_closed = False
+        # One kernel model may be rendered by several browser consumers.
+        self._browser_views = 0
         self._selection_store = SelectionStore()
         self._runtime = MarimoRuntimeAdapter()
         super().__init__(_state=self._selection_store.state.payload())
@@ -277,6 +307,7 @@ class Lens(anywidget.AnyWidget):
             self._lens_closed = True
             self._output_capture.close()
             self._selection_store.release()
+        _unregister_mounted_lens(self)
         super().close()
 
     def _cell_image(
@@ -365,7 +396,17 @@ class Lens(anywidget.AnyWidget):
         except ProtocolError:
             return
         if capture_event is not None:
-            self._output_capture.set_browser_ready(capture_event == "ready")
+            with self._lock:
+                if capture_event == "ready":
+                    self._browser_views += 1
+                else:
+                    self._browser_views = max(0, self._browser_views - 1)
+                ready = self._browser_views > 0
+                self._output_capture.set_browser_ready(ready)
+                if ready and not self._lens_closed:
+                    _register_mounted_lens(self)
+                else:
+                    _unregister_mounted_lens(self)
             return
         if is_response_envelope(content):
             if isinstance(content, Mapping):
