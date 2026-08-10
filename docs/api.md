@@ -27,29 +27,46 @@ The package registers this module as the `lens` capability in the
 `marimo.agent.capability` entry-point group.
 
 Notebook cells mount Lens through the [public `Lens` API](#lens). Agent
-integrations call the adapter inside their live `marimo._code_mode` context:
+integrations call the adapter from a live code-mode kernel call:
+
+```python
+import marimo_lens.agent as lens_agent
+
+mounted = lens_agent.connect()
+snapshot = mounted.context()
+```
+
+### `add_lens_cell(ctx) -> str`
+
+Returns the notebook's agent-created Lens cell ID. With an existing generated
+cell, the method returns that ID and queues no mutation. Otherwise, it queues a
+collapsed cell that constructs and appends a Lens, then queues that cell to run.
+The code-mode context applies a new cell when its async context manager exits.
+The cell uses private bindings and introduces no public notebook definitions.
 
 ```python
 import marimo._code_mode as cm
 import marimo_lens.agent as lens_agent
 
 async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx)
-    snapshot = mounted.context()
+    cell_id = lens_agent.add_lens_cell(ctx)
 ```
 
-### `connect(context, *, identity=None) -> MountedLens`
+End the kernel call after adding the cell. Call `connect()` in a later call
+after the browser renders Lens. `ctx` must expose `create_cell()` and
+`run_cell()` as well as `cells.find()`. Other objects raise `TypeError`.
+Several agent-created Lens cells raise `LensError(code="lens_ambiguous")`.
 
-Returns the mounted Lens found in a live `marimo._code_mode.get_context()`
-context. Pass an earlier handle's `identity` to reconnect to that exact Lens in
-a later kernel call.
+### `connect(*, identity=None) -> MountedLens`
+
+Returns a mounted Lens from the active marimo runtime. Pass an earlier handle's
+`identity` to reconnect to that exact Lens in a later kernel call.
 
 `connect()` raises `LensError(code="lens_unavailable")` when the requested Lens
 cannot be found. It raises `LensError(code="lens_ambiguous")` when several Lens
 widgets are mounted and no identity selects one.
 
-An invalid context or non-string identity raises `TypeError`. An empty identity
-raises `ValueError`.
+A non-string identity raises `TypeError`. An empty identity raises `ValueError`.
 
 ### `MountedLens`
 

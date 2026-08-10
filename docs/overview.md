@@ -473,9 +473,10 @@ the result while preserving the human request that motivated the work.
 
 ## Code mode carries the notebook work
 
-`marimo_lens.agent` connects from a live `marimo._code_mode` context. Its
-stable handle reads Lens state and sends notebook feedback across kernel calls.
-Code mode owns cell inspection, edits, execution, and runtime verification.
+`marimo_lens.agent` connects to a browser-ready Lens in the active marimo
+runtime. Its stable handle reads Lens state and sends notebook feedback across
+kernel calls. Code mode owns cell inspection, edits, execution, and runtime
+verification.
 
 Follow the [Agent workflow](./agents) to connect a compatible agent. The
 [Python API reference](./api) defines method signatures, image transfer,

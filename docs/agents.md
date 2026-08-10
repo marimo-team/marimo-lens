@@ -10,8 +10,9 @@ request, changes and runs notebook cells, and returns the verified result for
 human review. [marimo Pair](https://marimo.io/pair) is one code-mode agent
 option.
 
-Mount Lens in the notebook before connecting an agent. [Getting
-started](./getting-started) shows the two-cell setup.
+Connect to the notebook's mounted Lens before reading a request. When the
+notebook has no mounted Lens, the agent can add a collapsed Lens cell and
+reconnect after the browser renders it.
 
 ## Install the Lens skill
 
@@ -27,37 +28,34 @@ selections.
 
 ## Read the current request
 
-Run Lens calls inside the same `marimo._code_mode` context the agent uses to
-inspect and edit the notebook:
+Run Lens calls from the live code-mode kernel:
 
 ```python
 import json
 
-import marimo._code_mode as cm
 import marimo_lens.agent as lens_agent
 
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx)
-    snapshot = mounted.context()
-    selection = snapshot.current
+mounted = lens_agent.connect()
+snapshot = mounted.context()
+selection = snapshot.current
 
-    if selection is not None and selection["cellStatus"] == "available":
-        mounted.start_activity(
-            selection["outputCellId"],
-            label="Inspecting selected output",
-            message="Reading the marked result and its producing cell.",
-        )
-
-    print(
-        json.dumps(
-            {
-                "identity": mounted.identity,
-                "revision": snapshot.revision,
-                "current": snapshot.current,
-                "selectionCount": len(snapshot.references["selections"]),
-            }
-        )
+if selection is not None and selection["cellStatus"] == "available":
+    mounted.start_activity(
+        selection["outputCellId"],
+        label="Inspecting selected output",
+        message="Reading the marked result and its producing cell.",
     )
+
+print(
+    json.dumps(
+        {
+            "identity": mounted.identity,
+            "revision": snapshot.revision,
+            "current": snapshot.current,
+            "selectionCount": len(snapshot.references["selections"]),
+        }
+    )
+)
 ```
 
 `marimo._code_mode` is an internal agent-facing marimo API. Integrations are
@@ -77,9 +75,28 @@ the image when a visual claim or edit depends on the marked pixels.
 Lens registers `marimo_lens.agent` as the `lens` capability in the
 `marimo.agent.capability` entry-point group. Marimo advertises the installed
 module to code-mode agents. Its module docstring defines the collaboration
-contract, and `MountedLens` exposes the bounded handoff API.
+contract, and `MountedLens` exposes the bounded handoff API. A displayed Lens
+registers with its active marimo runtime when its browser view becomes ready.
 
 :::
+
+## Add Lens when none is mounted
+
+After `connect()` raises `LensError(code="lens_unavailable")` without an
+identity, queue one Lens cell through the active code-mode context:
+
+```python
+import marimo._code_mode as cm
+import marimo_lens.agent as lens_agent
+
+async with cm.get_context() as ctx:
+    cell_id = lens_agent.add_lens_cell(ctx)
+    print(cell_id)
+```
+
+The context creates and runs the collapsed cell when it exits. End that kernel
+call, then call `connect()` in a fresh call so the browser can render and
+register Lens.
 
 ## Keep the handle stable across calls
 
@@ -94,16 +111,14 @@ agent's working state:
 Reconnect in a later call:
 
 ```python
-import marimo._code_mode as cm
 import marimo_lens.agent as lens_agent
 
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx, identity=identity)
+mounted = lens_agent.connect(identity=identity)
 ```
 
-The handle's identity and Lens target remain fixed for its lifetime. Call
-`connect()` again after `lens_unavailable`, then read a fresh snapshot before
-continuing.
+The handle's identity and Lens target remain fixed for its lifetime. Retry
+without the saved identity when that Lens becomes unavailable, then read a
+fresh snapshot before continuing.
 
 ## Edit and return the result
 
@@ -160,7 +175,7 @@ blocked, or unverified selections open and report what remains.
 
 | Error code              | Agent response                                                   |
 | ----------------------- | ---------------------------------------------------------------- |
-| `lens_unavailable`      | Reconnect without an identity and read a fresh snapshot.         |
+| `lens_unavailable`      | Retry without identity, then add a Lens cell when none is mounted. |
 | `lens_ambiguous`        | Ask the user to leave one Lens mounted.                           |
 | `revision_conflict`     | Read current Lens state and reassess the requested work.          |
 | `selection_not_found`   | Read current selections before resolving again.                   |

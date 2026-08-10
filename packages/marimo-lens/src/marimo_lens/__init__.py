@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from importlib import metadata
 
+from . import agent as agent
 from .context import (
     LensContext,
     LensReferences,

@@ -41,9 +41,11 @@ and publishes as `marimo-lens`.
 - `@marimo-lens/widget` owns AnyWidget transport, notebook host integration,
   selection interaction, the document-scoped dock, and transient effects.
 - `@marimo-lens/python` owns the public API, durable state, runtime context,
-  output-capture mailbox, and packaged browser resources.
-- `marimo_lens.agent` owns mounted-Lens connection, stable instance identity,
-  detached context access, and full-cell capture adaptation.
+  output-capture mailbox, runtime-scoped mounted-Lens registration, and packaged
+  browser resources.
+- `marimo_lens.agent` owns explicit code-mode Lens cell creation, mounted-Lens
+  connection, stable instance identity, detached context access, and full-cell
+  capture adaptation.
 - `examples/lens.py` is the product example.
 
 Dependencies point toward the protocol package. Cross-package TypeScript
@@ -163,11 +165,13 @@ temporary file it creates from the returned bytes.
 ## Agent adapter
 
 Agents import `marimo_lens.agent` inside the active notebook kernel.
-`connect()` accepts a live marimo code-mode context and returns one mounted Lens
-handle. The handle carries a stable opaque identity, returns the current
-detached context, guards cell images and mutations by revision, delegates
-public feedback methods, and returns selection and full-cell images as PNG
-bytes.
+`add_lens_cell()` queues a collapsed Lens cell through a live marimo code-mode
+context. The context creates and runs that cell when it exits. `connect()`
+resolves browser-ready Lens instances from the active runtime's mounted
+registry and returns one handle. The handle carries a stable opaque identity,
+returns the current detached context, guards cell images and mutations by
+revision, delegates public feedback methods, and returns selection and
+full-cell images as PNG bytes.
 
 The top-level `skills/marimo-lens` directory owns agent workflow policy. A
 live-kernel executor owns session discovery, kernel calls, code-mode mutation,

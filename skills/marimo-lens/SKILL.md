@@ -45,42 +45,53 @@ kernel call:
 import json
 
 import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
 
-async with cm.get_context() as ctx:
-    mounted = lens_agent.connect(ctx)
-    snapshot = mounted.context()
-    selection = snapshot.current
-    if selection is not None and selection["cellStatus"] == "available":
-        mounted.start_activity(
-            selection["outputCellId"],
-            label="Inspecting selected output",
-            message="Reading the marked view and its producing cell.",
-        )
-    print(
-        json.dumps(
-            {
-                "identity": mounted.identity,
-                "revision": snapshot.revision,
-                "current": snapshot.current,
-                "selections": [
-                    {
-                        "id": selection["id"],
-                        "outputCellId": selection["outputCellId"],
-                    }
-                    for selection in snapshot.references["selections"]
-                ],
-                "selectionCount": len(snapshot.references["selections"]),
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-        )
+mounted = lens_agent.connect()
+snapshot = mounted.context()
+selection = snapshot.current
+if selection is not None and selection["cellStatus"] == "available":
+    mounted.start_activity(
+        selection["outputCellId"],
+        label="Inspecting selected output",
+        message="Reading the marked view and its producing cell.",
     )
+print(
+    json.dumps(
+        {
+            "identity": mounted.identity,
+            "revision": snapshot.revision,
+            "current": snapshot.current,
+            "selections": [
+                {
+                    "id": selection["id"],
+                    "outputCellId": selection["outputCellId"],
+                }
+                for selection in snapshot.references["selections"]
+            ],
+            "selectionCount": len(snapshot.references["selections"]),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+)
 ```
 
 Keep `mounted.identity` and `snapshot.revision` together. Reconnect in later
-kernel calls with `connect(ctx, identity=identity)`. Read a fresh context when
-`connect()` reports `lens_unavailable`.
+kernel calls with `connect(identity=identity)`. Retry without the saved
+identity when that Lens becomes unavailable.
+
+When the first connection without an identity reports `lens_unavailable`, add
+one Lens cell and end that kernel call:
+
+```python
+import marimo_lens.agent as lens_agent
+import marimo._code_mode as cm
+
+async with cm.get_context() as ctx:
+    lens_agent.add_lens_cell(ctx)
+```
+
+Connect again in a fresh kernel call after the browser renders Lens.
 
 Keep the first read compact. Print the identity, revision, current selection,
 and selection count. Do not print `snapshot.text`, every cell body, or the full
@@ -93,8 +104,8 @@ inventory. Notebook-order enumeration belongs to explicit overview and
 walkthrough requests.
 
 Ask the user to leave one Lens mounted when `connect()` reports
-`lens_ambiguous`. Report Lens as unavailable when the request explicitly
-depends on it and `connect()` reports `lens_unavailable` without an identity.
+`lens_ambiguous`. Report Lens as unavailable when adding or rendering the Lens
+cell fails.
 
 `snapshot.current` is the likely referent for "this", "here", or "the selected
 output". The explicit request takes priority over an older selection note. An
