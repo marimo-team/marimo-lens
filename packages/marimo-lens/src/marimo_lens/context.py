@@ -6,9 +6,10 @@ import threading
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from types import MappingProxyType
-from typing import Literal, NotRequired, Self, TypedDict, cast
+from typing import Literal, TypedDict, cast
 
 from pydantic import ValidationError
+from typing_extensions import NotRequired, Self
 
 from ._protocol_models import REVISION_ADAPTER
 

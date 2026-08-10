@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from functools import partial
-from typing import Annotated, Any, Literal, Self, TypeAlias
+from typing import Annotated, Any, Literal, TypeAlias
 
 from pydantic import (
     AfterValidator,
@@ -20,6 +20,7 @@ from pydantic import (
 )
 from pydantic.alias_generators import to_camel
 from pydantic_core import PydanticCustomError
+from typing_extensions import Self
 
 COMMAND_PROTOCOL = "marimo-lens.command"
 RESPONSE_PROTOCOL = "marimo-lens.response"

@@ -9,7 +9,7 @@ Mount Lens in a marimo notebook, create one visual request, and inspect the
 context available to a code-mode agent.
 
 ```marimo-config
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "marimo",
     "marimo-lens",

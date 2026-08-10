@@ -9,6 +9,7 @@ from marimo_lens._protocol import ProtocolError
 from marimo_lens._selection_state import (
     SelectionRecord,
     SelectionState,
+    SelectionStore,
     activate_selection,
     apply_selection_put,
     clear_history,
@@ -19,6 +20,22 @@ from marimo_lens._selection_state import (
 )
 
 from tests.support.factories import selection
+
+
+def test_selection_store_preserves_publish_error_when_rollback_publish_fails() -> None:
+    store = SelectionStore()
+    previous = store.state
+
+    def publish(_payload: dict[str, Any]) -> None:
+        raise RuntimeError("state publish failed")
+
+    with pytest.raises(RuntimeError, match="state publish failed") as raised:
+        store.commit(SelectionState(revision=1), publish)
+
+    assert store.state == previous
+    assert getattr(raised.value, "__notes__", None) == [
+        "Lens restored local selection state but could not republish it."
+    ]
 
 
 @pytest.mark.parametrize(

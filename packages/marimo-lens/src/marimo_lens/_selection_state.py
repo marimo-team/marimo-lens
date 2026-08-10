@@ -223,8 +223,9 @@ class SelectionStore:
             try:
                 _restore_published_state(publish, previous.payload())
             except _StateRestoreError:
-                publish_error.add_note(
-                    "Lens restored local selection state but could not republish it."
+                _add_exception_note(
+                    publish_error,
+                    "Lens restored local selection state but could not republish it.",
                 )
             raise
 
@@ -244,6 +245,14 @@ def _restore_published_state(
         publish(payload)
     except Exception as error:
         raise _StateRestoreError from error
+
+
+def _add_exception_note(error: BaseException, note: str) -> None:
+    add_note = getattr(error, "add_note", None)
+    if add_note is not None:
+        add_note(note)
+        return
+    vars(error)["__notes__"] = [*getattr(error, "__notes__", ()), note]
 
 
 @dataclass(frozen=True, slots=True)
