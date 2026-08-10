@@ -265,6 +265,34 @@ def test_connect_scopes_mounted_lenses_by_ui_registry(
     second.close()
 
 
+def _raise_runtime_context_error() -> object:
+    raise RuntimeError("runtime context changed")
+
+
+@pytest.mark.parametrize(
+    "get_context",
+    [
+        pytest.param(lambda: SimpleNamespace(), id="missing-ui-registry"),
+        pytest.param(_raise_runtime_context_error, id="context-read-failure"),
+    ],
+)
+def test_mount_discovery_degrades_when_runtime_scope_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    get_context: object,
+) -> None:
+    import marimo._runtime.context as context_module
+
+    monkeypatch.setattr(context_module, "get_context", get_context)
+    lens = Lens()
+
+    _set_mounted(lens)
+    with pytest.raises(LensError) as raised:
+        agent.connect()
+
+    assert raised.value.code == "lens_unavailable"
+    lens.close()
+
+
 def test_connect_requires_a_string_identity() -> None:
     with pytest.raises(TypeError, match="identity must be a string or None"):
         agent.connect(identity=cast(str | None, 1))

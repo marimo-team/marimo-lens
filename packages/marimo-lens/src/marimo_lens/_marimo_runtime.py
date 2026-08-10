@@ -36,13 +36,13 @@ def current_runtime_scope() -> object | None:
 
     try:
         from marimo._runtime.context import get_context
-        from marimo._runtime.context.types import ContextNotInitializedError
     except ImportError:
         return None
 
     try:
-        return get_context().ui_element_registry
-    except ContextNotInitializedError:
+        context = _read_runtime_context(get_context)
+        return _read_runtime_attribute(context, "ui_element_registry")
+    except _RuntimeReadError:
         return None
 
 
