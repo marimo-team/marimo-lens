@@ -10,7 +10,7 @@ mark a point, drag to mark a region, and add a note when the mark needs more
 context. One request can refer to several selections.
 
 ```marimo-config
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "marimo",
     "marimo-lens",

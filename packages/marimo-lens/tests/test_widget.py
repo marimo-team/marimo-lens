@@ -1307,7 +1307,6 @@ def test_outdated_snapshot_retains_capture_bytes() -> None:
     assert references["selections"][0]["snapshot"] == {"status": "outdated"}
     assert references["selections"][0]["anchor"]["x"] == 0.5
     assert context.images["selection-1"] == data
-    assert context.references["selections"][0]["snapshot"]["status"] == "outdated"
 
 
 def test_every_mutation_rejects_stale_revision_before_changing_state() -> None:

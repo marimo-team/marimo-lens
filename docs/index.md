@@ -37,7 +37,7 @@ features:
 ---
 
 ```marimo-config
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "marimo",
     "marimo-lens",

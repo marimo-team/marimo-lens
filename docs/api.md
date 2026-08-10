@@ -13,7 +13,7 @@ The package exports `Lens`, `LensContext`, `LensError`, `LensReferences`,
 comes from the installed `marimo-lens` distribution metadata.
 
 ```marimo-config
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 dependencies = [
     "marimo",
     "marimo-lens",
