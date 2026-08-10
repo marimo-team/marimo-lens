@@ -1,0 +1,92 @@
+packages/marimo-lens/src/marimo_lens/__init__.py
+  s_fadc167a7549a6::t_43b2e1bd2e4348 7
+development_docs/architecture.md
+  s_fadc167a7549a6::t_070070fcf7a5df 46-48,168-174
+  s_fadc167a7549a6::t_4fe4f8ea6f5328 44-45
+scripts/verify_release.py
+  s_fadc167a7549a6::t_070070fcf7a5df 16
+  s_fadc167a7549a6::t_9eb876965a561d 70-71
+packages/marimo-lens/tests/test_bundle_integration.py
+  s_fadc167a7549a6::t_a5a01ff7b87b96 86
+  s_fadc167a7549a6::t_4bb8ae285092ac 5,8,37-38,40-41,44-51,82-85,87,92,100,103-111
+  s_fadc167a7549a6::t_4da46bebfb3e3e 68-71
+  s_fadc167a7549a6::t_688826157225ba 101
+  s_fadc167a7549a6::t_b1be7528902c3d 43,60-67,72-81,88-90,93-96,102
+  s_fadc167a7549a6::t_c9685587fe39b8 91
+  s_fadc167a7549a6::t_5dd2abe6403ca3 42,56-59
+  s_fadc167a7549a6::t_fcce008cea0750 39
+  s_fadc167a7549a6::t_167968f7079cea 97-99
+  s_fadc167a7549a6::t_ace096216b29cd 52-55
+  s_fadc167a7549a6::t_9eb876965a561d 112
+skills/marimo-lens/reference/workflow.md
+  s_fadc167a7549a6::t_528a6f6a616069 21-40,42,61,165-167,247-255,272-281,293-299
+  s_fadc167a7549a6::t_94c7c2833b6efe 316-318
+docs/agents.md
+  s_fadc167a7549a6::t_862b1c08d92821 31,38-56,58,116
+  s_fadc167a7549a6::t_070070fcf7a5df 13-15,78-79,83-100,178
+  s_fadc167a7549a6::t_5d4ac3b7d9aaa6 119-121
+skills/marimo-lens/SKILL.md
+  s_fadc167a7549a6::t_862b1c08d92821 49-74,76
+  s_fadc167a7549a6::t_5d4ac3b7d9aaa6 80-81,94
+  s_fadc167a7549a6::t_9f89d435d277be 83-93,107-108
+packages/marimo-lens/tests/test_agent.py
+  s_fadc167a7549a6::t_9eb876965a561d 225,229,231,233
+  s_fadc167a7549a6::t_faf2f613c3fe43 183-184
+  s_fadc167a7549a6::t_b1be7528902c3d 174,177
+  s_fadc167a7549a6::t_8de7207d990e0f 36
+  s_fadc167a7549a6::t_04e8b88401b5dd 4-5,35,37-45,47,188,194,196-199
+  s_fadc167a7549a6::t_89e75db23e2cba 218-220,222-223,227,230,234
+  s_fadc167a7549a6::t_167968f7079cea 175,178
+  s_fadc167a7549a6::t_b7bd8df744bf38 52
+  s_fadc167a7549a6::t_db18381df78636 97-100,102-105,107,181
+  s_fadc167a7549a6::t_5dd2abe6403ca3 216
+  s_fadc167a7549a6::t_1de7fc18d570df 48
+  s_fadc167a7549a6::t_9747f3ab35d94b 16-17,19-28,32,53,96,101,106,108-111,143-149,151-155,159,165,168-171,173,180,182,189-190,204-205,208,217,221,224,226,228,232,241,246,253,256,267,281,294,322,361,374
+  s_fadc167a7549a6::t_fe139594d8aca5 33-34,46
+packages/marimo-lens/src/marimo_lens/widget.py
+  s_fadc167a7549a6::t_d778e561e300bc 79-80
+  s_fadc167a7549a6::t_f315b180ac7840 20,81
+  s_fadc167a7549a6::t_0e63cd0ff2fd3d 65-77,82,85-86,90-92,310,399,405-409
+  s_fadc167a7549a6::t_fecf9ba69d68dd 78
+  s_fadc167a7549a6::t_d420f40b30eb4f 83-84,87
+  s_fadc167a7549a6::t_4da46bebfb3e3e 115
+  s_fadc167a7549a6::t_b1be7528902c3d 116,400-404
+packages/marimo-lens/src/marimo_lens/_marimo_runtime.py
+  s_fadc167a7549a6::t_f315b180ac7840 34,36-38,40-43,46-48
+  s_fadc167a7549a6::t_93a2c0b0934acd 35,44
+  s_fadc167a7549a6::t_46ccc36bd3d660 39,45
+docs/overview.md
+  s_fadc167a7549a6::t_070070fcf7a5df 476-479
+docs/api.md
+  s_fadc167a7549a6::t_b7bd8df744bf38 39,55
+  s_fadc167a7549a6::t_b1be7528902c3d 41-44
+  s_fadc167a7549a6::t_070070fcf7a5df 51,54,57-58,67
+  s_fadc167a7549a6::t_4fe4f8ea6f5328 60
+  s_fadc167a7549a6::t_933aa0e81a4c47 61
+  s_fadc167a7549a6::t_862b1c08d92821 30-36
+  s_fadc167a7549a6::t_e0e97f535555f1 56
+packages/marimo-lens/src/marimo_lens/agent.py
+  s_fadc167a7549a6::t_ccee5806e0dcc6 42,51-57,216-220,222-228,231-243,248,263,303
+  s_fadc167a7549a6::t_862b1c08d92821 18-19
+  s_fadc167a7549a6::t_80bf388c20abbd 46
+  s_fadc167a7549a6::t_9eb876965a561d 21-22
+  s_fadc167a7549a6::t_9747f3ab35d94b 25
+  s_fadc167a7549a6::t_b7bd8df744bf38 215,229-230
+  s_fadc167a7549a6::t_b1be7528902c3d 50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "de6aa41985daf2f4867aa8603d7e4e889c759d7d",
+  "prompts": {},
+  "sessions": {
+    "s_fadc167a7549a6": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019fe748-00c3-79b0-bcad-2baa3df22d8d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
