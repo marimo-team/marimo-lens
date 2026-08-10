@@ -38,10 +38,11 @@ snapshot = mounted.context()
 
 ### `add_lens_cell(ctx) -> str`
 
-Queues a collapsed cell that constructs and appends a Lens, then queues that
-cell to run. The method returns the queued cell ID. The code-mode context
-applies the cell when its async context manager exits. The cell uses private
-bindings and introduces no public notebook definitions.
+Returns the notebook's agent-created Lens cell ID. With an existing generated
+cell, the method returns that ID and queues no mutation. Otherwise, it queues a
+collapsed cell that constructs and appends a Lens, then queues that cell to run.
+The code-mode context applies a new cell when its async context manager exits.
+The cell uses private bindings and introduces no public notebook definitions.
 
 ```python
 import marimo._code_mode as cm
@@ -53,7 +54,8 @@ async with cm.get_context() as ctx:
 
 End the kernel call after adding the cell. Call `connect()` in a later call
 after the browser renders Lens. `ctx` must expose `create_cell()` and
-`run_cell()`. Other objects raise `TypeError`.
+`run_cell()` as well as `cells.find()`. Other objects raise `TypeError`.
+Several agent-created Lens cells raise `LensError(code="lens_ambiguous")`.
 
 ### `connect(*, identity=None) -> MountedLens`
 

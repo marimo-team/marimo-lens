@@ -157,6 +157,26 @@ def test_add_lens_cell_requires_a_code_mode_context() -> None:
         agent.add_lens_cell(SimpleNamespace())
 
 
+def test_add_lens_cell_reports_duplicate_generated_cells() -> None:
+    class Cells:
+        def find(self, _substring: str) -> list[SimpleNamespace]:
+            return [
+                SimpleNamespace(id="lens-1"),
+                SimpleNamespace(id="lens-2"),
+            ]
+
+    context = SimpleNamespace(
+        cells=Cells(),
+        create_cell=lambda *_args, **_kwargs: "lens-3",
+        run_cell=lambda _cell_id: None,
+    )
+
+    with pytest.raises(LensError) as raised:
+        agent.add_lens_cell(context)
+
+    assert raised.value.code == "lens_ambiguous"
+
+
 def test_connect_preserves_identity_across_kernel_calls() -> None:
     lens = _mounted_lens()
 

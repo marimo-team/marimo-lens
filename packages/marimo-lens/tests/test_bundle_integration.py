@@ -58,21 +58,28 @@ def test_add_lens_cell_output_is_discoverable(
         ui_element_registry=RuntimeScope(),
     )
     created: list[Lens] = []
+    notebook: list[SimpleNamespace] = []
 
     def create_lens() -> Lens:
         lens = Lens()
         created.append(lens)
         return lens
 
+    class Cells:
+        def find(self, substring: str) -> list[SimpleNamespace]:
+            return [cell for cell in notebook if substring in cell.code]
+
     class Context:
         def __init__(self) -> None:
             self.code = ""
             self.hidden = False
             self.runs: list[str] = []
+            self.cells = Cells()
 
         def create_cell(self, code: str, *, hide_code: bool) -> str:
             self.code = code
             self.hidden = hide_code
+            notebook.append(SimpleNamespace(id="lens-cell", code=code))
             return "lens-cell"
 
         def run_cell(self, cell_id: str) -> None:
@@ -88,11 +95,16 @@ def test_add_lens_cell_output_is_discoverable(
     monkeypatch.setattr(marimo_lens, "Lens", create_lens)
 
     cell_id = agent.add_lens_cell(context)
+    retry_context = Context()
+    retry_cell_id = agent.add_lens_cell(retry_context)
     exec(context.code, {})  # noqa: S102 - execute the generated notebook cell
 
     assert cell_id == "lens-cell"
+    assert retry_cell_id == cell_id
     assert context.hidden is True
     assert context.runs == ["lens-cell"]
+    assert retry_context.runs == []
+    assert len(notebook) == 1
     assert len(created) == 1
     output = execution_context.output.stack()
     assert output is not None

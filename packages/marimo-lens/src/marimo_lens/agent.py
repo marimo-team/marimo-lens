@@ -48,15 +48,23 @@ import secrets
 import threading
 import weakref
 from collections.abc import Sequence
+from typing import Protocol, cast
 
 from .context import LensContext
 from .errors import LensError
 from .widget import Lens, _mounted_lenses
 
+
+class _CodeModeCell(Protocol):
+    id: object
+
+
 _IDENTITIES: weakref.WeakKeyDictionary[Lens, str] = weakref.WeakKeyDictionary()
 _IDENTITIES_LOCK = threading.RLock()
+_LENS_CELL_MARKER = "# marimo-lens: agent-managed Lens cell"
 # Private bindings introduce no public names into marimo's dataflow graph.
-_LENS_CELL_CODE = """\
+_LENS_CELL_CODE = f"""\
+{_LENS_CELL_MARKER}
 import marimo as _mo
 from marimo_lens import Lens as _Lens
 
@@ -223,21 +231,36 @@ class MountedLens:
 def add_lens_cell(ctx: object) -> str:
     """Queue a collapsed notebook cell that mounts a Lens.
 
-    The code-mode context creates and runs the cell when its async context
-    manager exits. Call connect() in a later kernel call after the browser has
-    rendered the cell.
+    Return the existing agent-created Lens cell ID when the notebook already
+    contains one. The code-mode context creates and runs a new cell when its
+    async context manager exits.
+
+    Call connect() in a later kernel call after the browser has rendered the
+    cell.
 
     Returns:
-        The queued cell ID.
+        The existing or queued cell ID.
 
     Raises:
-        TypeError: The context lacks the code-mode cell mutation methods.
+        TypeError: The context lacks the required code-mode cell APIs.
+        LensError: The notebook contains several agent-created Lens cells.
     """
 
     create_cell = getattr(ctx, "create_cell", None)
     run_cell = getattr(ctx, "run_cell", None)
-    if not callable(create_cell) or not callable(run_cell):
+    cells = getattr(ctx, "cells", None)
+    find_cells = getattr(cells, "find", None)
+    if not callable(create_cell) or not callable(run_cell) or not callable(find_cells):
         raise TypeError("context must be a live marimo code-mode context")
+
+    existing = cast(Sequence[_CodeModeCell], find_cells(_LENS_CELL_MARKER))
+    if len(existing) == 1:
+        return str(existing[0].id)
+    if len(existing) > 1:
+        raise LensError(
+            "lens_ambiguous",
+            "The notebook has multiple agent-created Lens cells. Leave one before adding another.",
+        )
 
     cell_id = create_cell(_LENS_CELL_CODE, hide_code=True)
     run_cell(cell_id)
