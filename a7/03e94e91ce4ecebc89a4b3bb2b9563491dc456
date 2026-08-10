@@ -1,0 +1,43 @@
+packages/marimo-lens/pyproject.toml
+  s_b5e1f699d919d0::t_267c2cbb735ce6 9,16,22-28
+docs/index.md
+  s_b5e1f699d919d0::t_267c2cbb735ce6 40
+docs/getting-started.md
+  s_b5e1f699d919d0::t_267c2cbb735ce6 12
+docs/overview.md
+  s_b5e1f699d919d0::t_267c2cbb735ce6 27
+packages/marimo-lens/tests/test_selection_state.py
+  s_b5e1f699d919d0::t_9abcf3b0c8a0ee 12,26,28-34,37-38
+  s_b5e1f699d919d0::t_006936764ce7c1 25,27,35
+  s_b5e1f699d919d0::t_a5622e7f024fb7 36
+packages/marimo-lens/src/marimo_lens/_selection_state.py
+  s_b5e1f699d919d0::t_521bda17c8b1bc 255
+  s_b5e1f699d919d0::t_e1c469e38c6428 226-227,250-254
+  s_b5e1f699d919d0::t_91d04804b610b6 228
+docs/api.md
+  s_b5e1f699d919d0::t_267c2cbb735ce6 16
+packages/marimo-lens/src/marimo_lens/_protocol_models.py
+  s_b5e1f699d919d0::t_267c2cbb735ce6 7,23
+.github/workflows/ci.yml
+  s_b5e1f699d919d0::t_267c2cbb735ce6 70
+docs/selections.md
+  s_b5e1f699d919d0::t_267c2cbb735ce6 13
+packages/marimo-lens/src/marimo_lens/context.py
+  s_b5e1f699d919d0::t_267c2cbb735ce6 9,12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a703e94e91ce4ecebc89a4b3bb2b9563491dc456",
+  "prompts": {},
+  "sessions": {
+    "s_b5e1f699d919d0": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019feb93-7ac4-7621-92fe-66b267177953",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
