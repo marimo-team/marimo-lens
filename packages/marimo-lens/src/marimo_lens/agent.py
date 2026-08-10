@@ -18,8 +18,16 @@ Use this module inside a live marimo code-mode kernel call:
     mounted = lens_agent.connect()
     snapshot = mounted.context()
 
-Call add_lens_cell(ctx) after an initial lens_unavailable result, end that
-kernel call, then connect again after the browser renders Lens.
+After connect() raises LensError(code="lens_unavailable"), queue a Lens cell
+in a fresh kernel call:
+
+    import marimo._code_mode as cm
+    import marimo_lens.agent as lens_agent
+
+    async with cm.get_context() as ctx:
+        lens_agent.add_lens_cell(ctx)
+
+End that kernel call, then connect again after the browser renders Lens.
 
 Keep mounted.identity and snapshot.revision together when work spans kernel
 calls. Reconnect with connect(identity=identity).

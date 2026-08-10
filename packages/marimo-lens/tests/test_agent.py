@@ -48,6 +48,15 @@ def test_package_import_exposes_agent_help() -> None:
     assert "marimo_lens.agent" in result.stdout
 
 
+def test_agent_help_defines_the_code_mode_context_for_mounting() -> None:
+    doc = inspect.getdoc(agent)
+
+    assert doc is not None
+    assert "import marimo._code_mode as cm" in doc
+    assert "async with cm.get_context() as ctx:" in doc
+    assert "lens_agent.add_lens_cell(ctx)" in doc
+
+
 def test_agent_handoff_matches_documented_signatures() -> None:
     assert list(inspect.signature(agent.add_lens_cell).parameters) == ["ctx"]
     assert list(inspect.signature(agent.connect).parameters) == ["identity"]
