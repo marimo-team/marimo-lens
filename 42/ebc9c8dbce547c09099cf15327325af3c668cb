@@ -1,0 +1,211 @@
+tools/oxlint/anti-slop/rules/no-known-value-widening.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-247
+packages/widget/tests/anywidget/client.test.ts
+  s_4341a5ea8943b5::t_0ed06ff6606cc0 110-126
+  s_4341a5ea8943b5::t_9fa495ff09a019 416,498
+  s_4341a5ea8943b5::t_1a974090a2e9c7 10,32,71
+  s_4341a5ea8943b5::t_a30319b4361da7 2-9,11,19-31,33,40-41,49-65,72,75-76,79,85,589,595,636-637,649-651,655,657,663,665-667,670-674
+tools/oxlint/anti-slop/rules/require-safety-comment-for-type-assertion.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-62
+packages/protocol/src/contracts.ts
+  s_4341a5ea8943b5::t_81daf30ce70b5e 9-11
+  s_4341a5ea8943b5::t_6e2ece7283d517 7-8,12-18,488,504,514-520,524-526,530-532,536-538,542-544,548-550,554-556
+  s_4341a5ea8943b5::t_1a974090a2e9c7 489-494,513
+packages/widget/tests/selection/output-availability.test.tsx
+  s_4341a5ea8943b5::t_999696044bcd64 81,179
+  s_4341a5ea8943b5::t_fefc8a7dd3656b 26-28,76-80,83-84,181-182
+  s_4341a5ea8943b5::t_576805b4edc2ba 30-46,82,86-87,145-158,180,183
+packages/widget/src/notebook/interaction-documents.ts
+  s_4341a5ea8943b5::t_f0c42f6ca7d122 15-20,180
+packages/widget/src/ui/components/lens-dock.tsx
+  s_4341a5ea8943b5::t_f0c42f6ca7d122 56-60,95
+tools/oxlint/anti-slop/rules/no-unknown-returns.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-115
+tools/oxlint/anti-slop/shared/dictionary-types.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-502
+tools/oxlint/anti-slop/rules/no-module-mocking.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-91
+packages/image-capture/src/evidence/image.ts
+  s_4341a5ea8943b5::t_f87cab77245f63 1,93-94
+packages/image-capture/src/evidence/raster.ts
+  s_4341a5ea8943b5::t_d27e06091d3c8e 196,201-203
+packages/widget/src/selection/dom-hint.ts
+  s_4341a5ea8943b5::t_f5cc3ae89a1def 70
+  s_4341a5ea8943b5::t_1a5ecf90307893 93-100
+packages/widget/tests/widget.test.tsx
+  s_4341a5ea8943b5::t_6811ace71ceb82 2,7,13-15,29,57,59,62-63,70-71,76,82-121
+  s_4341a5ea8943b5::t_9fa495ff09a019 18-22,77-79
+  s_4341a5ea8943b5::t_ec0e659c14ad3d 65,67,69
+packages/image-capture/tests/evidence/image.test.ts
+  s_4341a5ea8943b5::t_3c13ecb221c990 45,107,153,251,605,607-618
+  s_4341a5ea8943b5::t_cd139f7331b47c 44,47,89,106,109,152,155,250,252-254,256-261,263,599,601-604,606,619-629,631,633
+  s_4341a5ea8943b5::t_59638929b32433 572-597
+  s_4341a5ea8943b5::t_6ea05fbb463fbf 600,630,632
+tools/oxlint/anti-slop/rules/no-shape-in-symbol-names.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-39
+packages/widget/src/anywidget/event-router.ts
+  s_4341a5ea8943b5::t_1bf853bdf36432 32-40
+  s_4341a5ea8943b5::t_259be14ecfc34c 1-5,31
+tools/oxlint/anti-slop/rules/no-conditional-empty-object-spread.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-49
+packages/image-capture/src/evidence/owner-realm.ts
+  s_4341a5ea8943b5::t_d27e06091d3c8e 21,23
+  s_4341a5ea8943b5::t_f87cab77245f63 1-2,22,26-27
+packages/protocol/tests/error-cause.test.ts
+  s_4341a5ea8943b5::t_6e3ea3187ba259 1-19
+tools/oxlint/anti-slop/rules/no-reflect-apply.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-28
+packages/widget/tests/transient/cell-attention-indicator.test.tsx
+  s_4341a5ea8943b5::t_618e3cc650721e 32,48,64,77,89,106,121,134,143,161,165,343-346,371-382,384-388,394
+packages/widget/tests/notebook/interaction-documents.test.ts
+  s_4341a5ea8943b5::t_618e3cc650721e 25,27,34,40,42,47,86-87,110,114,116,121,152,170,173,179
+tools/oxlint/anti-slop/rules/no-unsafe-dictionary-type.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-134
+packages/widget/src/selection/conflict.ts
+  s_4341a5ea8943b5::t_1a5ecf90307893 26,29
+packages/widget/src/anywidget/model.ts
+  s_4341a5ea8943b5::t_1bf853bdf36432 10,22,25
+tools/oxlint/anti-slop/index.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-41
+tools/oxlint/anti-slop/rules/no-chained-type-assertions.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-77
+packages/widget/src/selection/components/selection-overlay.tsx
+  s_4341a5ea8943b5::t_1a5ecf90307893 400,405
+  s_4341a5ea8943b5::t_bbbe97d4d1e0ab 378
+packages/widget/tests/selection/selection-actions.test.tsx
+  s_4341a5ea8943b5::t_6746eb9f9c706e 114
+  s_4341a5ea8943b5::t_1ba5e28c1a04c7 746-766,801-821
+  s_4341a5ea8943b5::t_999696044bcd64 847-854,856-858,895-898,909
+  s_4341a5ea8943b5::t_59638929b32433 96-113,115-117
+  s_4341a5ea8943b5::t_6a7e3b52a18fbc 1,10,593-594,745,767-776,779,781,783,787-790,796-797,800,822-833,845-846,855,859-863,899,911-912
+packages/widget/tests/selection/document-interactions.test.tsx
+  s_4341a5ea8943b5::t_ffd148c4e3597c 331,337
+tools/oxlint/anti-slop/shared/lexical-type-parameters.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-61
+packages/image-capture/src/evidence/png.ts
+  s_4341a5ea8943b5::t_d27e06091d3c8e 19
+packages/widget/src/anywidget/client.ts
+  s_4341a5ea8943b5::t_1bf853bdf36432 4,6,19,29-37,39-50,52,58,108-114,144-146,150-152,156
+  s_4341a5ea8943b5::t_a11d9788d697fd 118-120,124-126,134-140
+  s_4341a5ea8943b5::t_1a974090a2e9c7 11,38,163
+  s_4341a5ea8943b5::t_259be14ecfc34c 14,164-168
+packages/protocol/tests/contracts.test.ts
+  s_4341a5ea8943b5::t_6e3ea3187ba259 21,25-42
+tools/oxlint/anti-slop/rules/no-unknown-parameters.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-83
+packages/widget/tests/notebook/notebook-dom.test.ts
+  s_4341a5ea8943b5::t_618e3cc650721e 48,50,52,57,86-87,158,161,167
+packages/widget/src/ui/global-styles.ts
+  s_4341a5ea8943b5::t_f0c42f6ca7d122 2,9-14,31,36-37,51-53,55-56
+packages/widget/src/selection/reveal.ts
+  s_4341a5ea8943b5::t_2e056d322f0e6a 16
+packages/widget/src/app/lens-view-owner.tsx
+  s_4341a5ea8943b5::t_f0c42f6ca7d122 7,13-18,68,77-78
+package.json
+  s_4341a5ea8943b5::t_8c36f122e62bec 15,17
+  s_4341a5ea8943b5::t_25d885c529cb53 18
+packages/widget/tests/selection/reveal.test.ts
+  s_4341a5ea8943b5::t_ffd148c4e3597c 15,33,55,59
+packages/image-capture/src/evidence/geometry.ts
+  s_4341a5ea8943b5::t_d27e06091d3c8e 3-4,30,63
+packages/widget/src/selection/selection-actions.ts
+  s_4341a5ea8943b5::t_81daf30ce70b5e 8
+  s_4341a5ea8943b5::t_0a474d28cdad25 74,80,190,193,199,203,236,278,309,355,429,432,437,482,540,543,548,655-656
+  s_4341a5ea8943b5::t_2c8b72cb8d9a9b 189,197,428,539
+  s_4341a5ea8943b5::t_f69014cc2ce52a 635-638
+packages/widget/src/app/lens-error-boundary.tsx
+  s_4341a5ea8943b5::t_f0c42f6ca7d122 3-5,7-11,13-14
+  s_4341a5ea8943b5::t_7e92801fa44ef5 12
+packages/widget/src/transient/cell-attention.ts
+  s_4341a5ea8943b5::t_7e92801fa44ef5 35,273,279-284,355
+  s_4341a5ea8943b5::t_d87de33238066d 41
+  s_4341a5ea8943b5::t_f0c42f6ca7d122 17,25-34,36,50-63,84,88,102,104-105,107-108,111,122,137-138,350,360
+packages/image-capture/tests/evidence/html-to-image-patch.test.ts
+  s_4341a5ea8943b5::t_543967476e4e9d 62,173,210,244,265,287-291,296,324-326,329,332,346-347,353,361-362,364,369-370,372,377-381,387-389,391,404-409,411,413
+  s_4341a5ea8943b5::t_3c13ecb221c990 75-76,79,333,390,392-403
+  s_4341a5ea8943b5::t_a9478b6aaf32f6 299
+  s_4341a5ea8943b5::t_6ea05fbb463fbf 196,385,410,412
+packages/widget/src/anywidget/output-capture-transport.ts
+  s_4341a5ea8943b5::t_259be14ecfc34c 2,16,71
+  s_4341a5ea8943b5::t_1bf853bdf36432 29,36,72,124-125,222-230,235,249
+packages/protocol/src/error-cause.ts
+  s_4341a5ea8943b5::t_d726cf39ddf2a9 1-17
+packages/widget/src/selection/selection-capture.ts
+  s_4341a5ea8943b5::t_03e0d3ee709206 5,111,142,264-265
+packages/protocol/src/index.ts
+  s_4341a5ea8943b5::t_d726cf39ddf2a9 3
+packages/widget/src/selection/anchor.ts
+  s_4341a5ea8943b5::t_1a5ecf90307893 170,213-214
+packages/widget/src/app/resolution-receipt.ts
+  s_4341a5ea8943b5::t_f0c42f6ca7d122 12,19-21,24-26
+tools/oxlint/anti-slop/shared/reflect-method.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-35
+packages/image-capture/src/evidence/evidence-layout.ts
+  s_4341a5ea8943b5::t_d27e06091d3c8e 327
+  s_4341a5ea8943b5::t_0ced69f9346fde 178
+  s_4341a5ea8943b5::t_df8912f3a799e1 14-16,350,357
+tools/oxlint/anti-slop/rules/no-widen-then-assert.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-366
+packages/widget/tests/app/marimo-lens-content.test.tsx
+  s_4341a5ea8943b5::t_30e2916b4b11f8 93,98-99,137,142-143,208,213-214,264,269-270,308,313-314
+  s_4341a5ea8943b5::t_d01a10dd815a94 1492-1493,1499,1505,1515-1526
+  s_4341a5ea8943b5::t_01a5e42fa0ef79 705,708,710-711,800,803,805-806,934,937,939-940,1014,1017,1019-1020,1098,1101,1103-1104,1165,1168,1170-1171,1254,1257,1259-1260,1332,1335,1337-1338,1379,1382,1385,1428,1431,1434
+  s_4341a5ea8943b5::t_cf40e2c897d018 5,125,130,175,197,201,225-228,240-243,253,257,280-281,283,297,301,331-334
+packages/widget/src/anywidget/request-client.ts
+  s_4341a5ea8943b5::t_5b784cb1f24b5d 310
+  s_4341a5ea8943b5::t_259be14ecfc34c 10,24,166,189
+  s_4341a5ea8943b5::t_1bf853bdf36432 56,61,81-118,120,163,167-170,175,178-179,188,190-194,308
+  s_4341a5ea8943b5::t_201acc5c3017be 314,317-319
+  s_4341a5ea8943b5::t_f500126fa30efb 316
+packages/widget/tests/setup.ts
+  s_4341a5ea8943b5::t_6811ace71ceb82 3,27,44-45
+packages/widget/src/notebook/output-root.ts
+  s_4341a5ea8943b5::t_f0c42f6ca7d122 5,9-14,105,120-121,173-174
+vite.config.ts
+  s_4341a5ea8943b5::t_807d29f28d98d2 9-25,28,49-53,72-86
+tools/oxlint/anti-slop/rules/no-reflect-get.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-28
+packages/widget/tests/notebook/output-root.test.ts
+  s_4341a5ea8943b5::t_618e3cc650721e 25
+packages/widget/tests/selection/components/selection-overlay.test.tsx
+  s_4341a5ea8943b5::t_ffd148c4e3597c 213
+packages/widget/src/selection/components/selection-snapshot-preview.tsx
+  s_4341a5ea8943b5::t_81daf30ce70b5e 3
+  s_4341a5ea8943b5::t_5fb9e6ec9adb13 33-40,369,458,469
+  s_4341a5ea8943b5::t_db0024ccf8c6fa 470
+tools/oxlint/anti-slop/rules/no-runtime-typeof.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-67
+tools/oxlint/anti-slop/rules/no-object-parameters.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-126
+tools/oxlint/anti-slop/rules/no-unknown-type-aliases.ts
+  s_4341a5ea8943b5::t_cbb4b7a6264c71 1-70
+packages/widget/tests/selection/conflict.test.ts
+  s_4341a5ea8943b5::t_15ca9dca38615f 50-55,64
+  s_4341a5ea8943b5::t_a1d9429d9462af 17-20
+packages/widget/tests/selection/components/selection-snapshot-preview.test.tsx
+  s_4341a5ea8943b5::t_ffd148c4e3597c 310,313
+  s_4341a5ea8943b5::t_999696044bcd64 66
+pnpm-workspace.yaml
+  s_4341a5ea8943b5::t_302e21ce8301f2 14
+  s_4341a5ea8943b5::t_8c36f122e62bec 22
+  s_4341a5ea8943b5::t_25d885c529cb53 23
+  s_4341a5ea8943b5::t_67e767f02fecb9 47
+packages/widget/tests/transient/cell-attention.test.ts
+  s_4341a5ea8943b5::t_618e3cc650721e 65,68,70,73,83,354,357,359,362,371,395,400,402,405,421,559-561,567,582-583,589
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "42ebc9c8dbce547c09099cf15327325af3c668cb",
+  "prompts": {},
+  "sessions": {
+    "s_4341a5ea8943b5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0099f-23df-7302-b951-7bfa2b40a807",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
