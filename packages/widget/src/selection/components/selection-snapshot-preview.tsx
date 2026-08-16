@@ -1,5 +1,6 @@
 import type { Selection, StoredSnapshot } from "@marimo-lens/protocol";
 
+import { parseErrorCause } from "@marimo-lens/protocol";
 import { AlertCircle, Clock3, Image as ImageIcon, LoaderCircle, X } from "lucide-react";
 import { useCallback, useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 
@@ -27,6 +28,14 @@ type LoadedSnapshot = {
   asset: SnapshotAsset;
   url: string;
   urlApi: Pick<typeof URL, "createObjectURL" | "revokeObjectURL">;
+};
+
+type SnapshotAssetController = {
+  current: LoadedSnapshot | null;
+  loading: boolean;
+  error: string | null;
+  ensureLoaded: () => Promise<void>;
+  release: () => void;
 };
 
 export function SnapshotPreviewButton({
@@ -357,13 +366,7 @@ function useSnapshotAsset({
   stored: boolean;
   snapshotLoader: SelectionSnapshotLoader;
   triggerRef: RefObject<HTMLButtonElement | null>;
-}): {
-  current: LoadedSnapshot | null;
-  loading: boolean;
-  error: string | null;
-  ensureLoaded: () => Promise<void>;
-  release: () => void;
-} {
+}): SnapshotAssetController {
   const loadGeneration = useRef(0);
   const leaseRef = useRef<{
     key: string;
@@ -452,7 +455,7 @@ function elementAnchor(element: Element | null): AnchoredSurfaceAnchor | null {
   return element ? { element, rect: element.getBoundingClientRect() } : null;
 }
 
-function isNode(value: unknown, ownerDocument: Document): value is Node {
+function isNode(value: EventTarget | null, ownerDocument: Document): value is Node {
   const NodeConstructor = ownerDocument.defaultView?.Node;
   return NodeConstructor ? value instanceof NodeConstructor : false;
 }
@@ -463,7 +466,6 @@ function copyArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copy.buffer;
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (typeof error !== "object" || error === null || !("message" in error)) return fallback;
-  return typeof error.message === "string" && error.message ? error.message : fallback;
+function errorMessage(cause: unknown, fallback: string): string {
+  return parseErrorCause(cause)?.message || fallback;
 }

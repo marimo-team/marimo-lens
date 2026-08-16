@@ -1,4 +1,4 @@
-import { boundedUtf16 } from "@marimo-lens/protocol";
+import { boundedUtf16, parseErrorCause } from "@marimo-lens/protocol";
 
 import type { CapturedSnapshot, CaptureResult } from "../types";
 
@@ -90,7 +90,6 @@ export async function captureSelectionSnapshot(
   }
 }
 
-function errorText(error: unknown): string | null {
-  if (typeof error !== "object" || error === null || !("message" in error)) return null;
-  return typeof error.message === "string" && error.message ? error.message : null;
+function errorText(cause: unknown): string | null {
+  return parseErrorCause(cause)?.message || null;
 }

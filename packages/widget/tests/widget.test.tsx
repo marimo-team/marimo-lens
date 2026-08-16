@@ -1,25 +1,32 @@
 import type { AnyModel, Experimental, Host, RenderProps } from "@anywidget/types";
+import type { LensState } from "@marimo-lens/protocol";
 
 import { act } from "react";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import widget from "@/widget";
+import { render } from "@/widget";
 
 vi.mock("@/app/marimo-lens-content", () => ({
   MarimoLensContent: () => <span data-widget-content>Lens</span>,
 }));
 
-const cleanups = new Set<() => void>();
+type RenderCleanup = Exclude<Awaited<ReturnType<typeof render>>, void>;
+
+const cleanups = new Set<RenderCleanup>();
 
 afterEach(() => {
-  for (const cleanup of cleanups) act(() => cleanup());
+  for (const cleanup of cleanups) {
+    act(() => {
+      void cleanup();
+    });
+  }
   cleanups.clear();
   document.body.replaceChildren();
 });
 
 describe("Lens widget views", () => {
   test("treats repeated renders of one model as conflicting displayed views", () => {
-    const underlyingModel = {};
+    const underlyingModel = fakeModel();
     const firstContainer = appendContainer();
     const secondContainer = appendContainer();
 
@@ -47,27 +54,69 @@ function appendContainer(): HTMLDivElement {
   return container;
 }
 
-function renderWidget(container: HTMLElement, model: object): () => void {
-  if (typeof widget === "function") throw new Error("Expected a widget definition");
-  const render = widget.render;
-  if (!render) throw new Error("Expected a widget render function");
+function renderWidget(container: HTMLElement, model: AnyModel): RenderCleanup {
   const props = {
-    model: model as AnyModel,
+    model,
     el: container,
     signal: new AbortController().signal,
-    host: {} as Host,
-    experimental: {} as Experimental,
+    host: fakeHost(),
+    experimental: fakeExperimental(),
   } satisfies RenderProps;
-  let cleanup: void | (() => void) = undefined;
+  const rendered = Array<ReturnType<typeof render>>();
   act(() => {
-    cleanup = render(props) as void | (() => void);
+    rendered.push(render(props));
   });
-  if (typeof cleanup !== "function") throw new Error("Expected synchronous widget cleanup");
+  const cleanup = rendered[0];
+  if (cleanup instanceof Promise) throw new Error("Expected synchronous widget cleanup");
+  if (!cleanup) throw new Error("Expected synchronous widget cleanup");
   cleanups.add(cleanup);
   return cleanup;
 }
 
-function release(cleanup: () => void): void {
-  act(() => cleanup());
+function release(cleanup: RenderCleanup): void {
+  act(() => {
+    void cleanup();
+  });
   cleanups.delete(cleanup);
+}
+
+function fakeModel(): AnyModel {
+  const values = new Map<string, LensState | string>([
+    [
+      "_state",
+      {
+        revision: 0,
+        nextLabel: "S1",
+        currentSelectionId: null,
+        selections: [],
+        history: [],
+      },
+    ],
+    ["_css", ""],
+  ]);
+  const model: AnyModel = {
+    get: (key) => values.get(key),
+    set: (key, value) => values.set(key, value),
+    on: () => undefined,
+    off: () => undefined,
+    save_changes: () => undefined,
+    send: () => undefined,
+    widget_manager: {
+      get_model: () => Promise.reject(new Error("Nested models are unavailable in this fixture")),
+    },
+  };
+  return model;
+}
+
+function fakeHost(): Host {
+  return {
+    getWidget: () => Promise.reject(new Error("Nested widgets are unavailable in this fixture")),
+    getModel: () => Promise.reject(new Error("Nested models are unavailable in this fixture")),
+  };
+}
+
+function fakeExperimental(): Experimental {
+  return {
+    invoke: () => Promise.reject(new Error("Host invocation is unavailable in this fixture")),
+  };
 }

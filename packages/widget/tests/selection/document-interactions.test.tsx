@@ -328,15 +328,14 @@ function announcement(): string {
 }
 
 function pointer(type: string, clientX: number, clientY: number, pointerId: number): PointerEvent {
-  const event = new MouseEvent(type, {
+  return new PointerEvent(type, {
     bubbles: true,
     cancelable: true,
     button: 0,
     clientX,
     clientY,
+    pointerId,
   });
-  Object.defineProperty(event, "pointerId", { value: pointerId });
-  return event as PointerEvent;
 }
 
 const INITIAL_STATE: UiState = {

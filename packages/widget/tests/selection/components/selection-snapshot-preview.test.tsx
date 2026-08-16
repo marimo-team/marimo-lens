@@ -63,7 +63,7 @@ describe("selection snapshot preview", () => {
     const ownerDocument = frame.contentDocument;
     const ownerWindow = frame.contentWindow;
     if (!ownerDocument || !ownerWindow) throw new Error("Iframe document must be available");
-    const ownerGlobal = ownerWindow as Window & typeof globalThis;
+    const ownerGlobal = ownerWindow.self;
     const selection = selectionFixture();
     const asset: SnapshotAsset = {
       snapshot: selection.snapshot.status === "available" ? selection.snapshot : neverSnapshot(),
@@ -307,12 +307,10 @@ function renderPreviews(
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+  const promise = new Promise<T>((resolvePromise) => {
     resolve = resolvePromise;
-    reject = rejectPromise;
   });
-  return { promise, resolve, reject };
+  return { promise, resolve };
 }
 
 function neverSnapshot(): never {

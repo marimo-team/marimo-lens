@@ -1,6 +1,6 @@
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-if (typeof globalThis.matchMedia !== "function") {
+if (!globalThis.matchMedia) {
   Object.assign(globalThis, {
     matchMedia: () => ({
       matches: false,
@@ -24,7 +24,7 @@ if (!("ResizeObserver" in globalThis)) {
   Object.assign(globalThis, { ResizeObserver: ResizeObserverStub });
 }
 
-if (typeof HTMLDialogElement.prototype.showModal !== "function") {
+if (!HTMLDialogElement.prototype.showModal) {
   Object.defineProperties(HTMLDialogElement.prototype, {
     showModal: {
       configurable: true,
@@ -41,7 +41,7 @@ if (typeof HTMLDialogElement.prototype.showModal !== "function") {
   });
 }
 
-if (typeof CSS === "undefined") Object.assign(globalThis, { CSS: {} });
-if (typeof CSS.escape !== "function") {
+if (!globalThis.CSS) Object.assign(globalThis, { CSS: {} });
+if (!CSS.escape) {
   Object.assign(CSS, { escape: (value: string) => value.replaceAll('"', '\\"') });
 }

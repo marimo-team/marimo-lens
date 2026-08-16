@@ -1,3 +1,4 @@
+import type { AnyModel } from "@anywidget/types";
 import type { CaptureResult } from "@marimo-lens/image-capture";
 import type { AddressedSelection, LensResponse, LensState, Selection } from "@marimo-lens/protocol";
 
@@ -6,8 +7,7 @@ import { act, StrictMode, useLayoutEffect, useMemo, useReducer } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import type { LensProtocolClient } from "@/anywidget/client";
-
+import { LensProtocolClient } from "@/anywidget/client";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import { useSelectionActions } from "@/selection/selection-actions";
 import { INITIAL_UI_STATE, uiReducer, type UiState } from "@/selection/state";
@@ -91,6 +91,28 @@ describe("selection mutations", () => {
       snapshot: { status: "failed" },
     });
     expect(protocol.putSelection.mock.calls[1]?.[1]).toBe("clear");
+  });
+
+  test("does not persist or announce an iframe-originated capture cancellation", async () => {
+    const output = visibleOutput();
+    const frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+    const frameWindow = frame.contentWindow?.self;
+    if (!frameWindow) throw new Error("Iframe window must be available");
+    vi.mocked(captureSelectionSnapshot).mockRejectedValue(
+      new frameWindow.DOMException("Frame capture canceled", "AbortError"),
+    );
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    mount(stateRef, protocol.client);
+
+    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    await flush();
+
+    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
+    expect(stateRef.current.selections[0]?.snapshot.status).toBe("pending");
+    expect(latestUi?.announcement).toBe("S1 selected.");
+    frame.remove();
   });
 
   test("settles a pending image after persistence fails", async () => {
@@ -568,12 +590,8 @@ describe("selection mutations", () => {
       };
       return Promise.resolve(successResponse(expectedRevision + 1));
     });
-    const protocol = {
-      putSelection: vi.fn(),
-      activateSelection,
-      deleteSelection: vi.fn(),
-      clearSelections: vi.fn(),
-    } as unknown as LensProtocolClient;
+    const protocol = protocolClient();
+    vi.spyOn(protocol, "activateSelection").mockImplementation(activateSelection);
     mount(stateRef, protocol);
 
     act(() => {
@@ -724,90 +742,95 @@ function Harness({
 }
 
 function statefulProtocol(stateRef: { current: LensState }) {
-  const putSelection = vi.fn(
-    async (selection: Selection, _imageAction: string, expectedRevision: number) => {
-      expect(expectedRevision).toBe(stateRef.current.revision);
-      const index = stateRef.current.selections.findIndex(({ id }) => id === selection.id);
-      const selections = [...stateRef.current.selections];
-      if (index < 0) selections.push(selection);
-      else selections[index] = selection;
-      const created = index < 0;
+  const client = protocolClient();
+  const putSelection = vi
+    .spyOn(client, "putSelection")
+    .mockImplementation(
+      async (selection: Selection, _imageAction: string, expectedRevision: number) => {
+        expect(expectedRevision).toBe(stateRef.current.revision);
+        const index = stateRef.current.selections.findIndex(({ id }) => id === selection.id);
+        const selections = [...stateRef.current.selections];
+        if (index < 0) selections.push(selection);
+        else selections[index] = selection;
+        const created = index < 0;
+        const revision = expectedRevision + 1;
+        stateRef.current = {
+          revision,
+          nextLabel: created ? nextLabel(selection.label) : stateRef.current.nextLabel,
+          currentSelectionId: created ? "selection-fixed" : stateRef.current.currentSelectionId,
+          selections,
+          history: stateRef.current.history,
+        };
+        return successResponse(revision);
+      },
+    );
+  const activateSelection = vi
+    .spyOn(client, "activateSelection")
+    .mockImplementation(async (selectionId: string, expectedRevision: number) => {
       const revision = expectedRevision + 1;
+      stateRef.current = { ...stateRef.current, revision, currentSelectionId: selectionId };
+      return successResponse(revision);
+    });
+  const deleteSelection = vi
+    .spyOn(client, "deleteSelection")
+    .mockImplementation(async (selectionId: string, expectedRevision: number) => {
+      expect(expectedRevision).toBe(stateRef.current.revision);
+      const revision = expectedRevision + 1;
+      const selections = stateRef.current.selections.filter(({ id }) => id !== selectionId);
       stateRef.current = {
+        ...stateRef.current,
         revision,
-        nextLabel: created ? nextLabel(selection.label) : stateRef.current.nextLabel,
-        currentSelectionId: created ? "selection-fixed" : stateRef.current.currentSelectionId,
+        currentSelectionId: selections.at(-1)?.id ?? null,
         selections,
-        history: stateRef.current.history,
       };
       return successResponse(revision);
-    },
-  );
-  const activateSelection = vi.fn(async (selectionId: string, expectedRevision: number) => {
-    const revision = expectedRevision + 1;
-    stateRef.current = { ...stateRef.current, revision, currentSelectionId: selectionId };
-    return successResponse(revision);
-  });
-  const deleteSelection = vi.fn(async (selectionId: string, expectedRevision: number) => {
-    expect(expectedRevision).toBe(stateRef.current.revision);
-    const revision = expectedRevision + 1;
-    const selections = stateRef.current.selections.filter(({ id }) => id !== selectionId);
-    stateRef.current = {
-      ...stateRef.current,
-      revision,
-      currentSelectionId: selections.at(-1)?.id ?? null,
-      selections,
-    };
-    return successResponse(revision);
-  });
-  const clearSelections = vi.fn(async (expectedRevision: number) => {
-    expect(expectedRevision).toBe(stateRef.current.revision);
-    const revision = expectedRevision + 1;
-    stateRef.current = {
-      ...stateRef.current,
-      revision,
-      currentSelectionId: null,
-      selections: [],
-    };
-    return successResponse(revision);
-  });
-  const reopenSelection = vi.fn(
-    async (selectionId: string, resolutionRevision: number, expectedRevision: number) => {
+    });
+  const clearSelections = vi
+    .spyOn(client, "clearSelections")
+    .mockImplementation(async (expectedRevision: number) => {
       expect(expectedRevision).toBe(stateRef.current.revision);
-      const receipt = stateRef.current.history.find(
-        (candidate) =>
-          candidate.selectionId === selectionId &&
-          candidate.resolutionRevision === resolutionRevision,
-      );
-      if (!receipt) throw new Error("Receipt fixture unavailable");
       const revision = expectedRevision + 1;
       stateRef.current = {
         ...stateRef.current,
         revision,
-        currentSelectionId: receipt.selectionId,
-        selections: [...stateRef.current.selections, reopenedSelection(receipt)],
+        currentSelectionId: null,
+        selections: [],
       };
       return successResponse(revision);
-    },
-  );
-  const clearHistory = vi.fn(async (expectedRevision: number) => {
-    expect(expectedRevision).toBe(stateRef.current.revision);
-    const revision = expectedRevision + 1;
-    stateRef.current = {
-      ...stateRef.current,
-      revision,
-      history: [],
-    };
-    return successResponse(revision);
-  });
-  const client = {
-    putSelection,
-    activateSelection,
-    deleteSelection,
-    clearSelections,
-    reopenSelection,
-    clearHistory,
-  } as unknown as LensProtocolClient;
+    });
+  const reopenSelection = vi
+    .spyOn(client, "reopenSelection")
+    .mockImplementation(
+      async (selectionId: string, resolutionRevision: number, expectedRevision: number) => {
+        expect(expectedRevision).toBe(stateRef.current.revision);
+        const receipt = stateRef.current.history.find(
+          (candidate) =>
+            candidate.selectionId === selectionId &&
+            candidate.resolutionRevision === resolutionRevision,
+        );
+        if (!receipt) throw new Error("Receipt fixture unavailable");
+        const revision = expectedRevision + 1;
+        stateRef.current = {
+          ...stateRef.current,
+          revision,
+          currentSelectionId: receipt.selectionId,
+          selections: [...stateRef.current.selections, reopenedSelection(receipt)],
+        };
+        return successResponse(revision);
+      },
+    );
+  const clearHistory = vi
+    .spyOn(client, "clearHistory")
+    .mockImplementation(async (expectedRevision: number) => {
+      expect(expectedRevision).toBe(stateRef.current.revision);
+      const revision = expectedRevision + 1;
+      stateRef.current = {
+        ...stateRef.current,
+        revision,
+        history: [],
+      };
+      return successResponse(revision);
+    });
   return {
     client,
     putSelection,
@@ -817,6 +840,25 @@ function statefulProtocol(stateRef: { current: LensState }) {
     reopenSelection,
     clearHistory,
   };
+}
+
+function protocolClient(): LensProtocolClient {
+  const model = {
+    get() {
+      throw new Error("Protocol client model reads are not expected");
+    },
+    set() {},
+    off() {},
+    on() {},
+    save_changes() {},
+    send() {},
+    widget_manager: {
+      async get_model() {
+        throw new Error("Nested model reads are not expected");
+      },
+    },
+  } satisfies AnyModel;
+  return new LensProtocolClient(model, window);
 }
 
 function lensState(
@@ -850,22 +892,24 @@ function availableCapture(
 }
 
 function reopenedSelection(receipt: AddressedSelection): Selection {
-  return {
+  const previousResolution: NonNullable<Selection["previousResolution"]> = {
+    addressedAt: receipt.addressedAt,
+  };
+  if (receipt.summary) previousResolution.summary = receipt.summary;
+  const selection: Selection = {
     id: receipt.selectionId,
     label: receipt.label,
     note: receipt.note,
     outputCellId: receipt.outputCellId,
     createdAt: receipt.createdAt,
     anchor: receipt.anchor,
-    ...(receipt.domHint ? { domHint: receipt.domHint } : {}),
     snapshot: {
       status: "pending",
     },
-    previousResolution: {
-      addressedAt: receipt.addressedAt,
-      ...(receipt.summary ? { summary: receipt.summary } : {}),
-    },
+    previousResolution,
   };
+  if (receipt.domHint) selection.domHint = receipt.domHint;
+  return selection;
 }
 
 function captureSignal(index = 0): AbortSignal {

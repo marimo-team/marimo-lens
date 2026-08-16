@@ -1,20 +1,22 @@
-import type { AnyModel } from "@anywidget/types";
 import type { OutputCaptureHandler } from "@marimo-lens/image-capture";
 import type {
   CellAttentionEvent,
-  CommandPayload,
-  CommandType,
+  ClientCommand,
   ImageAction,
+  LensState,
   LensResponse,
   Selection,
   SelectionResolvedEvent,
   StoredSnapshot,
+  TransportInput,
 } from "@marimo-lens/protocol";
+
+import { parseTransportEnvelope } from "@marimo-lens/protocol";
 
 import { LensProtocolError } from "@/anywidget/error";
 import { EventRouter } from "@/anywidget/event-router";
 import { OutputCaptureTransport } from "@/anywidget/output-capture-transport";
-import { RequestClient, type RequestReply } from "@/anywidget/request-client";
+import { RequestClient } from "@/anywidget/request-client";
 
 export type { OutputCaptureAsset } from "@marimo-lens/image-capture";
 export { LensProtocolError };
@@ -24,14 +26,36 @@ export type SnapshotAsset = {
   bytes: Uint8Array;
 };
 
+type OutputCaptureReadinessEvent = {
+  protocol: "marimo-lens.event";
+  version: 2;
+  type: "output.capture.ready" | "output.capture.unready";
+  payload: Readonly<Record<string, never>>;
+};
+
+type WidgetOutboundMessage = ClientCommand | LensResponse | OutputCaptureReadinessEvent;
+
+type WidgetMessageHandler = (message: TransportInput, buffers: DataView[]) => void;
+
+export type LensWidgetModel = {
+  get(key: "_state"): LensState;
+  on(eventName: "msg:custom", handler: WidgetMessageHandler): void;
+  off(eventName: "msg:custom", handler: WidgetMessageHandler): void;
+  send(
+    message: WidgetOutboundMessage,
+    callbacks?: undefined,
+    buffers?: ArrayBuffer[] | ArrayBufferView[],
+  ): void;
+};
+
 export class LensProtocolClient {
-  readonly #model: AnyModel;
+  readonly #model: LensWidgetModel;
   readonly #requests: RequestClient;
   readonly #events = new EventRouter();
   readonly #captures: OutputCaptureTransport;
   #started = false;
 
-  constructor(model: AnyModel, ownerWindow: Window) {
+  constructor(model: LensWidgetModel, ownerWindow: Window) {
     this.#model = model;
     this.#requests = new RequestClient(model, ownerWindow);
     this.#captures = new OutputCaptureTransport(model, ownerWindow);
@@ -81,23 +105,25 @@ export class LensProtocolClient {
         new LensProtocolError("invalid_command", `${imageAction} cannot include a PNG buffer`),
       );
     }
-    return this.#request(
-      "selection.put",
-      { selection, imageAction, expectedRevision },
-      bytes ? [exactArrayBuffer(bytes)] : [],
-    ).then(({ response }) => response);
+    return this.#requests
+      .send(
+        "selection.put",
+        { selection, imageAction, expectedRevision },
+        bytes ? [exactArrayBuffer(bytes)] : [],
+      )
+      .then(({ response }) => response);
   }
 
   activateSelection(selectionId: string, expectedRevision: number): Promise<LensResponse> {
-    return this.#request("selection.activate", { selectionId, expectedRevision }).then(
-      ({ response }) => response,
-    );
+    return this.#requests
+      .send("selection.activate", { selectionId, expectedRevision })
+      .then(({ response }) => response);
   }
 
   deleteSelection(selectionId: string, expectedRevision: number): Promise<LensResponse> {
-    return this.#request("selection.delete", { selectionId, expectedRevision }).then(
-      ({ response }) => response,
-    );
+    return this.#requests
+      .send("selection.delete", { selectionId, expectedRevision })
+      .then(({ response }) => response);
   }
 
   reopenSelection(
@@ -105,41 +131,41 @@ export class LensProtocolClient {
     resolutionRevision: number,
     expectedRevision: number,
   ): Promise<LensResponse> {
-    return this.#request("selection.reopen", {
-      selectionId,
-      resolutionRevision,
-      expectedRevision,
-    }).then(({ response }) => response);
+    return this.#requests
+      .send("selection.reopen", {
+        selectionId,
+        resolutionRevision,
+        expectedRevision,
+      })
+      .then(({ response }) => response);
   }
 
   clearSelections(expectedRevision: number): Promise<LensResponse> {
-    return this.#request("selections.clear", { expectedRevision }).then(({ response }) => response);
+    return this.#requests
+      .send("selections.clear", { expectedRevision })
+      .then(({ response }) => response);
   }
 
   clearHistory(expectedRevision: number): Promise<LensResponse> {
-    return this.#request("history.clear", { expectedRevision }).then(({ response }) => response);
+    return this.#requests
+      .send("history.clear", { expectedRevision })
+      .then(({ response }) => response);
   }
 
   async getSnapshot(selectionId: string): Promise<SnapshotAsset> {
-    const { payload, buffers } = await this.#request("snapshot.get", { selectionId });
+    const { payload, buffers } = await this.#requests.send("snapshot.get", { selectionId });
     return {
       snapshot: payload.snapshot,
       bytes: exactBytes(buffers[0]),
     };
   }
 
-  #request<TType extends CommandType>(
-    type: TType,
-    payload: CommandPayload<TType>,
-    buffers: ArrayBuffer[] = [],
-  ): Promise<RequestReply<TType>> {
-    return this.#requests.send(type, payload, buffers);
-  }
-
-  readonly #handleMessage = (message: unknown, buffers: DataView[] = []): void => {
-    if (this.#captures.accept(message, buffers)) return;
-    if (this.#events.accept(message, buffers)) return;
-    this.#requests.accept(message, buffers);
+  readonly #handleMessage = (message: TransportInput, buffers: DataView[] = []): void => {
+    const envelope = parseTransportEnvelope(message);
+    if (!envelope) return;
+    if (this.#captures.accept(envelope, buffers)) return;
+    if (this.#events.accept(envelope, buffers)) return;
+    this.#requests.accept(envelope, buffers);
   };
 }
 

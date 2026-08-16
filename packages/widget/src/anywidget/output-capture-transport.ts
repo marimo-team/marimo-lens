@@ -1,6 +1,5 @@
-import type { AnyModel } from "@anywidget/types";
 import type { OutputCaptureAsset, OutputCaptureHandler } from "@marimo-lens/image-capture";
-import type { OutputCaptureCommand } from "@marimo-lens/protocol";
+import type { OutputCaptureCommand, TransportEnvelope } from "@marimo-lens/protocol";
 
 import {
   WIDGET_TRANSPORT_VERSION,
@@ -14,9 +13,10 @@ import {
   parseOutputCaptureCommand,
 } from "@marimo-lens/protocol";
 
+import type { LensWidgetModel } from "@/anywidget/client";
+
 import { LensProtocolError } from "@/anywidget/error";
 
-const COMMAND_PROTOCOL = "marimo-lens.command";
 const CAPTURE_TIMEOUT_MS = 15_000;
 
 type ActiveCapture = {
@@ -26,14 +26,14 @@ type ActiveCapture = {
 };
 
 export class OutputCaptureTransport {
-  readonly #model: AnyModel;
+  readonly #model: LensWidgetModel;
   readonly #window: Window;
   #active: ActiveCapture | null = null;
   #handler: OutputCaptureHandler | null = null;
   #captureReady = false;
   #connected = false;
 
-  constructor(model: AnyModel, ownerWindow: Window) {
+  constructor(model: LensWidgetModel, ownerWindow: Window) {
     this.#model = model;
     this.#window = ownerWindow;
   }
@@ -68,8 +68,8 @@ export class OutputCaptureTransport {
     };
   }
 
-  accept(message: unknown, buffers: readonly DataView[] = []): boolean {
-    if (!isCommandMessage(message)) return false;
+  accept(message: TransportEnvelope, buffers: readonly DataView[] = []): boolean {
+    if (message.protocol !== "marimo-lens.command") return false;
     let command: OutputCaptureCommand;
     try {
       command = parseOutputCaptureCommand(message);
@@ -121,7 +121,8 @@ export class OutputCaptureTransport {
       this.#replySuccess(command, validateAsset(command, asset));
     } catch (error) {
       if (this.#active !== active) return;
-      const failure = captureFailure(error, controller.signal);
+      const cause = error instanceof Error ? error : new Error(String(error));
+      const failure = captureFailure(cause, controller.signal);
       this.#replyFailure(command, failure.code, failure.message);
     } finally {
       this.#window.clearTimeout(active.timeout);
@@ -218,26 +219,21 @@ function validateAsset(
   return { image, bytes: new Uint8Array(asset.bytes) };
 }
 
-function captureFailure(error: unknown, signal: AbortSignal): { code: string; message: string } {
-  const value = signal.aborted ? signal.reason : error;
-  if (isCodedError(value)) {
+type CaptureFailure = {
+  code: string;
+  message: string;
+};
+
+function captureFailure(error: Error, signal: AbortSignal): CaptureFailure {
+  const abortReason = signal.reason instanceof Error ? signal.reason : error;
+  const value = signal.aborted ? abortReason : error;
+  if (value instanceof LensProtocolError) {
     return { code: value.code, message: value.message };
   }
   return {
     code: "capture_failed",
-    message: value instanceof Error ? value.message : "Output capture failed",
+    message: value.message,
   };
-}
-
-function isCodedError(error: unknown): error is { code: string; message: string } {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    typeof error.code === "string" &&
-    "message" in error &&
-    typeof error.message === "string"
-  );
 }
 
 function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
@@ -250,21 +246,12 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
         signal.removeEventListener("abort", abort);
         resolve(value);
       },
-      (error: unknown) => {
+      (error) => {
         signal.removeEventListener("abort", abort);
         reject(error);
       },
     );
   });
-}
-
-function isCommandMessage(message: unknown): message is { protocol: string } {
-  return (
-    typeof message === "object" &&
-    message !== null &&
-    "protocol" in message &&
-    message.protocol === COMMAND_PROTOCOL
-  );
 }
 
 function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {

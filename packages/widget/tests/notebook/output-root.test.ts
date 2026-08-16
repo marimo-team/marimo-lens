@@ -22,7 +22,7 @@ function visibleOutput(id: string): HTMLElement {
   return output;
 }
 
-function visibleIsland(id: string): { island: HTMLElement; content: HTMLElement } {
+function visibleIsland(id: string) {
   const island = document.createElement("marimo-island");
   island.setAttribute("data-cell-id", id);
   const output = document.createElement("div");

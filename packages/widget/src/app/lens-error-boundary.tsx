@@ -1,9 +1,17 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
-export class LensErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
-  state: { error: Error | null } = { error: null };
+type LensErrorBoundaryProps = {
+  children: ReactNode;
+};
 
-  static getDerivedStateFromError(error: Error) {
+type LensErrorBoundaryState = {
+  error: Error | null;
+};
+
+export class LensErrorBoundary extends Component<LensErrorBoundaryProps, LensErrorBoundaryState> {
+  state: LensErrorBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): LensErrorBoundaryState {
     return { error };
   }
 

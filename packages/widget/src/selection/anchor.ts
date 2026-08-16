@@ -167,7 +167,7 @@ function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }
 
-function attachmentOffset(attachment?: ScrollAttachment): { x: number; y: number } {
+function attachmentOffset(attachment?: ScrollAttachment) {
   let x = 0;
   let y = 0;
   for (const frame of attachment?.frames ?? []) {
@@ -210,5 +210,6 @@ function acceptsScroll(overflow: string): boolean {
 function parentElementAcrossShadow(element: Element): Element | null {
   if (element.parentElement) return element.parentElement;
   const root = element.getRootNode();
-  return root.nodeType === 11 && "host" in root ? (root as ShadowRoot).host : null;
+  const ownerWindow = element.ownerDocument.defaultView;
+  return ownerWindow && root instanceof ownerWindow.ShadowRoot ? root.host : null;
 }

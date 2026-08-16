@@ -18,8 +18,28 @@ import {
   SelectionSchema,
   parseContract,
   parseLensResponse,
+  parseTransportEnvelope,
 } from "../src/index";
 import { selectionFixture } from "./fixtures";
+
+describe("transport envelope", () => {
+  test("decodes object discriminators and preserves the message body", () => {
+    const message = {
+      protocol: "marimo-lens.response",
+      requestId: "request-1",
+      type: "selection.put",
+      payload: { selectionId: "selection-1" },
+    };
+
+    expect(parseTransportEnvelope(message)).toEqual(message);
+  });
+
+  test("rejects primitive transport values", () => {
+    expect(parseTransportEnvelope(null)).toBeNull();
+    expect(parseTransportEnvelope(undefined)).toBeNull();
+    expect(parseTransportEnvelope("kernel.status")).toBeNull();
+  });
+});
 
 describe("selection contracts", () => {
   test("accepts empty notes and every snapshot lifecycle state", () => {

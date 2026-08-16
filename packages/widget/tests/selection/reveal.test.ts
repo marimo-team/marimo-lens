@@ -12,7 +12,7 @@ afterEach(() => {
 
 describe("selection reveal", () => {
   test("scrolls an offscreen output and leaves a visible output in place", () => {
-    const scrollIntoView = vi.fn();
+    const scrollIntoView = vi.fn<HTMLElement["scrollIntoView"]>();
     const output = setupOutput(new DOMRect(0, 1_200, 400, 200), scrollIntoView);
     const selection = selectionFixture();
     const dom = new NotebookDomAdapter(document);
@@ -30,7 +30,7 @@ describe("selection reveal", () => {
   });
 
   test("uses immediate scrolling for keyboard and reduced-motion activation", () => {
-    const scrollIntoView = vi.fn();
+    const scrollIntoView = vi.fn<HTMLElement["scrollIntoView"]>();
     setupOutput(new DOMRect(0, 1_200, 400, 200), scrollIntoView);
     const selection = selectionFixture();
     const dom = new NotebookDomAdapter(document);
@@ -52,11 +52,11 @@ describe("selection reveal", () => {
   });
 });
 
-function setupOutput(rect: DOMRect, scrollIntoView: ReturnType<typeof vi.fn>): HTMLElement {
+function setupOutput(rect: DOMRect, scrollIntoView: HTMLElement["scrollIntoView"]): HTMLElement {
   const output = document.createElement("div");
   output.id = "output-cell-1";
   output.getBoundingClientRect = () => rect;
-  output.scrollIntoView = scrollIntoView as HTMLElement["scrollIntoView"];
+  output.scrollIntoView = scrollIntoView;
   document.body.appendChild(output);
   return output;
 }

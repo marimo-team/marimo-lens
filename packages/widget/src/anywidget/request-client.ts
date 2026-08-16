@@ -1,4 +1,3 @@
-import type { AnyModel } from "@anywidget/types";
 import type {
   ClearSelectionsResponsePayload,
   ClientCommand,
@@ -8,6 +7,7 @@ import type {
   SelectionMutationResponsePayload,
   SelectionPutResponsePayload,
   SnapshotResponsePayload,
+  TransportEnvelope,
 } from "@marimo-lens/protocol";
 
 import {
@@ -21,9 +21,10 @@ import {
   parseLensResponse,
 } from "@marimo-lens/protocol";
 
+import type { LensWidgetModel } from "@/anywidget/client";
+
 import { LensProtocolError } from "@/anywidget/error";
 
-const RESPONSE_PROTOCOL = "marimo-lens.response";
 const REQUEST_TIMEOUT_MS = 20_000;
 
 type ResponsePayloadByCommand = {
@@ -52,12 +53,12 @@ type PendingRequest = {
 };
 
 export class RequestClient {
-  readonly #model: AnyModel;
+  readonly #model: LensWidgetModel;
   readonly #window: Window;
   readonly #pending = new Map<string, PendingRequest>();
   #connected = false;
 
-  constructor(model: AnyModel, ownerWindow: Window) {
+  constructor(model: LensWidgetModel, ownerWindow: Window) {
     this.#model = model;
     this.#window = ownerWindow;
   }
@@ -77,11 +78,46 @@ export class RequestClient {
     this.#pending.clear();
   }
 
-  send<TType extends CommandType>(
-    type: TType,
-    payload: CommandPayload<TType>,
+  send(
+    type: "selection.put",
+    payload: CommandPayload<"selection.put">,
+    buffers?: ArrayBuffer[],
+  ): Promise<RequestReply<"selection.put">>;
+  send(
+    type: "selection.activate",
+    payload: CommandPayload<"selection.activate">,
+    buffers?: ArrayBuffer[],
+  ): Promise<RequestReply<"selection.activate">>;
+  send(
+    type: "selection.delete",
+    payload: CommandPayload<"selection.delete">,
+    buffers?: ArrayBuffer[],
+  ): Promise<RequestReply<"selection.delete">>;
+  send(
+    type: "selection.reopen",
+    payload: CommandPayload<"selection.reopen">,
+    buffers?: ArrayBuffer[],
+  ): Promise<RequestReply<"selection.reopen">>;
+  send(
+    type: "selections.clear",
+    payload: CommandPayload<"selections.clear">,
+    buffers?: ArrayBuffer[],
+  ): Promise<RequestReply<"selections.clear">>;
+  send(
+    type: "history.clear",
+    payload: CommandPayload<"history.clear">,
+    buffers?: ArrayBuffer[],
+  ): Promise<RequestReply<"history.clear">>;
+  send(
+    type: "snapshot.get",
+    payload: CommandPayload<"snapshot.get">,
+    buffers?: ArrayBuffer[],
+  ): Promise<RequestReply<"snapshot.get">>;
+  send(
+    type: CommandType,
+    payload: CommandPayload<CommandType>,
     buffers: ArrayBuffer[] = [],
-  ): Promise<RequestReply<TType>> {
+  ): Promise<AnyRequestReply> {
     if (!this.#connected) {
       return Promise.reject(
         new LensProtocolError("client_disposed", "Lens is not connected to its widget model"),
@@ -124,23 +160,23 @@ export class RequestClient {
       }
       return reply;
     });
-    return request as Promise<RequestReply<TType>>;
+    return request;
   }
 
-  accept(message: unknown, buffers: DataView[] = []): boolean {
-    if (!isResponseMessage(message)) return false;
-    const requestId = typeof message.requestId === "string" ? message.requestId : null;
-    if (!requestId) return true;
-    const pending = this.#pending.get(requestId);
-    if (!pending) return true;
+  accept(message: TransportEnvelope, buffers: DataView[] = []): boolean {
+    if (message.protocol !== "marimo-lens.response") return false;
+    const entry = this.#pendingEntry(message);
+    if (!entry) return true;
+    const [requestId, pending] = entry;
     try {
       const response = parseLensResponse(message);
       const payload = validateClientReply(pending.command, response, buffers);
       this.#finish(requestId, pending);
-      pending.resolve({ response, payload, buffers } as AnyRequestReply);
+      pending.resolve({ response, payload, buffers });
     } catch (error) {
       this.#finish(requestId, pending);
-      pending.reject(invalidResponse(error));
+      const cause = error instanceof Error ? error : new Error(String(error));
+      pending.reject(invalidResponse(cause));
     }
     return true;
   }
@@ -148,6 +184,13 @@ export class RequestClient {
   #finish(requestId: string, pending: PendingRequest): void {
     this.#window.clearTimeout(pending.timeout);
     this.#pending.delete(requestId);
+  }
+
+  #pendingEntry(message: TransportEnvelope): readonly [string, PendingRequest] | null {
+    for (const entry of this.#pending) {
+      if (message.requestId === entry[0]) return entry;
+    }
+    return null;
   }
 }
 
@@ -262,28 +305,17 @@ function requireResponseBuffers(
   );
 }
 
-function invalidResponse(error: unknown): Error {
+function invalidResponse(error: Error): Error {
   if (error instanceof LensProtocolError) return error;
-  return new LensProtocolError(
-    "invalid_response",
-    error instanceof Error ? error.message : String(error),
-  );
-}
-
-function isResponseMessage(message: unknown): message is { protocol: string; requestId?: unknown } {
-  return (
-    typeof message === "object" &&
-    message !== null &&
-    "protocol" in message &&
-    message.protocol === RESPONSE_PROTOCOL
-  );
+  return new LensProtocolError("invalid_response", error.message);
 }
 
 function createRequestId(ownerWindow: Window): string {
-  const browser = ownerWindow as Window & { Date: DateConstructor; Math: Math };
-  return typeof ownerWindow.crypto.randomUUID === "function"
-    ? ownerWindow.crypto.randomUUID()
-    : `request-${browser.Date.now().toString(36)}-${browser.Math.random()
-        .toString(36)
-        .slice(2, 10)}`;
+  const ownerGlobal = ownerWindow.self;
+  return (
+    ownerWindow.crypto.randomUUID?.() ??
+    `request-${ownerGlobal.Date.now().toString(36)}-${ownerGlobal.Math.random()
+      .toString(36)
+      .slice(2, 10)}`
+  );
 }

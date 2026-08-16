@@ -193,15 +193,14 @@ export function resolveCaptureBackground(element: Element): string {
     if (color && color !== "transparent" && color !== "rgba(0, 0, 0, 0)") return color;
     current = parentElementAcrossShadow(current);
   }
-  const darkMode =
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const darkMode = window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
   return darkMode ? "#111113" : "#ffffff";
 }
 
 export function shouldCaptureNode(node: Node): boolean {
-  if (node.nodeType !== 1) return true;
-  return !(node as Element).closest("[data-marimo-lens-ui]");
+  const ownerDocument = node.ownerDocument;
+  if (!ownerDocument || !(node instanceof ownerWindow(ownerDocument).Element)) return true;
+  return !node.closest("[data-marimo-lens-ui]");
 }
 
 export function assertCapturableIframes(root: Element): void {

@@ -13,11 +13,8 @@ export const CELL_ATTENTION_TOP_GUTTER = 48;
 
 export type CellAttentionKind = "activity" | "reveal";
 export type CellAttentionPhase = "active" | "exiting";
-type CellAttentionPresentationEvent = CellActivityStartEvent | CellRevealEvent;
 
-export type CellAttentionPresentation = {
-  kind: CellAttentionKind;
-  event: CellAttentionPresentationEvent;
+type CellAttentionPresentationState = {
   sequence: number;
   target: HTMLElement | null;
   expiresAt: number | null;
@@ -25,17 +22,43 @@ export type CellAttentionPresentation = {
   phase: CellAttentionPhase;
 };
 
+type ActivityAttentionPresentation = CellAttentionPresentationState & {
+  kind: "activity";
+  event: CellActivityStartEvent;
+};
+
+type RevealAttentionPresentation = CellAttentionPresentationState & {
+  kind: "reveal";
+  event: CellRevealEvent;
+};
+
+export type CellAttentionPresentation = ActivityAttentionPresentation | RevealAttentionPresentation;
+
 type ActiveAttention = CellAttentionPresentation & {
   exitDuration: number;
   framingTimeout: number;
   observedTarget: HTMLElement | null;
-  observedTargetSize: { width: number; height: number } | null;
+  observedTargetSize: ElementSize | null;
   reframeAfterPending: boolean;
   revealFramed: boolean;
   resizeObserver: ResizeObserver | null;
   stopLayout: () => void;
   timeout: number;
   visibilityListener: () => void;
+};
+
+type ActiveActivityAttention = ActiveAttention & {
+  kind: "activity";
+  event: CellActivityStartEvent;
+};
+
+type AttentionStart =
+  | { kind: "activity"; event: CellActivityStartEvent }
+  | { kind: "reveal"; event: CellRevealEvent };
+
+type ElementSize = {
+  width: number;
+  height: number;
 };
 
 export class CellAttentionController {
@@ -58,11 +81,11 @@ export class CellAttentionController {
       this.#renewActivity(active, event);
       return;
     }
-    this.#start("activity", event);
+    this.#start({ kind: "activity", event });
   }
 
   reveal(event: CellRevealEvent): void {
-    this.#start("reveal", event);
+    this.#start({ kind: "reveal", event });
   }
 
   stopActivity(event: CellActivityStopEvent): void {
@@ -76,17 +99,16 @@ export class CellAttentionController {
     this.#clear(true);
   }
 
-  #start(kind: CellAttentionKind, event: CellAttentionPresentationEvent): void {
+  #start(start: AttentionStart): void {
     this.#clear(false);
-    const target = attentionTarget(this.#dom, event.payload.cellId);
-    const frameRequested = this.#reframe(kind, target);
+    const target = attentionTarget(this.#dom, start.event.payload.cellId);
+    const frameRequested = this.#reframe(start.kind, target);
 
-    const exitDuration = kind === "activity" ? ACTIVITY_EXIT_MS : REVEAL_EXIT_MS;
-    const duration = event.payload.durationMs ?? null;
+    const exitDuration = start.kind === "activity" ? ACTIVITY_EXIT_MS : REVEAL_EXIT_MS;
+    const duration = start.event.payload.durationMs ?? null;
     const expiresAt = duration === null ? null : this.#now() + duration + exitDuration;
     const active: ActiveAttention = {
-      kind,
-      event,
+      ...start,
       sequence: ++this.#sequence,
       target,
       expiresAt,
@@ -97,7 +119,7 @@ export class CellAttentionController {
       observedTargetSize: null,
       phase: "active",
       reframeAfterPending: false,
-      revealFramed: kind === "reveal" && frameRequested,
+      revealFramed: start.kind === "reveal" && frameRequested,
       resizeObserver: null,
       stopLayout: () => undefined,
       timeout: 0,
@@ -112,8 +134,8 @@ export class CellAttentionController {
     this.#emit(active);
   }
 
-  #renewActivity(active: ActiveAttention, event: CellActivityStartEvent): void {
-    const previous = active.event as CellActivityStartEvent;
+  #renewActivity(active: ActiveActivityAttention, event: CellActivityStartEvent): void {
+    const previous = active.event;
     const samePresentation =
       previous.payload.label === event.payload.label &&
       previous.payload.message === event.payload.message;
@@ -248,15 +270,18 @@ export class CellAttentionController {
   }
 
   #emit(active: ActiveAttention): void {
-    this.#onChange({
-      kind: active.kind,
-      event: active.event,
+    const state: CellAttentionPresentationState = {
       sequence: active.sequence,
       target: active.target,
       expiresAt: active.expiresAt,
       framing: active.framing,
       phase: active.phase,
-    });
+    };
+    const presentation: CellAttentionPresentation =
+      active.kind === "activity"
+        ? { ...state, kind: "activity", event: active.event }
+        : { ...state, kind: "reveal", event: active.event };
+    this.#onChange(presentation);
   }
 
   #observeTarget(active: ActiveAttention, target: HTMLElement | null): void {
@@ -322,21 +347,15 @@ function isFullyVisible(ownerWindow: Window, rect: DOMRect): boolean {
   );
 }
 
-function targetSize(target: HTMLElement): { width: number; height: number } {
+function targetSize(target: HTMLElement): ElementSize {
   const rect = target.getBoundingClientRect();
   return { width: rect.width, height: rect.height };
 }
 
-function sameSize(
-  left: { width: number; height: number } | null,
-  right: { width: number; height: number },
-): boolean {
+function sameSize(left: ElementSize | null, right: ElementSize): boolean {
   return left?.width === right.width && left.height === right.height;
 }
 
 function prefersReducedMotion(ownerWindow: Window): boolean {
-  return (
-    typeof ownerWindow.matchMedia === "function" &&
-    ownerWindow.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
+  return ownerWindow.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 }

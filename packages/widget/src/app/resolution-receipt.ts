@@ -9,17 +9,21 @@ import type { CellAttentionKind } from "@/transient/cell-attention";
 
 import { focusSelectionOrDock } from "@/ui/focus";
 
-export function useResolutionReceipt(options: {
+type ResolutionReceiptOptions = {
   state: LensState;
   protocol: LensProtocolClient;
   dom: NotebookDomAdapter;
   dispatch: Dispatch<UiAction>;
   invalidateSnapshotCapture: (selectionId: string) => void;
   attentionKind: CellAttentionKind | null;
-}): {
+};
+
+type ResolutionReceiptState = {
   receipt: SelectionResolvedEvent | null;
   setInteraction: (event: SelectionResolvedEvent, active: boolean) => void;
-} {
+};
+
+export function useResolutionReceipt(options: ResolutionReceiptOptions): ResolutionReceiptState {
   const { state, protocol, dom, dispatch, invalidateSnapshotCapture, attentionKind } = options;
   const suspended = attentionKind !== null;
   const [queued, setQueued] = useState<SelectionResolvedEvent | null>(null);

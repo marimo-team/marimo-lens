@@ -29,7 +29,7 @@ describe("cell attention presentation", () => {
     target.getBoundingClientRect = () => new DOMRect(980, 80, 200, 160);
     document.body.appendChild(target);
     const presentation = activityPresentation(target);
-    const ownerWindow = { innerWidth: 1280, innerHeight: 720 } as Window;
+    const ownerWindow = viewport(1280, 720);
 
     const view = projectCellAttention(presentation, ownerWindow);
 
@@ -45,7 +45,7 @@ describe("cell attention presentation", () => {
     target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
     document.body.appendChild(target);
     const presentation = activityPresentation(target);
-    const ownerWindow = { innerWidth: 480, innerHeight: 720 } as Window;
+    const ownerWindow = viewport(480, 720);
 
     const surface = projectCellAttentionSurface(presentation, ownerWindow, {
       height: 226,
@@ -61,7 +61,7 @@ describe("cell attention presentation", () => {
     target.getBoundingClientRect = () => new DOMRect(20, 740, 400, 240);
     document.body.appendChild(target);
     const presentation = { ...activityPresentation(target), framing: "pending" as const };
-    const ownerWindow = { innerWidth: 480, innerHeight: 720 } as Window;
+    const ownerWindow = viewport(480, 720);
 
     expect(projectCellAttentionSurface(presentation, ownerWindow)).toEqual({
       view: null,
@@ -74,7 +74,7 @@ describe("cell attention presentation", () => {
     target.getBoundingClientRect = () => new DOMRect(20, 740, 400, 240);
     document.body.appendChild(target);
     const presentation = activityPresentation(target);
-    const ownerWindow = { innerWidth: 480, innerHeight: 720 } as Window;
+    const ownerWindow = viewport(480, 720);
 
     expect(projectCellAttentionSurface(presentation, ownerWindow)).toEqual({
       view: null,
@@ -86,7 +86,7 @@ describe("cell attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
     document.body.appendChild(target);
-    const ownerWindow = { innerWidth: 1280, innerHeight: 720 } as Window;
+    const ownerWindow = viewport(1280, 720);
 
     const view = projectCellAttention(activityPresentation(target), ownerWindow);
 
@@ -103,7 +103,7 @@ describe("cell attention presentation", () => {
       kind: "reveal",
       event: revealEvent("A".repeat(300)),
     };
-    const ownerWindow = { innerWidth: 1280, innerHeight: 720 } as Window;
+    const ownerWindow = viewport(1280, 720);
 
     const view = projectCellAttention(presentation, ownerWindow, {
       height: 226,
@@ -118,7 +118,7 @@ describe("cell attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(190, 80, 80, 160);
     document.body.appendChild(target);
-    const narrowWindow = { innerWidth: 480, innerHeight: 720 } as Window;
+    const narrowWindow = viewport(480, 720);
 
     const view = projectCellAttention(activityPresentation(target), narrowWindow);
 
@@ -131,7 +131,7 @@ describe("cell attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
     document.body.appendChild(target);
-    const ownerWindow = { innerWidth: 1280, innerHeight: 720 } as Window;
+    const ownerWindow = viewport(1280, 720);
 
     expect(projectCellAttention(activityPresentation(target), ownerWindow)).toBeNull();
   });
@@ -140,7 +140,7 @@ describe("cell attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
     document.body.appendChild(target);
-    const ownerWindow = { innerWidth: 480, innerHeight: 720 } as Window;
+    const ownerWindow = viewport(480, 720);
 
     expect(
       projectCellAttention(activityPresentation(target), ownerWindow, {
@@ -158,21 +158,11 @@ describe("cell attention presentation", () => {
     const presentation = activityPresentation(target);
     const measurement = { height: 226, maxWidth: 400 };
 
-    expect(
-      projectCellAttention(
-        presentation,
-        { innerWidth: 480, innerHeight: 720 } as Window,
-        measurement,
-      ),
-    ).toBeNull();
+    expect(projectCellAttention(presentation, viewport(480, 720), measurement)).toBeNull();
 
     targetWidth = 900;
     expect(
-      projectCellAttention(
-        presentation,
-        { innerWidth: 1_280, innerHeight: 720 } as Window,
-        measurement,
-      )?.labelMaxWidth,
+      projectCellAttention(presentation, viewport(1_280, 720), measurement)?.labelMaxWidth,
     ).toBe(480);
   });
 
@@ -350,11 +340,10 @@ describe("cell attention presentation", () => {
         payload: { cellId: "BYtC", durationMs: 4_000 },
       },
     };
-    const surface = projectCellAttentionSurface(
-      presentation,
-      { innerWidth: 480, innerHeight: 720 } as Window,
-      { height: 226, maxWidth: 400 },
-    );
+    const surface = projectCellAttentionSurface(presentation, viewport(480, 720), {
+      height: 226,
+      maxWidth: 400,
+    });
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -379,17 +368,30 @@ function activityPresentation(target: HTMLElement, label?: string): CellAttentio
   };
 }
 
+function viewport(width: number, height: number) {
+  const frame = document.createElement("iframe");
+  document.body.appendChild(frame);
+  const ownerWindow = frame.contentWindow;
+  if (!ownerWindow) throw new Error("Viewport frame did not create a window");
+  Object.defineProperties(ownerWindow, {
+    innerWidth: { configurable: true, value: width },
+    innerHeight: { configurable: true, value: height },
+  });
+  return ownerWindow;
+}
+
 function startActivityEvent(label?: string): CellActivityStartEvent {
+  const payload: CellActivityStartEvent["payload"] = {
+    cellId: "BYtC",
+    message: "Updating the aggregation.",
+  };
+  if (label) payload.label = label;
   return {
     protocol: "marimo-lens.event",
     version: 2,
     type: "cell.activity.start",
     revision: 7,
-    payload: {
-      cellId: "BYtC",
-      ...(label ? { label } : {}),
-      message: "Updating the aggregation.",
-    },
+    payload,
   };
 }
 

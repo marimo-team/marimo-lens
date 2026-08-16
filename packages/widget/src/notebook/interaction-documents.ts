@@ -12,6 +12,12 @@ export type InteractionSurfaceOptions = {
   lockSelectionGestures: boolean;
 };
 
+type OpenTreeScan = {
+  frames: HTMLIFrameElement[];
+  shadows: ShadowRoot[];
+  outputs: HTMLElement[];
+};
+
 export function observeInteractionSurfaces(
   ownerDocument: Document,
   options: InteractionSurfaceOptions,
@@ -171,11 +177,7 @@ function discoverInteractionSurfaces(
   return surfaces;
 }
 
-function scanOpenTree(root: ParentNode): {
-  frames: HTMLIFrameElement[];
-  shadows: ShadowRoot[];
-  outputs: HTMLElement[];
-} {
+function scanOpenTree(root: ParentNode): OpenTreeScan {
   const frames: HTMLIFrameElement[] = [];
   const shadows: ShadowRoot[] = [];
   const outputs: HTMLElement[] = [];

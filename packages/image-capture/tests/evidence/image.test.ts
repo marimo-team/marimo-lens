@@ -41,12 +41,10 @@ describe("image capture", () => {
         height: 320,
       }),
       fillStyle: "",
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
+      fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
+      drawImage: vi.fn<DrawImage>(),
     };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      context as unknown as CanvasRenderingContext2D,
-    );
+    installCanvasContext(window, context);
     vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => {
       callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
     });
@@ -88,7 +86,7 @@ describe("image capture", () => {
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
     const ownerDocument = frame.contentDocument!;
-    const ownerWindow = frame.contentWindow! as Window & typeof globalThis;
+    const ownerWindow = frameRealm(frame);
     class LoadedImage extends EventTarget {
       naturalWidth = 640;
       naturalHeight = 320;
@@ -105,12 +103,10 @@ describe("image capture", () => {
     });
     const context = {
       fillStyle: "",
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
+      fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
+      drawImage: vi.fn<DrawImage>(),
     };
-    vi.spyOn(ownerWindow.HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      context as unknown as CanvasRenderingContext2D,
-    );
+    installCanvasContext(ownerWindow, context);
     vi.spyOn(ownerWindow.HTMLCanvasElement.prototype, "toBlob").mockImplementation(
       (callback: BlobCallback) => {
         callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
@@ -153,12 +149,10 @@ describe("image capture", () => {
     vi.stubGlobal("Image", LoadedImage);
     const context = {
       fillStyle: "",
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
+      fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
+      drawImage: vi.fn<DrawImage>(),
     };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      context as unknown as CanvasRenderingContext2D,
-    );
+    installCanvasContext(window, context);
     vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => {
       callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
     });
@@ -253,20 +247,20 @@ describe("image capture", () => {
       shadowBlur: 0,
       font: "",
       textBaseline: "",
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
-      save: vi.fn(),
-      restore: vi.fn(),
-      strokeRect: vi.fn(),
+      fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
+      drawImage: vi.fn<DrawImage>(),
+      save: vi.fn<CanvasRenderingContext2D["save"]>(),
+      restore: vi.fn<CanvasRenderingContext2D["restore"]>(),
+      strokeRect: vi.fn<CanvasRenderingContext2D["strokeRect"]>(),
       measureText: vi.fn(() => ({ width: 17 })),
-      beginPath: vi.fn(),
-      roundRect: vi.fn(),
-      fill: vi.fn(() => labelFills.push(fillStyle)),
-      fillText: vi.fn(),
+      beginPath: vi.fn<CanvasRenderingContext2D["beginPath"]>(),
+      roundRect: vi.fn<CanvasRenderingContext2D["roundRect"]>(),
+      fill: vi.fn<CanvasRenderingContext2D["fill"]>(() => {
+        labelFills.push(fillStyle);
+      }),
+      fillText: vi.fn<CanvasRenderingContext2D["fillText"]>(),
     };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      context as unknown as CanvasRenderingContext2D,
-    );
+    installCanvasContext(window, context);
 
     composeSelectionEvidence({
       ownerDocument: document,
@@ -575,4 +569,65 @@ describe("image capture", () => {
 
     await rejected;
   });
+
+  test("propagates an ambient cancellation from a secondary document capture", async () => {
+    const frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+    const ownerDocument = frame.contentDocument;
+    const ownerWindow = frame.contentWindow?.self;
+    if (!ownerDocument || !ownerWindow) throw new Error("Iframe realm must be available");
+    const output = ownerDocument.createElement("div");
+    output.getBoundingClientRect = () => new ownerWindow.DOMRect(0, 0, 400, 240);
+    Object.defineProperties(output, {
+      scrollWidth: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 240 },
+    });
+    ownerDocument.body.appendChild(output);
+    const cancellation = new DOMException("Parent renderer canceled", "AbortError");
+    vi.mocked(toPng).mockRejectedValueOnce(cancellation);
+
+    await expect(
+      captureSelectionSnapshot({
+        selectionId: "selection-1",
+        label: "S1",
+        anchor: { kind: "point", x: 0.5, y: 0.5 },
+        output,
+      }),
+    ).rejects.toBe(cancellation);
+  });
 });
+
+type OwnerRealm = Window & typeof globalThis;
+
+interface RasterCanvasContext {
+  fillStyle: CanvasRenderingContext2D["fillStyle"];
+  fillRect: CanvasRenderingContext2D["fillRect"];
+  drawImage: DrawImage;
+}
+
+type DrawImage = (
+  image: CanvasImageSource,
+  sourceX: number,
+  sourceY: number,
+  sourceWidth: number,
+  sourceHeight: number,
+  destinationX: number,
+  destinationY: number,
+  destinationWidth: number,
+  destinationHeight: number,
+) => void;
+
+interface CanvasContextOwner {
+  getContext(contextId: "2d"): RasterCanvasContext | null;
+}
+
+function installCanvasContext(ownerWindow: OwnerRealm, context: RasterCanvasContext): void {
+  const canvasOwner: CanvasContextOwner = ownerWindow.HTMLCanvasElement.prototype;
+  vi.spyOn(canvasOwner, "getContext").mockReturnValue(context);
+}
+
+function frameRealm(frame: HTMLIFrameElement): OwnerRealm {
+  const ownerWindow = frame.contentWindow?.self;
+  if (!ownerWindow) throw new Error("Iframe window must be available");
+  return ownerWindow;
+}

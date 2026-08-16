@@ -375,9 +375,7 @@ function attachmentTarget(
     viewport.kind === "point"
       ? viewport
       : { x: viewport.x + viewport.width / 2, y: viewport.y + viewport.height / 2 };
-  return typeof dom.document.elementsFromPoint === "function"
-    ? dom.deepestElementAtPoint(point.x, point.y)
-    : null;
+  return "elementsFromPoint" in dom.document ? dom.deepestElementAtPoint(point.x, point.y) : null;
 }
 
 function hasSameScrollAttachment(first: ScrollAttachment, second: ScrollAttachment): boolean {
@@ -399,12 +397,12 @@ function hasSameElements(
 
 const RESIZE_HANDLES: ResizeHandle[] = ["nw", "ne", "sw", "se"];
 
-const HANDLE_NAMES: Record<ResizeHandle, string> = {
+const HANDLE_NAMES = {
   nw: "top left",
   ne: "top right",
   sw: "bottom left",
   se: "bottom right",
-};
+} satisfies Record<ResizeHandle, string>;
 
 function ResizeHandleButton({
   selection,

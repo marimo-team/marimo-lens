@@ -1,5 +1,14 @@
 import type { AnyModel } from "@anywidget/types";
-import type { LensCommand, OutputCaptureCommand } from "@marimo-lens/protocol";
+import type {
+  CellAttentionEvent,
+  ClearSelectionsResponsePayload,
+  ClientCommand,
+  LensCommand,
+  LensResponse,
+  OutputCaptureCommand,
+  SelectionResolvedEvent,
+  TransportInput,
+} from "@marimo-lens/protocol";
 
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -7,16 +16,29 @@ import { LensProtocolClient, LensProtocolError, type OutputCaptureAsset } from "
 
 import { selectionFixture } from "../support/fixtures";
 
-type MessageHandler = (message: unknown, buffers: DataView[]) => void;
-type SentMessage = { message: unknown; buffers: ArrayBuffer[] };
+type OutputCaptureReadinessEvent = {
+  protocol: "marimo-lens.event";
+  version: 2;
+  type: "output.capture.ready" | "output.capture.unready";
+  payload: ClearSelectionsResponsePayload;
+};
+
+type ModelMessage =
+  | LensCommand
+  | LensResponse
+  | SelectionResolvedEvent
+  | CellAttentionEvent
+  | OutputCaptureReadinessEvent;
+type MessageHandler = (message: TransportInput, buffers: DataView[]) => void;
+type SentMessage = { message: ModelMessage; buffers: ArrayBuffer[] };
 
 const models: FakeModel[] = [];
 
 class FakeModel {
   handlers = new Set<MessageHandler>();
   sent: SentMessage[] = [];
-  readiness: unknown[] = [];
-  onCommand?: (command: LensCommand) => void;
+  readiness: OutputCaptureReadinessEvent[] = [];
+  onCommand?: (command: ClientCommand) => void;
   state = {
     revision: 7,
     nextLabel: "S1",
@@ -24,38 +46,43 @@ class FakeModel {
     selections: [],
     history: [],
   };
+  readonly model: AnyModel = {
+    get: (attribute) => (attribute === "_state" ? this.state : undefined),
+    set: () => undefined,
+    on: (eventName, handler) => {
+      if (eventName === "msg:custom") this.handlers.add(handler);
+    },
+    off: (eventName, handler) => {
+      if (eventName === "msg:custom" && handler) this.handlers.delete(handler);
+    },
+    save_changes: () => undefined,
+    send: (message, _callbacks, buffers = []) => {
+      this.record(message, Array.from(buffers, copyArrayBuffer));
+    },
+    widget_manager: {
+      get_model: () => Promise.reject(new Error("Nested models are unavailable in this fixture")),
+    },
+  };
 
   constructor() {
     models.push(this);
   }
 
-  on(eventName: string, handler: MessageHandler): void {
-    if (eventName === "msg:custom") this.handlers.add(handler);
+  emit(message: TransportInput, buffers: DataView[] = []): void {
+    for (const handler of this.handlers) handler(message, buffers);
   }
 
-  off(eventName: string, handler: MessageHandler): void {
-    if (eventName === "msg:custom") this.handlers.delete(handler);
+  asAnyModel(): AnyModel {
+    return this.model;
   }
 
-  get(attribute: string): unknown {
-    return attribute === "_state" ? this.state : undefined;
-  }
-
-  send(message: unknown, _callbacks?: unknown, buffers: ArrayBuffer[] = []): void {
+  private record(message: ModelMessage, buffers: ArrayBuffer[]): void {
     if (isReadinessEvent(message)) {
       this.readiness.push(message);
       return;
     }
     this.sent.push({ message, buffers });
-    if (isLensCommand(message)) this.onCommand?.(message);
-  }
-
-  emit(message: unknown, buffers: DataView[] = []): void {
-    for (const handler of this.handlers) handler(message, buffers);
-  }
-
-  asAnyModel(): AnyModel {
-    return this as unknown as AnyModel;
+    if (isClientCommand(message)) this.onCommand?.(message);
   }
 }
 
@@ -78,6 +105,25 @@ describe("Lens protocol client", () => {
     expect(model.handlers).toHaveLength(1);
     client.dispose();
     expect(model.handlers).toHaveLength(0);
+  });
+
+  test("ignores malformed and unrelated custom messages", async () => {
+    const model = new FakeModel();
+    const client = new LensProtocolClient(model.asAnyModel(), window);
+    client.start();
+
+    const request = client.clearSelections(7);
+    const command = model.sent[0]?.message;
+    if (!command || !isClientCommand(command)) throw new Error("Expected pending Lens command");
+
+    expect(() => model.emit(null)).not.toThrow();
+    expect(() => model.emit(undefined)).not.toThrow();
+    expect(() => model.emit("kernel.status")).not.toThrow();
+    expect(() => model.emit({ method: "update", state: { busy: false } })).not.toThrow();
+
+    model.emit(success(command));
+    await expect(request).resolves.toMatchObject({ revision: 8 });
+    client.dispose();
   });
 
   test("announces output capture readiness for the handler lifetime", () => {
@@ -367,7 +413,7 @@ describe("Lens protocol client", () => {
 
     const request = client.activateSelection("selection-2", 4);
     const command = model.sent[0]?.message;
-    if (!isLensCommand(command)) throw new Error("Expected Lens command");
+    if (!command || !isClientCommand(command)) throw new Error("Expected Lens command");
     model.emit({
       protocol: "marimo-lens.event",
       version: 2,
@@ -449,7 +495,7 @@ describe("Lens protocol client", () => {
   test("reports listener failures after notifying the remaining subscribers", () => {
     const model = new FakeModel();
     const client = new LensProtocolClient(model.asAnyModel(), window);
-    const event = {
+    const event: SelectionResolvedEvent = {
       protocol: "marimo-lens.event",
       version: 2,
       type: "selection.resolved",
@@ -540,21 +586,13 @@ describe("Lens protocol client", () => {
   });
 });
 
-function success(command: LensCommand, payload: Record<string, unknown> = {}) {
-  const expectedRevision = Reflect.get(command.payload, "expectedRevision");
-  const mutates =
-    command.type === "selection.put" ||
-    command.type === "selection.activate" ||
-    command.type === "selection.delete" ||
-    command.type === "selections.clear" ||
-    command.type === "selection.reopen" ||
-    command.type === "history.clear";
+function success(command: ClientCommand, payload: LensResponse["payload"] = {}): LensResponse {
   return {
     protocol: "marimo-lens.response",
     version: 2,
     requestId: command.requestId,
     ok: true,
-    revision: typeof expectedRevision === "number" ? expectedRevision + (mutates ? 1 : 0) : 4,
+    revision: command.type === "snapshot.get" ? 4 : command.payload.expectedRevision + 1,
     payload,
   };
 }
@@ -595,8 +633,8 @@ function captureFailure(
   requestId: string,
   outputCellId: string,
   code: string,
-  message: unknown,
-): unknown {
+  message: string,
+): LensResponse {
   return {
     protocol: "marimo-lens.response",
     version: 2,
@@ -608,24 +646,30 @@ function captureFailure(
   };
 }
 
-function readinessEvent(type: "output.capture.ready" | "output.capture.unready"): unknown {
+function readinessEvent(
+  type: "output.capture.ready" | "output.capture.unready",
+): OutputCaptureReadinessEvent {
   return { protocol: "marimo-lens.event", version: 2, type, payload: {} };
 }
 
-function isReadinessEvent(message: unknown): boolean {
+function isReadinessEvent(message: ModelMessage): message is OutputCaptureReadinessEvent {
   return (
-    typeof message === "object" &&
-    message !== null &&
+    message.protocol === "marimo-lens.event" &&
     "type" in message &&
     (message.type === "output.capture.ready" || message.type === "output.capture.unready")
   );
 }
 
-function isLensCommand(message: unknown): message is LensCommand {
+function isClientCommand(message: ModelMessage): message is ClientCommand {
   return (
-    typeof message === "object" &&
-    message !== null &&
-    "protocol" in message &&
-    message.protocol === "marimo-lens.command"
+    message.protocol === "marimo-lens.command" &&
+    "type" in message &&
+    message.type !== "output.capture"
   );
+}
+
+function copyArrayBuffer(buffer: ArrayBuffer | ArrayBufferView): ArrayBuffer {
+  if (buffer instanceof ArrayBuffer) return buffer;
+  const bytes = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  return new Uint8Array(bytes).buffer;
 }

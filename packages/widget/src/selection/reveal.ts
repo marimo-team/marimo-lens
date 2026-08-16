@@ -13,8 +13,7 @@ export function revealSelection(
   if (!output || isSubstantiallyVisible(dom, output)) return false;
 
   const reducedMotion =
-    typeof dom.window.matchMedia === "function" &&
-    dom.window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    dom.window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
   output.scrollIntoView({
     block: "center",
     inline: "nearest",

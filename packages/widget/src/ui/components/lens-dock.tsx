@@ -53,6 +53,11 @@ type LensDockProps = {
   snapshotLoader: SelectionSnapshotLoader;
 };
 
+type SheetFocus = {
+  open: boolean;
+  historyRevision: number | null;
+};
+
 export function LensDock({
   selections,
   history,
@@ -87,7 +92,7 @@ export function LensDock({
   const selectRef = useRef<HTMLButtonElement>(null);
   const tabRef = useRef<HTMLButtonElement>(null);
   const listTriggerRef = useRef<HTMLButtonElement>(null);
-  const sheetFocusRef = useRef({ open: false, historyRevision: null as number | null });
+  const sheetFocusRef = useRef<SheetFocus>({ open: false, historyRevision: null });
   const [expanded, setExpanded] = useState(true);
   const hasSelectionSurface = selections.length > 0 || history.length > 0;
   const commandsDisabled = interactionLocked || armed;

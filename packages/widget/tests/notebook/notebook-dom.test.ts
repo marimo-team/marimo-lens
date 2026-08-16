@@ -45,15 +45,16 @@ describe("notebook DOM layout subscriptions", () => {
   });
 
   test("coalesces output topology scans until the next paint", () => {
-    let notifyMutation: MutationCallback | undefined;
+    let notifyMutation = () => {};
     const MutationObserverStub = vi.fn(
-      class {
+      class implements MutationObserver {
         constructor(callback: MutationCallback) {
-          notifyMutation = callback;
+          notifyMutation = () => callback([], this);
         }
 
         observe = vi.fn();
         disconnect = vi.fn();
+        takeRecords = () => [];
       },
     );
     const ResizeObserverStub = vi.fn(
@@ -82,8 +83,8 @@ describe("notebook DOM layout subscriptions", () => {
     const release = dom.subscribeLayout(listener);
 
     expect(query).toHaveBeenCalledTimes(1);
-    notifyMutation?.([], {} as MutationObserver);
-    notifyMutation?.([], {} as MutationObserver);
+    notifyMutation();
+    notifyMutation();
     expect(query).toHaveBeenCalledTimes(1);
     expect(listener).not.toHaveBeenCalled();
     expect(frames.size).toBe(1);
@@ -154,15 +155,16 @@ describe("notebook DOM layout subscriptions", () => {
     const observedTargets = new Set<Node>();
     let notifyMutation = (_target: Node) => {};
     const MutationObserverStub = vi.fn(
-      class {
+      class implements MutationObserver {
         constructor(callback: MutationCallback) {
           notifyMutation = (target) => {
-            if (observedTargets.has(target)) callback([], {} as MutationObserver);
+            if (observedTargets.has(target)) callback([], this);
           };
         }
 
         observe = vi.fn((target: Node) => observedTargets.add(target));
         disconnect = vi.fn(() => observedTargets.clear());
+        takeRecords = () => [];
       },
     );
     vi.stubGlobal("MutationObserver", MutationObserverStub);

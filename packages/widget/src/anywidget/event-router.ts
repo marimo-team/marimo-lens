@@ -1,4 +1,8 @@
-import type { CellAttentionEvent, SelectionResolvedEvent } from "@marimo-lens/protocol";
+import type {
+  CellAttentionEvent,
+  SelectionResolvedEvent,
+  TransportEnvelope,
+} from "@marimo-lens/protocol";
 
 import {
   parseCellActivityStartEvent,
@@ -6,8 +10,6 @@ import {
   parseCellRevealEvent,
   parseSelectionResolvedEvent,
 } from "@marimo-lens/protocol";
-
-const EVENT_PROTOCOL = "marimo-lens.event";
 
 type SelectionResolvedListener = (event: SelectionResolvedEvent) => void;
 type CellAttentionListener = (event: CellAttentionEvent) => void;
@@ -26,8 +28,16 @@ export class EventRouter {
     return () => this.#cellAttentionListeners.delete(listener);
   }
 
-  accept(message: unknown, buffers: readonly DataView[] = []): boolean {
-    if (!isRoutedEvent(message)) return false;
+  accept(message: TransportEnvelope, buffers: readonly DataView[] = []): boolean {
+    if (message.protocol !== "marimo-lens.event") return false;
+    if (
+      message.type !== "selection.resolved" &&
+      message.type !== "cell.activity.start" &&
+      message.type !== "cell.activity.stop" &&
+      message.type !== "cell.reveal"
+    ) {
+      return false;
+    }
     if (buffers.length !== 0) return true;
     if (message.type === "selection.resolved") {
       let event: SelectionResolvedEvent;
@@ -70,21 +80,4 @@ function dispatch<T>(listeners: ReadonlySet<(event: T) => void>, event: T): void
     }
   }
   if (failures.length > 0) throw failures[0];
-}
-
-function isRoutedEvent(message: unknown): message is {
-  protocol: string;
-  type: "selection.resolved" | "cell.activity.start" | "cell.activity.stop" | "cell.reveal";
-} {
-  return (
-    typeof message === "object" &&
-    message !== null &&
-    "protocol" in message &&
-    message.protocol === EVENT_PROTOCOL &&
-    "type" in message &&
-    (message.type === "selection.resolved" ||
-      message.type === "cell.activity.start" ||
-      message.type === "cell.activity.stop" ||
-      message.type === "cell.reveal")
-  );
 }
