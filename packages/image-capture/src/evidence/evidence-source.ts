@@ -3,7 +3,7 @@ import type { DomHintBounds, SelectionAnchor } from "@marimo-lens/protocol";
 import { outputContentMetrics, parentElementAcrossShadow, relativeOutputBounds } from "./geometry";
 import { throwIfCaptureAborted } from "./owner-realm";
 import { exceedsCaptureDimensions } from "./png";
-import { captureElementRaster, resolveCaptureBackground } from "./raster";
+import { captureElementRaster, type RasterizeElement, resolveCaptureBackground } from "./raster";
 
 export type SelectionCaptureOptions = {
   selectionId: string;
@@ -39,10 +39,11 @@ type DetailTarget = {
 export async function captureSelectionEvidence(
   options: SelectionCaptureOptions,
   backgroundColor = resolveCaptureBackground(options.output),
+  rasterize?: RasterizeElement,
 ): Promise<SelectionEvidence> {
   const detailTarget = selectionDetailTarget(options);
   const detail = detailTarget
-    ? await captureDetailEvidence(detailTarget, backgroundColor, options.signal)
+    ? await captureDetailEvidence(detailTarget, backgroundColor, options.signal, rasterize)
     : null;
   throwIfCaptureAborted(options.signal, options.output.ownerDocument);
   const overview = await captureElementRaster(
@@ -50,6 +51,7 @@ export async function captureSelectionEvidence(
     backgroundColor,
     true,
     options.signal,
+    rasterize,
   );
   return { overview, detail, backgroundColor };
 }
@@ -57,13 +59,14 @@ export async function captureSelectionEvidence(
 export async function captureOutputEvidence(
   output: HTMLElement,
   signal?: AbortSignal,
+  rasterize?: RasterizeElement,
 ): Promise<OutputEvidence> {
   const backgroundColor = resolveCaptureBackground(output);
   const includeDetail = isLargeOutput(output) || output.scrollLeft !== 0 || output.scrollTop !== 0;
   const detail = includeDetail
-    ? await captureElementRaster(output, backgroundColor, false, signal)
+    ? await captureElementRaster(output, backgroundColor, false, signal, rasterize)
     : null;
-  const overview = await captureElementRaster(output, backgroundColor, true, signal);
+  const overview = await captureElementRaster(output, backgroundColor, true, signal, rasterize);
   return { overview, detail, backgroundColor };
 }
 
@@ -105,9 +108,10 @@ async function captureDetailEvidence(
   target: DetailTarget,
   backgroundColor: string,
   signal?: AbortSignal,
+  rasterize?: RasterizeElement,
 ): Promise<DetailEvidence> {
   return {
-    image: await captureElementRaster(target.element, backgroundColor, false, signal),
+    image: await captureElementRaster(target.element, backgroundColor, false, signal, rasterize),
     bounds: target.bounds,
   };
 }

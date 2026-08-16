@@ -2,10 +2,11 @@ import type { AnyModel } from "@anywidget/types";
 import type { CaptureResult } from "@marimo-lens/image-capture";
 import type { AddressedSelection, LensResponse, LensState, Selection } from "@marimo-lens/protocol";
 
-import { captureSelectionSnapshot } from "@marimo-lens/image-capture";
 import { act, StrictMode, useLayoutEffect, useMemo, useReducer } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
+
+import type { SelectionSnapshotCapture } from "@/selection/selection-capture";
 
 import { LensProtocolClient } from "@/anywidget/client";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
@@ -14,13 +15,9 @@ import { INITIAL_UI_STATE, uiReducer, type UiState } from "@/selection/state";
 
 import { addressedSelectionFixture, selectionFixture } from "../support/fixtures";
 
-vi.mock("@marimo-lens/image-capture", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@marimo-lens/image-capture")>()),
-  captureSelectionSnapshot: vi.fn(),
-}));
-
 type Actions = ReturnType<typeof useSelectionActions>;
 
+const captureSnapshot = vi.fn<SelectionSnapshotCapture>();
 let root: Root | null = null;
 let actions: Actions | null = null;
 let latestUi: UiState | null = null;
@@ -31,7 +28,7 @@ afterEach(() => {
   actions = null;
   latestUi = null;
   document.body.replaceChildren();
-  vi.mocked(captureSelectionSnapshot).mockReset();
+  captureSnapshot.mockReset();
   vi.unstubAllGlobals();
 });
 
@@ -39,7 +36,7 @@ describe("selection mutations", () => {
   test("commits on pointer release before capturing the automatic snapshot", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -78,7 +75,7 @@ describe("selection mutations", () => {
 
   test("keeps a text-ready selection when initial capture fails", async () => {
     const output = visibleOutput();
-    vi.mocked(captureSelectionSnapshot).mockResolvedValue(failedCapture());
+    captureSnapshot.mockResolvedValue(failedCapture());
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -99,7 +96,7 @@ describe("selection mutations", () => {
     document.body.appendChild(frame);
     const frameWindow = frame.contentWindow?.self;
     if (!frameWindow) throw new Error("Iframe window must be available");
-    vi.mocked(captureSelectionSnapshot).mockRejectedValue(
+    captureSnapshot.mockRejectedValue(
       new frameWindow.DOMException("Frame capture canceled", "AbortError"),
     );
     const stateRef = { current: lensState() };
@@ -117,7 +114,7 @@ describe("selection mutations", () => {
 
   test("settles a pending image after persistence fails", async () => {
     const output = visibleOutput();
-    vi.mocked(captureSelectionSnapshot).mockResolvedValue(availableCapture());
+    captureSnapshot.mockResolvedValue(availableCapture());
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     const persist = protocol.putSelection.getMockImplementation()!;
@@ -167,7 +164,7 @@ describe("selection mutations", () => {
   test("settles an initial snapshot when its output disappears", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -192,7 +189,7 @@ describe("selection mutations", () => {
     visibleOutput();
     const prior = selectionFixture({ snapshot: availableCapture().snapshot.metadata });
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState(2, [prior], prior.id, "S2") };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -212,7 +209,7 @@ describe("selection mutations", () => {
   test("rejects marked pixels from a replaced canonical output root", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -237,7 +234,7 @@ describe("selection mutations", () => {
     const output = visibleOutput();
     const prior = selectionFixture({ snapshot: availableCapture().snapshot.metadata });
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState(2, [prior], prior.id, "S2") };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -256,7 +253,7 @@ describe("selection mutations", () => {
   test("suppresses an automatic snapshot after its selection is resolved", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -284,7 +281,7 @@ describe("selection mutations", () => {
   test("suppresses a completed snapshot when canonical state removed the selection", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -310,7 +307,7 @@ describe("selection mutations", () => {
 
   test("does not start a queued automatic snapshot after resolution", async () => {
     const output = visibleOutput();
-    vi.mocked(captureSelectionSnapshot).mockResolvedValue(availableCapture());
+    captureSnapshot.mockResolvedValue(availableCapture());
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -322,13 +319,13 @@ describe("selection mutations", () => {
     await flush();
 
     expect(protocol.putSelection).toHaveBeenCalledTimes(1);
-    expect(captureSelectionSnapshot).not.toHaveBeenCalled();
+    expect(captureSnapshot).not.toHaveBeenCalled();
     expect(latestUi?.announcement).not.toBe("Image ready.");
   });
 
   test("commits a selection when development mode replays effects", async () => {
     const output = visibleOutput();
-    vi.mocked(captureSelectionSnapshot).mockResolvedValue(failedCapture());
+    captureSnapshot.mockResolvedValue(failedCapture());
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client, true);
@@ -344,7 +341,7 @@ describe("selection mutations", () => {
   test("settles a detached pending capture when deletion fails", async () => {
     const output = visibleOutput();
     const interrupted = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(interrupted.promise);
+    captureSnapshot.mockReturnValue(interrupted.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     protocol.deleteSelection.mockRejectedValueOnce(new Error("Remove failed"));
@@ -356,7 +353,7 @@ describe("selection mutations", () => {
     act(() => actions?.deleteSelection(stateRef.current.selections[0]!));
     await flush();
 
-    expect(captureSelectionSnapshot).toHaveBeenCalledTimes(1);
+    expect(captureSnapshot).toHaveBeenCalledTimes(1);
     expect(stateRef.current.selections[0]?.snapshot.status).toBe("pending");
     expect(captureSignal().aborted).toBe(false);
 
@@ -369,7 +366,7 @@ describe("selection mutations", () => {
   test("settles detached pending captures when clearing fails", async () => {
     const output = visibleOutput();
     const interrupted = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(interrupted.promise);
+    captureSnapshot.mockReturnValue(interrupted.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     protocol.clearSelections.mockRejectedValueOnce(new Error("Clear failed"));
@@ -381,7 +378,7 @@ describe("selection mutations", () => {
     act(() => actions?.clearSelections());
     await flush();
 
-    expect(captureSelectionSnapshot).toHaveBeenCalledTimes(1);
+    expect(captureSnapshot).toHaveBeenCalledTimes(1);
     expect(stateRef.current.selections[0]?.snapshot.status).toBe("pending");
     expect(captureSignal().aborted).toBe(false);
 
@@ -394,7 +391,7 @@ describe("selection mutations", () => {
   test("suppresses a pending capture after deletion succeeds", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -440,7 +437,7 @@ describe("selection mutations", () => {
   test("suppresses pending captures after clearing succeeds", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -462,7 +459,7 @@ describe("selection mutations", () => {
   test("aborts a pending raster when reposition starts its replacement", async () => {
     const output = visibleOutput();
     const firstCapture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot)
+    captureSnapshot
       .mockReturnValueOnce(firstCapture.promise)
       .mockResolvedValueOnce(failedCapture());
     const stateRef = { current: lensState() };
@@ -482,7 +479,7 @@ describe("selection mutations", () => {
     );
     await flush();
 
-    expect(captureSelectionSnapshot).toHaveBeenCalledTimes(2);
+    expect(captureSnapshot).toHaveBeenCalledTimes(2);
     expect(firstSignal.aborted).toBe(true);
     expect(captureSignal(1).aborted).toBe(false);
     const committedCalls = protocol.putSelection.mock.calls.length;
@@ -495,7 +492,7 @@ describe("selection mutations", () => {
   test("keeps the current raster when repositioning fails before replacement", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -526,7 +523,7 @@ describe("selection mutations", () => {
   test("aborts pending selection capture during teardown", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
@@ -614,7 +611,7 @@ describe("selection mutations", () => {
     const stateRef = { current: lensState(2, [prior], prior.id, "S2") };
     const protocol = statefulProtocol(stateRef);
     const capture = deferred<CaptureResult>();
-    vi.mocked(captureSelectionSnapshot).mockReturnValue(capture.promise);
+    captureSnapshot.mockReturnValue(capture.promise);
     mount(stateRef, protocol.client);
 
     act(() => actions?.repositionSelection(prior, { kind: "point", x: 0.7, y: 0.6 }));
@@ -638,7 +635,7 @@ describe("selection mutations", () => {
   test("reopens an exact receipt as current and captures fresh pixels", async () => {
     const output = visibleOutput();
     const receipt = addressedSelectionFixture();
-    vi.mocked(captureSelectionSnapshot).mockResolvedValue(availableCapture(receipt.selectionId));
+    captureSnapshot.mockResolvedValue(availableCapture(receipt.selectionId));
     const stateRef = {
       current: lensState(4, [], null, "S2", [receipt]),
     };
@@ -667,7 +664,7 @@ describe("selection mutations", () => {
       },
       snapshot: { status: "available" },
     });
-    expect(captureSelectionSnapshot).toHaveBeenCalledWith(
+    expect(captureSnapshot).toHaveBeenCalledWith(
       expect.objectContaining({
         selectionId: receipt.selectionId,
         output,
@@ -733,6 +730,7 @@ function Harness({
     dispatch,
     dom,
     protocol,
+    captureSnapshot,
   });
   useLayoutEffect(() => {
     actions = hookActions;
@@ -913,7 +911,7 @@ function reopenedSelection(receipt: AddressedSelection): Selection {
 }
 
 function captureSignal(index = 0): AbortSignal {
-  const signal = vi.mocked(captureSelectionSnapshot).mock.calls[index]?.[0].signal;
+  const signal = captureSnapshot.mock.calls[index]?.[0].signal;
   if (!signal) throw new Error(`Capture ${index + 1} has no abort signal`);
   return signal;
 }

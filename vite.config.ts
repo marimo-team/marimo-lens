@@ -63,7 +63,6 @@ export default defineConfig({
       "oxc",
       "promise",
       "react",
-      "react-hooks",
       "react-perf",
       "typescript",
       "unicorn",
@@ -94,6 +93,9 @@ export default defineConfig({
         },
       },
     ],
+  },
+  test: {
+    include: ["tools/oxlint/anti-slop-tests/**/*.test.ts"],
   },
   run: {
     cache: true,

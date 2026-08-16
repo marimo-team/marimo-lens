@@ -18,6 +18,7 @@ import {
 
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
+import type { SelectionSnapshotCapture } from "@/selection/selection-capture";
 import type { SelectionMotion, UiAction } from "@/selection/state";
 
 import { LensProtocolError } from "@/anywidget/client";
@@ -36,8 +37,9 @@ export function useSelectionActions(options: {
   dispatch: Dispatch<UiAction>;
   dom: NotebookDomAdapter;
   protocol: LensProtocolClient;
+  captureSnapshot?: SelectionSnapshotCapture;
 }) {
-  const { stateRef, dispatch, dom, protocol } = options;
+  const { stateRef, dispatch, dom, protocol, captureSnapshot } = options;
   const currentSignal = useLifecycleSignal(dom.window);
   const [mutationQueue] = useState(() => ({ tail: Promise.resolve() }));
 
@@ -106,8 +108,18 @@ export function useSelectionActions(options: {
         enqueueMutation,
         runRevisioned,
         announce: (message) => dispatch({ type: "announce", message }),
+        captureSnapshot,
       }),
-    [currentSignal, dispatch, dom, enqueueMutation, protocol, runRevisioned, stateRef],
+    [
+      captureSnapshot,
+      currentSignal,
+      dispatch,
+      dom,
+      enqueueMutation,
+      protocol,
+      runRevisioned,
+      stateRef,
+    ],
   );
 
   useEffect(() => {

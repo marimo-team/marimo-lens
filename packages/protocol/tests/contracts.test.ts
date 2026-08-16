@@ -39,6 +39,15 @@ describe("transport envelope", () => {
     expect(parseTransportEnvelope(undefined)).toBeNull();
     expect(parseTransportEnvelope("kernel.status")).toBeNull();
   });
+
+  test("rejects a non-string request identifier", () => {
+    expect(
+      parseTransportEnvelope({
+        protocol: "marimo-lens.response",
+        requestId: 7,
+      }),
+    ).toBeNull();
+  });
 });
 
 describe("selection contracts", () => {

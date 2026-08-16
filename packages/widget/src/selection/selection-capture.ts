@@ -15,6 +15,8 @@ type RunRevisioned = (
   postcondition: (state: LensState) => boolean,
 ) => Promise<void>;
 
+export type SelectionSnapshotCapture = typeof captureSelectionSnapshot;
+
 export type SelectionCaptureJob = {
   ticket: symbol;
   controller: AbortController;
@@ -29,6 +31,7 @@ export class SelectionCapture {
   readonly #enqueueMutation: EnqueueMutation;
   readonly #runRevisioned: RunRevisioned;
   readonly #announce: (message: string) => void;
+  readonly #captureSnapshot: SelectionSnapshotCapture;
   readonly #jobs = new Map<string, SelectionCaptureJob>();
 
   constructor(options: {
@@ -39,6 +42,7 @@ export class SelectionCapture {
     enqueueMutation: EnqueueMutation;
     runRevisioned: RunRevisioned;
     announce: (message: string) => void;
+    captureSnapshot?: SelectionSnapshotCapture;
   }) {
     this.#stateRef = options.stateRef;
     this.#dom = options.dom;
@@ -47,6 +51,7 @@ export class SelectionCapture {
     this.#enqueueMutation = options.enqueueMutation;
     this.#runRevisioned = options.runRevisioned;
     this.#announce = options.announce;
+    this.#captureSnapshot = options.captureSnapshot ?? captureSelectionSnapshot;
   }
 
   reserve(selectionId: string): SelectionCaptureJob {
@@ -127,7 +132,7 @@ export class SelectionCapture {
       const current = this.#stateRef.current.selections.find(({ id }) => id === selection.id);
       if (!current || !sameAnchor(current.anchor, selection.anchor)) return;
       job.started = true;
-      const result = await captureSelectionSnapshot({
+      const result = await this.#captureSnapshot({
         selectionId: selection.id,
         label: selection.label,
         anchor: selection.anchor,

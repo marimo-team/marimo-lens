@@ -3,9 +3,11 @@ import { defineRule } from "@oxlint/plugins";
 import {
 	classifyUnsafeDictionary,
 	classifyUnsafeDictionaryValue,
-	createTypeEnvironment,
-	type TypeEnvironment,
 } from "../shared/dictionary-types.ts";
+import {
+	createLexicalTypeEnvironment,
+	type LexicalTypeEnvironment,
+} from "../shared/type-environment.ts";
 
 import type { ESTree } from "@oxlint/plugins";
 
@@ -66,13 +68,18 @@ function isInsideTypeAliasDeclaration(node: ESTree.Node): boolean {
 	return false;
 }
 
-function isPlainAliasConsumerUse(node: ESTree.TSType, environment: TypeEnvironment): boolean {
+function isPlainAliasConsumerUse(
+	node: ESTree.TSType,
+	environment: LexicalTypeEnvironment,
+): boolean {
 	if (node.type !== "TSTypeReference" || node.typeArguments?.params.length) return false;
 	const name = typeReferenceName(node);
-	return name !== null && environment.aliases.has(name) && !isInsideTypeAliasDeclaration(node);
+	if (name === null || isInsideTypeAliasDeclaration(node)) return false;
+	const alias = environment.lookupAlias(name, node);
+	return alias !== null && (alias.typeParameters?.params.length ?? 0) === 0;
 }
 
-function shouldReportType(node: ESTree.TSType, environment: TypeEnvironment): boolean {
+function shouldReportType(node: ESTree.TSType, environment: LexicalTypeEnvironment): boolean {
 	if (isPlainAliasConsumerUse(node, environment)) return false;
 	if (classifyUnsafeDictionary(node, environment) === null) return false;
 	let current: ESTree.Node | null = node.parent;
@@ -98,7 +105,7 @@ export const noUnsafeDictionaryTypeRule = defineRule({
 		},
 	},
 	createOnce(context) {
-		let environment: TypeEnvironment | null = null;
+		let environment: LexicalTypeEnvironment | null = null;
 		const report = (node: ESTree.Node, value: string) => {
 			context.report({ node, messageId: "unsafeDictionary", data: { value } });
 		};
@@ -111,7 +118,10 @@ export const noUnsafeDictionaryTypeRule = defineRule({
 
 		return {
 			Program(node) {
-				environment = createTypeEnvironment(node);
+				environment = createLexicalTypeEnvironment(
+					node,
+					context.sourceCode.visitorKeys,
+				);
 			},
 			TSTypeReference: reportIfUnsafe,
 			TSTypeLiteral: reportIfUnsafe,

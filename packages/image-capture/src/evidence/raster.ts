@@ -121,18 +121,21 @@ export type ElementCaptureGeometry = {
   style: Record<string, string>;
 };
 
+export type RasterizeElement = typeof toPng;
+
 export async function captureElementRaster(
   element: HTMLElement,
   backgroundColor: string,
   captureFullOutput: boolean,
   signal?: AbortSignal,
+  rasterize: RasterizeElement = toPng,
 ): Promise<HTMLImageElement> {
   const ownerDocument = element.ownerDocument;
   throwIfCaptureAborted(signal, ownerDocument);
   const geometry = elementCaptureGeometry(element, captureFullOutput);
   assertCapturableIframes(element);
   const raster = captureRasterSize(geometry.width, geometry.height);
-  const dataUrl = await toPng(element, {
+  const dataUrl = await rasterize(element, {
     backgroundColor,
     width: geometry.width,
     height: geometry.height,

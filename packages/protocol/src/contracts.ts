@@ -12,7 +12,7 @@ const TransportDiscriminatorSchema = v.union([v.boolean(), v.null(), v.number(),
 
 export const TransportEnvelopeSchema = v.looseObject({
   protocol: v.optional(TransportDiscriminatorSchema),
-  requestId: v.optional(TransportDiscriminatorSchema),
+  requestId: v.optional(v.string()),
   type: v.optional(TransportDiscriminatorSchema),
 });
 

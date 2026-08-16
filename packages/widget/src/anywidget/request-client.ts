@@ -165,9 +165,10 @@ export class RequestClient {
 
   accept(message: TransportEnvelope, buffers: DataView[] = []): boolean {
     if (message.protocol !== "marimo-lens.response") return false;
-    const entry = this.#pendingEntry(message);
-    if (!entry) return true;
-    const [requestId, pending] = entry;
+    const requestId = message.requestId;
+    if (requestId === undefined) return true;
+    const pending = this.#pending.get(requestId);
+    if (!pending) return true;
     try {
       const response = parseLensResponse(message);
       const payload = validateClientReply(pending.command, response, buffers);
@@ -184,13 +185,6 @@ export class RequestClient {
   #finish(requestId: string, pending: PendingRequest): void {
     this.#window.clearTimeout(pending.timeout);
     this.#pending.delete(requestId);
-  }
-
-  #pendingEntry(message: TransportEnvelope): readonly [string, PendingRequest] | null {
-    for (const entry of this.#pending) {
-      if (message.requestId === entry[0]) return entry;
-    }
-    return null;
   }
 }
 

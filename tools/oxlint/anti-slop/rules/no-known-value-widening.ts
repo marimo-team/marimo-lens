@@ -1,16 +1,20 @@
 import { defineRule } from "@oxlint/plugins";
 
 import {
+	classifyPromiseResultWideningTarget,
 	classifyWideningTarget,
-	createTypeEnvironment,
 	isKnownEvidenceExpression,
-	type TypeEnvironment,
 	type WideningTarget,
 } from "../shared/dictionary-types.ts";
+import {
+	createLexicalTypeEnvironment,
+	type LexicalTypeEnvironment,
+} from "../shared/type-environment.ts";
 
 import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
 
 type FunctionExpression = ESTree.ArrowFunctionExpression | ESTree.Function;
+type TypeAssertion = ESTree.TSAsExpression | ESTree.TSTypeAssertion;
 
 function unwrapExpression(expression: ESTree.Expression): ESTree.Expression {
 	let current = expression;
@@ -79,10 +83,12 @@ function hasKnownEvidence(
 
 function annotationTarget(
 	annotation: ESTree.TSTypeAnnotation | null | undefined,
-	environment: TypeEnvironment,
+	environment: LexicalTypeEnvironment,
+	unwrapPromiseResult = false,
 ): WideningTarget | null {
-	return annotation === null || annotation === undefined
-		? null
+	if (annotation === null || annotation === undefined) return null;
+	return unwrapPromiseResult
+		? classifyPromiseResultWideningTarget(annotation.typeAnnotation, environment)
 		: classifyWideningTarget(annotation.typeAnnotation, environment);
 }
 
@@ -130,6 +136,65 @@ function hasParentAssertion(node: ESTree.Node): boolean {
 	return node.parent?.type === "TSAsExpression" || node.parent?.type === "TSTypeAssertion";
 }
 
+function bindingPatternAnnotation(
+	pattern: ESTree.BindingPattern,
+): ESTree.TSTypeAnnotation | null | undefined {
+	if (pattern.type === "AssignmentPattern") {
+		return bindingPatternAnnotation(pattern.left);
+	}
+	return pattern.typeAnnotation;
+}
+
+function isParameterDefault(node: ESTree.AssignmentPattern): boolean {
+	const parent = node.parent;
+	if (parent.type === "TSParameterProperty") return parent.parameter === node;
+	if (
+		parent.type !== "ArrowFunctionExpression" &&
+		parent.type !== "FunctionDeclaration" &&
+		parent.type !== "FunctionExpression" &&
+		parent.type !== "TSDeclareFunction" &&
+		parent.type !== "TSEmptyBodyFunctionExpression"
+	) {
+		return false;
+	}
+	return parent.params.some((parameter) => parameter === node);
+}
+
+function markAssertionsInFlow(
+	expression: ESTree.Expression,
+	coveredAssertions: WeakSet<TypeAssertion>,
+): void {
+	let current = expression;
+	while (true) {
+		if (current.type === "TSAsExpression" || current.type === "TSTypeAssertion") {
+			coveredAssertions.add(current);
+			current = current.expression;
+			continue;
+		}
+		if (
+			current.type === "ParenthesizedExpression" ||
+			current.type === "TSSatisfiesExpression" ||
+			current.type === "TSNonNullExpression"
+		) {
+			current = current.expression;
+			continue;
+		}
+		if (current.type === "ConditionalExpression") {
+			markAssertionsInFlow(current.consequent, coveredAssertions);
+			markAssertionsInFlow(current.alternate, coveredAssertions);
+			return;
+		}
+		if (current.type === "SequenceExpression") {
+			const finalExpression = current.expressions.at(-1);
+			if (finalExpression !== undefined) {
+				markAssertionsInFlow(finalExpression, coveredAssertions);
+			}
+			return;
+		}
+		return;
+	}
+}
+
 /** Detect sound syntactic cases where a known value is explicitly widened and loses evidence. */
 export const noKnownValueWideningRule = defineRule({
 	meta: {
@@ -144,46 +209,82 @@ export const noKnownValueWideningRule = defineRule({
 		},
 	},
 	createOnce(context) {
-		let environment: TypeEnvironment | null = null;
+		let environment: LexicalTypeEnvironment | null = null;
+		const coveredAssertions = new WeakSet<TypeAssertion>();
 
 		const reportFlow = (
 			expression: ESTree.Expression,
 			destination: WideningTarget | null,
 			subject: string,
-		) => {
-			if (destination === null) return;
+		): boolean => {
+			if (destination === null) return false;
 			if (
 				isDictionaryAccumulatorTarget(destination) &&
 				isEmptyObjectExpression(expression)
 			) {
-				return;
+				return false;
 			}
-			if (!hasKnownEvidence(context.sourceCode, expression)) return;
+			if (!hasKnownEvidence(context.sourceCode, expression)) return false;
 			context.report({
 				node: expression,
 				messageId: "widening",
 				data: { subject, target: destination.kind },
 			});
+			return true;
 		};
 
-		const targetFromAnnotation = (annotation: ESTree.TSTypeAnnotation | null | undefined) =>
-			environment === null ? null : annotationTarget(annotation, environment);
+		const reportAnnotatedFlow = (
+			expression: ESTree.Expression,
+			destination: WideningTarget | null,
+			subject: string,
+		) => {
+			if (!reportFlow(expression, destination, subject)) return;
+			markAssertionsInFlow(expression, coveredAssertions);
+		};
+
+		const targetFromAnnotation = (
+			annotation: ESTree.TSTypeAnnotation | null | undefined,
+			unwrapPromiseResult = false,
+		) =>
+			environment === null
+				? null
+				: annotationTarget(annotation, environment, unwrapPromiseResult);
 
 		return {
 			Program(node) {
-				environment = createTypeEnvironment(node);
+				environment = createLexicalTypeEnvironment(
+					node,
+					context.sourceCode.visitorKeys,
+				);
+			},
+			AssignmentPattern(node) {
+				if (!isParameterDefault(node)) return;
+				reportAnnotatedFlow(
+					node.right,
+					targetFromAnnotation(bindingPatternAnnotation(node.left)),
+					"default parameter",
+				);
 			},
 			VariableDeclarator(node) {
-				if (node.init === null || node.id.type !== "Identifier") return;
-				reportFlow(
+				if (
+					node.init === null ||
+					(node.id.type !== "Identifier" &&
+						node.id.type !== "ObjectPattern" &&
+						node.id.type !== "ArrayPattern")
+				) {
+					return;
+				}
+				const subject =
+					node.id.type === "Identifier" ? `binding \`${node.id.name}\`` : "binding pattern";
+				reportAnnotatedFlow(
 					node.init,
 					targetFromAnnotation(node.id.typeAnnotation),
-					`binding \`${node.id.name}\``,
+					subject,
 				);
 			},
 			PropertyDefinition(node) {
 				if (node.value === null) return;
-				reportFlow(
+				reportAnnotatedFlow(
 					node.value,
 					targetFromAnnotation(node.typeAnnotation),
 					`property \`${sourceKeyName(context.sourceCode, node.key)}\``,
@@ -191,7 +292,7 @@ export const noKnownValueWideningRule = defineRule({
 			},
 			AccessorProperty(node) {
 				if (node.value === null) return;
-				reportFlow(
+				reportAnnotatedFlow(
 					node.value,
 					targetFromAnnotation(node.typeAnnotation),
 					`property \`${sourceKeyName(context.sourceCode, node.key)}\``,
@@ -203,7 +304,7 @@ export const noKnownValueWideningRule = defineRule({
 				if (variable === null) return;
 				const declarator = variableDeclarator(variable);
 				if (declarator === null || declarator.id.type !== "Identifier") return;
-				reportFlow(
+				reportAnnotatedFlow(
 					node.right,
 					targetFromAnnotation(declarator.id.typeAnnotation),
 					`binding \`${declarator.id.name}\``,
@@ -212,22 +313,28 @@ export const noKnownValueWideningRule = defineRule({
 			ReturnStatement(node) {
 				if (node.argument === null) return;
 				const owner = enclosingFunction(node);
-				reportFlow(
+				reportAnnotatedFlow(
 					node.argument,
-					targetFromAnnotation(owner?.returnType),
+					targetFromAnnotation(owner?.returnType, owner?.async === true),
 					`return value of \`${functionName(context.sourceCode, owner)}\``,
 				);
 			},
 			ArrowFunctionExpression(node) {
 				if (node.body.type === "BlockStatement") return;
-				reportFlow(
+				reportAnnotatedFlow(
 					node.body,
-					targetFromAnnotation(node.returnType),
+					targetFromAnnotation(node.returnType, node.async),
 					`return value of \`${functionName(context.sourceCode, node)}\``,
 				);
 			},
 			TSAsExpression(node) {
-				if (environment === null || hasParentAssertion(node)) return;
+				if (
+					environment === null ||
+					hasParentAssertion(node) ||
+					coveredAssertions.has(node)
+				) {
+					return;
+				}
 				reportFlow(
 					node.expression,
 					classifyWideningTarget(node.typeAnnotation, environment),
@@ -235,7 +342,13 @@ export const noKnownValueWideningRule = defineRule({
 				);
 			},
 			TSTypeAssertion(node) {
-				if (environment === null || hasParentAssertion(node)) return;
+				if (
+					environment === null ||
+					hasParentAssertion(node) ||
+					coveredAssertions.has(node)
+				) {
+					return;
+				}
 				reportFlow(
 					node.expression,
 					classifyWideningTarget(node.typeAnnotation, environment),

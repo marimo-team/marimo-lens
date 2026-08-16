@@ -49,18 +49,27 @@ describe("revision synchronization", () => {
   test("schedules synchronization through the notebook window", async () => {
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
-    const ownerWindow = frame.contentWindow?.self;
-    if (!ownerWindow) throw new Error("Iframe window must be available");
-    const setTimeout = vi.spyOn(ownerWindow, "setTimeout");
-    const clearTimeout = vi.spyOn(ownerWindow, "clearTimeout");
-    const stateRef = { current: state() };
+    try {
+      const ownerWindow = frame.contentWindow?.self;
+      if (!ownerWindow) throw new Error("Iframe window must be available");
+      const setTimeout = vi.spyOn(ownerWindow, "setTimeout");
+      const clearTimeout = vi.spyOn(ownerWindow, "clearTimeout");
+      const stateRef = { current: state() };
+      const controller = new AbortController();
+      const waiting = waitForRevision(ownerWindow, stateRef, 2, controller.signal);
 
-    const waiting = waitForRevision(ownerWindow, stateRef, 2, new AbortController().signal);
-    expect(setTimeout).toHaveBeenCalledOnce();
+      try {
+        expect(setTimeout).toHaveBeenCalledOnce();
 
-    stateRef.current = state(2);
-    await expect(waiting).resolves.toBeUndefined();
-    expect(clearTimeout).toHaveBeenCalled();
-    frame.remove();
+        stateRef.current = state(2);
+        await expect(waiting).resolves.toBeUndefined();
+        expect(clearTimeout).toHaveBeenCalled();
+      } finally {
+        controller.abort();
+        await waiting.catch(() => undefined);
+      }
+    } finally {
+      frame.remove();
+    }
   });
 });

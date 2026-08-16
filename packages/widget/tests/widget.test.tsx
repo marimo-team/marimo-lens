@@ -2,13 +2,11 @@ import type { AnyModel, Experimental, Host, RenderProps } from "@anywidget/types
 import type { LensState } from "@marimo-lens/protocol";
 
 import { act } from "react";
-import { afterEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, describe, expect, test } from "vite-plus/test";
 
-import { render } from "@/widget";
+import { createLensRender } from "@/app/lens-render";
 
-vi.mock("@/app/marimo-lens-content", () => ({
-  MarimoLensContent: () => <span data-widget-content>Lens</span>,
-}));
+const render = createLensRender(TestContent);
 
 type RenderCleanup = Exclude<Awaited<ReturnType<typeof render>>, void>;
 
@@ -47,6 +45,10 @@ describe("Lens widget views", () => {
     expect(nextContainer.querySelector("[data-widget-content]")).not.toBeNull();
   });
 });
+
+function TestContent() {
+  return <span data-widget-content>Lens</span>;
+}
 
 function appendContainer(): HTMLDivElement {
   const container = document.createElement("div");

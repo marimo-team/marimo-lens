@@ -597,9 +597,12 @@ function success(command: ClientCommand, payload: LensResponse["payload"] = {}):
   };
 }
 
-function outputCaptureCommand(
-  overrides: { requestId?: string; outputCellId?: string } = {},
-): OutputCaptureCommand {
+type OutputCaptureCommandOptions = {
+  requestId?: string;
+  outputCellId?: string;
+};
+
+function outputCaptureCommand(overrides: OutputCaptureCommandOptions = {}): OutputCaptureCommand {
   return {
     protocol: "marimo-lens.command",
     version: 2,

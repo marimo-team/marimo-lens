@@ -1,10 +1,14 @@
 import { defineRule } from "@oxlint/plugins";
-import type { ESTree } from "@oxlint/plugins";
+import type { ESTree, Variable } from "@oxlint/plugins";
 
 const FORBIDDEN_SYMBOL_NAME = "shape";
 
 function containsForbiddenSymbolName(name: string): boolean {
   return name.toLowerCase().includes(FORBIDDEN_SYMBOL_NAME);
+}
+
+function identifierKey(node: ESTree.Node): string {
+  return `${node.start}:${node.end}`;
 }
 
 /** Ban the case-insensitive substring "shape" in every JavaScript and TypeScript symbol name. */
@@ -21,6 +25,7 @@ export const noForbiddenTermInSymbolNamesRule = defineRule({
     },
   },
   createOnce(context) {
+    const lexicalIdentifiers = new Set<string>();
     const reportForbiddenSymbolName = (node: ESTree.Node & { name: string }) => {
       if (!containsForbiddenSymbolName(node.name)) return;
       context.report({
@@ -30,8 +35,26 @@ export const noForbiddenTermInSymbolNamesRule = defineRule({
       });
     };
 
+    const registerVariable = (variable: Variable) => {
+      for (const identifier of variable.identifiers) {
+        lexicalIdentifiers.add(identifierKey(identifier));
+      }
+      for (const reference of variable.references) {
+        lexicalIdentifiers.add(identifierKey(reference.identifier));
+      }
+      const declaration = variable.identifiers[0] ?? variable.defs[0]?.name;
+      if (declaration !== undefined) reportForbiddenSymbolName(declaration);
+    };
+
     return {
-      Identifier: reportForbiddenSymbolName,
+      Program() {
+        for (const scope of context.sourceCode.scopeManager.scopes) {
+          for (const variable of scope.variables) registerVariable(variable);
+        }
+      },
+      Identifier(node) {
+        if (!lexicalIdentifiers.has(identifierKey(node))) reportForbiddenSymbolName(node);
+      },
       PrivateIdentifier: reportForbiddenSymbolName,
       JSXIdentifier: reportForbiddenSymbolName,
     };
