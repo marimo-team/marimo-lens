@@ -11,6 +11,9 @@ const MARKER_LABEL_COLOR = "rgba(8, 128, 234, 0.82)";
 const MARKER_LABEL_EDGE_GAP = 2;
 
 type DrawRegion = { x: number; y: number; width: number; height: number };
+type RoundedPathContext = Omit<CanvasRenderingContext2D, "roundRect"> & {
+  roundRect?: CanvasRenderingContext2D["roundRect"];
+};
 
 export type EvidenceLayout = {
   width: number;
@@ -172,11 +175,7 @@ function fitEvidenceLayout(layout: EvidenceLayout): EvidenceLayout {
   };
 }
 
-function evidenceCanvas(
-  ownerDocument: Document,
-  layout: EvidenceLayout,
-  backgroundColor: string,
-): { canvas: HTMLCanvasElement; context: CanvasRenderingContext2D } {
+function evidenceCanvas(ownerDocument: Document, layout: EvidenceLayout, backgroundColor: string) {
   const canvas = ownerDocument.createElement("canvas");
   canvas.width = layout.width;
   canvas.height = layout.height;
@@ -325,7 +324,7 @@ function labelPosition(
   x: number,
   y: number,
   selection: DrawRegion | null,
-): { x: number; y: number } {
+) {
   const inset = selection ? 0 : 2;
   const maxX = Math.max(inset, canvas.width - width - inset);
   const maxY = Math.max(inset, canvas.height - height - inset);
@@ -348,14 +347,14 @@ function labelPosition(
 }
 
 function roundRect(
-  context: CanvasRenderingContext2D,
+  context: RoundedPathContext,
   x: number,
   y: number,
   width: number,
   height: number,
   radius: number,
 ): void {
-  if (typeof context.roundRect === "function") {
+  if (context.roundRect) {
     context.beginPath();
     context.roundRect(x, y, width, height, radius);
     return;

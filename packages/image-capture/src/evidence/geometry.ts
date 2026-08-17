@@ -1,5 +1,7 @@
 import type { DomHintBounds, SelectionAnchor } from "@marimo-lens/protocol";
 
+import { ownerWindow } from "./owner-realm";
+
 export type OutputContentMetrics = {
   bounds: DOMRect;
   width: number;
@@ -25,7 +27,7 @@ export function outputContentMetrics(output: HTMLElement): OutputContentMetrics 
   };
 }
 
-export function anchorCenter(anchor: SelectionAnchor): { x: number; y: number } {
+export function anchorCenter(anchor: SelectionAnchor) {
   if (anchor.kind === "point") return { x: anchor.x, y: anchor.y };
   return { x: anchor.x + anchor.width / 2, y: anchor.y + anchor.height / 2 };
 }
@@ -58,7 +60,7 @@ export function relativeOutputBounds(element: Element, output: HTMLElement): Dom
 export function parentElementAcrossShadow(element: Element): Element | null {
   if (element.parentElement) return element.parentElement;
   const root = element.getRootNode();
-  return root.nodeType === 11 && "host" in root ? (root as ShadowRoot).host : null;
+  return root instanceof ownerWindow(element.ownerDocument).ShadowRoot ? root.host : null;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

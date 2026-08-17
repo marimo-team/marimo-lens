@@ -14,7 +14,10 @@ function state(revision = 0): LensState {
   };
 }
 
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
 
 describe("revision synchronization", () => {
   test("resolves after the model reaches the response revision", async () => {
@@ -44,22 +47,29 @@ describe("revision synchronization", () => {
   });
 
   test("schedules synchronization through the notebook window", async () => {
-    vi.useFakeTimers();
-    const ownerWindow = Object.create(window) as Window & typeof globalThis;
-    const setTimeout = vi.fn(window.setTimeout.bind(window));
-    const clearTimeout = vi.fn(window.clearTimeout.bind(window));
-    Object.defineProperties(ownerWindow, {
-      setTimeout: { value: setTimeout },
-      clearTimeout: { value: clearTimeout },
-    });
-    const stateRef = { current: state() };
+    const frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+    try {
+      const ownerWindow = frame.contentWindow?.self;
+      if (!ownerWindow) throw new Error("Iframe window must be available");
+      const setTimeout = vi.spyOn(ownerWindow, "setTimeout");
+      const clearTimeout = vi.spyOn(ownerWindow, "clearTimeout");
+      const stateRef = { current: state() };
+      const controller = new AbortController();
+      const waiting = waitForRevision(ownerWindow, stateRef, 2, controller.signal);
 
-    const waiting = waitForRevision(ownerWindow, stateRef, 2, new AbortController().signal);
-    expect(setTimeout).toHaveBeenCalledOnce();
+      try {
+        expect(setTimeout).toHaveBeenCalledOnce();
 
-    stateRef.current = state(2);
-    await vi.advanceTimersByTimeAsync(25);
-    await expect(waiting).resolves.toBeUndefined();
-    expect(clearTimeout).toHaveBeenCalled();
+        stateRef.current = state(2);
+        await expect(waiting).resolves.toBeUndefined();
+        expect(clearTimeout).toHaveBeenCalled();
+      } finally {
+        controller.abort();
+        await waiting.catch(() => undefined);
+      }
+    } finally {
+      frame.remove();
+    }
   });
 });

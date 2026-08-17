@@ -62,14 +62,15 @@ describe("cell attention", () => {
 
   test("does not restart offscreen activity framing on the initial resize observation", () => {
     vi.useFakeTimers();
-    const resizeCallbacks: ResizeObserverCallback[] = [];
+    const notifyResizes: Array<() => void> = [];
     vi.stubGlobal(
       "ResizeObserver",
-      class {
+      class implements ResizeObserver {
         constructor(callback: ResizeObserverCallback) {
-          resizeCallbacks.push(callback);
+          notifyResizes.push(() => callback([], this));
         }
         observe = vi.fn();
+        unobserve = vi.fn();
         disconnect = vi.fn();
       },
     );
@@ -79,7 +80,7 @@ describe("cell attention", () => {
     const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
 
     controller.startActivity(startActivityEvent("new-cell"));
-    for (const resize of resizeCallbacks) resize([], {} as ResizeObserver);
+    for (const notifyResize of notifyResizes) notifyResize();
 
     expect(cell.scrollIntoView).toHaveBeenCalledOnce();
     controller.dispose();
@@ -350,14 +351,15 @@ describe("cell attention", () => {
 
   test("updates reveal geometry after resize without scrolling again", () => {
     vi.useFakeTimers();
-    const resizeCallbacks: ResizeObserverCallback[] = [];
+    const notifyResizes: Array<() => void> = [];
     vi.stubGlobal(
       "ResizeObserver",
-      class {
+      class implements ResizeObserver {
         constructor(callback: ResizeObserverCallback) {
-          resizeCallbacks.push(callback);
+          notifyResizes.push(() => callback([], this));
         }
         observe = vi.fn();
+        unobserve = vi.fn();
         disconnect = vi.fn();
       },
     );
@@ -366,7 +368,7 @@ describe("cell attention", () => {
     const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
 
     controller.reveal(revealEvent("resized-reveal"));
-    for (const resize of resizeCallbacks) resize([], {} as ResizeObserver);
+    for (const notifyResize of notifyResizes) notifyResize();
 
     expect(cell.scrollIntoView).toHaveBeenCalledOnce();
     controller.dispose();
@@ -390,16 +392,17 @@ describe("cell attention", () => {
 
   test("reframes activity after its cell grows beyond the viewport", () => {
     vi.useFakeTimers();
-    const resizeCallbacks: ResizeObserverCallback[] = [];
+    const notifyResizes: Array<() => void> = [];
     const disconnect = vi.fn();
     const observe = vi.fn();
     vi.stubGlobal(
       "ResizeObserver",
-      class {
+      class implements ResizeObserver {
         constructor(callback: ResizeObserverCallback) {
-          resizeCallbacks.push(callback);
+          notifyResizes.push(() => callback([], this));
         }
         observe = observe;
+        unobserve = vi.fn();
         disconnect = disconnect;
       },
     );
@@ -415,7 +418,7 @@ describe("cell attention", () => {
 
     rect = new DOMRect(20, 120, 400, window.innerHeight - 100);
 
-    for (const resize of resizeCallbacks) resize([], {} as ResizeObserver);
+    for (const notifyResize of notifyResizes) notifyResize();
 
     expect(observe).toHaveBeenCalledWith(cell);
     expect(cell.scrollIntoView).toHaveBeenCalledOnce();
@@ -553,16 +556,15 @@ function startActivityEvent(
   message?: string,
   durationMs?: number,
 ): CellActivityStartEvent {
+  const payload: CellActivityStartEvent["payload"] = { cellId };
+  if (durationMs !== undefined) payload.durationMs = durationMs;
+  if (message) payload.message = message;
   return {
     protocol: "marimo-lens.event",
     version: 2,
     type: "cell.activity.start",
     revision: 7,
-    payload: {
-      cellId,
-      ...(durationMs === undefined ? {} : { durationMs }),
-      ...(message ? { message } : {}),
-    },
+    payload,
   };
 }
 
@@ -577,15 +579,13 @@ function activityStopEvent(cellId: string): CellActivityStopEvent {
 }
 
 function revealEvent(cellId: string, message?: string, durationMs = 4_000): CellRevealEvent {
+  const payload: CellRevealEvent["payload"] = { cellId, durationMs };
+  if (message) payload.message = message;
   return {
     protocol: "marimo-lens.event",
     version: 2,
     type: "cell.reveal",
     revision: 7,
-    payload: {
-      cellId,
-      durationMs,
-      ...(message ? { message } : {}),
-    },
+    payload,
   };
 }

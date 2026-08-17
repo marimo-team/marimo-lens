@@ -16,10 +16,7 @@ export function exceedsCaptureDimensions(width: number, height: number): boolean
   return width > MAX_CAPTURE_EDGE || height > MAX_CAPTURE_EDGE || width * height > MAX_AREA;
 }
 
-export function captureRasterSize(
-  width: number,
-  height: number,
-): { width: number; height: number } {
+export function captureRasterSize(width: number, height: number) {
   const safeWidth = Math.max(1, width);
   const safeHeight = Math.max(1, height);
   const scale = Math.min(

@@ -1,21 +1,22 @@
-import { toPng } from "html-to-image";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { composeSelectionEvidence, evidenceLayout } from "../../src/evidence/evidence-layout";
 import { captureSelectionEvidence, detailCaptureElement } from "../../src/evidence/evidence-source";
 import { relativeOutputBounds } from "../../src/evidence/geometry";
-import { captureOutputSnapshot, captureSelectionSnapshot } from "../../src/evidence/image";
+import { createSnapshotCapture } from "../../src/evidence/image";
 import { captureRasterSize } from "../../src/evidence/png";
 import {
   assertCapturableIframes,
+  type RasterizeElement,
   resolveCaptureBackground,
   shouldCaptureNode,
 } from "../../src/evidence/raster";
 
-vi.mock("html-to-image", () => ({ toPng: vi.fn() }));
+const toPng = vi.fn<RasterizeElement>();
+const { captureOutputSnapshot, captureSelectionSnapshot } = createSnapshotCapture(toPng);
 
 beforeEach(() => {
-  vi.mocked(toPng).mockReset();
+  toPng.mockReset();
 });
 
 afterEach(() => {
@@ -41,16 +42,14 @@ describe("image capture", () => {
         height: 320,
       }),
       fillStyle: "",
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
+      fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
+      drawImage: vi.fn<DrawImage>(),
     };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      context as unknown as CanvasRenderingContext2D,
-    );
+    installCanvasContext(window, context);
     vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => {
       callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
     });
-    vi.mocked(toPng).mockResolvedValue("data:image/png;base64,output");
+    toPng.mockResolvedValue("data:image/png;base64,output");
     const output = document.createElement("div");
     output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 200);
     Object.defineProperties(output, {
@@ -75,8 +74,8 @@ describe("image capture", () => {
       bytes: new Uint8Array([137, 80, 78, 71]),
     });
     expect(toPng).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(toPng).mock.calls[0]?.[0]).toBe(output);
-    expect(vi.mocked(toPng).mock.calls[0]?.[1]).toMatchObject({
+    expect(toPng.mock.calls[0]?.[0]).toBe(output);
+    expect(toPng.mock.calls[0]?.[1]).toMatchObject({
       width: 1_200,
       height: 600,
       style: { maxHeight: "none", overflow: "visible" },
@@ -88,7 +87,7 @@ describe("image capture", () => {
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
     const ownerDocument = frame.contentDocument!;
-    const ownerWindow = frame.contentWindow! as Window & typeof globalThis;
+    const ownerWindow = frameRealm(frame);
     class LoadedImage extends EventTarget {
       naturalWidth = 640;
       naturalHeight = 320;
@@ -105,19 +104,17 @@ describe("image capture", () => {
     });
     const context = {
       fillStyle: "",
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
+      fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
+      drawImage: vi.fn<DrawImage>(),
     };
-    vi.spyOn(ownerWindow.HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      context as unknown as CanvasRenderingContext2D,
-    );
+    installCanvasContext(ownerWindow, context);
     vi.spyOn(ownerWindow.HTMLCanvasElement.prototype, "toBlob").mockImplementation(
       (callback: BlobCallback) => {
         callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
       },
     );
     const createElement = vi.spyOn(ownerDocument, "createElement");
-    vi.mocked(toPng).mockResolvedValue("data:image/png;base64,output");
+    toPng.mockResolvedValue("data:image/png;base64,output");
     const output = ownerDocument.createElement("div");
     output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 200);
     Object.defineProperties(output, {
@@ -125,7 +122,10 @@ describe("image capture", () => {
       scrollHeight: { configurable: true, value: 200 },
     });
 
-    const result = await captureOutputSnapshot({ imageId: "image:owned", output });
+    const result = await captureOutputSnapshot({
+      imageId: "image:owned",
+      output,
+    });
 
     expect(createElement.mock.calls.some(([name]) => name === "canvas")).toBe(true);
     expect(context.drawImage.mock.calls[0]?.[0]).toBeInstanceOf(LoadedImage);
@@ -153,16 +153,14 @@ describe("image capture", () => {
     vi.stubGlobal("Image", LoadedImage);
     const context = {
       fillStyle: "",
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
+      fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
+      drawImage: vi.fn<DrawImage>(),
     };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      context as unknown as CanvasRenderingContext2D,
-    );
+    installCanvasContext(window, context);
     vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => {
       callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
     });
-    vi.mocked(toPng)
+    toPng
       .mockResolvedValueOnce("data:image/png;base64,detail")
       .mockResolvedValueOnce("data:image/png;base64,overview");
     const output = document.createElement("div");
@@ -187,8 +185,8 @@ describe("image capture", () => {
         height: layout.height,
       },
     });
-    expect(vi.mocked(toPng).mock.calls).toHaveLength(2);
-    expect(vi.mocked(toPng).mock.calls[0]?.[1]).toMatchObject({
+    expect(toPng.mock.calls).toHaveLength(2);
+    expect(toPng.mock.calls[0]?.[1]).toMatchObject({
       width: 600,
       height: 400,
       style: {
@@ -197,7 +195,7 @@ describe("image capture", () => {
         transform: "translate(-300px, -150px)",
       },
     });
-    expect(vi.mocked(toPng).mock.calls[1]?.[1]).toMatchObject({
+    expect(toPng.mock.calls[1]?.[1]).toMatchObject({
       width: 8_000,
       height: 5_000,
       style: { maxHeight: "none", overflow: "visible" },
@@ -253,20 +251,20 @@ describe("image capture", () => {
       shadowBlur: 0,
       font: "",
       textBaseline: "",
-      fillRect: vi.fn(),
-      drawImage: vi.fn(),
-      save: vi.fn(),
-      restore: vi.fn(),
-      strokeRect: vi.fn(),
+      fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
+      drawImage: vi.fn<DrawImage>(),
+      save: vi.fn<CanvasRenderingContext2D["save"]>(),
+      restore: vi.fn<CanvasRenderingContext2D["restore"]>(),
+      strokeRect: vi.fn<CanvasRenderingContext2D["strokeRect"]>(),
       measureText: vi.fn(() => ({ width: 17 })),
-      beginPath: vi.fn(),
-      roundRect: vi.fn(),
-      fill: vi.fn(() => labelFills.push(fillStyle)),
-      fillText: vi.fn(),
+      beginPath: vi.fn<CanvasRenderingContext2D["beginPath"]>(),
+      roundRect: vi.fn<CanvasRenderingContext2D["roundRect"]>(),
+      fill: vi.fn<CanvasRenderingContext2D["fill"]>(() => {
+        labelFills.push(fillStyle);
+      }),
+      fillText: vi.fn<CanvasRenderingContext2D["fillText"]>(),
     };
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-      context as unknown as CanvasRenderingContext2D,
-    );
+    installCanvasContext(window, context);
 
     composeSelectionEvidence({
       ownerDocument: document,
@@ -373,7 +371,7 @@ describe("image capture", () => {
     const detailCapture = new Promise<string>((resolve) => {
       resolveDetail = resolve;
     });
-    vi.mocked(toPng)
+    toPng
       .mockImplementationOnce(() => detailCapture)
       .mockResolvedValueOnce("data:image/png;base64,overview");
 
@@ -386,10 +384,11 @@ describe("image capture", () => {
         detailElement: detail,
       },
       "#fff",
+      toPng,
     );
 
-    expect(vi.mocked(toPng).mock.calls[0]?.[0]).toBe(detail);
-    expect(vi.mocked(toPng).mock.calls[0]?.[1]?.style).toMatchObject({
+    expect(toPng.mock.calls[0]?.[0]).toBe(detail);
+    expect(toPng.mock.calls[0]?.[1]?.style).toMatchObject({
       position: "relative",
       inset: "auto",
       top: "0",
@@ -402,7 +401,7 @@ describe("image capture", () => {
     resolveDetail("data:image/png;base64,detail");
     const sources = await capture;
 
-    expect(vi.mocked(toPng).mock.calls.map(([element]) => element)).toEqual([detail, output]);
+    expect(toPng.mock.calls.map(([element]) => element)).toEqual([detail, output]);
     expect(sources.detail?.bounds).toEqual({ x: 1 / 30, y: 0.05, width: 0.1, height: 0.1 });
   });
 
@@ -424,7 +423,7 @@ describe("image capture", () => {
       scrollTop: { configurable: true, value: 150 },
     });
     output.getBoundingClientRect = () => new DOMRect(0, 0, 600, 400);
-    vi.mocked(toPng)
+    toPng
       .mockResolvedValueOnce("data:image/png;base64,detail")
       .mockResolvedValueOnce("data:image/png;base64,overview");
 
@@ -437,18 +436,19 @@ describe("image capture", () => {
         detailElement: output,
       },
       "#fff",
+      toPng,
     );
 
-    expect(vi.mocked(toPng).mock.calls).toHaveLength(2);
-    expect(vi.mocked(toPng).mock.calls[0]?.[1]).toMatchObject({ width: 600, height: 400 });
-    expect(vi.mocked(toPng).mock.calls[0]?.[1]?.style).toMatchObject({
+    expect(toPng.mock.calls).toHaveLength(2);
+    expect(toPng.mock.calls[0]?.[1]).toMatchObject({ width: 600, height: 400 });
+    expect(toPng.mock.calls[0]?.[1]?.style).toMatchObject({
       width: "3000px",
       height: "1500px",
       overflow: "visible",
       transform: "translate(-300px, -150px)",
       transformOrigin: "top left",
     });
-    expect(vi.mocked(toPng).mock.calls[1]?.[1]).toMatchObject({ width: 3_000, height: 1_500 });
+    expect(toPng.mock.calls[1]?.[1]).toMatchObject({ width: 3_000, height: 1_500 });
     expect(sources.detail?.bounds).toEqual({
       x: 0.1,
       y: 0.1,
@@ -494,7 +494,7 @@ describe("image capture", () => {
     output.appendChild(iframe);
     document.body.appendChild(output);
     expect(iframe.contentDocument?.body).toBeDefined();
-    vi.mocked(toPng).mockImplementation(async () => {
+    toPng.mockImplementation(async () => {
       Object.defineProperty(iframe, "contentDocument", {
         configurable: true,
         value: null,
@@ -503,7 +503,10 @@ describe("image capture", () => {
     });
 
     await expect(
-      captureOutputSnapshot({ imageId: "image:iframe-navigation", output }),
+      captureOutputSnapshot({
+        imageId: "image:iframe-navigation",
+        output,
+      }),
     ).rejects.toThrow(/iframe content/i);
   });
 
@@ -531,7 +534,7 @@ describe("image capture", () => {
       scrollWidth: { configurable: true, value: 8_000 },
       scrollHeight: { configurable: true, value: 5_000 },
     });
-    vi.mocked(toPng).mockRejectedValueOnce(new Error(`${"e".repeat(239)}😀`));
+    toPng.mockRejectedValueOnce(new Error(`${"e".repeat(239)}😀`));
     const result = await captureSelectionSnapshot({
       selectionId: "selection-1",
       label: "S1",
@@ -540,7 +543,7 @@ describe("image capture", () => {
     });
 
     expect(result).toMatchObject({ status: "failed", snapshot: { error: "e".repeat(239) } });
-    expect(vi.mocked(toPng).mock.calls[0]?.[1]).toMatchObject({
+    expect(toPng.mock.calls[0]?.[1]).toMatchObject({
       canvasWidth: expect.any(Number),
       canvasHeight: expect.any(Number),
       pixelRatio: 1,
@@ -555,7 +558,7 @@ describe("image capture", () => {
       scrollHeight: { configurable: true, value: 240 },
     });
     let resolveCapture!: (dataUrl: string) => void;
-    vi.mocked(toPng).mockReturnValue(
+    toPng.mockReturnValue(
       new Promise((resolve) => {
         resolveCapture = resolve;
       }),
@@ -575,4 +578,65 @@ describe("image capture", () => {
 
     await rejected;
   });
+
+  test("propagates an ambient cancellation from a secondary document capture", async () => {
+    const frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+    const ownerDocument = frame.contentDocument;
+    const ownerWindow = frame.contentWindow?.self;
+    if (!ownerDocument || !ownerWindow) throw new Error("Iframe realm must be available");
+    const output = ownerDocument.createElement("div");
+    output.getBoundingClientRect = () => new ownerWindow.DOMRect(0, 0, 400, 240);
+    Object.defineProperties(output, {
+      scrollWidth: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 240 },
+    });
+    ownerDocument.body.appendChild(output);
+    const cancellation = new DOMException("Parent renderer canceled", "AbortError");
+    toPng.mockRejectedValueOnce(cancellation);
+
+    await expect(
+      captureSelectionSnapshot({
+        selectionId: "selection-1",
+        label: "S1",
+        anchor: { kind: "point", x: 0.5, y: 0.5 },
+        output,
+      }),
+    ).rejects.toBe(cancellation);
+  });
 });
+
+type OwnerRealm = Window & typeof globalThis;
+
+interface RasterCanvasContext {
+  fillStyle: CanvasRenderingContext2D["fillStyle"];
+  fillRect: CanvasRenderingContext2D["fillRect"];
+  drawImage: DrawImage;
+}
+
+type DrawImage = (
+  image: CanvasImageSource,
+  sourceX: number,
+  sourceY: number,
+  sourceWidth: number,
+  sourceHeight: number,
+  destinationX: number,
+  destinationY: number,
+  destinationWidth: number,
+  destinationHeight: number,
+) => void;
+
+interface CanvasContextOwner {
+  getContext(contextId: "2d"): RasterCanvasContext | null;
+}
+
+function installCanvasContext(ownerWindow: OwnerRealm, context: RasterCanvasContext): void {
+  const canvasOwner: CanvasContextOwner = ownerWindow.HTMLCanvasElement.prototype;
+  vi.spyOn(canvasOwner, "getContext").mockReturnValue(context);
+}
+
+function frameRealm(frame: HTMLIFrameElement): OwnerRealm {
+  const ownerWindow = frame.contentWindow?.self;
+  if (!ownerWindow) throw new Error("Iframe window must be available");
+  return ownerWindow;
+}

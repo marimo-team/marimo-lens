@@ -1,14 +1,18 @@
 import { defineConfig } from "vite-plus";
 
+import { antiSlopIgnorePatterns, antiSlopRules } from "./tools/oxlint/anti-slop/preset.ts";
+
 const generated = [
   "dist/**",
   "packages/*/dist/**",
   "packages/marimo-lens/src/marimo_lens/static/**",
 ];
 
+const ignored = [...generated, ...antiSlopIgnorePatterns];
+
 export default defineConfig({
   fmt: {
-    ignorePatterns: generated,
+    ignorePatterns: ignored,
     sortImports: {
       groups: [
         "type-import",
@@ -29,8 +33,11 @@ export default defineConfig({
       browser: true,
       builtin: true,
     },
-    ignorePatterns: generated,
-    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
+    ignorePatterns: ignored,
+    jsPlugins: [
+      { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
+      { name: "anti-slop", specifier: "./tools/oxlint/anti-slop/index.ts" },
+    ],
     options: {
       denyWarnings: true,
       reportUnusedDisableDirectives: "error",
@@ -43,12 +50,12 @@ export default defineConfig({
       "oxc",
       "promise",
       "react",
-      "react-hooks",
       "react-perf",
       "typescript",
       "unicorn",
     ],
     rules: {
+      ...antiSlopRules,
       "vite-plus/prefer-vite-plus-imports": "error",
     },
     overrides: [

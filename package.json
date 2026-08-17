@@ -4,15 +4,19 @@
   "private": true,
   "scripts": {
     "build": "vp run -r build",
-    "check": "vp check --no-error-on-unmatched-pattern .github apps/docs/.vitepress apps/docs/README.md apps/docs/package.json apps/docs/tsconfig.json development_docs docs examples packages scripts \"*.json\" README.md AGENTS.md CLAUDE.md SECURITY.md \"*.toml\" \"*.ts\" \"*.yaml\" \"*.yml\" && vp run -r typecheck",
+    "check": "vp check --no-error-on-unmatched-pattern .github apps/docs/.vitepress apps/docs/README.md apps/docs/package.json apps/docs/tsconfig.json development_docs docs examples packages scripts \"*.json\" README.md AGENTS.md CLAUDE.md SECURITY.md \"*.toml\" \"*.ts\" \"*.yaml\" \"*.yml\" && pnpm check:anti-slop && vp run -r typecheck",
+    "check:anti-slop": "node --test --test-concurrency=1 tools/oxlint/anti-slop/test/*.test.ts tools/oxlint/anti-slop/test/compatibility/*.test.ts && tsc -p tools/oxlint/anti-slop/tsconfig.json --noEmit",
     "dev": "vp run @marimo-lens/python#dev",
     "docs:build": "vp run @marimo-lens/docs#build",
     "docs:dev": "vp run @marimo-lens/docs#dev",
     "docs:preview": "vp run @marimo-lens/docs#preview",
-    "test": "vp run -r test"
+    "test": "vp run --filter '!marimo-lens-workspace' test"
   },
   "devDependencies": {
+    "@oxlint/plugins": "catalog:",
     "@types/node": "catalog:",
+    "oxlint": "catalog:",
+    "oxlint-tsgolint": "catalog:",
     "typescript": "catalog:",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
     "vite-plus": "catalog:",

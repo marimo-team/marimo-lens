@@ -2,6 +2,7 @@ import type { CaptureResult } from "@marimo-lens/image-capture";
 import type { ImageAction, LensState, Selection, SelectionAnchor } from "@marimo-lens/protocol";
 
 import { captureSelectionSnapshot } from "@marimo-lens/image-capture";
+import { isAbortCause, parseErrorCause } from "@marimo-lens/protocol";
 
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
@@ -13,6 +14,8 @@ type RunRevisioned = (
   mutation: RevisionedMutation,
   postcondition: (state: LensState) => boolean,
 ) => Promise<void>;
+
+export type SelectionSnapshotCapture = typeof captureSelectionSnapshot;
 
 export type SelectionCaptureJob = {
   ticket: symbol;
@@ -28,6 +31,7 @@ export class SelectionCapture {
   readonly #enqueueMutation: EnqueueMutation;
   readonly #runRevisioned: RunRevisioned;
   readonly #announce: (message: string) => void;
+  readonly #captureSnapshot: SelectionSnapshotCapture;
   readonly #jobs = new Map<string, SelectionCaptureJob>();
 
   constructor(options: {
@@ -38,6 +42,7 @@ export class SelectionCapture {
     enqueueMutation: EnqueueMutation;
     runRevisioned: RunRevisioned;
     announce: (message: string) => void;
+    captureSnapshot?: SelectionSnapshotCapture;
   }) {
     this.#stateRef = options.stateRef;
     this.#dom = options.dom;
@@ -46,6 +51,7 @@ export class SelectionCapture {
     this.#enqueueMutation = options.enqueueMutation;
     this.#runRevisioned = options.runRevisioned;
     this.#announce = options.announce;
+    this.#captureSnapshot = options.captureSnapshot ?? captureSelectionSnapshot;
   }
 
   reserve(selectionId: string): SelectionCaptureJob {
@@ -107,7 +113,7 @@ export class SelectionCapture {
           },
         );
       } catch (error) {
-        if (signal.aborted || isAbortError(error)) return;
+        if (signal.aborted || isAbortCause(error)) return;
         this.#announce(errorMessage(error, "Snapshot capture could not be settled"));
       }
     });
@@ -126,7 +132,7 @@ export class SelectionCapture {
       const current = this.#stateRef.current.selections.find(({ id }) => id === selection.id);
       if (!current || !sameAnchor(current.anchor, selection.anchor)) return;
       job.started = true;
-      const result = await captureSelectionSnapshot({
+      const result = await this.#captureSnapshot({
         selectionId: selection.id,
         label: selection.label,
         anchor: selection.anchor,
@@ -138,7 +144,7 @@ export class SelectionCapture {
       await this.#commit(selection, output, job, result);
     } catch (error) {
       if (!this.isActive(selection.id, job)) return;
-      if (!signal.aborted && !isAbortError(error)) {
+      if (!signal.aborted && !isAbortCause(error)) {
         this.#settleFailed(selection.id, "Snapshot capture did not complete.");
       }
       throw error;
@@ -260,13 +266,6 @@ function sameSnapshot(left: Selection["snapshot"], right: Selection["snapshot"])
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (typeof error !== "object" || error === null || !("message" in error)) return fallback;
-  return typeof error.message === "string" && error.message ? error.message : fallback;
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === "object" && error !== null && "name" in error && error.name === "AbortError"
-  );
+function errorMessage(cause: unknown, fallback: string): string {
+  return parseErrorCause(cause)?.message || fallback;
 }

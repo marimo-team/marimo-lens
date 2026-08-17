@@ -59,7 +59,7 @@ describe("html-to-image patch", () => {
   });
 
   test("resolves iframe resources before adopting the body into the notebook document", async () => {
-    installOwnerRasterHarness(window as Window & typeof globalThis, true);
+    installOwnerRasterHarness(window, true);
     const fetchResource = vi.fn().mockImplementation(
       async () =>
         new Response(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }), {
@@ -72,10 +72,11 @@ describe("html-to-image patch", () => {
     const iframe = document.createElement("iframe");
     output.appendChild(iframe);
     document.body.appendChild(output);
-    mockOwnerComputedStyle(iframe.contentWindow!);
+    const iframeWindow = frameRealm(iframe);
+    mockOwnerComputedStyle(iframeWindow);
 
     const iframeDocument = iframe.contentDocument!;
-    mockImageLoads(iframe.contentWindow!);
+    mockImageLoads(iframeWindow);
     const base = iframeDocument.createElement("base");
     base.href = "https://iframe.example/notebook-assets/";
     iframeDocument.head.appendChild(base);
@@ -169,7 +170,7 @@ describe("html-to-image patch", () => {
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
     const ownerDocument = frame.contentDocument!;
-    const ownerWindow = frame.contentWindow! as Window & typeof globalThis;
+    const ownerWindow = frameRealm(frame);
     const harness = installOwnerRasterHarness(ownerWindow, true);
     const ambientCreateElement = vi.spyOn(document, "createElement");
     const ambientCreateElementNS = vi.spyOn(document, "createElementNS");
@@ -192,6 +193,7 @@ describe("html-to-image patch", () => {
     expect(dataUrl).toBe("data:image/png;base64,owner-realm");
     expect(harness.context.drawImage).toHaveBeenCalledOnce();
     expect(harness.context.drawImage.mock.calls[0]?.[0]).toBeInstanceOf(harness.ImageClass);
+    expect(harness.images[0]).toBeInstanceOf(ownerWindow.EventTarget);
     expect(ownerStyle).toHaveBeenCalled();
     expect(ownerSerialize).toHaveBeenCalled();
     expect(
@@ -205,7 +207,7 @@ describe("html-to-image patch", () => {
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
     const ownerDocument = frame.contentDocument!;
-    const ownerWindow = frame.contentWindow! as Window & typeof globalThis;
+    const ownerWindow = frameRealm(frame);
     const decode = vi.fn(() => new Promise<void>(() => {}));
     const harness = installOwnerRasterHarness(ownerWindow, true, decode);
     const requestFrame = vi.fn(() => 1);
@@ -239,7 +241,7 @@ describe("html-to-image patch", () => {
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
     const ownerDocument = frame.contentDocument!;
-    const ownerWindow = frame.contentWindow! as Window & typeof globalThis;
+    const ownerWindow = frameRealm(frame);
     const error = new ownerWindow.DOMException("Raster decode failed", "EncodingError");
     installOwnerRasterHarness(ownerWindow, true, () => Promise.reject(error));
     const output = ownerDocument.createElement("div");
@@ -260,7 +262,7 @@ describe("html-to-image patch", () => {
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
     const ownerDocument = frame.contentDocument!;
-    const ownerWindow = frame.contentWindow! as Window & typeof globalThis;
+    const ownerWindow = frameRealm(frame);
     const harness = installOwnerRasterHarness(ownerWindow, false);
     const output = ownerDocument.createElement("div");
     ownerDocument.body.appendChild(output);
@@ -282,26 +284,19 @@ describe("html-to-image patch", () => {
     controller.abort(new DOMException("Closed in the parent realm", "AbortError"));
     harness.images[0]?.finishLoad();
 
-    const error = await capture.catch((reason: unknown) => reason);
-    expect(error).toBeInstanceOf(ownerWindow.DOMException);
-    expect(error).toMatchObject({ name: "AbortError", message: "Closed in the parent realm" });
+    await expect(capture).rejects.toBeInstanceOf(ownerWindow.DOMException);
+    await expect(capture).rejects.toMatchObject({
+      name: "AbortError",
+      message: "Closed in the parent realm",
+    });
   });
 });
 
 function installOwnerRasterHarness(
-  ownerWindow: Window & typeof globalThis,
+  ownerWindow: OwnerRealm,
   autoLoad: boolean,
   decode: () => Promise<void> = () => Promise.resolve(),
-): {
-  ImageClass: typeof Image;
-  images: TestImage[];
-  context: {
-    fillStyle: string;
-    fillRect: ReturnType<typeof vi.fn>;
-    drawImage: ReturnType<typeof vi.fn>;
-  };
-} {
-  const images: TestImage[] = [];
+) {
   class OwnerImage extends ownerWindow.EventTarget {
     naturalWidth = 480;
     naturalHeight = 260;
@@ -326,13 +321,16 @@ function installOwnerRasterHarness(
     }
 
     finishLoad(): void {
-      this.onload?.(new ownerWindow.Event("load") as unknown as Event);
+      const load = ownerWindow.document.createEvent("Event");
+      load.initEvent("load", false, false);
+      this.onload?.(load);
     }
   }
+  const images: OwnerImage[] = [];
   const context = {
     fillStyle: "",
-    fillRect: vi.fn(),
-    drawImage: vi.fn(),
+    fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
+    drawImage: vi.fn<DrawImage>(),
   };
   Object.defineProperty(ownerWindow, "Image", {
     configurable: true,
@@ -345,15 +343,14 @@ function installOwnerRasterHarness(
       return 1;
     },
   });
-  vi.spyOn(ownerWindow.HTMLCanvasElement.prototype, "getContext").mockReturnValue(
-    context as unknown as CanvasRenderingContext2D,
-  );
+  const canvasOwner: CanvasContextOwner = ownerWindow.HTMLCanvasElement.prototype;
+  vi.spyOn(canvasOwner, "getContext").mockReturnValue(context);
   vi.spyOn(ownerWindow.HTMLCanvasElement.prototype, "toDataURL").mockReturnValue(
     "data:image/png;base64,owner-realm",
   );
   mockOwnerComputedStyle(ownerWindow);
   return {
-    ImageClass: OwnerImage as unknown as typeof Image,
+    ImageClass: OwnerImage,
     images,
     context,
   };
@@ -361,31 +358,56 @@ function installOwnerRasterHarness(
 
 function mockOwnerComputedStyle(ownerWindow: Window): void {
   const nativeStyle = ownerWindow.getComputedStyle.bind(ownerWindow);
+  const pseudoStyle = ownerWindow.document.createElement("div").style;
+  pseudoStyle.setProperty("content", "none");
   vi.spyOn(ownerWindow, "getComputedStyle").mockImplementation((element, pseudo) => {
-    if (pseudo) {
-      return {
-        cssText: "",
-        getPropertyValue: (name: string) => (name === "content" ? "none" : ""),
-        getPropertyPriority: () => "",
-      } as unknown as CSSStyleDeclaration;
-    }
+    if (pseudo) return pseudoStyle;
     return nativeStyle(element);
   });
 }
 
-function mockImageLoads(ownerWindow: Window): void {
-  const ownerGlobal = ownerWindow as Window & typeof globalThis;
-  const descriptor = Object.getOwnPropertyDescriptor(ownerGlobal.HTMLImageElement.prototype, "src");
+function mockImageLoads(ownerWindow: OwnerRealm): void {
+  const descriptor = Object.getOwnPropertyDescriptor(ownerWindow.HTMLImageElement.prototype, "src");
   if (!descriptor?.set) throw new Error("Image source setter must be available");
-  vi.spyOn(ownerGlobal.HTMLImageElement.prototype, "src", "set").mockImplementation(function (
+  vi.spyOn(ownerWindow.HTMLImageElement.prototype, "src", "set").mockImplementation(function (
     this: HTMLImageElement,
     value: string,
   ) {
     descriptor.set?.call(this, value);
-    ownerGlobal.queueMicrotask(() => this.onload?.(new ownerGlobal.Event("load")));
+    ownerWindow.queueMicrotask(() => {
+      const load = ownerWindow.document.createEvent("Event");
+      load.initEvent("load", false, false);
+      this.onload?.(load);
+    });
   });
 }
 
-type TestImage = {
-  finishLoad(): void;
-};
+type OwnerRealm = Window & typeof globalThis;
+
+interface RasterCanvasContext {
+  fillStyle: CanvasRenderingContext2D["fillStyle"];
+  fillRect: CanvasRenderingContext2D["fillRect"];
+  drawImage: DrawImage;
+}
+
+type DrawImage = (
+  image: CanvasImageSource,
+  sourceX: number,
+  sourceY: number,
+  sourceWidth: number,
+  sourceHeight: number,
+  destinationX: number,
+  destinationY: number,
+  destinationWidth: number,
+  destinationHeight: number,
+) => void;
+
+interface CanvasContextOwner {
+  getContext(contextId: "2d"): RasterCanvasContext | null;
+}
+
+function frameRealm(frame: HTMLIFrameElement): OwnerRealm {
+  const ownerWindow = frame.contentWindow?.self;
+  if (!ownerWindow) throw new Error("Iframe window must be available");
+  return ownerWindow;
+}

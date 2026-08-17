@@ -282,13 +282,12 @@ function disarm(): void {
   act(() => document.querySelector<HTMLButtonElement>("[data-ml-select]")?.click());
 }
 
-function visibleOutput({
-  id = "cell-1",
-  title,
-}: {
+type VisibleOutputOptions = {
   id?: string;
   title?: string;
-} = {}): HTMLElement {
+};
+
+function visibleOutput({ id = "cell-1", title }: VisibleOutputOptions = {}): HTMLElement {
   const output = document.createElement("div");
   output.id = `output-${id}`;
   output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 200);
@@ -328,15 +327,14 @@ function announcement(): string {
 }
 
 function pointer(type: string, clientX: number, clientY: number, pointerId: number): PointerEvent {
-  const event = new MouseEvent(type, {
+  return new PointerEvent(type, {
     bubbles: true,
     cancelable: true,
     button: 0,
     clientX,
     clientY,
+    pointerId,
   });
-  Object.defineProperty(event, "pointerId", { value: pointerId });
-  return event as PointerEvent;
 }
 
 const INITIAL_STATE: UiState = {

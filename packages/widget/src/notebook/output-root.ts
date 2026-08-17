@@ -2,9 +2,15 @@ import type { OutputCell } from "@/notebook/types";
 
 import { OUTPUT_ROOT_SELECTOR, resolveOutputRoot } from "@/notebook/output-root-rules";
 
-const LENS_OUTPUT_REGISTRY = Symbol.for("marimo-lens.output-registry.v1");
+const LENS_OUTPUT_REGISTRY: unique symbol = Symbol.for("marimo-lens.output-registry.v1");
 
 type LensOutputRegistry = WeakMap<HTMLElement, number>;
+
+declare global {
+  interface Document {
+    [LENS_OUTPUT_REGISTRY]?: LensOutputRegistry;
+  }
+}
 
 export function registerLensHostOutput(host: Element): () => void {
   const root = owningOutputRoot(host);
@@ -96,8 +102,7 @@ export function deepestElementFromEvent(event: Event, output: HTMLElement): Elem
 }
 
 function containsLensHost(root: HTMLElement): boolean {
-  const registry: unknown = Reflect.get(root.ownerDocument, LENS_OUTPUT_REGISTRY);
-  return registry instanceof WeakMap && registry.has(root);
+  return root.ownerDocument[LENS_OUTPUT_REGISTRY]?.has(root) ?? false;
 }
 
 function owningOutputRoot(element: Element): HTMLElement | null {
@@ -112,8 +117,8 @@ function owningOutputRoot(element: Element): HTMLElement | null {
 }
 
 function lensOutputRegistry(ownerDocument: Document): LensOutputRegistry {
-  const existing: unknown = Reflect.get(ownerDocument, LENS_OUTPUT_REGISTRY);
-  if (existing instanceof WeakMap) return existing as LensOutputRegistry;
+  const existing = ownerDocument[LENS_OUTPUT_REGISTRY];
+  if (existing) return existing;
 
   const registry: LensOutputRegistry = new WeakMap();
   Object.defineProperty(ownerDocument, LENS_OUTPUT_REGISTRY, {
@@ -165,8 +170,8 @@ function isVisible(element: HTMLElement): boolean {
   );
 }
 
-function isElement(value: unknown): value is Element {
-  return typeof value === "object" && value !== null && "nodeType" in value && value.nodeType === 1;
+function isElement(value: EventTarget | null): value is Element {
+  return value !== null && "nodeType" in value && value.nodeType === 1;
 }
 
 function isShadowRoot(value: Node): value is ShadowRoot {

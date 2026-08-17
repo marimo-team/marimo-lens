@@ -4,11 +4,17 @@ import { NotebookDomAdapter, NotebookDomProvider } from "@/notebook/notebook-dom
 
 // Anywidget can mount views from separate app-module instances into one document.
 // The global symbol lets those instances share one ordered registry.
-const VIEW_REGISTRY = Symbol.for("marimo-lens.view-registry.v1");
+const VIEW_REGISTRY: unique symbol = Symbol.for("marimo-lens.view-registry.v1");
 
 type ViewOwnership = "owner" | "conflict";
 type ViewRegistry = Map<symbol, (ownership: ViewOwnership) => void>;
 type OwnedView = { adapter: NotebookDomAdapter; ownership: ViewOwnership };
+
+declare global {
+  interface Document {
+    [VIEW_REGISTRY]?: ViewRegistry;
+  }
+}
 
 export function LensViewOwner({ children }: { children: ReactNode }) {
   const viewIdRef = useRef<symbol | null>(null);
@@ -59,9 +65,7 @@ function acquireView(
     views.delete(viewId);
 
     if (views.size === 0) {
-      if (Reflect.get(ownerDocument, VIEW_REGISTRY) === views) {
-        Reflect.deleteProperty(ownerDocument, VIEW_REGISTRY);
-      }
+      if (ownerDocument[VIEW_REGISTRY] === views) delete ownerDocument[VIEW_REGISTRY];
       return;
     }
 
@@ -70,8 +74,8 @@ function acquireView(
 }
 
 function viewRegistry(ownerDocument: Document): ViewRegistry {
-  const existing: unknown = Reflect.get(ownerDocument, VIEW_REGISTRY);
-  if (existing instanceof Map) return existing as ViewRegistry;
+  const existing = ownerDocument[VIEW_REGISTRY];
+  if (existing) return existing;
 
   const views: ViewRegistry = new Map();
   Object.defineProperty(ownerDocument, VIEW_REGISTRY, {

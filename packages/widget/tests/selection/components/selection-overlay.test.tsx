@@ -210,7 +210,7 @@ function setupOutput({ scrollHeight = 240, scrollTop = 0 } = {}) {
   return output;
 }
 
-function setupNestedScroller(output = setupOutput()): { scroller: HTMLElement } {
+function setupNestedScroller(output = setupOutput()) {
   const host = document.createElement("div");
   const shadow = host.attachShadow({ mode: "open" });
   const scroller = document.createElement("div");

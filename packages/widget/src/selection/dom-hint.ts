@@ -67,7 +67,7 @@ function contentText(element: Element): string {
   const ownerWindow = element.ownerDocument.defaultView;
   const renderedText =
     ownerWindow && element instanceof ownerWindow.HTMLElement ? element.innerText : null;
-  if (typeof renderedText === "string") return renderedText;
+  if (renderedText !== null && renderedText !== undefined) return renderedText;
   if (NON_CONTENT_TEXT_ELEMENTS.has(element.localName)) return "";
   const text: string[] = [];
   const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
@@ -90,7 +90,12 @@ function normalizeText(value: string): string {
 }
 
 function compact(hint: DomHint): DomHint {
-  return Object.fromEntries(
-    Object.entries(hint).filter(([, value]) => value !== undefined && value !== ""),
-  ) as DomHint;
+  const compacted: DomHint = { tag: hint.tag };
+  if (hint.role) compacted.role = hint.role;
+  if (hint.ariaLabel) compacted.ariaLabel = hint.ariaLabel;
+  if (hint.title) compacted.title = hint.title;
+  if (hint.text) compacted.text = hint.text;
+  if (hint.path) compacted.path = hint.path;
+  if (hint.bounds) compacted.bounds = hint.bounds;
+  return compacted;
 }

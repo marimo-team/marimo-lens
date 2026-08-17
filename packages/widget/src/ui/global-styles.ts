@@ -1,10 +1,16 @@
 const STYLE_ID = "marimo-lens-global-styles";
-const STYLE_REGISTRY = Symbol.for("marimo-lens.style-registry.v1");
+const STYLE_REGISTRY: unique symbol = Symbol.for("marimo-lens.style-registry.v1");
 
 type StyleRegistry = {
   owners: number;
   element: HTMLStyleElement;
 };
+
+declare global {
+  interface Document {
+    [STYLE_REGISTRY]?: StyleRegistry;
+  }
+}
 
 export function acquireLensGlobalStyles(ownerDocument: Document, css: string): () => void {
   const registry = styleRegistry(ownerDocument);
@@ -22,15 +28,13 @@ export function acquireLensGlobalStyles(ownerDocument: Document, css: string): (
     registry.owners = Math.max(0, registry.owners - 1);
     if (registry.owners > 0) return;
     registry.element.remove();
-    if (Reflect.get(ownerDocument, STYLE_REGISTRY) === registry) {
-      Reflect.deleteProperty(ownerDocument, STYLE_REGISTRY);
-    }
+    if (ownerDocument[STYLE_REGISTRY] === registry) delete ownerDocument[STYLE_REGISTRY];
   };
 }
 
 function styleRegistry(ownerDocument: Document): StyleRegistry {
-  const existing: unknown = Reflect.get(ownerDocument, STYLE_REGISTRY);
-  if (isStyleRegistry(existing)) return existing;
+  const existing = ownerDocument[STYLE_REGISTRY];
+  if (existing) return existing;
 
   const existingElement = ownerDocument.getElementById(STYLE_ID);
   const element = isStyleElement(existingElement)
@@ -44,28 +48,10 @@ function styleRegistry(ownerDocument: Document): StyleRegistry {
   return registry;
 }
 
-function isStyleRegistry(value: unknown): value is StyleRegistry {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "owners" in value &&
-    "element" in value &&
-    isStyleElement(value.element)
-  );
-}
-
-function isStyleElement(element: unknown): element is HTMLStyleElement {
-  if (
-    typeof element !== "object" ||
-    element === null ||
-    !("nodeType" in element) ||
-    element.nodeType !== 1
-  ) {
-    return false;
-  }
-  const candidate = element as Element;
-  const StyleElementClass = candidate.ownerDocument.defaultView?.HTMLStyleElement;
+function isStyleElement(element: HTMLElement | null): element is HTMLStyleElement {
+  if (!element) return false;
+  const StyleElementClass = element.ownerDocument.defaultView?.HTMLStyleElement;
   return StyleElementClass
-    ? candidate instanceof StyleElementClass
-    : candidate.localName.toLowerCase() === "style";
+    ? element instanceof StyleElementClass
+    : element.localName.toLowerCase() === "style";
 }

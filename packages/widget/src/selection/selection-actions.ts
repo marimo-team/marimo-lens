@@ -5,6 +5,7 @@ import type {
   SelectionAnchor,
 } from "@marimo-lens/protocol";
 
+import { isAbortCause, parseErrorCause } from "@marimo-lens/protocol";
 import {
   useCallback,
   useEffect,
@@ -17,6 +18,7 @@ import {
 
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
+import type { SelectionSnapshotCapture } from "@/selection/selection-capture";
 import type { SelectionMotion, UiAction } from "@/selection/state";
 
 import { LensProtocolError } from "@/anywidget/client";
@@ -35,8 +37,9 @@ export function useSelectionActions(options: {
   dispatch: Dispatch<UiAction>;
   dom: NotebookDomAdapter;
   protocol: LensProtocolClient;
+  captureSnapshot?: SelectionSnapshotCapture;
 }) {
-  const { stateRef, dispatch, dom, protocol } = options;
+  const { stateRef, dispatch, dom, protocol, captureSnapshot } = options;
   const currentSignal = useLifecycleSignal(dom.window);
   const [mutationQueue] = useState(() => ({ tail: Promise.resolve() }));
 
@@ -70,13 +73,13 @@ export function useSelectionActions(options: {
           }
           return;
         } catch (error) {
-          if (signal.aborted || isAbortError(error)) throw error;
+          if (signal.aborted || isAbortCause(error)) throw error;
           if (error instanceof LensProtocolError && error.code === "timeout") {
             try {
               await waitForRevision(dom.window, stateRef, baseRevision + 1, signal);
               if (postcondition(stateRef.current)) return;
             } catch (syncError) {
-              if (signal.aborted || isAbortError(syncError)) throw syncError;
+              if (signal.aborted || isAbortCause(syncError)) throw syncError;
             }
           }
           if (
@@ -105,8 +108,18 @@ export function useSelectionActions(options: {
         enqueueMutation,
         runRevisioned,
         announce: (message) => dispatch({ type: "announce", message }),
+        captureSnapshot,
       }),
-    [currentSignal, dispatch, dom, enqueueMutation, protocol, runRevisioned, stateRef],
+    [
+      captureSnapshot,
+      currentSignal,
+      dispatch,
+      dom,
+      enqueueMutation,
+      protocol,
+      runRevisioned,
+      stateRef,
+    ],
   );
 
   useEffect(() => {
@@ -185,21 +198,21 @@ export function useSelectionActions(options: {
           if (!selectionCapture.isActive(saved.id, captureJob)) return;
           void selectionCapture
             .capture(saved, output, detailElement, captureJob)
-            .catch((error: unknown) => {
-              if (signal.aborted || isAbortError(error)) return;
+            .catch((cause: unknown) => {
+              if (signal.aborted || isAbortCause(cause)) return;
               dispatch({
                 type: "announce",
-                message: errorMessage(error, "Snapshot capture failed"),
+                message: errorMessage(cause, "Snapshot capture failed"),
               });
             });
         })
-        .catch((error: unknown) => {
+        .catch((cause: unknown) => {
           selectionCapture.release(selection.id, captureJob);
-          if (signal.aborted || isAbortError(error)) return;
+          if (signal.aborted || isAbortCause(cause)) return;
           dispatch({
             type: "selectionFailed",
             selectionId: selection.id,
-            message: errorMessage(error, "Selection could not be created"),
+            message: errorMessage(cause, "Selection could not be created"),
           });
           focusDock(dom);
         });
@@ -232,7 +245,7 @@ export function useSelectionActions(options: {
           );
           dispatch({ type: "activationCommitted", selectionId });
         } catch (error) {
-          if (signal.aborted || isAbortError(error)) return;
+          if (signal.aborted || isAbortCause(error)) return;
           dispatch({
             type: "activationFailed",
             selectionId,
@@ -274,7 +287,7 @@ export function useSelectionActions(options: {
           dispatch({ type: "noteSaveSucceeded", selectionId, label });
           focusSelectionOrDock(dom, selectionId);
         } catch (error) {
-          if (signal.aborted || isAbortError(error)) return;
+          if (signal.aborted || isAbortCause(error)) return;
           dispatch({
             type: "noteSaveFailed",
             selectionId,
@@ -305,7 +318,7 @@ export function useSelectionActions(options: {
           dispatch({ type: "announce", message: `${selection.label} removed.` });
           focusDock(dom);
         } catch (error) {
-          if (signal.aborted || isAbortError(error)) return;
+          if (signal.aborted || isAbortCause(error)) return;
           dispatch({
             type: "announce",
             message: errorMessage(error, "Selection could not be removed"),
@@ -351,7 +364,7 @@ export function useSelectionActions(options: {
         dispatch({ type: "setListOpen", open: false });
         dispatch({ type: "announce", message: "Selections cleared." });
       } catch (error) {
-        if (signal.aborted || isAbortError(error)) return;
+        if (signal.aborted || isAbortCause(error)) return;
         dispatch({
           type: "announce",
           message: errorMessage(error, "Selections could not be cleared"),
@@ -424,16 +437,16 @@ export function useSelectionActions(options: {
           const captureJob = selectionCapture.reserve(reopened.id);
           void selectionCapture
             .capture(reopened, output, detail, captureJob)
-            .catch((error: unknown) => {
-              if (signal.aborted || isAbortError(error)) return;
+            .catch((cause: unknown) => {
+              if (signal.aborted || isAbortCause(cause)) return;
               dispatch({
                 type: "announce",
-                message: errorMessage(error, "Snapshot capture failed"),
+                message: errorMessage(cause, "Snapshot capture failed"),
               });
             });
           focusSelectionOrDock(dom, reopened.id);
         } catch (error) {
-          if (signal.aborted || isAbortError(error)) return;
+          if (signal.aborted || isAbortCause(error)) return;
           dispatch({
             type: "announce",
             message: errorMessage(error, "Selection could not be reopened"),
@@ -478,7 +491,7 @@ export function useSelectionActions(options: {
         }
         dispatch({ type: "announce", message: "History cleared." });
       } catch (error) {
-        if (signal.aborted || isAbortError(error)) return;
+        if (signal.aborted || isAbortCause(error)) return;
         dispatch({
           type: "announce",
           message: errorMessage(error, "History could not be cleared"),
@@ -535,16 +548,16 @@ export function useSelectionActions(options: {
             dispatch({ type: "announce", message: `${saved.label} adjusted.` });
             void selectionCapture
               .capture(saved, output, detail, captureJob)
-              .catch((error: unknown) => {
-                if (signal.aborted || isAbortError(error)) return;
+              .catch((cause: unknown) => {
+                if (signal.aborted || isAbortCause(cause)) return;
                 dispatch({
                   type: "announce",
-                  message: errorMessage(error, "Snapshot capture failed"),
+                  message: errorMessage(cause, "Snapshot capture failed"),
                 });
               });
           }
         } catch (error) {
-          if (signal.aborted || isAbortError(error)) return;
+          if (signal.aborted || isAbortCause(error)) return;
           dispatch({
             type: "announce",
             message: errorMessage(error, "Selection could not be adjusted"),
@@ -631,9 +644,10 @@ function useLifecycleSignal(ownerWindow: Window & typeof globalThis): () => Abor
 }
 
 function createSelectionId(ownerWindow: Window & typeof globalThis): string {
-  return typeof ownerWindow.crypto.randomUUID === "function"
-    ? ownerWindow.crypto.randomUUID()
-    : `selection-${ownerWindow.Date.now().toString(36)}-${ownerWindow.Math.random().toString(36).slice(2, 10)}`;
+  return (
+    ownerWindow.crypto.randomUUID?.() ??
+    `selection-${ownerWindow.Date.now().toString(36)}-${ownerWindow.Math.random().toString(36).slice(2, 10)}`
+  );
 }
 
 function requireSelection(state: LensState, selectionId: string): Selection {
@@ -650,13 +664,6 @@ function sameAnchor(left: SelectionAnchor, right: SelectionAnchor): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (typeof error !== "object" || error === null || !("message" in error)) return fallback;
-  return typeof error.message === "string" && error.message ? error.message : fallback;
-}
-
-function isAbortError(error: unknown): boolean {
-  return (
-    typeof error === "object" && error !== null && "name" in error && error.name === "AbortError"
-  );
+function errorMessage(cause: unknown, fallback: string): string {
+  return parseErrorCause(cause)?.message || fallback;
 }

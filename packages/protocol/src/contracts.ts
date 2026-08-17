@@ -4,6 +4,18 @@ import { hasTextContent } from "./bounded-text";
 
 export const WIDGET_TRANSPORT_VERSION = 2;
 
+export type TransportPrimitive = boolean | null | number | string | undefined;
+export type TransportRecord = { readonly [key: string]: TransportValue };
+export type TransportValue = TransportPrimitive | readonly TransportValue[] | TransportRecord;
+
+const TransportDiscriminatorSchema = v.union([v.boolean(), v.null(), v.number(), v.string()]);
+
+export const TransportEnvelopeSchema = v.looseObject({
+  protocol: v.optional(TransportDiscriminatorSchema),
+  requestId: v.optional(v.string()),
+  type: v.optional(TransportDiscriminatorSchema),
+});
+
 const TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|[+-](\d{2}):(\d{2}))$/;
 
@@ -473,6 +485,13 @@ export type CellRevealEvent = v.InferOutput<typeof CellRevealEventSchema>;
 export type CellActivityStartEvent = v.InferOutput<typeof CellActivityStartEventSchema>;
 export type CellActivityStopEvent = v.InferOutput<typeof CellActivityStopEventSchema>;
 export type CellAttentionEvent = CellActivityStartEvent | CellActivityStopEvent | CellRevealEvent;
+export type TransportEnvelope = v.InferOutput<typeof TransportEnvelopeSchema>;
+export type TransportInput =
+  | TransportValue
+  | LensCommand
+  | LensResponse
+  | SelectionResolvedEvent
+  | CellAttentionEvent;
 
 export type CommandType = ClientCommand["type"];
 export type CommandPayload<TType extends CommandType> = Extract<
@@ -482,7 +501,7 @@ export type CommandPayload<TType extends CommandType> = Extract<
 
 export function parseContract<TSchema extends v.BaseSchema<unknown, unknown, v.BaseIssue<unknown>>>(
   schema: TSchema,
-  input: unknown,
+  input: v.InferInput<TSchema> | TransportEnvelope | TransportValue,
   label: string,
 ): v.InferOutput<TSchema> {
   const result = v.safeParse(schema, input);
@@ -491,31 +510,50 @@ export function parseContract<TSchema extends v.BaseSchema<unknown, unknown, v.B
   throw new Error(`${label} failed contract validation: ${messages}`);
 }
 
-export function parseLensState(input: unknown): LensState {
+export function parseTransportEnvelope(input: TransportInput): TransportEnvelope | null {
+  const result = v.safeParse(TransportEnvelopeSchema, input);
+  return result.success ? result.output : null;
+}
+
+export function parseLensState(
+  input: v.InferInput<typeof LensStateSchema> | TransportValue,
+): LensState {
   return parseContract(LensStateSchema, input, "Lens state");
 }
 
-export function parseLensResponse(input: unknown): LensResponse {
+export function parseLensResponse(
+  input: v.InferInput<typeof LensResponseSchema> | TransportEnvelope | TransportValue,
+): LensResponse {
   return parseContract(LensResponseSchema, input, "Lens response");
 }
 
-export function parseOutputCaptureCommand(input: unknown): OutputCaptureCommand {
+export function parseOutputCaptureCommand(
+  input: v.InferInput<typeof OutputCaptureCommandSchema> | TransportEnvelope | TransportValue,
+): OutputCaptureCommand {
   return parseContract(OutputCaptureCommandSchema, input, "Output capture command");
 }
 
-export function parseSelectionResolvedEvent(input: unknown): SelectionResolvedEvent {
+export function parseSelectionResolvedEvent(
+  input: v.InferInput<typeof SelectionResolvedEventSchema> | TransportEnvelope | TransportValue,
+): SelectionResolvedEvent {
   return parseContract(SelectionResolvedEventSchema, input, "Lens resolution event");
 }
 
-export function parseCellRevealEvent(input: unknown): CellRevealEvent {
+export function parseCellRevealEvent(
+  input: v.InferInput<typeof CellRevealEventSchema> | TransportEnvelope | TransportValue,
+): CellRevealEvent {
   return parseContract(CellRevealEventSchema, input, "Lens cell reveal event");
 }
 
-export function parseCellActivityStartEvent(input: unknown): CellActivityStartEvent {
+export function parseCellActivityStartEvent(
+  input: v.InferInput<typeof CellActivityStartEventSchema> | TransportEnvelope | TransportValue,
+): CellActivityStartEvent {
   return parseContract(CellActivityStartEventSchema, input, "Lens cell activity start event");
 }
 
-export function parseCellActivityStopEvent(input: unknown): CellActivityStopEvent {
+export function parseCellActivityStopEvent(
+  input: v.InferInput<typeof CellActivityStopEventSchema> | TransportEnvelope | TransportValue,
+): CellActivityStopEvent {
   return parseContract(CellActivityStopEventSchema, input, "Lens cell activity stop event");
 }
 

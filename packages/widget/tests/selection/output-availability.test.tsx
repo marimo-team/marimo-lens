@@ -23,20 +23,27 @@ afterEach(() => {
 
 describe("output availability", () => {
   test("observes the document only while selections reference outputs", () => {
-    const observe = vi.fn();
-    const disconnect = vi.fn();
+    const NativeMutationObserver = window.MutationObserver;
+    const observe = vi.fn<MutationObserver["observe"]>();
+    const disconnect = vi.fn<MutationObserver["disconnect"]>();
     const requestAnimationFrame = vi.fn(() => 1);
-    let notify: MutationCallback | null = null;
-    const MutationObserverStub = vi.fn(
-      class {
-        constructor(callback: MutationCallback) {
-          notify = callback;
-        }
+    const observers: TestMutationObserver[] = [];
+    class TestMutationObserver implements MutationObserver {
+      readonly callback: MutationCallback;
 
-        observe = observe;
-        disconnect = disconnect;
-      },
-    );
+      constructor(callback: MutationCallback) {
+        this.callback = callback;
+        observers.push(this);
+      }
+
+      observe = observe;
+      disconnect = disconnect;
+
+      takeRecords(): MutationRecord[] {
+        return [];
+      }
+    }
+    const MutationObserverStub = vi.fn(TestMutationObserver);
     vi.stubGlobal("MutationObserver", MutationObserverStub);
     vi.stubGlobal("requestAnimationFrame", requestAnimationFrame);
 
@@ -66,15 +73,18 @@ describe("output availability", () => {
       subtree: true,
     });
 
-    const output = setupOutput("cell-1");
-    const record = {
-      target: document.body,
-      addedNodes: [output],
-      removedNodes: [],
-    } as unknown as MutationRecord;
+    const recordObserver = new NativeMutationObserver(() => {});
+    recordObserver.observe(document.body, { childList: true });
+    setupOutput("cell-1");
+    const record = recordObserver.takeRecords()[0];
+    recordObserver.disconnect();
+    const activeObserver = observers[0];
+    if (!record || !activeObserver) {
+      throw new Error("Mutation observer fixture must capture the appended output");
+    }
     act(() => {
-      notify?.([record], {} as MutationObserver);
-      notify?.([record], {} as MutationObserver);
+      activeObserver.callback([record], activeObserver);
+      activeObserver.callback([record], activeObserver);
     });
     expect(requestAnimationFrame).toHaveBeenCalledOnce();
 
@@ -132,19 +142,20 @@ describe("output availability", () => {
       return window.setTimeout(() => callback(performance.now()), 0);
     });
     vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
-    let notifyResize: ResizeObserverCallback | null = null;
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        constructor(callback: ResizeObserverCallback) {
-          notifyResize = callback;
-        }
+    const resizeObservers: TestResizeObserver[] = [];
+    class TestResizeObserver implements ResizeObserver {
+      readonly callback: ResizeObserverCallback;
 
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback;
+        resizeObservers.push(this);
+      }
+
+      observe(_target: Element, _options?: ResizeObserverOptions) {}
+      unobserve(_target: Element) {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", TestResizeObserver);
 
     const selection = selectionFixture();
     let width = 0;
@@ -165,7 +176,11 @@ describe("output availability", () => {
 
     await act(async () => {
       width = 400;
-      notifyResize?.([], {} as ResizeObserver);
+      const activeResizeObserver = resizeObservers[0];
+      if (!activeResizeObserver) {
+        throw new Error("Resize observer fixture must be connected");
+      }
+      activeResizeObserver.callback([], activeResizeObserver);
       await new Promise((resolve) => window.setTimeout(resolve, 5));
     });
     expect(container.textContent).toBe("1");

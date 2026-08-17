@@ -23,10 +23,10 @@ export function waitForRevision(
   return new Promise((resolve, reject) => {
     const started = ownerWindow.Date.now();
     let timeout = 0;
-    const finish = (error?: unknown) => {
+    const finish = (cause?: unknown) => {
       ownerWindow.clearTimeout(timeout);
       signal.removeEventListener("abort", abort);
-      if (error) reject(error);
+      if (cause) reject(cause);
       else resolve();
     };
     const abort = () =>

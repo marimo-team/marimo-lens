@@ -1,6 +1,7 @@
-import { boundedUtf16 } from "@marimo-lens/protocol";
+import { boundedUtf16, parseErrorCause } from "@marimo-lens/protocol";
 
 import type { CapturedSnapshot, CaptureResult } from "../types";
+import type { RasterizeElement } from "./raster";
 
 import { composeOutputEvidence, composeSelectionEvidence } from "./evidence-layout";
 import {
@@ -20,10 +21,32 @@ type OutputCaptureOptions = {
 export async function captureOutputSnapshot(
   options: OutputCaptureOptions,
 ): Promise<CapturedSnapshot> {
+  return captureOutputSnapshotWith(options);
+}
+
+export async function captureSelectionSnapshot(
+  options: SelectionCaptureOptions,
+): Promise<CaptureResult> {
+  return captureSelectionSnapshotWith(options);
+}
+
+export function createSnapshotCapture(rasterize: RasterizeElement) {
+  return {
+    captureOutputSnapshot: (options: OutputCaptureOptions) =>
+      captureOutputSnapshotWith(options, rasterize),
+    captureSelectionSnapshot: (options: SelectionCaptureOptions) =>
+      captureSelectionSnapshotWith(options, rasterize),
+  };
+}
+
+async function captureOutputSnapshotWith(
+  options: OutputCaptureOptions,
+  rasterize?: RasterizeElement,
+): Promise<CapturedSnapshot> {
   const ownerDocument = options.output.ownerDocument;
   const capturedAt = new (ownerWindow(ownerDocument).Date)().toISOString();
   throwIfCaptureAborted(options.signal, ownerDocument);
-  const evidence = await captureOutputEvidence(options.output, options.signal);
+  const evidence = await captureOutputEvidence(options.output, options.signal, rasterize);
   throwIfCaptureAborted(options.signal, ownerDocument);
   const canvas = composeOutputEvidence({
     ownerDocument,
@@ -45,14 +68,15 @@ export async function captureOutputSnapshot(
   };
 }
 
-export async function captureSelectionSnapshot(
+async function captureSelectionSnapshotWith(
   options: SelectionCaptureOptions,
+  rasterize?: RasterizeElement,
 ): Promise<CaptureResult> {
   const ownerDocument = options.output.ownerDocument;
   const capturedAt = new (ownerWindow(ownerDocument).Date)().toISOString();
   try {
     throwIfCaptureAborted(options.signal, ownerDocument);
-    const evidence = await captureSelectionEvidence(options);
+    const evidence = await captureSelectionEvidence(options, undefined, rasterize);
     throwIfCaptureAborted(options.signal, ownerDocument);
     const canvas = composeSelectionEvidence({
       ownerDocument,
@@ -90,7 +114,6 @@ export async function captureSelectionSnapshot(
   }
 }
 
-function errorText(error: unknown): string | null {
-  if (typeof error !== "object" || error === null || !("message" in error)) return null;
-  return typeof error.message === "string" && error.message ? error.message : null;
+function errorText(cause: unknown): string | null {
+  return parseErrorCause(cause)?.message || null;
 }

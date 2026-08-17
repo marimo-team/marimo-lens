@@ -22,28 +22,29 @@ describe("interaction documents", () => {
       clientLeft: { configurable: true, value: 2 },
       clientTop: { configurable: true, value: 3 },
     });
-    const event = new MouseEvent("pointermove", { clientX: 20, clientY: 10 });
+    const event = new PointerEvent("pointermove", { clientX: 20, clientY: 10 });
 
-    expect(parentViewportPoint(event as PointerEvent, frame)).toEqual({
+    expect(parentViewportPoint(event, frame)).toEqual({
       x: 100 + (2 + 20) * scale,
       y: 50 + (3 + 10) * scale,
     });
   });
 
   test("coalesces topology changes without reinstalling document surfaces", () => {
-    let notifyMutation: MutationCallback | undefined;
+    let notifyMutation = () => {};
     const observe = vi.fn();
     const disconnect = vi.fn();
     vi.stubGlobal(
       "MutationObserver",
       vi.fn(
-        class {
+        class implements MutationObserver {
           constructor(callback: MutationCallback) {
-            notifyMutation = callback;
+            notifyMutation = () => callback([], this);
           }
 
           observe = observe;
           disconnect = disconnect;
+          takeRecords = () => [];
         },
       ),
     );
@@ -82,8 +83,8 @@ describe("interaction documents", () => {
     expect(query).toHaveBeenCalledTimes(1);
     expect(attach).toHaveBeenCalledTimes(2);
 
-    notifyMutation?.([], {} as MutationObserver);
-    notifyMutation?.([], {} as MutationObserver);
+    notifyMutation();
+    notifyMutation();
     frame.dispatchEvent(new Event("load"));
     expect(query).toHaveBeenCalledTimes(1);
     expect(frames.size).toBe(1);
@@ -106,17 +107,18 @@ describe("interaction documents", () => {
   });
 
   test("discovers dynamically added output frames while gesture locking is off", () => {
-    let notifyMutation: MutationCallback | undefined;
+    let notifyMutation = () => {};
     vi.stubGlobal(
       "MutationObserver",
       vi.fn(
-        class {
+        class implements MutationObserver {
           constructor(callback: MutationCallback) {
-            notifyMutation = callback;
+            notifyMutation = () => callback([], this);
           }
 
           observe = vi.fn();
           disconnect = vi.fn();
+          takeRecords = () => [];
         },
       ),
     );
@@ -147,7 +149,7 @@ describe("interaction documents", () => {
     const frame = document.createElement("iframe");
     output.appendChild(frame);
     frame.contentDocument?.documentElement.style.setProperty("touch-action", "manipulation");
-    notifyMutation?.([], {} as MutationObserver);
+    notifyMutation();
     refresh?.(0);
 
     expect(attachedDocuments).toEqual([document, frame.contentDocument]);
@@ -165,15 +167,16 @@ describe("interaction documents", () => {
     vi.stubGlobal(
       "MutationObserver",
       vi.fn(
-        class {
+        class implements MutationObserver {
           constructor(callback: MutationCallback) {
             notifyMutation = (root) => {
-              if (observed.has(root)) callback([], {} as MutationObserver);
+              if (observed.has(root)) callback([], this);
             };
           }
 
           observe = vi.fn((root: Node) => observed.add(root));
           disconnect = () => observed.clear();
+          takeRecords = () => [];
         },
       ),
     );

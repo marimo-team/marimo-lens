@@ -1,3 +1,5 @@
+import { isAbortCause, parseErrorCause } from "@marimo-lens/protocol";
+
 export type OwnerWindow = Window & typeof globalThis;
 
 export function ownerWindow(ownerDocument: Document): OwnerWindow {
@@ -16,19 +18,11 @@ export function throwIfCaptureAborted(
 ): void {
   if (!signal?.aborted) return;
   const reason = signal.reason;
-  const message =
-    typeof reason === "object" &&
-    reason !== null &&
-    "message" in reason &&
-    typeof reason.message === "string" &&
-    reason.message
-      ? reason.message
-      : "Lens capture was canceled";
-  throw new (ownerWindow(ownerDocument).DOMException)(message, "AbortError");
+  const window = ownerWindow(ownerDocument);
+  const message = parseErrorCause(reason)?.message || "Lens capture was canceled";
+  throw new window.DOMException(message, "AbortError");
 }
 
-export function isCaptureAbort(error: unknown): boolean {
-  return (
-    typeof error === "object" && error !== null && "name" in error && error.name === "AbortError"
-  );
+export function isCaptureAbort(cause: unknown): boolean {
+  return isAbortCause(cause);
 }

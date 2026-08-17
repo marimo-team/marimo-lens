@@ -1,6 +1,8 @@
+import type { OutputCaptureHandler } from "@marimo-lens/image-capture";
 import type {
   AddressedSelection,
   CellAttentionEvent,
+  LensState,
   OutputCaptureCommand,
   Selection,
   SelectionResolvedEvent,
@@ -11,38 +13,37 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
+import type { LensWidgetModel } from "@/anywidget/client";
+import type { LensModel } from "@/anywidget/model";
 import type { UiAction } from "@/selection/state";
 
-import { MarimoLensContent as Content } from "@/app/marimo-lens-content";
+import { LensProtocolClient } from "@/anywidget/client";
+import {
+  MarimoLensContent as Content,
+  type MarimoLensContentDependencies,
+} from "@/app/marimo-lens-content";
 
 import { selectionFixture } from "../support/fixtures";
 import { NotebookDomTestProvider } from "../support/notebook-dom";
 
-const mocks = vi.hoisted(() => ({
-  useDocumentInteractions: vi.fn(),
-  useLensModel: vi.fn(),
-  useSelectionActions: vi.fn(),
-}));
-
-vi.mock("@/selection/document-interactions", () => ({
-  useDocumentInteractions: mocks.useDocumentInteractions,
-}));
-vi.mock("@marimo-lens/image-capture", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@marimo-lens/image-capture")>()),
-  captureOutputSnapshot: vi.fn(),
-}));
-vi.mock("@/anywidget/model", () => ({ useLensModel: mocks.useLensModel }));
-vi.mock("@/selection/selection-actions", () => ({
-  useSelectionActions: mocks.useSelectionActions,
-}));
-vi.mock("@/notebook/viewport", () => ({ useViewportRevision: () => 0 }));
-
 let root: Root | null = null;
+let currentModel: LensModel;
+let currentModelFor = () => currentModel;
+
+type ActionFactory = (dispatch: (action: UiAction) => void) => ReturnType<typeof actionsFor>;
+
+let currentActionsFor: ActionFactory = actionsFor;
+const captureOutput = vi.fn<typeof captureOutputSnapshot>();
+const dependencies: MarimoLensContentDependencies = {
+  captureOutputSnapshot: captureOutput,
+  useLensModel: () => currentModelFor(),
+  useSelectionActions: (options) => currentActionsFor(options.dispatch),
+};
 
 function MarimoLensContent() {
   return (
     <NotebookDomTestProvider>
-      <Content />
+      <Content dependencies={dependencies} />
     </NotebookDomTestProvider>
   );
 }
@@ -52,6 +53,9 @@ afterEach(() => {
   root = null;
   document.body.replaceChildren();
   vi.clearAllMocks();
+  captureOutput.mockReset();
+  currentActionsFor = actionsFor;
+  currentModelFor = () => currentModel;
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -73,34 +77,20 @@ function actionsFor(dispatch: (action: UiAction) => void) {
   };
 }
 
-function protocolDefaults() {
-  return {
-    onCellAttention: vi.fn(() => vi.fn()),
-  };
-}
-
 describe("marimo-lens content", () => {
   test("applies the native anywidget stylesheet to the body portal", () => {
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(() => vi.fn()),
-      onSelectionResolved: vi.fn(() => vi.fn()),
-    };
-    mocks.useLensModel.mockReturnValue({
-      state: {
+    const protocol = protocolClient();
+    currentModel = {
+      state: lensState({
         revision: 0,
         nextLabel: "S1",
         currentSelectionId: null,
         selections: [],
-        history: [] as AddressedSelection[],
-      },
+        history: [],
+      }),
       css: ".marimo_lens { color: rgb(8, 128, 234); }",
       protocol,
-    });
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    };
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -120,34 +110,25 @@ describe("marimo-lens content", () => {
 
   test("captures the exact canonical output for a reverse protocol request", async () => {
     const frames = controlledAnimationFrames();
-    let captureHandler:
-      | ((command: OutputCaptureCommand, signal: AbortSignal) => Promise<unknown>)
-      | undefined;
+    let captureHandler: OutputCaptureHandler | undefined;
     const releaseCaptureHandler = vi.fn();
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(
-        (handler: (command: OutputCaptureCommand, signal: AbortSignal) => Promise<unknown>) => {
-          captureHandler = handler;
-          return releaseCaptureHandler;
-        },
-      ),
-      onSelectionResolved: vi.fn(() => vi.fn()),
-    };
-    mocks.useLensModel.mockReturnValue({
-      state: {
+    const protocol = protocolClient({
+      onOutputCapture: vi.fn((handler: OutputCaptureHandler) => {
+        captureHandler = handler;
+        return releaseCaptureHandler;
+      }),
+    });
+    currentModel = {
+      state: lensState({
         revision: 7,
         nextLabel: "S1",
         currentSelectionId: null,
         selections: [],
-        history: [] as AddressedSelection[],
-      },
+        history: [],
+      }),
+      css: "",
       protocol,
-    });
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    };
     const output = document.createElement("div");
     output.id = "output-cell-1";
     output.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
@@ -155,7 +136,7 @@ describe("marimo-lens content", () => {
       scrollWidth: { configurable: true, value: 400 },
       scrollHeight: { configurable: true, value: 240 },
     });
-    vi.mocked(captureOutputSnapshot).mockResolvedValue({
+    captureOutput.mockResolvedValue({
       metadata: {
         status: "available",
         id: "image:capture-1",
@@ -174,16 +155,16 @@ describe("marimo-lens content", () => {
     act(() => root?.render(<MarimoLensContent />));
     const command = outputCaptureCommand();
     const controller = new AbortController();
-    const capture = captureHandler!(command, controller.signal);
+    const capture = requireCaptureHandler(captureHandler)(command, controller.signal);
 
-    expect(captureOutputSnapshot).not.toHaveBeenCalled();
+    expect(captureOutput).not.toHaveBeenCalled();
     document.body.appendChild(output);
     frames.flushNext();
     await expect(capture).resolves.toEqual({
       image: expect.objectContaining({ id: "image:capture-1" }),
       bytes: new Uint8Array([137, 80, 78, 71]),
     });
-    expect(captureOutputSnapshot).toHaveBeenCalledWith({
+    expect(captureOutput).toHaveBeenCalledWith({
       imageId: "image:capture-1",
       output,
       signal: controller.signal,
@@ -196,39 +177,33 @@ describe("marimo-lens content", () => {
 
   test("reports missing and failed output capture through stable protocol errors", async () => {
     const frames = controlledAnimationFrames();
-    let captureHandler:
-      | ((command: OutputCaptureCommand, signal: AbortSignal) => Promise<unknown>)
-      | undefined;
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(
-        (handler: (command: OutputCaptureCommand, signal: AbortSignal) => Promise<unknown>) => {
-          captureHandler = handler;
-          return vi.fn();
-        },
-      ),
-      onSelectionResolved: vi.fn(() => vi.fn()),
-    };
-    mocks.useLensModel.mockReturnValue({
-      state: {
+    let captureHandler: OutputCaptureHandler | undefined;
+    const protocol = protocolClient({
+      onOutputCapture: vi.fn((handler: OutputCaptureHandler) => {
+        captureHandler = handler;
+        return vi.fn();
+      }),
+    });
+    currentModel = {
+      state: lensState({
         revision: 7,
         nextLabel: "S1",
         currentSelectionId: null,
         selections: [],
-        history: [] as AddressedSelection[],
-      },
+        history: [],
+      }),
+      css: "",
       protocol,
-    });
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    };
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => root?.render(<MarimoLensContent />));
 
-    const missing = captureHandler!(outputCaptureCommand(), new AbortController().signal);
+    const missing = requireCaptureHandler(captureHandler)(
+      outputCaptureCommand(),
+      new AbortController().signal,
+    );
     frames.flushNext();
     await expect(missing).rejects.toMatchObject({ code: "output_unavailable" });
 
@@ -236,11 +211,12 @@ describe("marimo-lens content", () => {
     output.id = "output-cell-1";
     output.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
     document.body.appendChild(output);
-    vi.mocked(captureOutputSnapshot).mockRejectedValue(
-      new Error("Canvas rendering is unavailable"),
-    );
+    captureOutput.mockRejectedValue(new Error("Canvas rendering is unavailable"));
 
-    const failed = captureHandler!(outputCaptureCommand(), new AbortController().signal);
+    const failed = requireCaptureHandler(captureHandler)(
+      outputCaptureCommand(),
+      new AbortController().signal,
+    );
     frames.flushNext();
     await expect(failed).rejects.toMatchObject({
       message: "Canvas rendering is unavailable",
@@ -250,38 +226,32 @@ describe("marimo-lens content", () => {
   test("cancels the next-paint barrier when the active view unmounts", async () => {
     const frames = controlledAnimationFrames();
     const controller = new AbortController();
-    let captureHandler:
-      | ((command: OutputCaptureCommand, signal: AbortSignal) => Promise<unknown>)
-      | undefined;
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(
-        (handler: (command: OutputCaptureCommand, signal: AbortSignal) => Promise<unknown>) => {
-          captureHandler = handler;
-          return () => controller.abort(new DOMException("Lens view released", "AbortError"));
-        },
-      ),
-      onSelectionResolved: vi.fn(() => vi.fn()),
-    };
-    mocks.useLensModel.mockReturnValue({
-      state: {
+    let captureHandler: OutputCaptureHandler | undefined;
+    const protocol = protocolClient({
+      onOutputCapture: vi.fn((handler: OutputCaptureHandler) => {
+        captureHandler = handler;
+        return () => controller.abort(new DOMException("Lens view released", "AbortError"));
+      }),
+    });
+    currentModel = {
+      state: lensState({
         revision: 7,
         nextLabel: "S1",
         currentSelectionId: null,
         selections: [],
-        history: [] as AddressedSelection[],
-      },
+        history: [],
+      }),
+      css: "",
       protocol,
-    });
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    };
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => root?.render(<MarimoLensContent />));
-    const capture = captureHandler!(outputCaptureCommand(), controller.signal);
+    const capture = requireCaptureHandler(captureHandler)(
+      outputCaptureCommand(),
+      controller.signal,
+    );
     const rejection = expect(capture).rejects.toMatchObject({ name: "AbortError" });
 
     act(() => root?.unmount());
@@ -289,51 +259,45 @@ describe("marimo-lens content", () => {
 
     expect(controller.signal.aborted).toBe(true);
     expect(frames.cancel).toHaveBeenCalledOnce();
-    expect(captureOutputSnapshot).not.toHaveBeenCalled();
+    expect(captureOutput).not.toHaveBeenCalled();
     await rejection;
   });
 
   test("rejects a capture when the canonical output root changes", async () => {
     const frames = controlledAnimationFrames();
-    let captureHandler:
-      | ((command: OutputCaptureCommand, signal: AbortSignal) => Promise<unknown>)
-      | undefined;
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(
-        (handler: (command: OutputCaptureCommand, signal: AbortSignal) => Promise<unknown>) => {
-          captureHandler = handler;
-          return vi.fn();
-        },
-      ),
-      onSelectionResolved: vi.fn(() => vi.fn()),
-    };
-    mocks.useLensModel.mockReturnValue({
-      state: {
+    let captureHandler: OutputCaptureHandler | undefined;
+    const protocol = protocolClient({
+      onOutputCapture: vi.fn((handler: OutputCaptureHandler) => {
+        captureHandler = handler;
+        return vi.fn();
+      }),
+    });
+    currentModel = {
+      state: lensState({
         revision: 7,
         nextLabel: "S1",
         currentSelectionId: null,
         selections: [],
-        history: [] as AddressedSelection[],
-      },
+        history: [],
+      }),
+      css: "",
       protocol,
-    });
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    };
     const output = document.createElement("div");
     output.id = "output-cell-1";
     output.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
     document.body.appendChild(output);
     const pending = deferred<Awaited<ReturnType<typeof captureOutputSnapshot>>>();
-    vi.mocked(captureOutputSnapshot).mockImplementationOnce(() => pending.promise);
+    captureOutput.mockImplementationOnce(() => pending.promise);
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => root?.render(<MarimoLensContent />));
 
-    const capture = captureHandler!(outputCaptureCommand(), new AbortController().signal);
+    const capture = requireCaptureHandler(captureHandler)(
+      outputCaptureCommand(),
+      new AbortController().signal,
+    );
     const rejection = expect(capture).rejects.toMatchObject({
       code: "capture_failed",
     });
@@ -354,7 +318,7 @@ describe("marimo-lens content", () => {
   test("activates a detached selection and announces its unavailable output", async () => {
     const selection = selectionFixture();
     const activateSelection = vi.fn();
-    mocks.useLensModel.mockReturnValue({
+    currentModel = {
       state: {
         revision: 3,
         nextLabel: "S2",
@@ -362,31 +326,25 @@ describe("marimo-lens content", () => {
         selections: [selection],
         history: [],
       },
-      protocol: {
-        ...protocolDefaults(),
-        getSnapshot: vi.fn(),
-        onOutputCapture: vi.fn(() => vi.fn()),
-        onSelectionResolved: vi.fn(() => vi.fn()),
+      css: "",
+      protocol: protocolClient(),
+    };
+    currentActionsFor = (dispatch) => ({
+      beginSelection: vi.fn(),
+      activateSelection: (selectionId: string) => {
+        activateSelection(selectionId);
+        dispatch({ type: "selectionActivated", selectionId });
       },
+      openNote: vi.fn(),
+      saveNote: vi.fn(),
+      deleteSelection: vi.fn(),
+      clearSelections: vi.fn(),
+      reopenSelection: vi.fn(),
+      clearHistory: vi.fn(),
+      repositionSelection: vi.fn(),
+      invalidateSnapshotCapture: vi.fn(),
+      settleUnavailableSnapshot: vi.fn(),
     });
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => ({
-        beginSelection: vi.fn(),
-        activateSelection: (selectionId: string) => {
-          activateSelection(selectionId);
-          dispatch({ type: "selectionActivated", selectionId });
-        },
-        openNote: vi.fn(),
-        saveNote: vi.fn(),
-        deleteSelection: vi.fn(),
-        clearSelections: vi.fn(),
-        reopenSelection: vi.fn(),
-        clearHistory: vi.fn(),
-        repositionSelection: vi.fn(),
-        invalidateSnapshotCapture: vi.fn(),
-        settleUnavailableSnapshot: vi.fn(),
-      }),
-    );
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -413,10 +371,7 @@ describe("marimo-lens content", () => {
     vi.useFakeTimers();
     let listener: ((event: CellAttentionEvent) => void) | undefined;
     const resolutionListeners: Array<(event: SelectionResolvedEvent) => void> = [];
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(() => vi.fn()),
+    const protocol = protocolClient({
       onSelectionResolved: vi.fn((next: (event: SelectionResolvedEvent) => void) => {
         resolutionListeners.push(next);
         return vi.fn();
@@ -425,8 +380,8 @@ describe("marimo-lens content", () => {
         listener = next;
         return vi.fn();
       }),
-    };
-    mocks.useLensModel.mockReturnValue({
+    });
+    currentModel = {
       state: {
         revision: 7,
         nextLabel: "S1",
@@ -434,11 +389,9 @@ describe("marimo-lens content", () => {
         selections: [],
         history: [],
       },
+      css: "",
       protocol,
-    });
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    };
     const cell = document.createElement("section");
     cell.id = "cell-BYtC";
     cell.getBoundingClientRect = () => new DOMRect(20, 80, 400, 300);
@@ -481,14 +434,13 @@ describe("marimo-lens content", () => {
       document.querySelector("[data-marimo-lens-cell-attention-status]")?.textContent;
     expect(attentionStatus()).toBe("Revealed cell BYtC. Updated the aggregation.");
 
-    const reboundProtocol = {
-      ...protocol,
+    const reboundProtocol = protocolClient({
       onCellAttention: vi.fn((next: (event: CellAttentionEvent) => void) => {
         listener = next;
         return vi.fn();
       }),
-    };
-    mocks.useLensModel.mockReturnValue({
+    });
+    currentModel = {
       state: {
         revision: 8,
         nextLabel: "S1",
@@ -496,8 +448,9 @@ describe("marimo-lens content", () => {
         selections: [],
         history: [],
       },
+      css: "",
       protocol: reboundProtocol,
-    });
+    };
     act(() => root?.render(<MarimoLensContent />));
     expect(document.querySelector("[data-marimo-lens-cell-attention]")).not.toBeNull();
 
@@ -642,20 +595,14 @@ describe("marimo-lens content", () => {
         selections: [selection],
         history: [],
       },
-      protocol: {
-        ...protocolDefaults(),
-        getSnapshot: vi.fn(),
-        onOutputCapture: vi.fn(() => vi.fn()),
-        onSelectionResolved: vi.fn(() => vi.fn()),
-      },
+      css: "",
+      protocol: protocolClient(),
     };
-    mocks.useLensModel.mockImplementation(() => model);
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => ({
-        ...actionsFor(dispatch),
-        settleUnavailableSnapshot,
-      }),
-    );
+    currentModelFor = () => model;
+    currentActionsFor = (dispatch) => ({
+      ...actionsFor(dispatch),
+      settleUnavailableSnapshot,
+    });
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -704,28 +651,24 @@ describe("marimo-lens content", () => {
     });
     const selection = selectionFixture();
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S2",
-        currentSelectionId: selection.id as string | null,
+        currentSelectionId: selection.id,
         selections: [selection],
-        history: [] as AddressedSelection[],
-      },
-      protocol: {
-        ...protocolDefaults(),
-        getSnapshot: vi.fn(),
-        onOutputCapture: vi.fn(() => vi.fn()),
-        onSelectionResolved,
-      },
-    };
-    mocks.useLensModel.mockImplementation(() => model);
-    const invalidateSnapshotCapture = vi.fn();
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => ({
-        ...actionsFor(dispatch),
-        invalidateSnapshotCapture,
+        history: [],
       }),
-    );
+      css: "",
+      protocol: protocolClient({
+        onSelectionResolved,
+      }),
+    };
+    currentModelFor = () => model;
+    const invalidateSnapshotCapture = vi.fn();
+    currentActionsFor = (dispatch) => ({
+      ...actionsFor(dispatch),
+      invalidateSnapshotCapture,
+    });
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -799,16 +742,15 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture();
     const event = resolvedEvent({ summary: "Updated the chart." });
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S2",
-        currentSelectionId: selection.id as string | null,
+        currentSelectionId: selection.id,
         selections: [selection],
-        history: [] as AddressedSelection[],
-      },
-      protocol: {
-        getSnapshot: vi.fn(),
-        onOutputCapture: vi.fn(() => vi.fn()),
+        history: [],
+      }),
+      css: "",
+      protocol: protocolClient({
         onCellAttention: vi.fn((next: (event: CellAttentionEvent) => void) => {
           attentionListener = next;
           return vi.fn();
@@ -817,12 +759,9 @@ describe("marimo-lens content", () => {
           resolutionListener = next;
           return vi.fn();
         }),
-      },
+      }),
     };
-    mocks.useLensModel.mockImplementation(() => model);
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    currentModelFor = () => model;
     const cell = document.createElement("section");
     cell.id = `cell-${selection.outputCellId}`;
     cell.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
@@ -933,16 +872,15 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture();
     const event = resolvedEvent({ summary: "Updated the chart." });
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S2",
-        currentSelectionId: selection.id as string | null,
+        currentSelectionId: selection.id,
         selections: [selection],
-        history: [] as AddressedSelection[],
-      },
-      protocol: {
-        getSnapshot: vi.fn(),
-        onOutputCapture: vi.fn(() => vi.fn()),
+        history: [],
+      }),
+      css: "",
+      protocol: protocolClient({
         onCellAttention: vi.fn((next: (event: CellAttentionEvent) => void) => {
           attentionListener = next;
           return vi.fn();
@@ -951,12 +889,9 @@ describe("marimo-lens content", () => {
           resolutionListener = next;
           return vi.fn();
         }),
-      },
+      }),
     };
-    mocks.useLensModel.mockImplementation(() => model);
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    currentModelFor = () => model;
     const cell = document.createElement("section");
     cell.id = `cell-${selection.outputCellId}`;
     cell.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
@@ -1013,28 +948,24 @@ describe("marimo-lens content", () => {
       return vi.fn();
     });
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S3",
-        currentSelectionId: second.id as string | null,
+        currentSelectionId: second.id,
         selections: [first, second],
-        history: [] as AddressedSelection[],
-      },
-      protocol: {
-        ...protocolDefaults(),
-        getSnapshot: vi.fn(),
-        onOutputCapture: vi.fn(() => vi.fn()),
-        onSelectionResolved,
-      },
-    };
-    mocks.useLensModel.mockImplementation(() => model);
-    const invalidateSnapshotCapture = vi.fn();
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => ({
-        ...actionsFor(dispatch),
-        invalidateSnapshotCapture,
+        history: [],
       }),
-    );
+      css: "",
+      protocol: protocolClient({
+        onSelectionResolved,
+      }),
+    };
+    currentModelFor = () => model;
+    const invalidateSnapshotCapture = vi.fn();
+    currentActionsFor = (dispatch) => ({
+      ...actionsFor(dispatch),
+      invalidateSnapshotCapture,
+    });
     const event = resolvedEvent({
       selections: [
         {
@@ -1087,29 +1018,24 @@ describe("marimo-lens content", () => {
     let listener: ((event: SelectionResolvedEvent) => void) | undefined;
     const first = selectionFixture();
     const second = selectionFixture({ id: "selection-2", label: "S2" });
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(() => vi.fn()),
+    const protocol = protocolClient({
       onSelectionResolved: vi.fn((next: (event: SelectionResolvedEvent) => void) => {
         listener = next;
         return vi.fn();
       }),
-    };
+    });
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S3",
-        currentSelectionId: first.id as string | null,
+        currentSelectionId: first.id,
         selections: [first, second],
-        history: [] as AddressedSelection[],
-      },
+        history: [],
+      }),
+      css: "",
       protocol,
     };
-    mocks.useLensModel.mockImplementation(() => model);
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    currentModelFor = () => model;
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -1154,29 +1080,24 @@ describe("marimo-lens content", () => {
     let listener: ((event: SelectionResolvedEvent) => void) | undefined;
     const first = selectionFixture();
     const second = selectionFixture({ id: "selection-2", label: "S2" });
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(() => vi.fn()),
+    const protocol = protocolClient({
       onSelectionResolved: vi.fn((next: (event: SelectionResolvedEvent) => void) => {
         listener = next;
         return vi.fn();
       }),
-    };
+    });
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S3",
-        currentSelectionId: first.id as string | null,
+        currentSelectionId: first.id,
         selections: [first, second],
-        history: [] as AddressedSelection[],
-      },
+        history: [],
+      }),
+      css: "",
       protocol,
     };
-    mocks.useLensModel.mockImplementation(() => model);
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    currentModelFor = () => model;
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -1240,32 +1161,28 @@ describe("marimo-lens content", () => {
       scrollHeight: { configurable: true, value: 240 },
     });
     document.body.appendChild(output);
-    const protocol = {
+    const protocol = protocolClient({
       onCellAttention: vi.fn((next: (event: CellAttentionEvent) => void) => {
         attentionListener = next;
         return vi.fn();
       }),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(() => vi.fn()),
       onSelectionResolved: vi.fn((next: (event: SelectionResolvedEvent) => void) => {
         listener = next;
         return vi.fn();
       }),
-    };
+    });
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S2",
-        currentSelectionId: selection.id as string | null,
+        currentSelectionId: selection.id,
         selections: [selection],
-        history: [] as AddressedSelection[],
-      },
+        history: [],
+      }),
+      css: "",
       protocol,
     };
-    mocks.useLensModel.mockImplementation(() => model);
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    currentModelFor = () => model;
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -1321,29 +1238,24 @@ describe("marimo-lens content", () => {
   test("preserves focus outside the resolved selection", () => {
     let listener: ((event: SelectionResolvedEvent) => void) | undefined;
     const selection = selectionFixture();
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(() => vi.fn()),
+    const protocol = protocolClient({
       onSelectionResolved: vi.fn((next: (event: SelectionResolvedEvent) => void) => {
         listener = next;
         return vi.fn();
       }),
-    };
+    });
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S2",
-        currentSelectionId: selection.id as string | null,
+        currentSelectionId: selection.id,
         selections: [selection],
-        history: [] as AddressedSelection[],
-      },
+        history: [],
+      }),
+      css: "",
       protocol,
     };
-    mocks.useLensModel.mockImplementation(() => model);
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    currentModelFor = () => model;
 
     const unrelated = document.createElement("button");
     document.body.appendChild(unrelated);
@@ -1371,26 +1283,19 @@ describe("marimo-lens content", () => {
 
   test("unlocks note editing when its selection disappears", () => {
     const selection = selectionFixture();
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(() => vi.fn()),
-      onSelectionResolved: vi.fn(() => vi.fn()),
-    };
+    const protocol = protocolClient();
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S2",
-        currentSelectionId: selection.id as string | null,
+        currentSelectionId: selection.id,
         selections: [selection],
         history: [],
-      },
+      }),
+      css: "",
       protocol,
     };
-    mocks.useLensModel.mockImplementation(() => model);
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    currentModelFor = () => model;
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -1420,26 +1325,19 @@ describe("marimo-lens content", () => {
 
   test("keeps the selection sheet closed after its final row disappears", () => {
     const selection = selectionFixture();
-    const protocol = {
-      ...protocolDefaults(),
-      getSnapshot: vi.fn(),
-      onOutputCapture: vi.fn(() => vi.fn()),
-      onSelectionResolved: vi.fn(() => vi.fn()),
-    };
+    const protocol = protocolClient();
     let model = {
-      state: {
+      state: lensState({
         revision: 3,
         nextLabel: "S2",
-        currentSelectionId: selection.id as string | null,
+        currentSelectionId: selection.id,
         selections: [selection],
         history: [],
-      },
+      }),
+      css: "",
       protocol,
     };
-    mocks.useLensModel.mockImplementation(() => model);
-    mocks.useSelectionActions.mockImplementation(
-      ({ dispatch }: { dispatch: (action: UiAction) => void }) => actionsFor(dispatch),
-    );
+    currentModelFor = () => model;
 
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -1475,15 +1373,15 @@ describe("marimo-lens content", () => {
   });
 });
 
-function resolvedEvent(
-  overrides: {
-    revision?: number;
-    selectionId?: string;
-    label?: string;
-    summary?: string;
-    selections?: SelectionResolvedEvent["payload"]["selections"];
-  } = {},
-): SelectionResolvedEvent {
+type ResolvedEventOptions = {
+  revision?: number;
+  selectionId?: string;
+  label?: string;
+  summary?: string;
+  selections?: SelectionResolvedEvent["payload"]["selections"];
+};
+
+function resolvedEvent(overrides: ResolvedEventOptions = {}): SelectionResolvedEvent {
   const {
     revision = 4,
     selectionId = "selection-1",
@@ -1491,21 +1389,20 @@ function resolvedEvent(
     summary,
     selections = [{ selectionId, label, resolutionRevision: revision }],
   } = overrides;
+  const payload: SelectionResolvedEvent["payload"] = { selections };
+  if (summary) payload.summary = summary;
   return {
     protocol: "marimo-lens.event",
     version: 2,
     type: "selection.resolved",
     revision,
-    payload: {
-      selections,
-      ...(summary ? { summary } : {}),
-    },
+    payload,
   };
 }
 
 function addressedReceipt(selection: Selection, event: SelectionResolvedEvent): AddressedSelection {
   const resolved = event.payload.selections.find(({ selectionId }) => selectionId === selection.id);
-  return {
+  const receipt: AddressedSelection = {
     selectionId: selection.id,
     label: selection.label,
     note: selection.note,
@@ -1513,10 +1410,65 @@ function addressedReceipt(selection: Selection, event: SelectionResolvedEvent): 
     createdAt: selection.createdAt,
     addressedAt: "2026-07-23T08:00:00Z",
     anchor: selection.anchor,
-    ...(selection.domHint ? { domHint: selection.domHint } : {}),
-    ...(event.payload.summary ? { summary: event.payload.summary } : {}),
     resolutionRevision: resolved?.resolutionRevision ?? event.revision,
   };
+  if (selection.domHint) receipt.domHint = selection.domHint;
+  if (event.payload.summary) receipt.summary = event.payload.summary;
+  return receipt;
+}
+
+function lensState(state: LensState): LensState {
+  return state;
+}
+
+type ProtocolOverrides = {
+  onCellAttention?: LensProtocolClient["onCellAttention"];
+  onOutputCapture?: LensProtocolClient["onOutputCapture"];
+  onSelectionResolved?: LensProtocolClient["onSelectionResolved"];
+};
+
+function protocolClient(overrides: ProtocolOverrides = {}): LensProtocolClient {
+  const model: LensWidgetModel = {
+    get: () =>
+      lensState({
+        revision: 0,
+        nextLabel: "S1",
+        currentSelectionId: null,
+        selections: [],
+        history: [],
+      }),
+    on: vi.fn(),
+    off: vi.fn(),
+    send: vi.fn(),
+  };
+  const protocol = new LensProtocolClient(model, window);
+  vi.spyOn(protocol, "getSnapshot").mockResolvedValue({
+    snapshot: {
+      status: "available",
+      id: "image:selection-1",
+      mediaType: "image/png",
+      width: 800,
+      height: 600,
+      sha256: "a".repeat(64),
+      capturedAt: "2026-07-14T10:01:00Z",
+    },
+    bytes: new Uint8Array([137, 80, 78, 71]),
+  });
+  vi.spyOn(protocol, "onCellAttention").mockImplementation(
+    overrides.onCellAttention ?? (() => () => undefined),
+  );
+  vi.spyOn(protocol, "onOutputCapture").mockImplementation(
+    overrides.onOutputCapture ?? (() => () => undefined),
+  );
+  vi.spyOn(protocol, "onSelectionResolved").mockImplementation(
+    overrides.onSelectionResolved ?? (() => () => undefined),
+  );
+  return protocol;
+}
+
+function requireCaptureHandler(handler: OutputCaptureHandler | undefined): OutputCaptureHandler {
+  if (!handler) throw new Error("Expected output capture handler registration");
+  return handler;
 }
 
 function outputCaptureCommand(): OutputCaptureCommand {
@@ -1581,13 +1533,9 @@ async function advanceToCapture(
   frames: ReturnType<typeof controlledAnimationFrames>,
   callCount: number,
 ): Promise<void> {
-  for (
-    let index = 0;
-    index < 10 && vi.mocked(captureOutputSnapshot).mock.calls.length < callCount;
-    index += 1
-  ) {
+  for (let index = 0; index < 10 && captureOutput.mock.calls.length < callCount; index += 1) {
     frames.flushNext();
     await Promise.resolve();
   }
-  expect(captureOutputSnapshot).toHaveBeenCalledTimes(callCount);
+  expect(captureOutput).toHaveBeenCalledTimes(callCount);
 }

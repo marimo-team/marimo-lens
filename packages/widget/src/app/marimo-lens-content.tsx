@@ -31,9 +31,26 @@ import { LensPortal } from "@/ui/components/lens-portal";
 import { LensStatus } from "@/ui/components/lens-status";
 import { focusDock, focusSelectionOrDock } from "@/ui/focus";
 
-export function MarimoLensContent() {
+export type MarimoLensContentDependencies = {
+  captureOutputSnapshot: typeof captureOutputSnapshot;
+  useLensModel: typeof useLensModel;
+  useSelectionActions: typeof useSelectionActions;
+};
+
+type MarimoLensContentProps = {
+  dependencies?: MarimoLensContentDependencies;
+};
+
+const defaultDependencies: MarimoLensContentDependencies = {
+  captureOutputSnapshot,
+  useLensModel,
+  useSelectionActions,
+};
+
+export function MarimoLensContent(props?: MarimoLensContentProps) {
+  const dependencies = props?.dependencies ?? defaultDependencies;
   const dom = useNotebookDom();
-  const model = useLensModel(dom.window);
+  const model = dependencies.useLensModel(dom.window);
   const [ui, dispatch] = useReducer(uiReducer, INITIAL_UI_STATE);
   const uiRef = useLatestCommitted(ui);
   const stateRef = useLatestCommitted(model.state);
@@ -63,14 +80,14 @@ export function MarimoLensContent() {
     [],
   );
 
-  const actions = useSelectionActions({
+  const actions = dependencies.useSelectionActions({
     stateRef,
     dispatch,
     dom,
     protocol: model.protocol,
   });
   const { invalidateSnapshotCapture, settleUnavailableSnapshot } = actions;
-  useOutputCapture(model.protocol, dom);
+  useOutputCapture(model.protocol, dom, dependencies.captureOutputSnapshot);
   const cellAttention = useCellAttention(model.protocol, dom);
   const [cellAttentionLabel, setCellAttentionLabel] = useState<{
     sequence: number;
@@ -295,7 +312,11 @@ function mergeSelections(stored: Selection[], pending: Selection[]): Selection[]
   return [...merged.values()];
 }
 
-function useOutputCapture(protocol: LensProtocolClient, dom: NotebookDomAdapter): void {
+function useOutputCapture(
+  protocol: LensProtocolClient,
+  dom: NotebookDomAdapter,
+  capture: typeof captureOutputSnapshot,
+): void {
   useEffect(
     () =>
       protocol.onOutputCapture(async (command, signal) => {
@@ -308,7 +329,7 @@ function useOutputCapture(protocol: LensProtocolClient, dom: NotebookDomAdapter)
           );
         }
         const element = output.element;
-        const result = await captureOutputSnapshot({
+        const result = await capture({
           imageId: `image:${command.requestId}`,
           output: element,
           signal,
@@ -325,7 +346,7 @@ function useOutputCapture(protocol: LensProtocolClient, dom: NotebookDomAdapter)
           bytes: result.bytes,
         };
       }),
-    [dom, protocol],
+    [capture, dom, protocol],
   );
 }
 
