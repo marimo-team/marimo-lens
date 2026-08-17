@@ -1,4 +1,4 @@
-import { noChainedTypeAssertionsRule } from "../anti-slop/rules/no-chained-type-assertions.ts";
+import { noChainedTypeAssertionsRule } from "../rules/no-chained-type-assertions.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "chained" };

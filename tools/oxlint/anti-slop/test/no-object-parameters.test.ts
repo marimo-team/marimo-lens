@@ -1,4 +1,4 @@
-import { noObjectParametersRule } from "../anti-slop/rules/no-object-parameters.ts";
+import { noObjectParametersRule } from "../rules/no-object-parameters.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "objectParameter" };

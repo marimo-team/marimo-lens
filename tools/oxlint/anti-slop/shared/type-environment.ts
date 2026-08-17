@@ -7,9 +7,16 @@ type TypeStateInput = ESTree.TSType | ESTree.TSOptionalType | ESTree.TSRestType;
 
 type TypeBindings = {
   readonly aliases: Map<string, ESTree.TSTypeAliasDeclaration>;
+  readonly classes: Map<string, ESTree.Class[]>;
+  readonly importEquals: Map<string, ImportEqualsBinding>;
   readonly interfaces: Map<string, ESTree.TSInterfaceDeclaration[]>;
   readonly namespaces: Map<string, TypeBindings>;
   readonly bindings: Set<string>;
+};
+
+type ImportEqualsBinding = {
+  readonly declaration: ESTree.TSImportEqualsDeclaration;
+  readonly target: readonly string[];
 };
 
 type TypeScope = TypeBindings & {
@@ -44,8 +51,11 @@ export type LexicalTypeEnvironment = {
     path: readonly string[],
     useNode: ESTree.Node,
   ): readonly ESTree.TSInterfaceDeclaration[];
+  lookupClasses(name: string, useNode: ESTree.Node): readonly ESTree.Class[];
+  lookupQualifiedClasses(path: readonly string[], useNode: ESTree.Node): readonly ESTree.Class[];
   hasTypeParameter(name: string, useNode: ESTree.Node): boolean;
   isBuiltInType(name: string, useNode: ESTree.Node): boolean;
+  isBuiltInTypeReference(type: ESTree.TSTypeReference, name: string): boolean;
 };
 
 export type TypeSubstitution = {
@@ -74,6 +84,7 @@ const EMPTY_SUBSTITUTIONS: TypeSubstitutions = new Map();
 const OBJECT_TRANSPARENT_WRAPPERS = new Set(["NonNullable", "Partial", "Readonly", "Required"]);
 const MAX_TYPE_STATE_DEPTH = 64;
 const RESOLUTION_IDENTITIES = new WeakMap<LexicalTypeEnvironment, ResolutionIdentityStore>();
+const LEXICAL_ENVIRONMENTS = new WeakMap<ESTree.Program, LexicalTypeEnvironment>();
 
 function isNode(value: unknown): value is ESTree.Node {
   return (
@@ -95,6 +106,8 @@ function createsTypeScope(node: ESTree.Node): boolean {
 function createTypeBindings(): TypeBindings {
   return {
     aliases: new Map(),
+    classes: new Map(),
+    importEquals: new Map(),
     interfaces: new Map(),
     namespaces: new Map(),
     bindings: new Set(),
@@ -137,12 +150,25 @@ function collectDeclaration(node: ESTree.Node, scope: TypeScope): void {
       return;
     }
     case "ClassDeclaration":
-      if (node.id !== null) addBinding(bindings, node.id.name);
+      if (node.id !== null) {
+        addBinding(bindings, node.id.name);
+        const declarations = bindings.classes.get(node.id.name) ?? [];
+        declarations.push(node);
+        bindings.classes.set(node.id.name, declarations);
+      }
       return;
     case "TSEnumDeclaration":
-    case "TSImportEqualsDeclaration":
       addBinding(bindings, node.id.name);
       return;
+    case "TSImportEqualsDeclaration": {
+      addBinding(bindings, node.id.name);
+      if (node.moduleReference.type === "TSExternalModuleReference") return;
+      const target = qualifiedNameParts(node.moduleReference);
+      if (target !== null) {
+        bindings.importEquals.set(node.id.name, { declaration: node, target });
+      }
+      return;
+    }
     case "TSModuleDeclaration":
       if (node.id.type === "Identifier") addBinding(bindings, node.id.name);
       return;
@@ -221,6 +247,9 @@ export function createLexicalTypeEnvironment(
   program: ESTree.Program,
   visitorKeys: VisitorKeys,
 ): LexicalTypeEnvironment {
+  const cached = LEXICAL_ENVIRONMENTS.get(program);
+  if (cached !== undefined) return cached;
+
   const scopes = new WeakMap<ESTree.Node, TypeScope>();
   const namespaceScopes = new WeakMap<ESTree.TSModuleBlock, NamespaceScope>();
   const mergedNamespaces = new Map<object, Map<string, TypeBindings>>();
@@ -297,6 +326,7 @@ export function createLexicalTypeEnvironment(
         node.id !== null
       ) {
         addBinding(childScope, node.id.name);
+        childScope.classes.set(node.id.name, [node]);
       }
     }
 
@@ -316,32 +346,127 @@ export function createLexicalTypeEnvironment(
 
   visit(program, root);
 
+  const importedBinding = (name: string, useNode: ESTree.Node): ImportEqualsBinding | null => {
+    const bindings = nearestBindings(name, useNode, scopes, root);
+    return bindings?.importEquals.get(name) ?? null;
+  };
+
+  const expandImportedPath = (
+    path: readonly string[],
+    useNode: ESTree.Node,
+    visited: ReadonlySet<ESTree.TSImportEqualsDeclaration>,
+  ): { readonly path: readonly string[]; readonly useNode: ESTree.Node } | null => {
+    const [owner, ...members] = path;
+    if (owner === undefined) return null;
+    const imported = importedBinding(owner, useNode);
+    if (imported === null) return { path, useNode };
+    if (visited.has(imported.declaration)) return null;
+    const nextVisited = new Set(visited);
+    nextVisited.add(imported.declaration);
+    return expandImportedPath(
+      [...imported.target, ...members],
+      imported.declaration.moduleReference,
+      nextVisited,
+    );
+  };
+
+  const lookupAlias = (
+    name: string,
+    useNode: ESTree.Node,
+    visited: ReadonlySet<ESTree.TSImportEqualsDeclaration>,
+  ): ESTree.TSTypeAliasDeclaration | null => {
+    const bindings = nearestBindings(name, useNode, scopes, root);
+    const alias = bindings?.aliases.get(name);
+    if (alias !== undefined) return alias;
+    const imported = bindings?.importEquals.get(name);
+    if (imported === undefined || visited.has(imported.declaration)) return null;
+    const nextVisited = new Set(visited);
+    nextVisited.add(imported.declaration);
+    return lookupAliasPath(imported.target, imported.declaration.moduleReference, nextVisited);
+  };
+
+  const lookupAliasPath = (
+    path: readonly string[],
+    useNode: ESTree.Node,
+    visited: ReadonlySet<ESTree.TSImportEqualsDeclaration>,
+  ): ESTree.TSTypeAliasDeclaration | null => {
+    const expanded = expandImportedPath(path, useNode, visited);
+    if (expanded === null) return null;
+    const [owner] = expanded.path;
+    if (owner === undefined) return null;
+    if (expanded.path.length === 1) {
+      return lookupAlias(owner, expanded.useNode, visited);
+    }
+    if (lexicalTypeParameterNames(expanded.useNode, visitorKeys).has(owner)) return null;
+    const bindings = qualifiedNamespaceBindings(expanded.path, expanded.useNode, scopes, root);
+    const aliasName = expanded.path.at(-1);
+    return aliasName === undefined ? null : (bindings?.aliases.get(aliasName) ?? null);
+  };
+
+  const lookupDeclarations = <Declaration>(
+    name: string,
+    useNode: ESTree.Node,
+    select: (bindings: TypeBindings, declarationName: string) => readonly Declaration[],
+    visited: ReadonlySet<ESTree.TSImportEqualsDeclaration>,
+  ): readonly Declaration[] => {
+    const bindings = nearestBindings(name, useNode, scopes, root);
+    const declarations = bindings === null ? [] : select(bindings, name);
+    if (declarations.length > 0) return declarations;
+    const imported = bindings?.importEquals.get(name);
+    if (imported === undefined || visited.has(imported.declaration)) return [];
+    const nextVisited = new Set(visited);
+    nextVisited.add(imported.declaration);
+    return lookupDeclarationPath(
+      imported.target,
+      imported.declaration.moduleReference,
+      select,
+      nextVisited,
+    );
+  };
+
+  const lookupDeclarationPath = <Declaration>(
+    path: readonly string[],
+    useNode: ESTree.Node,
+    select: (bindings: TypeBindings, declarationName: string) => readonly Declaration[],
+    visited: ReadonlySet<ESTree.TSImportEqualsDeclaration>,
+  ): readonly Declaration[] => {
+    const expanded = expandImportedPath(path, useNode, visited);
+    if (expanded === null) return [];
+    const [owner] = expanded.path;
+    if (owner === undefined) return [];
+    if (expanded.path.length === 1) {
+      return lookupDeclarations(owner, expanded.useNode, select, visited);
+    }
+    if (lexicalTypeParameterNames(expanded.useNode, visitorKeys).has(owner)) return [];
+    const bindings = qualifiedNamespaceBindings(expanded.path, expanded.useNode, scopes, root);
+    const declarationName = expanded.path.at(-1);
+    return bindings === null || declarationName === undefined
+      ? []
+      : select(bindings, declarationName);
+  };
+
+  const selectInterfaces = (bindings: TypeBindings, name: string) =>
+    bindings.interfaces.get(name) ?? [];
+  const selectClasses = (bindings: TypeBindings, name: string) => bindings.classes.get(name) ?? [];
+
   const environment: LexicalTypeEnvironment = {
     lookupAlias(name, useNode) {
-      const bindings = nearestBindings(name, useNode, scopes, root);
-      return bindings?.aliases.get(name) ?? null;
+      return lookupAlias(name, useNode, new Set());
     },
     lookupQualifiedAlias(path, useNode) {
-      const [owner] = path;
-      if (owner === undefined || lexicalTypeParameterNames(useNode, visitorKeys).has(owner)) {
-        return null;
-      }
-      const bindings = qualifiedNamespaceBindings(path, useNode, scopes, root);
-      const alias = path.at(-1);
-      return alias === undefined ? null : (bindings?.aliases.get(alias) ?? null);
+      return lookupAliasPath(path, useNode, new Set());
     },
     lookupInterfaces(name, useNode) {
-      const bindings = nearestBindings(name, useNode, scopes, root);
-      return bindings?.interfaces.get(name) ?? [];
+      return lookupDeclarations(name, useNode, selectInterfaces, new Set());
     },
     lookupQualifiedInterfaces(path, useNode) {
-      const [owner] = path;
-      if (owner === undefined || lexicalTypeParameterNames(useNode, visitorKeys).has(owner)) {
-        return [];
-      }
-      const bindings = qualifiedNamespaceBindings(path, useNode, scopes, root);
-      const interfaceName = path.at(-1);
-      return interfaceName === undefined ? [] : (bindings?.interfaces.get(interfaceName) ?? []);
+      return lookupDeclarationPath(path, useNode, selectInterfaces, new Set());
+    },
+    lookupClasses(name, useNode) {
+      return lookupDeclarations(name, useNode, selectClasses, new Set());
+    },
+    lookupQualifiedClasses(path, useNode) {
+      return lookupDeclarationPath(path, useNode, selectClasses, new Set());
     },
     hasTypeParameter(name, useNode) {
       return lexicalTypeParameterNames(useNode, visitorKeys).has(name);
@@ -352,12 +477,26 @@ export function createLexicalTypeEnvironment(
         nearestBindings(name, useNode, scopes, root) === null
       );
     },
+    isBuiltInTypeReference(type, name) {
+      const path = typeReferencePath(type);
+      if (path?.length === 1 && path[0] === name) {
+        return environment.isBuiltInType(name, type);
+      }
+      if (path?.length !== 2 || path[0] !== "globalThis" || path[1] !== name) {
+        return false;
+      }
+      return (
+        !lexicalTypeParameterNames(type, visitorKeys).has("globalThis") &&
+        nearestBindings("globalThis", type, scopes, root) === null
+      );
+    },
   };
   RESOLUTION_IDENTITIES.set(environment, {
     aliasIdentities: new WeakMap(),
     nodeIds: new WeakMap(),
     nextNodeId: 1,
   });
+  LEXICAL_ENVIRONMENTS.set(program, environment);
   return environment;
 }
 
@@ -651,12 +790,7 @@ function typeReferenceIs(
   name: string,
   environment: LexicalTypeEnvironment,
 ): boolean {
-  return (
-    type.type === "TSTypeReference" &&
-    type.typeName.type === "Identifier" &&
-    type.typeName.name === name &&
-    environment.isBuiltInType(name, type)
-  );
+  return type.type === "TSTypeReference" && environment.isBuiltInTypeReference(type, name);
 }
 
 function resolvesToUnknownInternal(

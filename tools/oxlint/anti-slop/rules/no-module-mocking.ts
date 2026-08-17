@@ -1,11 +1,23 @@
-import { defineRule } from "@oxlint/plugins";
+import type { ESTree, Reference, Scope, SourceCode, Variable } from "@oxlint/plugins";
 
-import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
+import { defineRule } from "@oxlint/plugins";
 
 const moduleMockMethods = new Set(["doMock", "mock", "unstable_mockModule"]);
 const functionInvocationMethods = new Set(["apply", "call"]);
 const functionBindingMethods = new Set(["bind"]);
 const vitestModules = new Set(["vite-plus/test", "vitest"]);
+
+function sameIdentifier(left: Reference["identifier"], right: ESTree.IdentifierReference): boolean {
+  return left === right || (left.start === right.start && left.end === right.end);
+}
+
+function referenceInScope(scope: Scope, identifier: ESTree.IdentifierReference): Reference | null {
+  return (
+    scope.references.find((reference) => sameIdentifier(reference.identifier, identifier)) ??
+    scope.through.find((reference) => sameIdentifier(reference.identifier, identifier)) ??
+    null
+  );
+}
 
 function resolveVariable(
   sourceCode: SourceCode,
@@ -13,8 +25,8 @@ function resolveVariable(
 ): Variable | null {
   let scope: Scope | null = sourceCode.getScope(identifier);
   while (scope !== null) {
-    const variable = scope.set.get(identifier.name);
-    if (variable !== undefined) return variable;
+    const reference = referenceInScope(scope, identifier);
+    if (reference !== null) return reference.resolved;
     scope = scope.upper;
   }
   return null;
@@ -27,14 +39,14 @@ function importedName(node: ESTree.Node): string | null {
 
 function frameworkExport(source: string, name: string | null): boolean {
   return (
-    (name === "vi" && vitestModules.has(source)) ||
-    (source === "@jest/globals" && name === "jest")
+    (name === "vi" && vitestModules.has(source)) || (source === "@jest/globals" && name === "jest")
   );
 }
 
 function unwrapExpression(expression: ESTree.Expression): ESTree.Expression {
   let current = expression;
   while (
+    current.type === "ChainExpression" ||
     current.type === "ParenthesizedExpression" ||
     current.type === "TSAsExpression" ||
     current.type === "TSSatisfiesExpression" ||
@@ -46,15 +58,41 @@ function unwrapExpression(expression: ESTree.Expression): ESTree.Expression {
   return current;
 }
 
+function unwrapPropertyKey(key: ESTree.PropertyKey): ESTree.PropertyKey {
+  let current = key;
+  while (
+    current.type === "ParenthesizedExpression" ||
+    current.type === "TSAsExpression" ||
+    current.type === "TSNonNullExpression" ||
+    current.type === "TSSatisfiesExpression" ||
+    current.type === "TSTypeAssertion"
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function staticPropertyName(key: ESTree.PropertyKey, computed: boolean): string | null {
+  const unwrapped = unwrapPropertyKey(key);
+  if (!computed && (unwrapped.type === "Identifier" || unwrapped.type === "PrivateIdentifier")) {
+    return unwrapped.name;
+  }
+  if (unwrapped.type === "Literal" && typeof unwrapped.value === "string") {
+    return unwrapped.value;
+  }
+  if (unwrapped.type === "TemplateLiteral" && unwrapped.expressions.length === 0) {
+    const quasi = unwrapped.quasis[0];
+    return quasi === undefined ? null : (quasi.value.cooked ?? quasi.value.raw);
+  }
+  return null;
+}
+
 type StableConstBinding =
   | { kind: "expression"; expression: ESTree.Expression }
   | { kind: "property"; object: ESTree.Expression; property: string };
 
 function bindingPropertyName(property: ESTree.BindingProperty): string | null {
-  if (!property.computed && property.key.type === "Identifier") return property.key.name;
-  return property.key.type === "Literal" && typeof property.key.value === "string"
-    ? property.key.value
-    : null;
+  return staticPropertyName(property.key, property.computed);
 }
 
 function stableConstBinding(variable: Variable): StableConstBinding | null {
@@ -88,9 +126,7 @@ function stableConstBinding(variable: Variable): StableConstBinding | null {
       continue;
     }
     const name = bindingPropertyName(property);
-    return name === null
-      ? null
-      : { kind: "property", object: declarator.init, property: name };
+    return name === null ? null : { kind: "property", object: declarator.init, property: name };
   }
   return null;
 }
@@ -133,13 +169,57 @@ function namespaceImportSource(
 
 function memberName(expression: ESTree.Expression): string | null {
   if (expression.type !== "MemberExpression") return null;
-  const property = expression.property;
-  if (expression.computed) {
-    return property.type === "Literal" && typeof property.value === "string"
-      ? property.value
-      : null;
+  return staticPropertyName(expression.property, expression.computed);
+}
+
+function isUnshadowedGlobalIdentifier(
+  sourceCode: SourceCode,
+  identifier: ESTree.IdentifierReference,
+  name: string,
+): boolean {
+  if (identifier.name !== name) return false;
+  const variable = resolveVariable(sourceCode, identifier);
+  if (variable !== null && variable.defs.length > 0) return false;
+  return sourceCode.isGlobalReference(identifier) || variable === null;
+}
+
+function isGlobalThis(
+  sourceCode: SourceCode,
+  expression: ESTree.Expression,
+  visitedVariables: ReadonlySet<Variable>,
+): boolean {
+  const unwrapped = unwrapExpression(expression);
+  if (unwrapped.type !== "Identifier") return false;
+  if (isUnshadowedGlobalIdentifier(sourceCode, unwrapped, "globalThis")) return true;
+
+  const variable = resolveVariable(sourceCode, unwrapped);
+  if (variable === null || visitedVariables.has(variable)) return false;
+  const binding = stableConstBinding(variable);
+  if (binding === null || binding.kind !== "expression") return false;
+  const nextVisited = new Set(visitedVariables);
+  nextVisited.add(variable);
+  return isGlobalThis(sourceCode, binding.expression, nextVisited);
+}
+
+function isGlobalTestFrameworkObject(
+  sourceCode: SourceCode,
+  expression: ESTree.Expression,
+  visitedVariables: ReadonlySet<Variable>,
+): boolean {
+  const unwrapped = unwrapExpression(expression);
+  if (unwrapped.type === "Identifier") {
+    return (
+      isUnshadowedGlobalIdentifier(sourceCode, unwrapped, "vi") ||
+      isUnshadowedGlobalIdentifier(sourceCode, unwrapped, "jest")
+    );
   }
-  return property.type === "Identifier" ? property.name : null;
+  if (unwrapped.type !== "MemberExpression") return false;
+  const name = memberName(unwrapped);
+  return (
+    (name === "vi" || name === "jest") &&
+    unwrapped.object.type !== "Super" &&
+    isGlobalThis(sourceCode, unwrapped.object, visitedVariables)
+  );
 }
 
 function isTestFrameworkObject(
@@ -148,6 +228,7 @@ function isTestFrameworkObject(
   visitedVariables: ReadonlySet<Variable> = new Set(),
 ): boolean {
   const unwrapped = unwrapExpression(expression);
+  if (isGlobalTestFrameworkObject(sourceCode, unwrapped, visitedVariables)) return true;
   if (unwrapped.type === "MemberExpression") {
     const name = memberName(unwrapped);
     if (name === null) return false;
@@ -155,17 +236,9 @@ function isTestFrameworkObject(
     return source !== null && frameworkExport(source, name);
   }
   if (unwrapped.type !== "Identifier") return false;
-  if (
-    (unwrapped.name === "vi" || unwrapped.name === "jest") &&
-    sourceCode.isGlobalReference(unwrapped)
-  ) {
-    return true;
-  }
 
   const variable = resolveVariable(sourceCode, unwrapped);
-  if (variable === null || variable.defs.length === 0) {
-    return unwrapped.name === "vi" || unwrapped.name === "jest";
-  }
+  if (variable === null || variable.defs.length === 0) return false;
   if (frameworkImport(variable)) return true;
   if (visitedVariables.has(variable)) return false;
 

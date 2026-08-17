@@ -1,4 +1,4 @@
-import { noKnownValueWideningRule } from "../anti-slop/rules/no-known-value-widening.ts";
+import { noKnownValueWideningRule } from "../rules/no-known-value-widening.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "widening" };

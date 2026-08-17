@@ -1,7 +1,19 @@
-import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
+import type { ESTree, Reference, Scope, SourceCode, Variable } from "@oxlint/plugins";
 
 const functionInvocationMethods = new Set(["apply", "call"]);
 const functionBindingMethods = new Set(["bind"]);
+
+function sameIdentifier(left: Reference["identifier"], right: ESTree.IdentifierReference): boolean {
+  return left === right || (left.start === right.start && left.end === right.end);
+}
+
+function referenceInScope(scope: Scope, identifier: ESTree.IdentifierReference): Reference | null {
+  return (
+    scope.references.find((reference) => sameIdentifier(reference.identifier, identifier)) ??
+    scope.through.find((reference) => sameIdentifier(reference.identifier, identifier)) ??
+    null
+  );
+}
 
 function resolveVariable(
   sourceCode: SourceCode,
@@ -9,8 +21,8 @@ function resolveVariable(
 ): Variable | null {
   let scope: Scope | null = sourceCode.getScope(identifier);
   while (scope !== null) {
-    const variable = scope.set.get(identifier.name);
-    if (variable !== undefined) return variable;
+    const reference = referenceInScope(scope, identifier);
+    if (reference !== null) return reference.resolved;
     scope = scope.upper;
   }
   return null;
@@ -19,6 +31,7 @@ function resolveVariable(
 function unwrapExpression(expression: ESTree.Expression): ESTree.Expression {
   let current = expression;
   while (
+    current.type === "ChainExpression" ||
     current.type === "ParenthesizedExpression" ||
     current.type === "TSAsExpression" ||
     current.type === "TSSatisfiesExpression" ||
@@ -72,22 +85,24 @@ function stableConstBinding(variable: Variable): StableConstBinding | null {
       continue;
     }
     const name = bindingPropertyName(property);
-    return name === null
-      ? null
-      : { kind: "property", object: declarator.init, property: name };
+    return name === null ? null : { kind: "property", object: declarator.init, property: name };
   }
   return null;
 }
 
 function memberName(expression: ESTree.Expression): string | null {
   if (expression.type !== "MemberExpression") return null;
-  const property = expression.property;
-  if (expression.computed) {
-    return property.type === "Literal" && typeof property.value === "string"
-      ? property.value
-      : null;
+  if (!expression.computed) return expression.property.name;
+
+  const property = unwrapExpression(expression.property);
+  if (property.type === "Literal" && typeof property.value === "string") {
+    return property.value;
   }
-  return property.type === "Identifier" ? property.name : null;
+  if (property.type === "TemplateLiteral" && property.expressions.length === 0) {
+    const quasi = property.quasis[0];
+    return quasi === undefined ? null : (quasi.value.cooked ?? quasi.value.raw);
+  }
+  return null;
 }
 
 function isGlobalThis(
@@ -134,10 +149,7 @@ function isGlobalReflect(
   if (binding.kind === "expression") {
     return isGlobalReflect(sourceCode, binding.expression, nextVisited);
   }
-  return (
-    binding.property === "Reflect" &&
-    isGlobalThis(sourceCode, binding.object, nextVisited)
-  );
+  return binding.property === "Reflect" && isGlobalThis(sourceCode, binding.object, nextVisited);
 }
 
 function isGlobalReflectMethodValue(
@@ -178,8 +190,7 @@ function isGlobalReflectMethodValue(
     return isGlobalReflectMethodValue(sourceCode, binding.expression, methodName, nextVisited);
   }
   return (
-    binding.property === methodName &&
-    isGlobalReflect(sourceCode, binding.object, nextVisited)
+    binding.property === methodName && isGlobalReflect(sourceCode, binding.object, nextVisited)
   );
 }
 
@@ -196,12 +207,7 @@ function isGlobalReflectMethodAdapter(
   return (
     adapter !== null &&
     adapters.has(adapter) &&
-    isGlobalReflectMethodValue(
-      sourceCode,
-      unwrapped.object,
-      methodName,
-      visitedVariables,
-    )
+    isGlobalReflectMethodValue(sourceCode, unwrapped.object, methodName, visitedVariables)
   );
 }
 

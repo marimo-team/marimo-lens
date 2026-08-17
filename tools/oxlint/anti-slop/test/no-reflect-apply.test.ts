@@ -1,4 +1,4 @@
-import { noReflectApplyRule } from "../anti-slop/rules/no-reflect-apply.ts";
+import { noReflectApplyRule } from "../rules/no-reflect-apply.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "reflectApply" };

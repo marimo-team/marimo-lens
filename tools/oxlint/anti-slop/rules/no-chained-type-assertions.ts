@@ -1,5 +1,6 @@
-import { defineRule } from "@oxlint/plugins";
 import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
+
+import { defineRule } from "@oxlint/plugins";
 
 type TypeAssertionExpression = ESTree.TSAsExpression | ESTree.TSTypeAssertion;
 type TransparentExpression =
@@ -168,10 +169,7 @@ function isOutermostAssertionInChain(node: TypeAssertionExpression): boolean {
   return !isTypeAssertionExpression(parent) || parent.expression !== current;
 }
 
-function isForbiddenAssertionChain(
-  sourceCode: SourceCode,
-  node: TypeAssertionExpression,
-): boolean {
+function isForbiddenAssertionChain(sourceCode: SourceCode, node: TypeAssertionExpression): boolean {
   return hasForbiddenAssertionPath(sourceCode, node, 0, false, new Set());
 }
 

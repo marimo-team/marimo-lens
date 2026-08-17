@@ -1,4 +1,4 @@
-import { noWidenThenAssertRule } from "../anti-slop/rules/no-widen-then-assert.ts";
+import { noWidenThenAssertRule } from "../rules/no-widen-then-assert.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "widenThenAssert" };

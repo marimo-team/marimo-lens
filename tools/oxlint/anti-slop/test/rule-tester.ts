@@ -1,5 +1,5 @@
+import { describe, test } from "node:test";
 import { RuleTester } from "oxlint/plugins-dev";
-import { describe, test } from "vite-plus/test";
 
 RuleTester.describe = describe;
 RuleTester.it = test;

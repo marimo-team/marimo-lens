@@ -1,5 +1,6 @@
-import { defineRule } from "@oxlint/plugins";
 import type { ESTree, Variable } from "@oxlint/plugins";
+
+import { defineRule } from "@oxlint/plugins";
 
 import {
   createLexicalTypeEnvironment,
@@ -61,18 +62,10 @@ function isUnknownOrAnyType(
   if (resolved === null || resolving.has(resolved.identity)) return false;
   const nextResolving = new Set(resolving);
   nextResolving.add(resolved.identity);
-  return isUnknownOrAnyType(
-    resolved.type,
-    environment,
-    resolved.substitutions,
-    nextResolving,
-  );
+  return isUnknownOrAnyType(resolved.type, environment, resolved.substitutions, nextResolving);
 }
 
-function isBroadRecordKeyType(
-  type: ESTree.TSType,
-  environment: LexicalTypeEnvironment,
-): boolean {
+function isBroadRecordKeyType(type: ESTree.TSType, environment: LexicalTypeEnvironment): boolean {
   const unwrapped = unwrapTypeParentheses(type);
   if (
     unwrapped.type === "TSStringKeyword" ||
@@ -81,13 +74,19 @@ function isBroadRecordKeyType(
   ) {
     return true;
   }
+  if (
+    unwrapped.type === "TSTypeOperator" &&
+    unwrapped.operator === "keyof" &&
+    unwrapTypeParentheses(unwrapped.typeAnnotation).type === "TSAnyKeyword"
+  ) {
+    return true;
+  }
   if (unwrapped.type === "TSUnionType") {
-    return unwrapped.types.every((member) => isBroadRecordKeyType(member, environment));
+    return unwrapped.types.some((member) => isBroadRecordKeyType(member, environment));
   }
   return (
     unwrapped.type === "TSTypeReference" &&
-    typeReferenceName(unwrapped) === "PropertyKey" &&
-    environment.isBuiltInType("PropertyKey", unwrapped)
+    environment.isBuiltInTypeReference(unwrapped, "PropertyKey")
   );
 }
 
@@ -99,21 +98,12 @@ function isBroadRecordType(
   const unwrapped = unwrapTypeParentheses(type);
 
   if (unwrapped.type === "TSTypeReference") {
-    if (
-      typeReferenceName(unwrapped) === "Readonly" &&
-      environment.isBuiltInType("Readonly", unwrapped)
-    ) {
+    if (environment.isBuiltInTypeReference(unwrapped, "Readonly")) {
       const [inner] = unwrapped.typeArguments?.params ?? [];
-      return (
-        inner !== undefined &&
-        isBroadRecordType(inner, environment, requireUnknownValue)
-      );
+      return inner !== undefined && isBroadRecordType(inner, environment, requireUnknownValue);
     }
 
-    if (
-      typeReferenceName(unwrapped) !== "Record" ||
-      !environment.isBuiltInType("Record", unwrapped)
-    ) {
+    if (!environment.isBuiltInTypeReference(unwrapped, "Record")) {
       return false;
     }
     const parameters = unwrapped.typeArguments?.params ?? [];
@@ -134,8 +124,7 @@ function isBroadRecordType(
     member.parameters.length === 1 &&
     parameter !== undefined &&
     isBroadRecordKeyType(parameter.typeAnnotation.typeAnnotation, environment) &&
-    (!requireUnknownValue ||
-      isUnknownOrAnyType(member.typeAnnotation.typeAnnotation, environment))
+    (!requireUnknownValue || isUnknownOrAnyType(member.typeAnnotation.typeAnnotation, environment))
   );
 }
 
@@ -225,10 +214,7 @@ function isDefinitelyNarrowerRecordType(
   }
 
   if (unwrapped.type !== "TSTypeReference") return false;
-  if (
-    typeReferenceName(unwrapped) === "Readonly" &&
-    environment.isBuiltInType("Readonly", unwrapped)
-  ) {
+  if (environment.isBuiltInTypeReference(unwrapped, "Readonly")) {
     const [inner] = unwrapped.typeArguments?.params ?? [];
     return (
       inner !== undefined &&
@@ -241,10 +227,7 @@ function isDefinitelyNarrowerRecordType(
       )
     );
   }
-  if (
-    typeReferenceName(unwrapped) === "Record" &&
-    environment.isBuiltInType("Record", unwrapped)
-  ) {
+  if (environment.isBuiltInTypeReference(unwrapped, "Record")) {
     if (requireNamedMember) return false;
     const parameters = unwrapped.typeArguments?.params ?? [];
     return (
@@ -367,13 +350,7 @@ function knownValueEvidence(
     const finalExpression = unwrapped.expressions.at(-1);
     return finalExpression === undefined
       ? null
-      : knownValueEvidence(
-          finalExpression,
-          scopes,
-          environment,
-          boundary,
-          visitedVariables,
-        );
+      : knownValueEvidence(finalExpression, scopes, environment, boundary, visitedVariables);
   }
 
   if (
@@ -495,11 +472,7 @@ function assertionIsNarrower(
   if (broadKind === "top") return true;
   if (typesHaveSameSyntax(sourceText, evidence.type, assertedType)) return true;
   if (broadKind === "object") return isDefinitelyObjectType(assertedType);
-  return isDefinitelyNarrowerRecordType(
-    assertedType,
-    environment,
-    broadKind === "open-record",
-  );
+  return isDefinitelyNarrowerRecordType(assertedType, environment, broadKind === "open-record");
 }
 
 /** Detect immutable local bindings that erase a known type and are later asserted back to a narrower type. */

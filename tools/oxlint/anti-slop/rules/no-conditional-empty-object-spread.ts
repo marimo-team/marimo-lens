@@ -1,5 +1,6 @@
-import { defineRule } from "@oxlint/plugins";
 import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
+
+import { defineRule } from "@oxlint/plugins";
 
 function unwrapTransparentExpression(node: ESTree.Expression): ESTree.Expression {
   let current = node;
@@ -96,16 +97,8 @@ function isConditionalEmptyObjectSpread(
   }
   return (
     conditional.type === "ConditionalExpression" &&
-    (hasEmptyObjectConditionalArm(
-      sourceCode,
-      conditional.consequent,
-      visitedVariables,
-    ) ||
-      hasEmptyObjectConditionalArm(
-        sourceCode,
-        conditional.alternate,
-        visitedVariables,
-      ))
+    (hasEmptyObjectConditionalArm(sourceCode, conditional.consequent, visitedVariables) ||
+      hasEmptyObjectConditionalArm(sourceCode, conditional.alternate, visitedVariables))
   );
 }
 

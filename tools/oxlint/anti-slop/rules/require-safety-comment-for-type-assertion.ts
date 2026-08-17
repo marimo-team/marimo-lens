@@ -1,6 +1,6 @@
-import { defineRule } from "@oxlint/plugins";
-
 import type { ESTree, SourceCode } from "@oxlint/plugins";
+
+import { defineRule } from "@oxlint/plugins";
 
 type TypeAssertion = ESTree.TSAsExpression | ESTree.TSTypeAssertion;
 
@@ -42,12 +42,43 @@ const commentOwnerKinds = new Set([
   "WithStatement",
 ]);
 
+const enclosingDeclarationKinds = new Set([
+  "ArrowFunctionExpression",
+  "ClassDeclaration",
+  "ClassExpression",
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "TSEmptyBodyFunctionExpression",
+  "TSEnumDeclaration",
+]);
+
+function isTransparentExpressionParent(parent: ESTree.Node, child: ESTree.Node): boolean {
+  return (
+    (parent.type === "ParenthesizedExpression" ||
+      parent.type === "TSAsExpression" ||
+      parent.type === "TSNonNullExpression" ||
+      parent.type === "TSSatisfiesExpression" ||
+      parent.type === "TSTypeAssertion") &&
+    parent.expression === child
+  );
+}
+
+function isImmediatelyInvokedFunctionBody(node: ESTree.Node, descendant: ESTree.Node): boolean {
+  if (node.type !== "ArrowFunctionExpression" && node.type !== "FunctionExpression") return false;
+  if (node.body !== descendant) return false;
+  let callee: ESTree.Node = node;
+  while (true) {
+    const parent: ESTree.Node | null = callee.parent;
+    if (parent === null || !isTransparentExpressionParent(parent, callee)) break;
+    callee = parent;
+  }
+  const parent: ESTree.Node | null = callee.parent;
+  return parent !== null && parent.type === "CallExpression" && parent.callee === callee;
+}
+
 function isNode(value: unknown): value is ESTree.Node {
   return (
-    typeof value === "object" &&
-    value !== null &&
-    "type" in value &&
-    typeof value.type === "string"
+    typeof value === "object" && value !== null && "type" in value && typeof value.type === "string"
   );
 }
 
@@ -92,8 +123,16 @@ function isConstAssertion(node: TypeAssertion): boolean {
 }
 
 function hasSafetyComment(sourceCode: SourceCode, node: TypeAssertion): boolean {
+  let descendant: ESTree.Node = node;
   let current: ESTree.Node = node;
   while (true) {
+    if (
+      current !== node &&
+      enclosingDeclarationKinds.has(current.type) &&
+      !isImmediatelyInvokedFunctionBody(current, descendant)
+    ) {
+      return false;
+    }
     const sibling = previousSibling(sourceCode, current);
     if (
       sourceCode
@@ -109,10 +148,12 @@ function hasSafetyComment(sourceCode: SourceCode, node: TypeAssertion): boolean 
     }
     const exportOwner = exportedDeclarationOwner(current);
     if (exportOwner !== null) {
+      descendant = current;
       current = exportOwner;
       continue;
     }
     if (commentOwnerKinds.has(current.type) || current.parent.type === "Program") return false;
+    descendant = current;
     current = current.parent;
   }
 }

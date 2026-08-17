@@ -1,4 +1,4 @@
-import { noUnknownReturnsRule } from "../anti-slop/rules/no-unknown-returns.ts";
+import { noUnknownReturnsRule } from "../rules/no-unknown-returns.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "unknownReturn" };

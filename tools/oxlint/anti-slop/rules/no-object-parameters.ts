@@ -1,6 +1,6 @@
-import { defineRule } from "@oxlint/plugins";
-
 import type { ESTree, SourceCode } from "@oxlint/plugins";
+
+import { defineRule } from "@oxlint/plugins";
 
 import { createLexicalTypeEnvironment, resolvesToObject } from "../shared/type-environment.ts";
 
@@ -28,6 +28,15 @@ function parameterAnnotation(parameter: Parameter): ESTree.TSTypeAnnotation | nu
 }
 
 function parameterName(parameter: Parameter, sourceCode: SourceCode): string {
+  if (parameter.type === "TSParameterProperty") {
+    return parameterName(parameter.parameter, sourceCode);
+  }
+  if (parameter.type === "AssignmentPattern") {
+    return parameterName(parameter.left, sourceCode);
+  }
+  if (parameter.type === "RestElement") {
+    return parameterName(parameter.argument, sourceCode);
+  }
   return parameter.type === "Identifier"
     ? parameter.name
     : sourceCode.getText(parameter).replace(/\s*:\s*object\s*$/u, "");

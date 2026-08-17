@@ -2,7 +2,7 @@ import type { ESTree } from "@oxlint/plugins";
 
 import { defineRule } from "@oxlint/plugins";
 
-import { createLexicalTypeEnvironment } from "../anti-slop/shared/type-environment.ts";
+import { createLexicalTypeEnvironment } from "../shared/type-environment.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 function qualifiedPath(name: ESTree.TSTypeName): string[] | null {
@@ -39,6 +39,23 @@ const qualifiedInterfacesRule = defineRule({
 
 const resolved = { messageId: "resolved" };
 
+const cachedEnvironmentRule = defineRule({
+  meta: {
+    type: "problem",
+    docs: { description: "Exercise lexical environment reuse." },
+    messages: { reused: "Reused the lexical type environment." },
+  },
+  createOnce(context) {
+    return {
+      Program(node) {
+        const first = createLexicalTypeEnvironment(node, context.sourceCode.visitorKeys);
+        const second = createLexicalTypeEnvironment(node, context.sourceCode.visitorKeys);
+        if (first === second) context.report({ node, messageId: "reused" });
+      },
+    };
+  },
+});
+
 ruleTester.run("type-environment/qualified-interfaces", qualifiedInterfacesRule, {
   valid: [
     "import type * as Domain from './owner'; declare function consume(value: Domain.Value): void;",
@@ -62,6 +79,16 @@ ruleTester.run("type-environment/qualified-interfaces", qualifiedInterfacesRule,
     {
       code: "declare function consume(value: Domain.Value): void; namespace Domain { export interface Value {} }",
       errors: [resolved],
+    },
+  ],
+});
+
+ruleTester.run("type-environment/cache", cachedEnvironmentRule, {
+  valid: [],
+  invalid: [
+    {
+      code: "type Value = string;",
+      errors: [{ messageId: "reused" }],
     },
   ],
 });

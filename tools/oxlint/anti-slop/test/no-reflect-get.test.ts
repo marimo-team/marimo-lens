@@ -1,4 +1,4 @@
-import { noReflectGetRule } from "../anti-slop/rules/no-reflect-get.ts";
+import { noReflectGetRule } from "../rules/no-reflect-get.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "reflectGet" };

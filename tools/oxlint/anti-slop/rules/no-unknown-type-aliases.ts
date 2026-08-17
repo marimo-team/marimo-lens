@@ -1,6 +1,6 @@
-import { defineRule } from "@oxlint/plugins";
-
 import type { ESTree } from "@oxlint/plugins";
+
+import { defineRule } from "@oxlint/plugins";
 
 import { createLexicalTypeEnvironment, resolvesToUnknown } from "../shared/type-environment.ts";
 

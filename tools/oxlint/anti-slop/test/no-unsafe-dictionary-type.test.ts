@@ -1,4 +1,4 @@
-import { noUnsafeDictionaryTypeRule } from "../anti-slop/rules/no-unsafe-dictionary-type.ts";
+import { noUnsafeDictionaryTypeRule } from "../rules/no-unsafe-dictionary-type.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "unsafeDictionary" };

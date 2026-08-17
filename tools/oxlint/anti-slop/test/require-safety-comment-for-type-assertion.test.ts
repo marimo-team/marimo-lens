@@ -1,4 +1,4 @@
-import { requireSafetyCommentForTypeAssertionRule } from "../anti-slop/rules/require-safety-comment-for-type-assertion.ts";
+import { requireSafetyCommentForTypeAssertionRule } from "../rules/require-safety-comment-for-type-assertion.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "missingSafetyComment" };

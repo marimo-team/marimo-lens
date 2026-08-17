@@ -1,6 +1,6 @@
 import { defineRule, type Context, type Rule, type VisitorWithHooks } from "@oxlint/plugins";
 
-import antiSlopPlugin from "../anti-slop/index.ts";
+import antiSlopPlugin from "../index.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 function createVisitors(name: string, context: Context): VisitorWithHooks {

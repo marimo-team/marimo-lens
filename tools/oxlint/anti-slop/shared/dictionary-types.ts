@@ -12,14 +12,8 @@ const STRING_KEY_DOMAIN = 1;
 const NUMBER_KEY_DOMAIN = 2;
 const SYMBOL_KEY_DOMAIN = 4;
 const BIGINT_TEMPLATE_DOMAIN = 8;
-const PROPERTY_KEY_DOMAIN =
-  STRING_KEY_DOMAIN | NUMBER_KEY_DOMAIN | SYMBOL_KEY_DOMAIN;
-const STRING_DOMAIN_WRAPPERS = new Set([
-  "Capitalize",
-  "Lowercase",
-  "Uncapitalize",
-  "Uppercase",
-]);
+const PROPERTY_KEY_DOMAIN = STRING_KEY_DOMAIN | NUMBER_KEY_DOMAIN | SYMBOL_KEY_DOMAIN;
+const STRING_DOMAIN_WRAPPERS = new Set(["Capitalize", "Lowercase", "Uncapitalize", "Uppercase"]);
 
 type ResolvedType = {
   readonly type: ESTree.TSType;
@@ -33,6 +27,7 @@ export type UnsafeDictionary = {
 
 export type WideningTargetKind =
   | "anonymous object"
+  | "finite dictionary"
   | "generic container"
   | "object"
   | "open dictionary"
@@ -86,12 +81,32 @@ function interfaceDeclarations(
     : environment.lookupQualifiedInterfaces(path, useNode);
 }
 
+function classDeclarations(
+  path: readonly string[],
+  useNode: ESTree.Node,
+  environment: LexicalTypeEnvironment,
+): readonly ESTree.Class[] {
+  const [name] = path;
+  if (name === undefined) return [];
+  return path.length === 1
+    ? environment.lookupClasses(name, useNode)
+    : environment.lookupQualifiedClasses(path, useNode);
+}
+
 function isBuiltInReference(
   type: ESTree.TSTypeReference,
   name: string,
   environment: LexicalTypeEnvironment,
 ): boolean {
-  return typeReferenceName(type) === name && environment.isBuiltInType(name, type);
+  return environment.isBuiltInTypeReference(type, name);
+}
+
+function isBuiltInReferenceFrom(
+  type: ESTree.TSTypeReference,
+  names: ReadonlySet<string>,
+  environment: LexicalTypeEnvironment,
+): boolean {
+  return [...names].some((name) => isBuiltInReference(type, name, environment));
 }
 
 function unwrapTransparentType(type: ESTree.TSType): ESTree.TSType {
@@ -123,6 +138,18 @@ function isEffectivelyEmptyTypeLiteral(type: ESTree.TSTypeLiteral): boolean {
   return type.members.length === 0 || type.members.every(isEffectivelyEmptyMember);
 }
 
+function isConcreteClassMember(member: ESTree.ClassElement): boolean {
+  if (member.type === "StaticBlock" || ("static" in member && member.static)) return false;
+  return member.type !== "MethodDefinition" || member.kind !== "constructor";
+}
+
+function hasConcreteClassContract(declarations: readonly ESTree.Class[]): boolean {
+  return declarations.some(
+    (declaration) =>
+      declaration.body.body.some(isConcreteClassMember) || declaration.superClass !== null,
+  );
+}
+
 function isEffectivelyEmptyInterface(
   declarations: readonly ESTree.TSInterfaceDeclaration[],
   environment: LexicalTypeEnvironment,
@@ -149,6 +176,20 @@ function isEffectivelyEmptyInterface(
           )
         );
       }),
+  );
+}
+
+function isEffectivelyEmptyNamedType(
+  path: readonly string[],
+  useNode: ESTree.Node,
+  environment: LexicalTypeEnvironment,
+  resolving: ReadonlySet<object>,
+): boolean {
+  if (hasConcreteClassContract(classDeclarations(path, useNode, environment))) return false;
+  return isEffectivelyEmptyInterface(
+    interfaceDeclarations(path, useNode, environment),
+    environment,
+    resolving,
   );
 }
 
@@ -213,12 +254,7 @@ function isNeverKeyDomain(
   if (resolved === null || resolving.has(resolved.identity)) return false;
   const nextResolving = new Set(resolving);
   nextResolving.add(resolved.identity);
-  return isNeverKeyDomain(
-    resolved.type,
-    environment,
-    resolved.substitutions,
-    nextResolving,
-  );
+  return isNeverKeyDomain(resolved.type, environment, resolved.substitutions, nextResolving);
 }
 
 function unsafeDirectValue(
@@ -244,26 +280,15 @@ function unsafeDirectValue(
   if (unwrapped.type === "TSUnionType") {
     return unwrapped.types.some(
       (member) =>
-        unsafeDirectValue(
-          member,
-          environment,
-          substitutions,
-          resolving,
-          unwrapPromiseResult,
-        ) !== null,
+        unsafeDirectValue(member, environment, substitutions, resolving, unwrapPromiseResult) !==
+        null,
     )
       ? "union"
       : null;
   }
   if (unwrapped.type === "TSIntersectionType") {
     const unsafeMembers = unwrapped.types.map((member) =>
-      unsafeDirectValue(
-        member,
-        environment,
-        substitutions,
-        resolving,
-        unwrapPromiseResult,
-      ),
+      unsafeDirectValue(member, environment, substitutions, resolving, unwrapPromiseResult),
     );
     if (unsafeMembers.includes("any")) return "any";
     return unsafeMembers.length > 0 && unsafeMembers.every((member) => member !== null)
@@ -291,21 +316,11 @@ function unsafeDirectValue(
       ? null
       : unsafeDirectValue(wrapped, environment, substitutions, resolving, true);
   }
-  if (
-    name !== null &&
-    TRANSPARENT_WRAPPERS.has(name) &&
-    environment.isBuiltInType(name, unwrapped)
-  ) {
+  if (isBuiltInReferenceFrom(unwrapped, TRANSPARENT_WRAPPERS, environment)) {
     const wrapped = unwrapped.typeArguments?.params[0];
     return wrapped === undefined
       ? null
-      : unsafeDirectValue(
-          wrapped,
-          environment,
-          substitutions,
-          resolving,
-          unwrapPromiseResult,
-        );
+      : unsafeDirectValue(wrapped, environment, substitutions, resolving, unwrapPromiseResult);
   }
   if (isBuiltInReference(unwrapped, "Record", environment)) {
     const key = unwrapped.typeArguments?.params[0];
@@ -335,11 +350,7 @@ function unsafeDirectValue(
   }
 
   if (name !== null && environment.hasTypeParameter(name, unwrapped)) return null;
-  return isEffectivelyEmptyInterface(
-    interfaceDeclarations(path, unwrapped, environment),
-    environment,
-    resolving,
-  )
+  return isEffectivelyEmptyNamedType(path, unwrapped, environment, resolving)
     ? "empty-object"
     : null;
 }
@@ -361,19 +372,17 @@ function dictionaryValueTypes(
   }
 
   if (unwrapped.type === "TSMappedType") {
+    const mappedSubstitutions = new Map(substitutions);
+    mappedSubstitutions.delete(unwrapped.key.name);
     return unwrapped.typeAnnotation === null
       ? []
-      : [{ type: unwrapped.typeAnnotation, substitutions }];
+      : [{ type: unwrapped.typeAnnotation, substitutions: mappedSubstitutions }];
   }
 
   if (unwrapped.type !== "TSTypeReference") return [];
   const name = typeReferenceName(unwrapped);
 
-  if (
-    name !== null &&
-    TRANSPARENT_WRAPPERS.has(name) &&
-    environment.isBuiltInType(name, unwrapped)
-  ) {
+  if (isBuiltInReferenceFrom(unwrapped, TRANSPARENT_WRAPPERS, environment)) {
     const wrapped = unwrapped.typeArguments?.params[0];
     return wrapped === undefined
       ? []
@@ -399,24 +408,14 @@ function dictionaryValueTypes(
   if (resolved === null || resolving.has(resolved.identity)) return [];
   const nextResolving = new Set(resolving);
   nextResolving.add(resolved.identity);
-  return dictionaryValueTypes(
-    resolved.type,
-    environment,
-    resolved.substitutions,
-    nextResolving,
-  );
+  return dictionaryValueTypes(resolved.type, environment, resolved.substitutions, nextResolving);
 }
 
 export function classifyUnsafeDictionaryValue(
   valueType: ESTree.TSType,
   environment: LexicalTypeEnvironment,
 ): UnsafeDictionary | null {
-  const unsafeValue = unsafeDirectValue(
-    valueType,
-    environment,
-    EMPTY_SUBSTITUTIONS,
-    new Set(),
-  );
+  const unsafeValue = unsafeDirectValue(valueType, environment, EMPTY_SUBSTITUTIONS, new Set());
   return unsafeValue === null ? null : { kind: "unsafe-dictionary", unsafeValue };
 }
 
@@ -424,12 +423,7 @@ export function classifyUnsafeDictionary(
   type: ESTree.TSType,
   environment: LexicalTypeEnvironment,
 ): UnsafeDictionary | null {
-  for (const valueType of dictionaryValueTypes(
-    type,
-    environment,
-    EMPTY_SUBSTITUTIONS,
-    new Set(),
-  )) {
+  for (const valueType of dictionaryValueTypes(type, environment, EMPTY_SUBSTITUTIONS, new Set())) {
     const unsafeValue = unsafeDirectValue(
       valueType.type,
       environment,
@@ -470,12 +464,13 @@ function neutralIntersectionMember(
   const path = typeReferencePath(unwrapped);
   if (path === null) return false;
   const name = typeReferenceName(unwrapped);
-  return !(
-    name !== null && environment.hasTypeParameter(name, unwrapped)
-  ) && isEffectivelyEmptyInterface(
-    interfaceDeclarations(path, unwrapped, environment),
-    environment,
-    resolving,
+  return (
+    !(name !== null && environment.hasTypeParameter(name, unwrapped)) &&
+    isEffectivelyEmptyInterface(
+      interfaceDeclarations(path, unwrapped, environment),
+      environment,
+      resolving,
+    )
   );
 }
 
@@ -492,12 +487,7 @@ function broadMappedKeyDomain(
   if (unwrapped.type === "TSBigIntKeyword") return BIGINT_TEMPLATE_DOMAIN;
   if (unwrapped.type === "TSAnyKeyword") return PROPERTY_KEY_DOMAIN;
   if (unwrapped.type === "TSTypeOperator" && unwrapped.operator === "keyof") {
-    return keyofMappedKeyDomain(
-      unwrapped.typeAnnotation,
-      environment,
-      substitutions,
-      resolving,
-    );
+    return keyofMappedKeyDomain(unwrapped.typeAnnotation, environment, substitutions, resolving);
   }
   if (unwrapped.type === "TSUnionType") {
     return unwrapped.types.reduce(
@@ -510,12 +500,7 @@ function broadMappedKeyDomain(
     let domain = PROPERTY_KEY_DOMAIN | BIGINT_TEMPLATE_DOMAIN;
     let hasBroadDomain = false;
     for (const member of unwrapped.types) {
-      const memberDomain = broadMappedKeyDomain(
-        member,
-        environment,
-        substitutions,
-        resolving,
-      );
+      const memberDomain = broadMappedKeyDomain(member, environment, substitutions, resolving);
       if (memberDomain !== 0) {
         domain &= memberDomain;
         hasBroadDomain = true;
@@ -542,16 +527,10 @@ function broadMappedKeyDomain(
     return PROPERTY_KEY_DOMAIN;
   }
   const name = typeReferenceName(unwrapped);
-  if (
-    name !== null &&
-    STRING_DOMAIN_WRAPPERS.has(name) &&
-    environment.isBuiltInType(name, unwrapped)
-  ) {
+  if (isBuiltInReferenceFrom(unwrapped, STRING_DOMAIN_WRAPPERS, environment)) {
     const value = unwrapped.typeArguments?.params[0];
     return value !== undefined &&
-      (broadMappedKeyDomain(value, environment, substitutions, resolving) &
-        STRING_KEY_DOMAIN) !==
-        0
+      (broadMappedKeyDomain(value, environment, substitutions, resolving) & STRING_KEY_DOMAIN) !== 0
       ? STRING_KEY_DOMAIN
       : 0;
   }
@@ -560,12 +539,7 @@ function broadMappedKeyDomain(
   if (resolved === null || resolving.has(resolved.identity)) return 0;
   const nextResolving = new Set(resolving);
   nextResolving.add(resolved.identity);
-  return broadMappedKeyDomain(
-    resolved.type,
-    environment,
-    resolved.substitutions,
-    nextResolving,
-  );
+  return broadMappedKeyDomain(resolved.type, environment, resolved.substitutions, nextResolving);
 }
 
 function keyofMappedKeyDomain(
@@ -608,16 +582,11 @@ function keyofMappedKeyDomain(
     const key = unwrapped.typeArguments?.params[0];
     return key === undefined
       ? 0
-      : broadMappedKeyDomain(key, environment, substitutions, resolving) &
-          PROPERTY_KEY_DOMAIN;
+      : broadMappedKeyDomain(key, environment, substitutions, resolving) & PROPERTY_KEY_DOMAIN;
   }
 
   const name = typeReferenceName(unwrapped);
-  if (
-    name !== null &&
-    TRANSPARENT_WRAPPERS.has(name) &&
-    environment.isBuiltInType(name, unwrapped)
-  ) {
+  if (isBuiltInReferenceFrom(unwrapped, TRANSPARENT_WRAPPERS, environment)) {
     const wrapped = unwrapped.typeArguments?.params[0];
     return wrapped === undefined
       ? 0
@@ -629,12 +598,7 @@ function keyofMappedKeyDomain(
     if (resolving.has(resolved.identity)) return 0;
     const nextResolving = new Set(resolving);
     nextResolving.add(resolved.identity);
-    return keyofMappedKeyDomain(
-      resolved.type,
-      environment,
-      resolved.substitutions,
-      nextResolving,
-    );
+    return keyofMappedKeyDomain(resolved.type, environment, resolved.substitutions, nextResolving);
   }
 
   if (name !== null && environment.hasTypeParameter(name, unwrapped)) return 0;
@@ -668,9 +632,116 @@ function isBroadMappedKey(
   resolving: ReadonlySet<object>,
 ): boolean {
   return (
-    (broadMappedKeyDomain(type, environment, substitutions, resolving) &
-      PROPERTY_KEY_DOMAIN) !==
-    0
+    (broadMappedKeyDomain(type, environment, substitutions, resolving) & PROPERTY_KEY_DOMAIN) !== 0
+  );
+}
+
+function isDefinitelyFiniteKeyofOperand(
+  type: ESTree.TSType,
+  environment: LexicalTypeEnvironment,
+  substitutions: TypeSubstitutions,
+  resolving: ReadonlySet<object>,
+): boolean {
+  const operand = unwrapTransparentType(type);
+  if (operand.type === "TSTypeLiteral") {
+    return (
+      operand.members.some((member) => member.type !== "TSIndexSignature") &&
+      !operand.members.some((member) => member.type === "TSIndexSignature")
+    );
+  }
+  if (operand.type === "TSMappedType") {
+    return isDefinitelyFiniteKeyDomain(
+      operand.nameType ?? operand.constraint,
+      environment,
+      substitutions,
+      resolving,
+    );
+  }
+  if (operand.type !== "TSTypeReference") return false;
+  if (isBuiltInReference(operand, "Record", environment)) {
+    const key = operand.typeArguments?.params[0];
+    return (
+      key !== undefined && isDefinitelyFiniteKeyDomain(key, environment, substitutions, resolving)
+    );
+  }
+  const resolved = resolveTypeReference(operand, environment, substitutions);
+  if (resolved !== null && !resolving.has(resolved.identity)) {
+    const nextResolving = new Set(resolving);
+    nextResolving.add(resolved.identity);
+    return isDefinitelyFiniteKeyofOperand(
+      resolved.type,
+      environment,
+      resolved.substitutions,
+      nextResolving,
+    );
+  }
+  const path = typeReferencePath(operand);
+  if (path === null) return false;
+  const declarations = interfaceDeclarations(path, operand, environment);
+  return (
+    declarations.some((declaration) =>
+      declaration.body.body.some((member) => member.type !== "TSIndexSignature"),
+    ) &&
+    declarations.every((declaration) =>
+      declaration.body.body.every((member) => member.type !== "TSIndexSignature"),
+    )
+  );
+}
+
+function isDefinitelyFiniteKeyDomain(
+  type: ESTree.TSType,
+  environment: LexicalTypeEnvironment,
+  substitutions: TypeSubstitutions,
+  resolving: ReadonlySet<object>,
+): boolean {
+  const unwrapped = unwrapTransparentType(type);
+  if (unwrapped.type === "TSLiteralType") return true;
+  if (unwrapped.type === "TSUnionType") {
+    let hasFiniteMember = false;
+    for (const member of unwrapped.types) {
+      if (isNeverKeyDomain(member, environment, substitutions, resolving)) continue;
+      if (!isDefinitelyFiniteKeyDomain(member, environment, substitutions, resolving)) {
+        return false;
+      }
+      hasFiniteMember = true;
+    }
+    return hasFiniteMember;
+  }
+  if (unwrapped.type === "TSIntersectionType") {
+    return unwrapped.types.some((member) =>
+      isDefinitelyFiniteKeyDomain(member, environment, substitutions, resolving),
+    );
+  }
+  if (unwrapped.type === "TSTemplateLiteralType") {
+    return unwrapped.types.every((member) =>
+      isDefinitelyFiniteKeyDomain(member, environment, substitutions, resolving),
+    );
+  }
+  if (unwrapped.type === "TSTypeOperator" && unwrapped.operator === "keyof") {
+    return isDefinitelyFiniteKeyofOperand(
+      unwrapped.typeAnnotation,
+      environment,
+      substitutions,
+      resolving,
+    );
+  }
+  if (unwrapped.type !== "TSTypeReference") return false;
+  if (isBuiltInReferenceFrom(unwrapped, STRING_DOMAIN_WRAPPERS, environment)) {
+    const value = unwrapped.typeArguments?.params[0];
+    return (
+      value !== undefined &&
+      isDefinitelyFiniteKeyDomain(value, environment, substitutions, resolving)
+    );
+  }
+  const resolved = resolveTypeReference(unwrapped, environment, substitutions);
+  if (resolved === null || resolving.has(resolved.identity)) return false;
+  const nextResolving = new Set(resolving);
+  nextResolving.add(resolved.identity);
+  return isDefinitelyFiniteKeyDomain(
+    resolved.type,
+    environment,
+    resolved.substitutions,
+    nextResolving,
   );
 }
 
@@ -686,9 +757,7 @@ function classifyWideningTargetInternal(
   if (unwrapped.type === "TSUnknownKeyword") return { kind: "unknown" };
   if (unwrapped.type === "TSObjectKeyword") return { kind: "object" };
   if (unwrapped.type === "TSTypeLiteral") {
-    const hasIndex = unwrapped.members.some(
-      (member) => member.type === "TSIndexSignature",
-    );
+    const hasIndex = unwrapped.members.some((member) => member.type === "TSIndexSignature");
     if (hasIndex && !unwrapped.members.some(isRequiredNonIndexMember)) {
       return { kind: "open dictionary" };
     }
@@ -697,8 +766,11 @@ function classifyWideningTargetInternal(
       : null;
   }
   if (unwrapped.type === "TSMappedType") {
-    return isBroadMappedKey(unwrapped.constraint, environment, substitutions, resolving)
-      ? { kind: "open dictionary" }
+    if (isBroadMappedKey(unwrapped.constraint, environment, substitutions, resolving)) {
+      return { kind: "open dictionary" };
+    }
+    return isDefinitelyFiniteKeyDomain(unwrapped.constraint, environment, substitutions, resolving)
+      ? { kind: "finite dictionary" }
       : null;
   }
   if (unwrapped.type !== "TSTypeReference") return null;
@@ -736,11 +808,7 @@ function classifyWideningTargetInternal(
           true,
         );
   }
-  if (
-    name !== null &&
-    TRANSPARENT_WRAPPERS.has(name) &&
-    environment.isBuiltInType(name, unwrapped)
-  ) {
+  if (isBuiltInReferenceFrom(unwrapped, TRANSPARENT_WRAPPERS, environment)) {
     const wrapped = unwrapped.typeArguments?.params[0];
     return wrapped === undefined
       ? null
@@ -755,8 +823,12 @@ function classifyWideningTargetInternal(
   }
   if (isBuiltInReference(unwrapped, "Record", environment)) {
     const key = unwrapped.typeArguments?.params[0];
-    return key !== undefined && isBroadMappedKey(key, environment, substitutions, resolving)
-      ? { kind: "open dictionary" }
+    if (key === undefined) return null;
+    if (isBroadMappedKey(key, environment, substitutions, resolving)) {
+      return { kind: "open dictionary" };
+    }
+    return isDefinitelyFiniteKeyDomain(key, environment, substitutions, resolving)
+      ? { kind: "finite dictionary" }
       : null;
   }
 
@@ -800,9 +872,10 @@ function classifyWideningTargetInternal(
       false,
       unwrapPromiseResult,
     );
-    return target?.kind === "open dictionary" || target?.kind === "generic container"
-      ? { kind: "generic container" }
-      : null;
+    if (target?.kind === "open dictionary" || target?.kind === "generic container") {
+      return { kind: "generic container" };
+    }
+    return target?.kind === "finite dictionary" ? target : null;
   }
 
   return classifyWideningTargetInternal(
@@ -842,14 +915,7 @@ function classifyPromiseResultWideningTargetInternal(
     const result = unwrapped.typeArguments?.params[0];
     return result === undefined
       ? null
-      : classifyWideningTargetInternal(
-          result,
-          environment,
-          substitutions,
-          resolving,
-          true,
-          false,
-        );
+      : classifyWideningTargetInternal(result, environment, substitutions, resolving, true, false);
   }
 
   const resolved = resolveTypeReference(unwrapped, environment, substitutions);
@@ -890,8 +956,7 @@ export function isKnownEvidenceExpression(expression: ESTree.Expression): boolea
   }
   if (current.type === "ConditionalExpression") {
     return (
-      isKnownEvidenceExpression(current.consequent) &&
-      isKnownEvidenceExpression(current.alternate)
+      isKnownEvidenceExpression(current.consequent) && isKnownEvidenceExpression(current.alternate)
     );
   }
   if (current.type === "SequenceExpression") {

@@ -1,4 +1,4 @@
-import { noUnknownParametersRule } from "../anti-slop/rules/no-unknown-parameters.ts";
+import { noUnknownParametersRule } from "../rules/no-unknown-parameters.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "unknownParameter" };

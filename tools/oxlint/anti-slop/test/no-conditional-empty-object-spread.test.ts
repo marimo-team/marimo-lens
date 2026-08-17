@@ -1,4 +1,4 @@
-import { noConditionalEmptyObjectSpreadRule } from "../anti-slop/rules/no-conditional-empty-object-spread.ts";
+import { noConditionalEmptyObjectSpreadRule } from "../rules/no-conditional-empty-object-spread.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "avoid" };

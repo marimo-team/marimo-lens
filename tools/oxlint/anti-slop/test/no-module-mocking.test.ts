@@ -1,4 +1,4 @@
-import { noModuleMockingRule } from "../anti-slop/rules/no-module-mocking.ts";
+import { noModuleMockingRule } from "../rules/no-module-mocking.ts";
 import { ruleTester } from "./rule-tester.ts";
 
 const error = { messageId: "moduleMock" };
@@ -23,6 +23,8 @@ ruleTester.run("anti-slop/no-module-mocking", noModuleMockingRule, {
     "const localVi = { mock() {} }; const { mock: mockModule } = localVi; mockModule('./module');",
     "import { vi as localVi } from './helpers'; const mockModule = localVi.mock; mockModule('./module');",
     "import * as testApi from './helpers'; const mockModule = testApi.vi.mock; mockModule('./module');",
+    "import vi = require('./helpers'); vi.mock('./module');",
+    "import globalThis = require('./helpers'); globalThis.vi.mock('./module');",
     "const localVi = { mock() {} }; localVi.mock.call(localVi, './module');",
     "const localVi = { mock() {} }; const mockModule = localVi.mock; mockModule.apply(localVi, ['./module']);",
     "const unrelated = () => {}; unrelated.call(null, './module'); unrelated.apply(null, ['./module']);",
