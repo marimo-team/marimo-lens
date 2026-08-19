@@ -7,14 +7,16 @@ description: How Lens grounds human feedback in the marimo graph and returns age
 
 People direct analytical work by pointing to visible evidence and explaining
 what deserves attention. Notebook agents act through code. Lens keeps these
-two views connected to the same rendered output, so the agent can make a
+two views connected to the same rendered target, so the agent can make a
 grounded change and the person can judge the result in context.
 
-A point or region identifies the visual evidence. Its output cell identifies
-the computation. Lens follows the live marimo dependency graph upstream from
-that cell and returns a bounded closure of the code, controls, and values that
-produced the result. The agent works from that computational grounding, then
-brings verified evidence back into the notebook for review.
+A point or region identifies the visual evidence. A notebook target identifies
+its producing cell. A configured DOM target can infer producing cells from
+generic runtime metadata. Lens follows the live marimo dependency graph
+upstream from those cells and returns a bounded closure of the code, controls,
+and values that produced the result. DOM targets also keep their document path
+and exact element. The agent works from that grounding, then returns verified
+evidence for review.
 
 ::: tip What this means for you
 
@@ -275,6 +277,14 @@ _overview_method = next(
 if _overview_method is not None:
     _overview_method_context = overview_lens.context()
     _overview_method_current = _overview_method_context.current
+    _overview_method_cell = next(
+        (
+            str(_cell["id"])
+            for _cell in (_overview_method_current or {}).get("cells", [])
+            if _cell.get("status") == "available"
+        ),
+        "",
+    )
     if _overview_method == "context":
         set_overview_action(
             {
@@ -282,10 +292,7 @@ if _overview_method is not None:
                 "revision": _overview_method_context.revision,
             }
         )
-    elif (
-        _overview_method_current is None
-        or _overview_method_current.get("cellStatus") != "available"
-    ):
+    elif _overview_method_current is None or not _overview_method_cell:
         set_overview_action(
             {
                 "kind": "missing",
@@ -294,7 +301,6 @@ if _overview_method is not None:
             }
         )
     elif _overview_method == "start_activity":
-        _overview_method_cell = str(_overview_method_current["outputCellId"])
         overview_lens.start_activity(
             _overview_method_cell,
             label="Reviewing selected chart",
@@ -307,7 +313,7 @@ if _overview_method is not None:
             }
         )
     elif _overview_method == "stop_activity":
-        overview_lens.stop_activity(str(_overview_method_current["outputCellId"]))
+        overview_lens.stop_activity(_overview_method_cell)
         set_overview_action(
             {
                 "kind": "stop_activity",
@@ -316,7 +322,7 @@ if _overview_method is not None:
         )
     elif _overview_method == "reveal":
         overview_lens.reveal(
-            str(_overview_method_current["outputCellId"]),
+            _overview_method_cell,
             duration_ms=8_000,
             label="Selected result",
             message="Returned the selected result for review.",
@@ -367,9 +373,14 @@ if _overview_current is not None:
     _overview_note = (
         escape(str(_overview_current.get("note", "")).strip()) or "No note added"
     )
-    _overview_cell = escape(str(_overview_current["outputCellId"]))
+    _overview_cells = list(_overview_current.get("cells", []))
+    _overview_cell = (
+        escape(str(_overview_cells[0]["id"])) if _overview_cells else "None"
+    )
     _overview_context_status = (
-        "Ready" if _overview_current.get("cellStatus") == "available" else "Unavailable"
+        "Ready"
+        if any(_cell.get("status") == "available" for _cell in _overview_cells)
+        else "Unavailable"
     )
     _overview_snapshot = _overview_current.get("snapshot", {})
     _overview_image_status = (
@@ -461,10 +472,10 @@ notebook cells.
 
 Lens returns three connected forms of evidence:
 
-| Evidence            | Agent use                                                        |
-| ------------------- | ---------------------------------------------------------------- |
-| Selection reference | Identifies the point or region, note, and exact output cell       |
-| Graph context       | Supplies bounded source for the producing cell and its ancestors |
+| Evidence            | Agent use                                                         |
+| ------------------- | ----------------------------------------------------------------- |
+| Selection reference | Identifies the point or region, target, note, and producing cells |
+| Graph context       | Supplies bounded source for producing cells and their ancestors   |
 | Annotated image     | Preserves the visible evidence that drew the person's attention   |
 
 The graph determines computational relevance. The image determines visual
@@ -490,8 +501,8 @@ to a Python model in the notebook kernel.
 | Browser                                                      | Python                                                        |
 | ------------------------------------------------------------ | ------------------------------------------------------------- |
 | Finds rendered outputs and handles pointer or keyboard input | Stores open selections and completed History items            |
-| Positions markers, selection UI, and agent feedback          | Reads the live marimo graph and builds `LensContext`           |
-| Captures annotated images of selected outputs                | Validates selection changes, activity, reveal, and resolution |
+| Positions markers, selection UI, and agent feedback          | Reads the live marimo graph and builds `LensContext`          |
+| Captures annotated images of selected targets                | Validates selection changes, activity, reveal, and resolution |
 
 The two sides exchange compact selection records and explicit commands through
 the widget connection. PNG bytes travel separately from ordinary selection

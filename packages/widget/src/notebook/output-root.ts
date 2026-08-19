@@ -51,9 +51,8 @@ export function outputCellFromEvent(event: Event): OutputCell | null {
 }
 
 export function getOutputCell(ownerDocument: Document, outputCellId: string): OutputCell | null {
-  for (const root of ownerDocument.querySelectorAll(OUTPUT_ROOT_SELECTOR)) {
-    const cell = outputCellFromRoot(root);
-    if (cell?.id === outputCellId && isVisible(cell.element)) return cell;
+  for (const cell of listOutputRoots(ownerDocument)) {
+    if (cell.id === outputCellId && isVisible(cell.element)) return cell;
   }
   return null;
 }
@@ -63,9 +62,19 @@ export function listOutputCells(ownerDocument: Document): OutputCell[] {
 }
 
 export function listOutputRoots(ownerDocument: Document): OutputCell[] {
-  return Array.from(ownerDocument.querySelectorAll(OUTPUT_ROOT_SELECTOR))
-    .map(outputCellFromRoot)
-    .filter((cell): cell is OutputCell => cell !== null);
+  const cells: OutputCell[] = [];
+  const visit = (root: ParentNode) => {
+    for (const element of root.children) {
+      if (isOutputRoot(element)) {
+        const cell = outputCellFromRoot(element);
+        if (cell) cells.push(cell);
+      }
+      if (element.shadowRoot) visit(element.shadowRoot);
+      visit(element);
+    }
+  };
+  visit(ownerDocument);
+  return cells;
 }
 
 export function outputCellFromRoot(element: Element): OutputCell | null {
@@ -101,8 +110,26 @@ export function deepestElementFromEvent(event: Event, output: HTMLElement): Elem
   return output;
 }
 
-function containsLensHost(root: HTMLElement): boolean {
+function isLensHostOutput(root: HTMLElement): boolean {
   return root.ownerDocument[LENS_OUTPUT_REGISTRY]?.has(root) ?? false;
+}
+
+export function containsLensHost(root: HTMLElement): boolean {
+  const registry = root.ownerDocument[LENS_OUTPUT_REGISTRY];
+  if (!registry) return false;
+  if (isLensHostOutput(root)) return true;
+  const HTMLElementClass = root.ownerDocument.defaultView?.HTMLElement;
+  const containsRegisteredOutput = (parent: ParentNode): boolean => {
+    for (const element of parent.children) {
+      if (HTMLElementClass && element instanceof HTMLElementClass && registry.has(element)) {
+        return true;
+      }
+      if (element.shadowRoot && containsRegisteredOutput(element.shadowRoot)) return true;
+      if (containsRegisteredOutput(element)) return true;
+    }
+    return false;
+  };
+  return containsRegisteredOutput(root);
 }
 
 function owningOutputRoot(element: Element): HTMLElement | null {

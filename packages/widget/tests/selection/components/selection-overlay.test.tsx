@@ -141,7 +141,7 @@ describe("selection overlay", () => {
     const rerender = renderOverlay([selection], selection.id);
 
     rerender({
-      workflow: { mode: "armed", activeOutputCellId: selection.outputCellId },
+      workflow: { mode: "armed", activeTargetKey: JSON.stringify(selection.target) },
     });
 
     expect(
@@ -256,7 +256,8 @@ function renderOverlay(
           <SelectionOverlay
             selections={selections}
             currentSelectionId={currentSelectionId}
-            availableOutputCellIds={new Set(selections.map(({ outputCellId }) => outputCellId))}
+            availableSelectionIds={new Set(selections.map(({ id }) => id))}
+            selector={null}
             workflow={{ mode: "idle" }}
             busySelectionIds={new Set()}
             capturingSelectionIds={new Set()}

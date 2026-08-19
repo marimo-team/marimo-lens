@@ -1,3 +1,5 @@
+import type { SelectionTarget, TargetSelector } from "@marimo-lens/protocol";
+
 import { createContext, useContext, type ReactNode } from "react";
 
 import type { OutputCell } from "@/notebook/types";
@@ -8,6 +10,7 @@ import {
   type InteractionSurface,
   type InteractionSurfaceOptions,
 } from "@/notebook/interaction-documents";
+import { containsOpenTree } from "@/notebook/open-tree";
 import {
   deepestElementAtPoint,
   getOutputCell,
@@ -15,6 +18,14 @@ import {
   listOutputRoots,
   registerLensHostOutput,
 } from "@/notebook/output-root";
+import {
+  getTargetSurface,
+  listTargetSurfaces,
+  targetFromElement,
+  targetFromEvent,
+  type TargetSurface,
+  validateTargetSelector,
+} from "@/notebook/selection-target";
 
 type LayoutListener = () => void;
 
@@ -25,6 +36,7 @@ export class NotebookDomAdapter {
   readonly window: Window & typeof globalThis;
 
   readonly #layoutListeners = new Set<LayoutListener>();
+  #selector: TargetSelector = null;
   #stopLayoutObserver: (() => void) | null = null;
 
   constructor(ownerDocument: Document) {
@@ -40,6 +52,29 @@ export class NotebookDomAdapter {
 
   registerHost(host: Element): () => void {
     return registerLensHostOutput(host);
+  }
+
+  configureSelector(selector: TargetSelector): void {
+    validateTargetSelector(this.document, selector);
+    if (this.#selector === selector) return;
+    this.#selector = selector;
+    for (const listener of this.#layoutListeners) listener();
+  }
+
+  targetFromEvent(event: Event, selector: TargetSelector): TargetSurface | null {
+    return targetFromEvent(event, selector);
+  }
+
+  targetFromElement(element: Element | null, selector: TargetSelector): TargetSurface | null {
+    return targetFromElement(element, selector);
+  }
+
+  getTarget(target: SelectionTarget, selector: TargetSelector): TargetSurface | null {
+    return getTargetSurface(this.document, target, selector);
+  }
+
+  listTargets(selector: TargetSelector): TargetSurface[] {
+    return listTargetSurfaces(this.document, selector);
   }
 
   getOutputCell(outputCellId: string): OutputCell | null {
@@ -59,8 +94,8 @@ export class NotebookDomAdapter {
     return deepestElementAtPoint(this.document, x, y);
   }
 
-  iframeAtPoint(point: { x: number; y: number }, output: OutputCell): HTMLIFrameElement | null {
-    return iframeAtPoint(point, output);
+  iframeAtPoint(point: { x: number; y: number }, target: TargetSurface): HTMLIFrameElement | null {
+    return iframeAtPoint(point, target.element);
   }
 
   observeInteractionSurfaces(
@@ -117,7 +152,8 @@ export class NotebookDomAdapter {
     });
   }
 
-  subscribeLayout(listener: LayoutListener): () => void {
+  subscribeLayout(listener: LayoutListener, selector?: TargetSelector): () => void {
+    if (selector !== undefined) this.configureSelector(selector);
     this.#layoutListeners.add(listener);
     this.#stopLayoutObserver ??= this.#observeLayout();
 
@@ -160,21 +196,41 @@ export class NotebookDomAdapter {
     this.window.addEventListener("resize", schedule);
     this.window.addEventListener("scroll", schedule, true);
 
+    const observedOutputs = new Set<HTMLElement>();
+    const observedShadows = new Set<ShadowRoot>();
     const MutationObserverClass = this.window.MutationObserver;
     const mutationObserver = MutationObserverClass
-      ? new MutationObserverClass(scheduleTopology)
+      ? new MutationObserverClass((records) => {
+          let currentTargets: HTMLElement[] | null = null;
+          const affectsTargets =
+            records.length === 0 ||
+            records.some((record) => {
+              if (record.type !== "attributes") return true;
+              const target = record.target;
+              if (!(target instanceof this.window.HTMLElement)) return false;
+              if (target.closest("[data-marimo-lens-ui]")) return false;
+              const related = (root: HTMLElement) =>
+                containsOpenTree(root, target) || containsOpenTree(target, root);
+              if ([...observedOutputs].some(related)) return true;
+              currentTargets ??= this.listTargets(this.#selector).map(({ element }) => element);
+              return currentTargets.some(related);
+            });
+          if (affectsTargets) scheduleTopology();
+        })
       : null;
     const mutationOptions = {
+      attributes: true,
       childList: true,
       subtree: true,
     } satisfies MutationObserverInit;
     const ResizeObserverClass = this.window.ResizeObserver;
     const resizeObserver = ResizeObserverClass ? new ResizeObserverClass(schedule) : null;
-    const observedOutputs = new Set<HTMLElement>();
-    const observedShadows = new Set<ShadowRoot>();
     const syncTopology = () => {
       if (resizeObserver) {
-        const outputs = new Set(listOutputRoots(this.document).map((output) => output.element));
+        const outputs = new Set([
+          ...listOutputRoots(this.document).map((output) => output.element),
+          ...this.listTargets(this.#selector).map((target) => target.element),
+        ]);
         for (const output of observedOutputs) {
           if (outputs.has(output)) continue;
           resizeObserver.unobserve(output);

@@ -1,5 +1,5 @@
 import type { AnyModel, RenderProps } from "@anywidget/types";
-import type { LensState } from "@marimo-lens/protocol";
+import type { LensState, TargetSelector } from "@marimo-lens/protocol";
 
 import { createRender } from "@anywidget/react";
 import { act } from "react";
@@ -9,7 +9,7 @@ import { useLensModel } from "@/anywidget/model";
 
 function ModelProbe() {
   const model = useLensModel(window);
-  return <output data-css={model.css} />;
+  return <output data-css={model.css} data-selector={model.selector ?? ""} />;
 }
 
 const renderProbe = createRender(ModelProbe);
@@ -32,6 +32,7 @@ describe("Lens model", () => {
 
     try {
       expect(container.querySelector("output")?.dataset.css).toBe(".marimo_lens { color: blue; }");
+      expect(container.querySelector("output")?.dataset.selector).toBe("[data-feedback-target]");
       off.mockClear();
     } finally {
       act(() => {
@@ -61,7 +62,7 @@ function mountProbe(container: HTMLElement, model: AnyModel): RenderCleanup {
 }
 
 function fakeModel() {
-  const values = new Map<string, LensState | string>([
+  const values = new Map<string, LensState | TargetSelector | string>([
     [
       "_state",
       {
@@ -73,6 +74,7 @@ function fakeModel() {
       },
     ],
     ["_css", ".marimo_lens { color: blue; }"],
+    ["_selector", "[data-feedback-target]"],
   ]);
   const off = vi.fn();
   const model = {

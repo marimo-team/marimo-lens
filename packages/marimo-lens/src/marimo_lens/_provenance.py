@@ -1,4 +1,4 @@
-"""Resolve selected output cells to bounded marimo DAG provenance."""
+"""Resolve producing cells to bounded marimo DAG provenance."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ MAX_TEXT_SOURCE_CHARACTERS = 24_000
 MAX_REPORTED_OMITTED_CELL_IDS = 16
 
 _ROLE_ORDER = {
-    "selected-output": 0,
+    "producer": 0,
     "upstream": 1,
 }
 
@@ -45,12 +45,12 @@ class Provenance:
 
 def resolve_provenance(
     snapshot: RuntimeSnapshot,
-    output_cell_ids: Sequence[str],
+    producer_cell_ids: Sequence[str],
     *,
     max_cells: int = MAX_RELEVANT_CELLS,
     max_source_characters: int = MAX_TEXT_SOURCE_CHARACTERS,
 ) -> Provenance:
-    """Return selected cells and their bounded upstream closure."""
+    """Return producing cells and their bounded upstream closure."""
 
     max_cells = POSITIVE_SAFE_INTEGER_ADAPTER.validate_python(max_cells)
     max_source_characters = NONNEGATIVE_SAFE_INTEGER_ADAPTER.validate_python(
@@ -59,7 +59,7 @@ def resolve_provenance(
 
     cells_by_id = {cell.id: cell for cell in snapshot.cells}
     cell_order = {cell.id: index for index, cell in enumerate(snapshot.cells)}
-    output_ids = _unique(output_cell_ids)
+    output_ids = _unique(producer_cell_ids)
     roles: dict[str, set[str]] = {}
     output_core_ids: list[str] = []
 
@@ -68,10 +68,10 @@ def resolve_provenance(
         if output_cell is None:
             continue
         _append_unique(output_core_ids, output_id)
-        roles.setdefault(output_id, set()).add("selected-output")
+        roles.setdefault(output_id, set()).add("producer")
 
-    # Output cells are mandatory evidence. Transitive parents use the remaining
-    # context budget when many outputs are selected.
+    # Producing cells are mandatory evidence. Transitive parents use the
+    # remaining context budget when many producers are selected.
     priority = _upstream_priority(
         output_core_ids,
         {cell_id: cell.upstream_cell_ids for cell_id, cell in cells_by_id.items()},
@@ -103,7 +103,7 @@ def resolve_provenance(
     remaining_source = max_source_characters
     code_by_id: dict[str, str] = {}
     truncated_cell_ids: list[str] = []
-    # Allocate source budget by relevance so a selected output keeps its
+    # Allocate source budget by relevance so a producer keeps its
     # source when a large distant ancestor consumes the remaining budget.
     for cell_id in selected_ids:
         code = cells_by_id[cell_id].code
@@ -140,12 +140,12 @@ def resolve_provenance(
 def rank_relevant_controls(
     snapshot: RuntimeSnapshot,
     provenance: Provenance,
-    output_cell_ids: Sequence[str],
+    producer_cell_ids: Sequence[str],
 ) -> tuple[RuntimeControl, ...]:
-    """Return controls ordered by their relevance to selected outputs."""
+    """Return controls ordered by their relevance to producing cells."""
 
-    output_id_set = set(output_cell_ids)
-    distances = _upstream_distances(snapshot, output_cell_ids)
+    output_id_set = set(producer_cell_ids)
+    distances = _upstream_distances(snapshot, producer_cell_ids)
     cells_by_id = {cell.id: cell for cell in snapshot.cells}
     ranked: list[tuple[tuple[int, int, int], RuntimeControl]] = []
     fallback = len(snapshot.cells) + 1
@@ -171,12 +171,12 @@ def rank_relevant_controls(
 
 def _upstream_distances(
     snapshot: RuntimeSnapshot,
-    output_cell_ids: Sequence[str],
+    producer_cell_ids: Sequence[str],
 ) -> dict[str, int]:
     cells_by_id = {cell.id: cell for cell in snapshot.cells}
     distances: dict[str, int] = {}
     queue: deque[tuple[str, int]] = deque(
-        (cell_id, 0) for cell_id in output_cell_ids if cell_id in cells_by_id
+        (cell_id, 0) for cell_id in producer_cell_ids if cell_id in cells_by_id
     )
     while queue:
         cell_id, distance = queue.popleft()

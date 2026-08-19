@@ -37,7 +37,7 @@ def test_cell_reveal_event_uses_transient_transport() -> None:
         revision=3,
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 2,
+        "version": 3,
         "type": "cell.reveal",
         "revision": 3,
         "payload": {
@@ -68,7 +68,7 @@ def test_cell_activity_start_event_uses_transient_transport() -> None:
         revision=3,
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 2,
+        "version": 3,
         "type": "cell.activity.start",
         "revision": 3,
         "payload": {
@@ -96,7 +96,7 @@ def test_cell_activity_stop_event_targets_one_cell() -> None:
         revision=3,
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 2,
+        "version": 3,
         "type": "cell.activity.stop",
         "revision": 3,
         "payload": {"cellId": "cell-view"},
@@ -246,7 +246,8 @@ def test_command_ignores_unrelated_envelopes() -> None:
     ("updates", "code"),
     [
         ({"version": 1}, "unsupported_version"),
-        ({"version": 3}, "unsupported_version"),
+        ({"version": 2}, "unsupported_version"),
+        ({"version": 4}, "unsupported_version"),
         ({"version": True}, "unsupported_version"),
         ({"type": "selection.unknown"}, "unsupported_command"),
     ],
@@ -326,13 +327,15 @@ def test_commands_reject_revisions_outside_the_json_safe_integer_contract(
 
 
 @pytest.mark.parametrize(
-    "field",
-    ["id", "outputCellId"],
+    "value",
+    [
+        selection(selection_id="   "),
+        selection(target={"kind": "notebook", "cellIds": ["   "]}),
+    ],
 )
-def test_selection_commands_reject_whitespace_only_identifiers(field: str) -> None:
-    value = selection()
-    value[field] = "   "
-
+def test_selection_commands_reject_whitespace_only_identifiers(
+    value: dict[str, object],
+) -> None:
     with pytest.raises(ProtocolError) as raised:
         parse_command(
             _command(
@@ -347,6 +350,32 @@ def test_selection_commands_reject_whitespace_only_identifiers(field: str) -> No
         )
 
     assert raised.value.code == "invalid_request"
+
+
+def test_selection_commands_accept_dom_targets() -> None:
+    target: dict[str, object] = {
+        "kind": "dom",
+        "cellIds": ["cell-b", "cell-a"],
+        "documentPath": "/dashboard/",
+        "domSelector": "#forecast-summary",
+    }
+    command = parse_command(
+        _command(
+            "selection.put",
+            {
+                "selection": selection(target=target),
+                "expectedRevision": 0,
+                "imageAction": "clear",
+            },
+        ),
+        [],
+    )
+
+    assert command is not None
+    assert command.payload["selection"]["target"] == {
+        **target,
+        "cellIds": ["cell-a", "cell-b"],
+    }
 
 
 def test_put_requires_expected_revision_and_matching_buffer_action() -> None:
@@ -626,9 +655,9 @@ def test_responses_use_current_version_and_include_an_object_payload() -> None:
         message="Bad request.",
     )
 
-    assert success["version"] == 2
+    assert success["version"] == 3
     assert success["payload"] == {}
-    assert error["version"] == 2
+    assert error["version"] == 3
     assert error["payload"] == {}
     assert error["error"] == {
         "code": "invalid_request",
@@ -693,7 +722,7 @@ def test_output_capture_uses_a_separate_outgoing_command_path() -> None:
 
     assert command == {
         "protocol": "marimo-lens.command",
-        "version": 2,
+        "version": 3,
         "requestId": "request-1",
         "type": "output.capture",
         "payload": {"outputCellId": "cell-view"},
@@ -708,7 +737,7 @@ def test_output_capture_response_requires_metadata_and_one_png() -> None:
     response = parse_capture_response(
         {
             "protocol": "marimo-lens.response",
-            "version": 2,
+            "version": 3,
             "requestId": "request-1",
             "ok": True,
             "revision": 4,
@@ -740,7 +769,7 @@ def test_output_capture_response_rejects_image_for_another_request() -> None:
         parse_capture_response(
             {
                 "protocol": "marimo-lens.response",
-                "version": 2,
+                "version": 3,
                 "requestId": "request-1",
                 "ok": True,
                 "revision": 4,
@@ -768,7 +797,7 @@ def test_output_capture_failure_rejects_binary_buffers() -> None:
         parse_capture_response(
             {
                 "protocol": "marimo-lens.response",
-                "version": 2,
+                "version": 3,
                 "requestId": "request-1",
                 "ok": False,
                 "revision": 4,
@@ -785,7 +814,7 @@ def test_output_capture_response_accepts_additive_fields() -> None:
     response = parse_capture_response(
         {
             "protocol": "marimo-lens.response",
-            "version": 2,
+            "version": 3,
             "requestId": "request-1",
             "ok": False,
             "revision": 4,
@@ -829,7 +858,7 @@ def test_invalid_request_id_is_not_echoed(request_id: str) -> None:
 def _command(command_type: str, payload: dict[str, object]) -> dict[str, object]:
     return {
         "protocol": "marimo-lens.command",
-        "version": 2,
+        "version": 3,
         "requestId": "request-1",
         "type": command_type,
         "payload": payload,

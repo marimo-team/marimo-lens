@@ -1,21 +1,30 @@
 import type { Selection } from "@marimo-lens/protocol";
 
 import { captureOutputSnapshot } from "@marimo-lens/image-capture";
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
 
 import { LensProtocolError, type LensProtocolClient } from "@/anywidget/client";
 import { useLensModel } from "@/anywidget/model";
 import { useLatestCommitted } from "@/app/committed-ref";
 import { useResolutionReceipt } from "@/app/resolution-receipt";
 import { useNotebookDom, type NotebookDomAdapter } from "@/notebook/notebook-dom";
+import { targetBelongsToDocument } from "@/notebook/selection-target";
 import { SelectionNoteEditor } from "@/selection/components/selection-note-editor";
 import { SelectionOverlay, type AdjustmentCancel } from "@/selection/components/selection-overlay";
 import { useDocumentInteractions } from "@/selection/document-interactions";
-import { useAvailableOutputCellIds } from "@/selection/output-availability";
 import { revealSelection } from "@/selection/reveal";
 import { useSelectionActions } from "@/selection/selection-actions";
 import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
 import { INITIAL_UI_STATE, locksCompetingInteractions, uiReducer } from "@/selection/state";
+import { useAvailableSelectionIds } from "@/selection/target-availability";
 import {
   CellAttentionController,
   type CellAttentionPresentation,
@@ -51,6 +60,7 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
   const dependencies = props?.dependencies ?? defaultDependencies;
   const dom = useNotebookDom();
   const model = dependencies.useLensModel(dom.window);
+  useLayoutEffect(() => dom.configureSelector(model.selector), [dom, model.selector]);
   const [ui, dispatch] = useReducer(uiReducer, INITIAL_UI_STATE);
   const uiRef = useLatestCommitted(ui);
   const stateRef = useLatestCommitted(model.state);
@@ -84,6 +94,7 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
     stateRef,
     dispatch,
     dom,
+    selector: model.selector,
     protocol: model.protocol,
   });
   const { invalidateSnapshotCapture, settleUnavailableSnapshot } = actions;
@@ -132,6 +143,7 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
     uiRef,
     dispatch,
     dom,
+    selector: model.selector,
     beginSelection: actions.beginSelection,
     canceledPointerIds,
     cancelAdjustment,
@@ -146,7 +158,7 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
     [model.state.selections, ui.pendingSelections],
   );
   const currentSelectionId = ui.optimisticCurrentSelectionId ?? model.state.currentSelectionId;
-  const availableOutputCellIds = useAvailableOutputCellIds(selections);
+  const availableSelectionIds = useAvailableSelectionIds(selections, model.selector);
   const busySelectionIds = useMemo(() => new Set(ui.busySelectionIds), [ui.busySelectionIds]);
   const capturingSelectionIds = useMemo(() => {
     const ids = new Set<string>();
@@ -160,12 +172,13 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
     for (const selection of selections) {
       if (
         selection.snapshot.status === "pending" &&
-        !availableOutputCellIds.has(selection.outputCellId)
+        targetBelongsToDocument(selection.target, dom.document) &&
+        !availableSelectionIds.has(selection.id)
       ) {
         settleUnavailableSnapshot(selection.id);
       }
     }
-  }, [availableOutputCellIds, selections, settleUnavailableSnapshot]);
+  }, [availableSelectionIds, dom, selections, settleUnavailableSnapshot]);
 
   const noteWorkflow = ui.workflow.mode === "editingNote" ? ui.workflow : null;
   const noteSelection = noteWorkflow
@@ -207,7 +220,8 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
           selections={selections}
           history={model.state.history}
           currentSelectionId={currentSelectionId}
-          availableOutputCellIds={availableOutputCellIds}
+          availableSelectionIds={availableSelectionIds}
+          selector={model.selector}
           armed={ui.workflow.mode === "armed" || ui.workflow.mode === "dragging"}
           listOpen={ui.listOpen}
           sheetTab={ui.sheetTab}
@@ -246,12 +260,18 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
           }
           onClearSelections={actions.clearSelections}
           onClearHistory={actions.clearHistory}
-          onReopenSelection={actions.reopenSelection}
-          onActivateSelection={(selection, motion) => {
-            if (dom.getOutputCell(selection.outputCellId)) {
-              revealSelection(dom, selection, motion);
+          onReopenSelection={(receipt) => {
+            if (dom.getTarget(receipt.target, model.selector)) {
+              actions.reopenSelection(receipt);
             } else {
-              dispatch({ type: "announce", message: "Output unavailable." });
+              dispatch({ type: "announce", message: "Target unavailable in this document." });
+            }
+          }}
+          onActivateSelection={(selection, motion) => {
+            if (dom.getTarget(selection.target, model.selector)) {
+              revealSelection(dom, selection, motion, model.selector);
+            } else {
+              dispatch({ type: "announce", message: "Target unavailable." });
             }
             actions.activateSelection(selection.id);
           }}
@@ -263,7 +283,8 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
         <SelectionOverlay
           selections={selections}
           currentSelectionId={currentSelectionId}
-          availableOutputCellIds={availableOutputCellIds}
+          availableSelectionIds={availableSelectionIds}
+          selector={model.selector}
           workflow={ui.workflow}
           busySelectionIds={busySelectionIds}
           capturingSelectionIds={capturingSelectionIds}
@@ -283,6 +304,7 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
           <SelectionNoteEditor
             key={`${noteSelection.id}:${noteSelection.note}`}
             selection={noteSelection}
+            selector={model.selector}
             initialNote={noteSelection.note}
             saving={busySelectionIds.has(noteSelection.id)}
             mutationPending={busySelectionIds.has(noteSelection.id) || ui.clearPending}

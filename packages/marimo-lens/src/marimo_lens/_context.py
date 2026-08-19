@@ -14,6 +14,25 @@ from ._text_context import render_text
 from .context import LensContext, LensReferences
 
 
+def target_cell_ids(
+    selections: Sequence[Mapping[str, Any]],
+    current_selection_id: str | None,
+) -> tuple[str, ...]:
+    """Return unique producer IDs with the current selection first."""
+
+    prioritized = sorted(
+        selections,
+        key=lambda selection: selection.get("id") != current_selection_id,
+    )
+    return tuple(
+        dict.fromkeys(
+            str(cell_id)
+            for selection in prioritized
+            for cell_id in selection["target"]["cellIds"]
+        )
+    )
+
+
 def build_lens_context(
     snapshot: RuntimeSnapshot,
     state: SelectionState,
@@ -70,12 +89,12 @@ def build_context_lazy(
     )
 
     def build_text() -> str:
-        output_cell_ids = [str(selection["outputCellId"]) for selection in selections]
-        provenance = resolve_provenance(snapshot, output_cell_ids)
+        producer_ids = target_cell_ids(selections, current_selection_id)
+        provenance = resolve_provenance(snapshot, producer_ids)
         relevant_controls = rank_relevant_controls(
             snapshot,
             provenance,
-            output_cell_ids,
+            producer_ids,
         )
         serialized_controls = serialize_controls(relevant_controls[:MAX_CONTROLS])
         omitted_control_count = max(
@@ -98,4 +117,5 @@ __all__ = [
     "build_context",
     "build_context_lazy",
     "build_lens_context",
+    "target_cell_ids",
 ]

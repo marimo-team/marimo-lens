@@ -3,6 +3,8 @@ import type {
   LensState,
   Selection,
   SelectionAnchor,
+  SelectionTarget,
+  TargetSelector,
 } from "@marimo-lens/protocol";
 
 import { isAbortCause, parseErrorCause } from "@marimo-lens/protocol";
@@ -36,10 +38,11 @@ export function useSelectionActions(options: {
   stateRef: RefObject<LensState>;
   dispatch: Dispatch<UiAction>;
   dom: NotebookDomAdapter;
+  selector: TargetSelector;
   protocol: LensProtocolClient;
   captureSnapshot?: SelectionSnapshotCapture;
 }) {
-  const { stateRef, dispatch, dom, protocol, captureSnapshot } = options;
+  const { stateRef, dispatch, dom, selector, protocol, captureSnapshot } = options;
   const currentSignal = useLifecycleSignal(dom.window);
   const [mutationQueue] = useState(() => ({ tail: Promise.resolve() }));
 
@@ -103,6 +106,7 @@ export function useSelectionActions(options: {
       new SelectionCapture({
         stateRef,
         dom,
+        selector,
         protocol,
         currentSignal,
         enqueueMutation,
@@ -119,6 +123,7 @@ export function useSelectionActions(options: {
       protocol,
       runRevisioned,
       stateRef,
+      selector,
     ],
   );
 
@@ -139,7 +144,7 @@ export function useSelectionActions(options: {
 
   const beginSelection = useCallback(
     (
-      outputCellId: string,
+      target: SelectionTarget,
       output: HTMLElement,
       anchor: SelectionAnchor,
       detailElement: Element,
@@ -151,7 +156,7 @@ export function useSelectionActions(options: {
         id: createSelectionId(dom.window),
         label: stateRef.current.nextLabel,
         note: "",
-        outputCellId,
+        target,
         createdAt: new dom.window.Date().toISOString(),
         anchor,
         domHint: collectDomHint(detailElement, output),
@@ -423,16 +428,16 @@ export function useSelectionActions(options: {
             selectionId: reopened.id,
             label: reopened.label,
           });
-          const output = dom.getOutputCell(reopened.outputCellId)?.element;
+          const output = dom.getTarget(reopened.target, selector)?.element;
           if (!output) {
             dispatch({
               type: "announce",
-              message: `${reopened.label} reopened. Output unavailable.`,
+              message: `${reopened.label} reopened. Target unavailable.`,
             });
             focusSelectionOrDock(dom, reopened.id);
             return;
           }
-          revealSelection(dom, reopened, "smooth");
+          revealSelection(dom, reopened, "smooth", selector);
           const detail = detailElementForSelection(dom, reopened, output);
           const captureJob = selectionCapture.reserve(reopened.id);
           void selectionCapture
@@ -467,6 +472,7 @@ export function useSelectionActions(options: {
       runRevisioned,
       selectionCapture,
       stateRef,
+      selector,
     ],
   );
 
@@ -506,9 +512,9 @@ export function useSelectionActions(options: {
     (selection: Selection, anchor: SelectionAnchor) => {
       const signal = currentSignal();
       signal.throwIfAborted();
-      const output = dom.getOutputCell(selection.outputCellId)?.element;
+      const output = dom.getTarget(selection.target, selector)?.element;
       if (!output) {
-        dispatch({ type: "announce", message: "Output unavailable." });
+        dispatch({ type: "announce", message: "Target unavailable." });
         return;
       }
       const detail = detailElementForAnchor(dom, anchor, output);
@@ -576,6 +582,7 @@ export function useSelectionActions(options: {
       runRevisioned,
       selectionCapture,
       stateRef,
+      selector,
     ],
   );
 

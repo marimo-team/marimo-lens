@@ -18,9 +18,10 @@ describe("notebook DOM layout subscriptions", () => {
         disconnect = disconnectMutation;
       },
     );
+    const resizeObserve = vi.fn();
     const ResizeObserverStub = vi.fn(
       class {
-        observe = vi.fn();
+        observe = resizeObserve;
         unobserve = vi.fn();
         disconnect = disconnectResize;
       },
@@ -57,9 +58,10 @@ describe("notebook DOM layout subscriptions", () => {
         takeRecords = () => [];
       },
     );
+    const resizeObserve = vi.fn();
     const ResizeObserverStub = vi.fn(
       class {
-        observe = vi.fn();
+        observe = resizeObserve;
         unobserve = vi.fn();
         disconnect = vi.fn();
       },
@@ -77,15 +79,16 @@ describe("notebook DOM layout subscriptions", () => {
     vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
       frames.delete(id);
     });
-    const query = vi.spyOn(document, "querySelectorAll");
     const listener = vi.fn();
     const dom = new NotebookDomAdapter(document);
     const release = dom.subscribeLayout(listener);
 
-    expect(query).toHaveBeenCalledTimes(1);
+    const output = document.createElement("div");
+    output.id = "output-later-cell";
+    document.body.appendChild(output);
     notifyMutation();
     notifyMutation();
-    expect(query).toHaveBeenCalledTimes(1);
+    expect(resizeObserve).not.toHaveBeenCalledWith(output);
     expect(listener).not.toHaveBeenCalled();
     expect(frames.size).toBe(1);
 
@@ -94,7 +97,7 @@ describe("notebook DOM layout subscriptions", () => {
     frames.delete(pending[0]);
     pending[1](0);
 
-    expect(query).toHaveBeenCalledTimes(2);
+    expect(resizeObserve).toHaveBeenCalledWith(output);
     expect(listener).toHaveBeenCalledOnce();
     release();
   });

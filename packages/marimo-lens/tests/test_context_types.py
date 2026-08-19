@@ -2,29 +2,33 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from importlib import metadata as pkg
-from typing import Any, cast, get_type_hints
+from typing import Any, Literal, cast, get_args, get_type_hints
 
 import marimo_lens
 import pytest
 from marimo_lens import (
+    CellReference,
     Lens,
     LensContext,
     LensError,
     LensReferences,
     NotebookReference,
     SelectionReference,
+    SelectionTargetReference,
 )
 from marimo_lens._runtime import RuntimeSnapshot
 
 
 def test_package_exports_the_public_api() -> None:
     expected = {
+        "CellReference": CellReference,
         "Lens": Lens,
         "LensContext": LensContext,
         "LensError": LensError,
         "LensReferences": LensReferences,
         "NotebookReference": NotebookReference,
         "SelectionReference": SelectionReference,
+        "SelectionTargetReference": SelectionTargetReference,
         "__version__": pkg.version("marimo-lens"),
     }
 
@@ -42,7 +46,12 @@ def test_context_exposes_typed_reference_dictionaries() -> None:
     assert get_type_hints(LensReferences)["notebook"] is NotebookReference
     assert get_type_hints(LensReferences)["selections"] == list[SelectionReference]
     assert get_type_hints(NotebookReference)["path"] is str
-    assert get_type_hints(SelectionReference)["outputCellId"] is str
+    assert get_type_hints(SelectionReference)["target"] is SelectionTargetReference
+    assert get_type_hints(SelectionReference)["cells"] == list[CellReference]
+    target_kinds = {
+        get_type_hints(target)["kind"] for target in get_args(SelectionTargetReference)
+    }
+    assert target_kinds == {Literal["notebook"], Literal["dom"]}
 
 
 def test_context_exposes_immutable_png_bytes_by_selection_id() -> None:
@@ -130,6 +139,7 @@ def test_lens_context_defers_and_caches_standalone_text(
         available=False,
         filename="",
         reason="kernel unavailable",
+        available_cell_ids=frozenset(),
         cells=(),
         controls=(),
     )

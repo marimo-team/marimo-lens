@@ -1,4 +1,4 @@
-import type { Selection } from "@marimo-lens/protocol";
+import type { Selection, TargetSelector } from "@marimo-lens/protocol";
 
 import { Trash2 } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
@@ -6,10 +6,12 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useNotebookDom } from "@/notebook/notebook-dom";
 import { anchorToViewport } from "@/selection/anchor";
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
+import { targetLabel, targetTitle } from "@/selection/target-label";
 import { useAnchoredSurface, type AnchoredSurfaceAnchor } from "@/ui/anchored-surface";
 
 type SelectionNoteEditorProps = {
   selection: Selection;
+  selector: TargetSelector;
   initialNote: string;
   saving: boolean;
   mutationPending: boolean;
@@ -22,6 +24,7 @@ type SelectionNoteEditorProps = {
 
 export function SelectionNoteEditor({
   selection,
+  selector,
   initialNote,
   saving,
   mutationPending,
@@ -38,7 +41,7 @@ export function SelectionNoteEditor({
   const errorId = useId();
   const dom = useNotebookDom();
   const anchor = editorAnchor(
-    dom.getOutputCell(selection.outputCellId)?.element ?? null,
+    dom.getTarget(selection.target, selector)?.element ?? null,
     selection,
   );
   const position = useAnchoredSurface({
@@ -78,7 +81,7 @@ export function SelectionNoteEditor({
       data-marimo-lens-note-editor
       data-marimo-lens-selection-cluster={selection.id}
       data-marimo-lens-ui
-      aria-label={`${title} for ${selection.label}, cell ${selection.outputCellId}`}
+      aria-label={`${title} for ${selection.label}, ${targetLabel(selection.target, selection.domHint)}`}
       onCancel={(event) => {
         event.preventDefault();
         onCancel();
@@ -110,8 +113,8 @@ export function SelectionNoteEditor({
       <header className="ml-note-editor__header">
         <span className="ml-note-editor__selection ml-code">{selection.label}</span>
         <span aria-hidden="true">·</span>
-        <span className="ml-note-editor__target">
-          Cell <span className="ml-code">{selection.outputCellId}</span>
+        <span className="ml-note-editor__target" title={targetTitle(selection.target)}>
+          <span className="ml-code">{targetLabel(selection.target, selection.domHint)}</span>
         </span>
         <SelectionKindMark kind={selection.anchor.kind} />
       </header>

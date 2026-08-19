@@ -8,9 +8,10 @@ description: Python API contracts for reading Lens requests and returning agent 
 The Python API lets code-mode agents read the current selection, show their work
 in the notebook, reveal a result, and complete a request.
 
-The package exports `Lens`, `LensContext`, `LensError`, `LensReferences`,
-`NotebookReference`, `SelectionReference`, and `__version__`. The version string
-comes from the installed `marimo-lens` distribution metadata.
+The package exports `CellReference`, `Lens`, `LensContext`, `LensError`,
+`LensReferences`, `NotebookReference`, `SelectionReference`,
+`SelectionTargetReference`, and `__version__`. The version string comes from the
+installed `marimo-lens` distribution metadata.
 
 ```marimo-config
 requires-python = ">=3.10"
@@ -96,7 +97,7 @@ identity and Lens target remain fixed for the handle's lifetime.
 
 | Member                                                                   | Behavior                                                     |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| `identity`                                                               | Reconnects to this Lens across kernel calls                   |
+| `identity`                                                               | Reconnects to this Lens across kernel calls                  |
 | `context()`                                                              | Returns the current detached `LensContext`                   |
 | `cell_image(cell_id, *, expected_revision)`                              | Returns fresh cell PNG bytes after browser capture completes |
 | `start_activity(cell_id, *, duration_ms=None, label=None, message=None)` | Shows the current agent work target                          |
@@ -136,6 +137,20 @@ handoff method on a selectable chart.
 
 ## `Lens`
 
+### `Lens(*, dom_selector=None)`
+
+Creates a Lens for notebook outputs and optional DOM roots.
+
+- `dom_selector`: A CSS selector for additional authored page roots. Each DOM
+  selection records the current document path, an exact selector for the chosen
+  element, and producer cell IDs inferred from nested `data-runtime-cell-id`
+  metadata. Matching roots live in the widget owner's light DOM. Interactions
+  inside their open shadow trees remain attached to the selected root.
+  The selector accepts at most 1,024 UTF-16 code units.
+
+An empty selector raises `ValueError`. A selector with another type raises
+`TypeError`. The browser reports invalid CSS syntax when Lens mounts.
+
 Mount one `Lens` through marimo:
 
 ```python
@@ -157,7 +172,9 @@ context = lens.context()
 selection = context.current
 
 if selection is not None:
-    cell_id = str(selection["outputCellId"])
+    available_cells = [
+        cell["id"] for cell in selection["cells"] if cell["status"] == "available"
+    ]
 ```
 
 A `LensContext` does not update. Call `lens.context()` again after the notebook
@@ -181,9 +198,17 @@ another activity, reveal, or Lens teardown replaces it.
 context = lens.context()
 selection = context.current
 
-if selection is not None and selection["cellStatus"] == "available":
+cell = (
+    next(
+        (cell for cell in selection["cells"] if cell["status"] == "available"),
+        None,
+    )
+    if selection is not None
+    else None
+)
+if cell is not None:
     lens.start_activity(
-        str(selection["outputCellId"]),
+        cell["id"],
         label="Updating aggregation",
         message="Updating the aggregation",
     )
@@ -231,9 +256,17 @@ it for `duration_ms`.
 context = lens.context()
 selection = context.current
 
-if selection is not None and selection["cellStatus"] == "available":
+cell = (
+    next(
+        (cell for cell in selection["cells"] if cell["status"] == "available"),
+        None,
+    )
+    if selection is not None
+    else None
+)
+if cell is not None:
     lens.reveal(
-        str(selection["outputCellId"]),
+        cell["id"],
         duration_ms=10_000,
         label="Updated chart",
         message="Updated the aggregation and verified the chart.",
@@ -264,7 +297,7 @@ context = lens.context()
 selection_ids = [
     str(selection["id"])
     for selection in context.references["selections"]
-    if selection["outputCellId"] == "BYtC"
+    if any(cell["id"] == "BYtC" for cell in selection["cells"])
 ]
 
 if selection_ids:
@@ -311,15 +344,18 @@ Later calls to `context()`, `start_activity()`, `stop_activity()`, `reveal()`, a
 | `text`       | Bounded text for selected cells and their relevant upstream cells |
 | `images`     | Read-only mapping from selection IDs to captured PNG bytes        |
 
-Each compact selection reference includes its stable ID and label, note, exact
-`outputCellId`, point or region, annotated image status, and runtime
-`cellStatus`.
+Each compact selection reference includes its stable ID and label, note,
+`target`, producing `cells`, point or region, and annotated image status.
 
-`cellStatus` is:
+`target.kind` is `notebook` or `dom`. Notebook targets carry one cell ID. DOM
+targets carry the document path, exact DOM selector, and zero or more inferred
+producing cell IDs. Producer IDs are sorted and their order has no semantic
+meaning.
 
-- `available` when the current graph contains the exact output cell ID
-- `missing` when the runtime is available and the cell ID is absent
-- `unavailable` when Lens cannot inspect the current marimo runtime
+Each `CellReference` in `cells` contains `id` and `status`. Status is
+`available` when the current graph contains the cell, `missing` when the runtime
+is available and the ID is absent, and `unavailable` when Lens cannot inspect
+the current marimo runtime.
 
 ## Typed context references
 
@@ -338,9 +374,12 @@ no selection is current. These `TypedDict` contracts are exported from
 | `currentSelectionId` | Current selection ID, or `None`     |
 | `selections`         | List of `SelectionReference` values |
 
-`SelectionReference` contains `id`, `label`, `note`, `outputCellId`,
-`cellStatus`, `anchor`, and `snapshot`. `domHint` and `previousResolution`
-appear when that evidence is available for the selection.
+`SelectionReference` contains `id`, `label`, `note`, a
+`SelectionTargetReference` in `target`, `cells`, `anchor`, and `snapshot`.
+`domHint` and `previousResolution` appear when that evidence is available for
+the selection.
+
+`CellReference` contains a producing cell `id` and its current runtime `status`.
 
 `NotebookReference` contains `path` and `available`. It includes `reason` when
 the active marimo runtime is unavailable.
@@ -385,14 +424,16 @@ Lens operation begins.
 | Open selections                      | 64                                         |
 | Selection note                       | 4,000 UTF-16 code units                    |
 | Cell ID or selection ID              | 128 UTF-16 code units                      |
+| Configured or exact DOM selector     | 1,024 UTF-16 code units                    |
+| Producing cell IDs per DOM target    | 64                                         |
 | Activity or reveal label             | 40 UTF-16 code units                       |
 | Activity message or resolve summary  | 240 UTF-16 code units                      |
 | Reveal message                       | 1,000 UTF-16 code units                    |
 | Reveal duration                      | 1 to 300,000 milliseconds                  |
 | Selections per resolution            | 64 unique IDs                              |
-| Active synchronized state            | 40,000 UTF-8 bytes                         |
+| Active synchronized state            | 48,000 UTF-8 bytes                         |
 | Addressed History                    | 64 items and 64,000 UTF-8 bytes            |
-| Compact references                   | 45,000 UTF-8 bytes                         |
+| Compact references                   | 60,000 UTF-8 bytes                         |
 | Standalone text                      | 64,000 characters                          |
 | Relevant runtime cells               | 64                                         |
 | Reported omitted cell IDs            | 16 plus the exact omitted count            |

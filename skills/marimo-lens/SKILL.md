@@ -1,12 +1,12 @@
 ---
 name: marimo-lens
 description: >-
-  Use Lens to turn a user's point, region, or note on rendered notebook output
-  into a bounded task against the producing cells. Work through a live marimo
+  Use Lens to turn a user's point, region, or note on a rendered notebook or
+  configured DOM target into a bounded task against producing cells or host source. Work through a live marimo
   code-mode environment, installing and using the marimo-pair skill first when
   the current agent is not connected to one. Inspect the selected cell,
   upstream context, and available images, then show activity, verify the
-  notebook result, reveal it, and resolve the addressed selection to History.
+  notebook or host result, reveal it, and resolve the addressed selection to History.
   Use when the user refers to "this" output, asks to address Lens selections,
   requests an overview or walkthrough, or invokes `$marimo-lens address` for
   every open selection. Treat the human's mark and note as the request, and
@@ -52,6 +52,31 @@ evidence. Address each actionable request, verify the result, then resolve its
 selection. Keep ambiguous, blocked, or unverified selections open and report
 why.
 
+## Choose the mounted target scope
+
+Read the notebook and current browser surface before creating a Lens cell.
+
+- Use `Lens()` for an ordinary marimo notebook. Notebook outputs are selectable
+  by default.
+- A host integration may supply `dom_selector` for additional rendered roots.
+  Read that host's skill or public API and reuse its selector policy. Do not
+  copy host element names into this workflow. Choose light-DOM roots and let
+  Lens follow interactions into their open shadow trees.
+- Compose task-specific page regions into the host selector when feedback can
+  target structure, copy, spacing, or styling. Avoid `*` and selectors that
+  turn every nested wrapper into a target.
+
+For an ordinary notebook, `lens_agent.add_lens_cell(ctx)` mounts the default
+Lens. A host document may require an authored Lens cell so it can pass and
+render the host-owned selector. Follow the host skill for that mount.
+
+```python
+from marimo_lens import Lens
+
+lens = Lens()
+lens
+```
+
 ## Connect and read the request
 
 Connect to Lens and take one detached context snapshot in the same
@@ -67,9 +92,21 @@ ctx = cm.get_context()
 mounted = lens_agent.connect(ctx)
 snapshot = mounted.context()
 selection = snapshot.current
-if selection is not None and selection["cellStatus"] == "available":
+available_cell = (
+    next(
+        (cell for cell in selection["cells"] if cell["status"] == "available"),
+        None,
+    )
+    if selection is not None
+    else None
+)
+if (
+    selection is not None
+    and selection["target"]["kind"] == "notebook"
+    and available_cell is not None
+):
     mounted.start_activity(
-        selection["outputCellId"],
+        available_cell["id"],
         label="Inspecting selected output",
         message="Reading the marked view and its producing cell.",
     )
@@ -82,7 +119,8 @@ print(
             "selections": [
                 {
                     "id": selection["id"],
-                    "outputCellId": selection["outputCellId"],
+                    "target": selection["target"],
+                    "cells": selection["cells"],
                 }
                 for selection in snapshot.references["selections"]
             ],
@@ -95,7 +133,7 @@ print(
 ```
 
 Use `ctx` for notebook cells, graph relationships, globals, and runtime status.
-Use `snapshot` for Lens selections, bounded context, and captured evidence.
+Use `snapshot` for Lens targets, bounded context, and captured evidence.
 
 Keep `mounted.identity` and `snapshot.revision` together. Reconnect in later
 kernel calls with `connect(cm.get_context(), identity=identity)`. Retry without
@@ -104,8 +142,9 @@ the saved identity when that Lens becomes unavailable.
 Passing `ctx` lets `connect()` reuse an existing Lens object from notebook
 globals before considering a new Lens cell. When the first `connect(ctx)` call
 without an identity reports `lens_unavailable`, use the
-[mount recipe](reference/workflow.md#mount-lens-when-unavailable). Connect again
-in a fresh kernel call after the browser renders Lens.
+[mount recipe](reference/workflow.md#mount-lens-when-unavailable) for a notebook
+or follow the host integration's mount workflow. Connect again in a fresh
+kernel call after the target document renders Lens.
 
 Keep the first read compact. Print the identity, revision, current selection,
 and selection count. Do not print `snapshot.text`, every cell body, or the full
@@ -122,7 +161,7 @@ Without an identity, ask the user to close or remove extra Lens instances.
 Report Lens as unavailable when adding or rendering the Lens cell fails.
 
 `snapshot.current` is the likely referent for "this", "here", or "the selected
-output". The explicit request takes priority over an older selection note. An
+target". The explicit request takes priority over an older selection note. An
 empty selection list describes the current attention state. Continue an
 explicit overview or walkthrough through the notebook's ordered cells and
 graph.
@@ -136,10 +175,11 @@ such as `Inspecting selected output`. Update the activity after image inspection
 when a more specific label is supported. Do this before extended context
 loading, planning, mutation, or verification.
 
-Use the selected or edited cell as the activity target. For an overview, use
-the first inspected cell whose ID is present in `ctx.graph.cells`. Start
-activity again when the primary target changes. A direct result can proceed to
-`reveal()`.
+Use the selected or edited cell as the activity target for notebook work. For a
+DOM target, use the host integration's status surface while editing its source.
+For an overview, use the first inspected cell whose ID is present in
+`ctx.graph.cells`. Start activity again when the primary target changes. A
+direct result can proceed to `reveal()`.
 
 Leave `duration_ms` unset for work spanning context, edits, execution, and
 verification, then call `stop_activity(cell_id)` when that work finishes. Pass
@@ -147,8 +187,20 @@ verification, then call `stop_activity(cell_id)` when that work finishes. Pass
 
 ## Inspect the required evidence
 
-Read the selected cell and its required graph neighbors before planning a
-mutation. `snapshot.text` contains bounded standalone context. For an aggregate
+Route work from `selection["target"]["kind"]` before planning a mutation:
+
+- `notebook`: Inspect the producing cell and its required graph neighbors.
+- `dom`: Use `documentPath` and `domSelector` to locate the authored view region.
+  Treat `cells` as related provenance. A DOM target can have no producing cell.
+
+Use the host integration's skill and source tools for authored view changes and
+browser handoff. The exact selector locates the rendered element.
+`domHint.path`, labels, and text provide a shorter readable description.
+Inspect computed styles and nearby elements fresh in the browser when the
+request needs them.
+
+Read selected cells and required graph neighbors before changing notebook
+logic. `snapshot.text` contains bounded standalone context. For an aggregate
 mark, identify the plotted measure and its entity key. When an upstream join
 can multiply entities, compare the row count with the distinct entity count and
 name the plotted unit precisely.
@@ -195,13 +247,13 @@ address_workset = [
 ]
 ```
 
-Inspect each workset item's note, output cell, cell status, and snapshot status.
+Inspect each workset item's note, target, producing cell statuses, and snapshot status.
 Open each available `selection_png` before making a visual claim about that
-selection. Several selections can point to one output cell while marking
+selection. Several selections can point to one target while marking
 different evidence, so inspect each annotated image. Keep blocked or ambiguous
 items in the workset until they can be reported as open.
 
-Request a fresh cell PNG after confirming that the output cell is available.
+Request a fresh cell PNG after confirming that a notebook cell is available.
 Follow the [cell-image recipe](reference/workflow.md#capture-a-current-cell-image)
 across kernel calls. Finish the current capture before requesting another cell.
 
@@ -220,10 +272,15 @@ claims supplied by the user or a source to that observer.
 ## Apply, verify, and present
 
 Keep activity visible through context gathering, edits, execution, and fresh
-verification. Start activity on a new result cell as soon as its returned cell
-ID is available. Verify changed cells in a fresh kernel call. Each claimed
-result must be idle and free of relevant errors. Inspect a fresh cell image for
-visual work.
+verification for notebook work. Start activity on a new result cell as soon as
+its returned cell ID is available. Verify changed cells in a fresh kernel call.
+Each claimed result must be idle and free of relevant errors. Inspect a fresh
+cell image for notebook visual work.
+
+For host view work, inspect the saved source, activate the exact view, and
+collect fresh browser evidence at desktop and narrow widths. Compare the result
+with the selection PNG. A notebook cell capture does not prove page layout,
+CSS, or authored DOM behavior.
 
 Give each activity and reveal a contextual `label`. Name the notebook object
 and action or result, such as `Joining artist records`, `Checking image

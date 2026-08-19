@@ -7,12 +7,13 @@ import type { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loa
 
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
 import { SnapshotPreviewButton } from "@/selection/components/selection-snapshot-preview";
+import { targetLabel, targetTitle } from "@/selection/target-label";
 import { moveSelectionRowFocus } from "@/ui/focus";
 
 type SelectionListProps = {
   selections: Selection[];
   currentSelectionId: string | null;
-  availableOutputCellIds: ReadonlySet<string>;
+  availableSelectionIds: ReadonlySet<string>;
   capturingSelectionIds: ReadonlySet<string>;
   busySelectionIds: ReadonlySet<string>;
   clearing: boolean;
@@ -26,7 +27,7 @@ type SelectionListProps = {
 export function SelectionList({
   selections,
   currentSelectionId,
-  availableOutputCellIds,
+  availableSelectionIds,
   capturingSelectionIds,
   busySelectionIds,
   clearing,
@@ -46,7 +47,8 @@ export function SelectionList({
         {selections.map((selection) => {
           const current = selection.id === currentSelectionId;
           const busy = busySelectionIds.has(selection.id);
-          const outputAvailable = availableOutputCellIds.has(selection.outputCellId);
+          const targetAvailable = availableSelectionIds.has(selection.id);
+          const label = targetLabel(selection.target, selection.domHint);
           return (
             <li
               key={selection.id}
@@ -64,7 +66,7 @@ export function SelectionList({
                   onActivate(selection, event.detail === 0 ? "instant" : "smooth")
                 }
                 aria-current={current ? "true" : undefined}
-                aria-label={`${current ? "Current selection" : "Activate selection"} ${selection.label}, ${selection.note || "no note added"}, cell ${selection.outputCellId}${outputAvailable ? "" : ", Output unavailable"}`}
+                aria-label={`${current ? "Current selection" : "Activate selection"} ${selection.label}, ${selection.note || "no note added"}, ${label}${targetAvailable ? "" : ", target unavailable"}`}
               >
                 <span className="ml-label">{selection.label}</span>
                 <span className="ml-selection-list__details">
@@ -74,13 +76,13 @@ export function SelectionList({
                   >
                     {selection.note || "No note added"}
                   </span>
-                  <small>
-                    Cell <span className="ml-code">{selection.outputCellId}</span>
+                  <small title={targetTitle(selection.target)}>
+                    <span className="ml-code">{label}</span>
                     <SelectionKindMark kind={selection.anchor.kind} />
-                    {!outputAvailable ? (
+                    {!targetAvailable ? (
                       <>
                         <span aria-hidden="true"> · </span>
-                        <span className="ml-selection-list__availability">Output unavailable</span>
+                        <span className="ml-selection-list__availability">Target unavailable</span>
                       </>
                     ) : null}
                   </small>

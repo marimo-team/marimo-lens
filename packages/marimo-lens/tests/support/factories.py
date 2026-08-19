@@ -48,13 +48,14 @@ def selection(
     label: str = "S1",
     note: str = "",
     output_cell_id: str = "cell-view",
+    target: dict[str, Any] | None = None,
     snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": selection_id,
         "label": label,
         "note": note,
-        "outputCellId": output_cell_id,
+        "target": target or {"kind": "notebook", "cellIds": [output_cell_id]},
         "createdAt": "2026-07-14T11:58:00Z",
         "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
         "domHint": {
@@ -100,6 +101,7 @@ def snapshot(
         available=True,
         filename="/workspace/demo.py",
         reason="",
+        available_cell_ids=frozenset(cell.id for cell in cells),
         cells=tuple(cells),
         controls=(),
     )

@@ -16,6 +16,7 @@ from pydantic import (
     StringConstraints,
     TypeAdapter,
     ValidationError,
+    field_validator,
     model_validator,
 )
 from pydantic.alias_generators import to_camel
@@ -25,7 +26,7 @@ from typing_extensions import Self
 COMMAND_PROTOCOL = "marimo-lens.command"
 RESPONSE_PROTOCOL = "marimo-lens.response"
 EVENT_PROTOCOL = "marimo-lens.event"
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
 MAX_SELECTIONS = 64
 MAX_HISTORY = 64
@@ -34,6 +35,7 @@ MAX_CELL_ID = 128
 MAX_NOTE = 4_000
 MAX_DOM_TEXT = 240
 MAX_DOM_FIELD = 240
+MAX_DOM_SELECTOR = 1_024
 MAX_ERROR = 500
 MAX_ATTENTION_MESSAGE = 240
 MAX_REVEAL_MESSAGE = 1_000
@@ -130,6 +132,11 @@ DomFieldText: TypeAlias = Annotated[
 DomContentText: TypeAlias = Annotated[
     UnicodeText,
     AfterValidator(partial(_bounded_utf16, maximum=MAX_DOM_TEXT)),
+]
+DomSelectorText: TypeAlias = Annotated[
+    UnicodeText,
+    AfterValidator(_nonblank),
+    AfterValidator(partial(_bounded_utf16, maximum=MAX_DOM_SELECTOR)),
 ]
 ErrorText: TypeAlias = Annotated[
     UnicodeText,
@@ -246,11 +253,11 @@ class RectAnchor(TransportModel):
     height: PositiveNormalizedNumber
 
     @model_validator(mode="after")
-    def inside_output(self) -> Self:
+    def inside_target(self) -> Self:
         if self.x + self.width > 1 or self.y + self.height > 1:
             raise PydanticCustomError(
                 "invalid_selection",
-                "Selection rectangle must stay inside its output",
+                "Selection rectangle must stay inside its target",
             )
         return self
 
@@ -268,11 +275,11 @@ class DomBounds(TransportModel):
     height: NormalizedNumber
 
     @model_validator(mode="after")
-    def inside_output(self) -> Self:
+    def inside_target(self) -> Self:
         if self.x + self.width > 1 or self.y + self.height > 1:
             raise PydanticCustomError(
                 "invalid_selection",
-                "DOM hint bounds must stay inside their output",
+                "DOM hint bounds must stay inside their target",
             )
         return self
 
@@ -285,6 +292,45 @@ class DomHint(TransportModel):
     text: DomContentText | None = None
     path: DomFieldText | None = None
     bounds: DomBounds | None = None
+
+
+class SelectionTargetBase(TransportModel):
+    cell_ids: Annotated[list[CellId], Field(max_length=64)]
+
+    @field_validator("cell_ids")
+    @classmethod
+    def canonical_cell_ids(cls, cell_ids: list[CellId]) -> list[CellId]:
+        if len(set(cell_ids)) != len(cell_ids):
+            raise PydanticCustomError(
+                "invalid_target",
+                "Target cell ids must be unique",
+            )
+        return sorted(cell_ids)
+
+
+class NotebookSelectionTarget(SelectionTargetBase):
+    kind: Literal["notebook"]
+
+    @model_validator(mode="after")
+    def one_cell(self) -> Self:
+        if len(self.cell_ids) != 1:
+            raise PydanticCustomError(
+                "invalid_target",
+                "Notebook targets require one cell id",
+            )
+        return self
+
+
+class DomSelectionTarget(SelectionTargetBase):
+    kind: Literal["dom"]
+    document_path: DomSelectorText
+    dom_selector: DomSelectorText
+
+
+SelectionTarget: TypeAlias = Annotated[
+    NotebookSelectionTarget | DomSelectionTarget,
+    Field(discriminator="kind"),
+]
 
 
 class PendingSnapshot(TransportModel):
@@ -325,7 +371,7 @@ class SelectionInput(TransportModel):
     id: Identifier
     label: SelectionLabel
     note: NoteText
-    output_cell_id: CellId
+    target: SelectionTarget
     created_at: TimestampText
     anchor: SelectionAnchor
     dom_hint: DomHint | None = None
@@ -356,7 +402,7 @@ class AddressedSelection(TransportModel):
     selection_id: Identifier
     label: SelectionLabel
     note: NoteText
-    output_cell_id: CellId
+    target: SelectionTarget
     created_at: TimestampText
     addressed_at: TimestampText
     anchor: SelectionAnchor
@@ -657,6 +703,7 @@ ADDRESSED_SELECTION_ADAPTER = TypeAdapter(AddressedSelection)
 SELECTION_ID_ADAPTER = TypeAdapter(Identifier)
 REQUEST_ID_ADAPTER = TypeAdapter(RequestId)
 CELL_ID_ADAPTER = TypeAdapter(CellId)
+DOM_SELECTOR_ADAPTER = TypeAdapter(DomSelectorText)
 REVISION_ADAPTER = TypeAdapter(Revision)
 POSITIVE_SAFE_INTEGER_ADAPTER = TypeAdapter(PositiveSafeInteger)
 NONNEGATIVE_SAFE_INTEGER_ADAPTER = TypeAdapter(NonNegativeSafeInteger)

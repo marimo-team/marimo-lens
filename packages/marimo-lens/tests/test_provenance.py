@@ -43,7 +43,7 @@ def test_provenance_keeps_topological_order_and_dag_roles() -> None:
         "cell-view",
     ]
     roles = {item.cell.id: item.roles for item in provenance.cells}
-    assert roles["cell-view"] == ("selected-output",)
+    assert roles["cell-view"] == ("producer",)
     assert roles["cell-data-a"] == ("upstream",)
     assert roles["cell-source"] == ("upstream",)
     assert provenance.referenced_names == frozenset({"data", "source"})

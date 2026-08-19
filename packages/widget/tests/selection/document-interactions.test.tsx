@@ -38,7 +38,7 @@ describe("document selection interactions", () => {
     });
 
     expect(beginSelection).toHaveBeenCalledWith(
-      "cell-1",
+      { kind: "notebook", cellIds: ["cell-1"] },
       expect.any(HTMLElement),
       { kind: "point", x: 0.5, y: 0.5 },
       expect.any(Element),
@@ -75,20 +75,20 @@ describe("document selection interactions", () => {
 
     pressSelectKey("ArrowDown");
     expect(first.scrollIntoView).toHaveBeenCalledOnce();
-    expect(announcement()).toBe("Output 1 of 3, Regional revenue.");
+    expect(announcement()).toBe("Target 1 of 3, Regional revenue.");
     expect(document.activeElement).toBe(select);
 
     pressSelectKey("ArrowDown");
     expect(second.scrollIntoView).toHaveBeenCalledOnce();
-    expect(announcement()).toBe("Output 2 of 3, Region.");
+    expect(announcement()).toBe("Target 2 of 3, Region.");
 
     pressSelectKey("ArrowUp");
     expect(first.scrollIntoView).toHaveBeenCalledTimes(2);
-    expect(announcement()).toBe("Output 1 of 3, Regional revenue.");
+    expect(announcement()).toBe("Target 1 of 3, Regional revenue.");
 
     pressSelectKey("ArrowUp");
     expect(third.scrollIntoView).toHaveBeenCalledOnce();
-    expect(announcement()).toBe("Output 3 of 3, All revenue.");
+    expect(announcement()).toBe("Target 3 of 3, All revenue.");
   });
 
   test("disarms Select on Tab and leaves native focus movement available", () => {
@@ -125,7 +125,7 @@ describe("document selection interactions", () => {
     void act(() => target.dispatchEvent(pointer("pointerup", 20, 30, 7)));
 
     expect(beginSelection).toHaveBeenCalledWith(
-      "cell-1",
+      { kind: "notebook", cellIds: ["cell-1"] },
       output,
       { kind: "point", x: 0.3, y: 0.4 },
       frame,
@@ -146,7 +146,7 @@ describe("document selection interactions", () => {
     void act(() => output.dispatchEvent(pointer("pointerup", 150, 80, 9)));
 
     expect(beginSelection).toHaveBeenCalledWith(
-      "cell-1",
+      { kind: "notebook", cellIds: ["cell-1"] },
       output,
       { kind: "point", x: 0.375, y: 0.4 },
       frame,
@@ -202,7 +202,7 @@ describe("document selection interactions", () => {
     void act(() => output.dispatchEvent(pointer("pointerup", 292, 180, 13)));
 
     expect(beginSelection).toHaveBeenCalledWith(
-      "cell-1",
+      { kind: "notebook", cellIds: ["cell-1"] },
       output,
       expect.objectContaining({ kind: "rect" }),
       selectedMark,
@@ -252,6 +252,7 @@ function Harness({ beginSelection }: { beginSelection: BeginSelection }) {
     uiRef,
     dispatch,
     dom,
+    selector: null,
     beginSelection,
     canceledPointerIds,
     cancelAdjustment,

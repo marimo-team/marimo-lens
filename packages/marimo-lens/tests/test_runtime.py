@@ -258,7 +258,32 @@ def test_targeted_runtime_materializes_at_most_sixty_four_cells(
         f"cell-{index}" for index in range(935, 919, -1)
     )
     assert runtime.cell_truncated_output_ids == frozenset({"cell-999"})
+    assert runtime.available_cell_ids == frozenset({"cell-999"})
     assert provenance.omitted_cell_count == 936
+
+
+def test_targeted_runtime_preserves_membership_for_omitted_producers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cell_ids = tuple(f"cell-{index}" for index in range(65))
+    context = SimpleNamespace(
+        graph=SimpleNamespace(
+            cells={cell_id: _ReadCountingCell("value = 1") for cell_id in cell_ids},
+            definitions={},
+            parents={cell_id: set() for cell_id in cell_ids},
+        ),
+        globals={},
+        filename="demo.py",
+        cell_id="cell-lens",
+    )
+    _install_context(monkeypatch, context)
+
+    runtime = collect_runtime_snapshot(cell_ids)
+
+    assert len(runtime.cells) == 64
+    assert runtime.available_cell_ids == frozenset(cell_ids)
+    assert runtime.omitted_cell_ids == ("cell-64",)
+    assert runtime.cell_truncated_output_ids == frozenset({"cell-64"})
 
 
 def test_targeted_runtime_reads_only_sixteen_of_many_relevant_controls(

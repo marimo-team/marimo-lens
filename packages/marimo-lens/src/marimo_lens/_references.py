@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import copy
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, cast
 
@@ -13,7 +13,7 @@ from ._runtime import RuntimeSnapshot
 if TYPE_CHECKING:
     from .context import LensReferences
 
-MAX_CONTEXT_REFERENCES_BYTES = 45_000
+MAX_CONTEXT_REFERENCES_BYTES = 60_000
 
 _MAX_NOTEBOOK_PATH = 2_048
 _MAX_RUNTIME_REASON = 500
@@ -37,7 +37,8 @@ def _minimal_reference_size(selections: Sequence[Mapping[str, Any]]) -> int:
     projected = [
         _project_selection(
             selection,
-            cell_status="unavailable",
+            live_cell_ids=set(),
+            runtime_available=False,
             include_previous_resolution=True,
         )
         for selection in selections
@@ -73,19 +74,12 @@ def build_references(
     revision: int,
     current_selection_id: str | None,
 ) -> LensReferences:
-    live_cell_ids = {cell.id for cell in snapshot.cells}
+    live_cell_ids = snapshot.available_cell_ids
     selection_references = [
         _project_selection(
             selection,
-            cell_status=(
-                "unavailable"
-                if not snapshot.available
-                else (
-                    "available"
-                    if selection["outputCellId"] in live_cell_ids
-                    else "missing"
-                )
-            ),
+            live_cell_ids=live_cell_ids,
+            runtime_available=snapshot.available,
             include_previous_resolution=selection["id"] == current_selection_id,
         )
         for selection in selections
@@ -197,7 +191,8 @@ def _fit_reference_text(
 def _project_selection(
     selection: Mapping[str, Any],
     *,
-    cell_status: str,
+    live_cell_ids: Collection[str],
+    runtime_available: bool,
     include_previous_resolution: bool,
 ) -> dict[str, Any]:
     snapshot = selection.get("snapshot")
@@ -213,8 +208,20 @@ def _project_selection(
         "id": str(selection["id"]),
         "label": str(selection["label"]),
         "note": str(selection["note"]),
-        "outputCellId": str(selection["outputCellId"]),
-        "cellStatus": cell_status,
+        "target": copy.deepcopy(selection["target"]),
+        "cells": [
+            {
+                "id": cell_id,
+                "status": (
+                    "unavailable"
+                    if not runtime_available
+                    else "available"
+                    if cell_id in live_cell_ids
+                    else "missing"
+                ),
+            }
+            for cell_id in _target_cell_ids(selection)
+        ],
         "anchor": copy.deepcopy(selection["anchor"]),
         "snapshot": {"status": snapshot_status},
     }
@@ -225,6 +232,18 @@ def _project_selection(
     if include_previous_resolution and isinstance(previous_resolution, Mapping):
         item["previousResolution"] = copy.deepcopy(dict(previous_resolution))
     return item
+
+
+def _target_cell_ids(selection: Mapping[str, Any]) -> tuple[str, ...]:
+    target = selection.get("target")
+    if not isinstance(target, Mapping):
+        return ()
+    cell_ids = target.get("cellIds")
+    if not isinstance(cell_ids, Sequence) or isinstance(
+        cell_ids, (str, bytes, bytearray)
+    ):
+        return ()
+    return tuple(str(cell_id) for cell_id in cell_ids)
 
 
 def _safe_text(value: str, maximum: int) -> str:

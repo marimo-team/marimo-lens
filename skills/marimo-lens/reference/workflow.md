@@ -26,7 +26,9 @@ async with cm.get_context() as ctx:
 ```
 
 End that kernel call. The code-mode context creates and runs the cell when it
-exits, and the browser then renders Lens. Connect in a fresh call.
+exits, and the browser then renders Lens. Connect in a fresh call. Host
+documents use the authored mount and selector policy described by their own
+integration skill.
 
 ## Reconnect to Lens
 
@@ -133,14 +135,14 @@ the next call.
 
 ## Operation recovery
 
-| Error code | Next action |
-| --- | --- |
-| `lens_unavailable` | Retry without identity, then mount Lens when none is available. |
-| `lens_ambiguous` | Reconnect with an identity, or close or remove extra Lens instances. |
-| `revision_conflict` | Reconnect and read a fresh Lens context. |
-| `selection_not_found` | Reconnect and inspect the current selections. |
-| `capture_busy` | Finish the pending cell capture before requesting another. |
-| `runtime_unavailable` | Keep the request open and report that verification is unavailable. |
+| Error code            | Next action                                                          |
+| --------------------- | -------------------------------------------------------------------- |
+| `lens_unavailable`    | Retry without identity, then mount Lens when none is available.      |
+| `lens_ambiguous`      | Reconnect with an identity, or close or remove extra Lens instances. |
+| `revision_conflict`   | Reconnect and read a fresh Lens context.                             |
+| `selection_not_found` | Reconnect and inspect the current selections.                        |
+| `capture_busy`        | Finish the pending cell capture before requesting another.           |
+| `runtime_unavailable` | Keep the request open and report that verification is unavailable.   |
 
 Keep selections open when recovery cannot restore current evidence and fresh
 verification.

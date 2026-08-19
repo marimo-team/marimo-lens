@@ -1,5 +1,11 @@
 import type { CaptureResult } from "@marimo-lens/image-capture";
-import type { ImageAction, LensState, Selection, SelectionAnchor } from "@marimo-lens/protocol";
+import type {
+  ImageAction,
+  LensState,
+  Selection,
+  SelectionAnchor,
+  TargetSelector,
+} from "@marimo-lens/protocol";
 
 import { captureSelectionSnapshot } from "@marimo-lens/image-capture";
 import { isAbortCause, parseErrorCause } from "@marimo-lens/protocol";
@@ -26,6 +32,7 @@ export type SelectionCaptureJob = {
 export class SelectionCapture {
   readonly #stateRef: { current: LensState };
   readonly #dom: NotebookDomAdapter;
+  readonly #selector: TargetSelector;
   readonly #protocol: LensProtocolClient;
   readonly #currentSignal: () => AbortSignal;
   readonly #enqueueMutation: EnqueueMutation;
@@ -37,6 +44,7 @@ export class SelectionCapture {
   constructor(options: {
     stateRef: { current: LensState };
     dom: NotebookDomAdapter;
+    selector: TargetSelector;
     protocol: LensProtocolClient;
     currentSignal: () => AbortSignal;
     enqueueMutation: EnqueueMutation;
@@ -46,6 +54,7 @@ export class SelectionCapture {
   }) {
     this.#stateRef = options.stateRef;
     this.#dom = options.dom;
+    this.#selector = options.selector;
     this.#protocol = options.protocol;
     this.#currentSignal = options.currentSignal;
     this.#enqueueMutation = options.enqueueMutation;
@@ -87,7 +96,7 @@ export class SelectionCapture {
   }
 
   settleUnavailable(selectionId: string): void {
-    this.#settleFailed(selectionId, "The output changed before snapshot capture completed.");
+    this.#settleFailed(selectionId, "The target changed before snapshot capture completed.");
   }
 
   #settleFailed(selectionId: string, error: string): void {
@@ -177,12 +186,12 @@ export class SelectionCapture {
           const current = state.selections.find((candidate) => candidate.id === selection.id);
           if (
             !current ||
-            current.outputCellId !== selection.outputCellId ||
+            !sameTarget(current, selection) ||
             !sameAnchor(current.anchor, selection.anchor)
           ) {
             return localResponse(state.revision);
           }
-          const currentResult = this.#isCanonicalOutput(selection.outputCellId, output)
+          const currentResult = this.#isCanonicalTarget(selection, output)
             ? result
             : this.#failedCapture();
           committedStatus = currentResult.status;
@@ -207,7 +216,7 @@ export class SelectionCapture {
           const current = latest.selections.find((candidate) => candidate.id === selection.id);
           return (
             !current ||
-            current.outputCellId !== selection.outputCellId ||
+            !sameTarget(current, selection) ||
             !sameAnchor(current.anchor, selection.anchor) ||
             (committedStatus === "failed" && current.snapshot.status === "outdated") ||
             (committedSnapshot !== null && sameSnapshot(current.snapshot, committedSnapshot))
@@ -235,8 +244,11 @@ export class SelectionCapture {
     });
   }
 
-  #isCanonicalOutput(outputCellId: string, output: HTMLElement): boolean {
-    return output.isConnected && this.#dom.getOutputCell(outputCellId)?.element === output;
+  #isCanonicalTarget(selection: Selection, output: HTMLElement): boolean {
+    return (
+      output.isConnected &&
+      this.#dom.getTarget(selection.target, this.#selector)?.element === output
+    );
   }
 
   #failedCapture(): CaptureResult {
@@ -244,7 +256,7 @@ export class SelectionCapture {
   }
 
   #failedSnapshot(
-    error = "The output changed before snapshot capture completed.",
+    error = "The target changed before snapshot capture completed.",
   ): Extract<Selection["snapshot"], { status: "failed" }> {
     return {
       status: "failed",
@@ -260,6 +272,10 @@ function localResponse(revision: number): RevisionedResult {
 
 function sameAnchor(left: SelectionAnchor, right: SelectionAnchor): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function sameTarget(left: Selection, right: Selection): boolean {
+  return JSON.stringify(left.target) === JSON.stringify(right.target);
 }
 
 function sameSnapshot(left: Selection["snapshot"], right: Selection["snapshot"]): boolean {

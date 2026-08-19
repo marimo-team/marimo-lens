@@ -23,8 +23,8 @@ from ._protocol_models import (
 )
 from ._references import validate_reference_capacity
 
-_IMMUTABLE_SELECTION_FIELDS = ("label", "outputCellId", "createdAt")
-MAX_SELECTION_STATE_BYTES = 40_000
+_IMMUTABLE_SELECTION_FIELDS = ("label", "target", "createdAt")
+MAX_SELECTION_STATE_BYTES = 48_000
 MAX_HISTORY_STATE_BYTES = 64_000
 
 
@@ -289,7 +289,7 @@ def plan_selection_put(
         )
     if existing is not None:
         for field in _IMMUTABLE_SELECTION_FIELDS:
-            if selection[field] != existing.selection[field]:
+            if selection[field] != _thaw(existing.selection[field]):
                 raise ProtocolError(
                     "selection_identity_changed",
                     f"Selection {field} cannot change after creation.",
@@ -620,7 +620,7 @@ def reopen_selection(
         "id": receipt["selectionId"],
         "label": receipt["label"],
         "note": receipt["note"],
-        "outputCellId": receipt["outputCellId"],
+        "target": _thaw(receipt["target"]),
         "createdAt": receipt["createdAt"],
         "anchor": _thaw(receipt["anchor"]),
         "snapshot": {"status": "pending"},
@@ -819,7 +819,7 @@ def _addressed_selection(
         "selectionId": record.id,
         "label": record.selection["label"],
         "note": record.selection["note"],
-        "outputCellId": record.selection["outputCellId"],
+        "target": _thaw(record.selection["target"]),
         "createdAt": record.selection["createdAt"],
         "addressedAt": addressed_at,
         "anchor": _thaw(record.selection["anchor"]),

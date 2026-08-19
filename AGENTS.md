@@ -1,8 +1,8 @@
 # AGENTS.md
 
 Guidance for coding agents working in this uv, pnpm, and Vite+ monorepo.
-`marimo-lens` records point and region attention on rendered marimo outputs and
-exposes bounded, cell-backed context to agents.
+`marimo-lens` records point and region attention on notebook outputs or
+configured DOM roots and exposes bounded target and producer context to agents.
 
 ## Build, test, and lint commands
 
@@ -84,9 +84,10 @@ Unqualified Python filenames in this table live in
 
 ## Key invariants
 
-- A rendered output cell is the semantic unit. A point or region narrows
-  attention inside it. Lens uses one renderer-neutral path and no
-  renderer-specific inspectors.
+- A configured target is the semantic unit. Notebook targets resolve one output
+  cell. DOM targets keep a document-scoped selector and producer IDs inferred
+  from generic runtime metadata. A point or region narrows attention inside the
+  target.
 - Human selections are durable. Activity and reveal are transient. Resolve
   moves one or more completed selections into bounded metadata-only History,
   and reopen restores the original attention with fresh marked PNG capture.
@@ -95,7 +96,7 @@ Unqualified Python filenames in this table live in
 - PNG bytes stay outside trait state, JSON references, local storage, and text
   prompts. Full-cell capture is a one-use agent transfer.
 - Selection mutations are revision checked. Python and TypeScript transport
-  schemas remain aligned at protocol version 2.
+  schemas remain aligned at protocol version 3.
 
 ## Validation
 

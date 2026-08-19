@@ -61,6 +61,21 @@ Keep the cell mounted. Press **Select**, then click a point or drag a region
 inside a rendered output. Add a note with what you want the agent to inspect or
 change.
 
+### Select additional page regions
+
+Pass one CSS selector for page regions that should also receive feedback:
+
+```python
+lens = Lens(
+    dom_selector="#app-shell :is(header, section, article)",
+)
+```
+
+Notebook outputs remain selectable. Each additional selection keeps the
+document path, an exact DOM locator, producer IDs inferred from generic runtime
+metadata, and the marked PNG. Host integrations own the selector they pass to
+Lens.
+
 ## Connect an agent
 
 The `marimo-lens` package carries the Agent Skill that matches its Python API.
@@ -95,9 +110,10 @@ start with existing code-mode access or enter code mode through Pair.
 
 ## Python API
 
-The package exports `Lens`, `LensContext`, `LensError`, `LensReferences`,
-`NotebookReference`, `SelectionReference`, and `__version__`. The version string
-comes from the installed `marimo-lens` distribution metadata.
+The package exports `CellReference`, `Lens`, `LensContext`, `LensError`,
+`LensReferences`, `NotebookReference`, `SelectionReference`,
+`SelectionTargetReference`, and `__version__`. The version string comes from the
+installed `marimo-lens` distribution metadata.
 
 Agent integrations use five methods:
 

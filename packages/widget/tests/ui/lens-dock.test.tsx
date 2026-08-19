@@ -26,12 +26,12 @@ describe("Lens dock", () => {
   test("starts with an explicit Select action and a latched collapse control", () => {
     renderDock({ selections: [] });
 
-    expect(findButton("Select an output")?.textContent).toBe("Select");
+    expect(findButton("Select a target")?.textContent).toBe("Select");
 
     act(() => findButton("Collapse Lens")?.click());
     expect(findButton("Open Lens")).not.toBeNull();
     act(() => findButton("Open Lens")?.click());
-    expect(findButton("Select an output")).not.toBeNull();
+    expect(findButton("Select a target")).not.toBeNull();
   });
 
   test("announces the selection count from the collapsed dock", () => {
@@ -50,7 +50,7 @@ describe("Lens dock", () => {
     act(() => findButton("Collapse Lens")?.click());
     act(() => findButton("Open Lens")?.click());
 
-    expect(findButton("Select an output")?.getAttribute("aria-pressed")).toBe("false");
+    expect(findButton("Select a target")?.getAttribute("aria-pressed")).toBe("false");
   });
 
   test("moves focus between the expanded and collapsed entry points", () => {
@@ -70,7 +70,7 @@ describe("Lens dock", () => {
     act(() => open.click());
     act(() => frame?.(0));
 
-    expect(document.activeElement).toBe(findButton("Select an output"));
+    expect(document.activeElement).toBe(findButton("Select a target"));
   });
 
   test("keeps Option or Alt+L as a one-way entry into selection mode", () => {
@@ -122,6 +122,7 @@ describe("Lens dock", () => {
     });
     const output = document.createElement("div");
     output.id = "output-cell-1";
+    output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 240);
     const iframe = document.createElement("iframe");
     output.appendChild(iframe);
     document.body.appendChild(output);
@@ -273,7 +274,7 @@ describe("Lens dock", () => {
       Array.from(document.querySelectorAll<HTMLButtonElement>(".ml-dockbar button")).map((button) =>
         button.getAttribute("aria-label"),
       ),
-    ).toEqual(["Select an output", "Open selections, 1 open, 0 in history", "Collapse Lens"]);
+    ).toEqual(["Select a target", "Open selections, 1 open, 0 in history", "Collapse Lens"]);
   });
 
   test("keeps bulk clearing in the selection sheet", () => {
@@ -310,9 +311,9 @@ describe("Lens dock", () => {
     )!;
 
     expect(notedRow.textContent).toContain(noted.note);
-    expect(notedRow.textContent).toContain(`Cell ${noted.outputCellId}`);
+    expect(notedRow.textContent).toContain(`Cell ${noted.target.cellIds[0]}`);
     expect(unnotedRow.textContent).toContain("No note added");
-    expect(unnotedRow.textContent).toContain(`Cell ${unnoted.outputCellId}`);
+    expect(unnotedRow.textContent).toContain(`Cell ${unnoted.target.cellIds[0]}`);
   });
 
   test("keeps history accessible when no selections remain", () => {
@@ -334,7 +335,7 @@ describe("Lens dock", () => {
     expect(findButton("Open selections, 0 open, 1 in history")?.textContent).toContain("0");
     expect(document.querySelector<HTMLButtonElement>("#marimo-lens-open-tab")?.disabled).toBe(true);
     expect(document.querySelector(".ml-history-list__target")?.textContent).toContain(
-      `Cell ${receipt.outputCellId}`,
+      `Cell ${receipt.target.cellIds[0]}`,
     );
     const disclosure = document.querySelector<HTMLDetailsElement>(".ml-history-list__disclosure")!;
     const trigger = document.querySelector<HTMLElement>(".ml-history-list__row")!;
@@ -475,7 +476,7 @@ describe("Lens dock", () => {
     expect(document.activeElement).toBe(history);
   });
 
-  test("keeps a detached selection actionable and labels its unavailable output", () => {
+  test("keeps a detached selection actionable and labels its unavailable target", () => {
     const selection = selectionFixture();
     const onActivateSelection = vi.fn();
     const onEditNote = vi.fn();
@@ -483,15 +484,15 @@ describe("Lens dock", () => {
     renderDock({
       selections: [selection],
       currentSelectionId: selection.id,
-      availableOutputCellIds: new Set(),
+      availableSelectionIds: new Set(),
       listOpen: true,
       onActivateSelection,
       onEditNote,
       onDeleteSelection,
     });
 
-    const summary = document.querySelector<HTMLButtonElement>('[aria-label*="Output unavailable"]');
-    expect(summary?.textContent).toContain("Output unavailable");
+    const summary = document.querySelector<HTMLButtonElement>('[aria-label*="target unavailable"]');
+    expect(summary?.textContent).toContain("Target unavailable");
     expect(summary?.getAttribute("aria-current")).toBe("true");
     expect(findButton("View image for S1.")?.disabled).toBe(false);
     expect(findButton("Edit note for S1")?.disabled).toBe(false);
@@ -595,7 +596,8 @@ function defaultProps(): React.ComponentProps<typeof LensDock> {
     selections: [],
     history: [],
     currentSelectionId: null,
-    availableOutputCellIds: new Set(),
+    availableSelectionIds: new Set(),
+    selector: null,
     armed: false,
     listOpen: false,
     sheetTab: "open",
@@ -624,7 +626,7 @@ function defaultProps(): React.ComponentProps<typeof LensDock> {
 function resolutionEvent(): SelectionResolvedEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 2,
+    version: 3,
     type: "selection.resolved",
     revision: 2,
     payload: {

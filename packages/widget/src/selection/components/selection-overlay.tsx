@@ -1,4 +1,4 @@
-import type { RectAnchor, Selection, SelectionAnchor } from "@marimo-lens/protocol";
+import type { RectAnchor, Selection, SelectionAnchor, TargetSelector } from "@marimo-lens/protocol";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
@@ -20,7 +20,8 @@ import { previewAnchor } from "@/selection/state";
 type SelectionOverlayProps = {
   selections: Selection[];
   currentSelectionId: string | null;
-  availableOutputCellIds: ReadonlySet<string>;
+  availableSelectionIds: ReadonlySet<string>;
+  selector: TargetSelector;
   workflow: WorkflowState;
   busySelectionIds: ReadonlySet<string>;
   capturingSelectionIds: ReadonlySet<string>;
@@ -36,7 +37,8 @@ export type AdjustmentCancel = () => void;
 export function SelectionOverlay({
   selections,
   currentSelectionId,
-  availableOutputCellIds,
+  availableSelectionIds,
+  selector,
   workflow,
   busySelectionIds,
   capturingSelectionIds,
@@ -48,14 +50,17 @@ export function SelectionOverlay({
 }: SelectionOverlayProps) {
   const dom = useNotebookDom();
   const interactionActive = workflow.mode === "armed" || workflow.mode === "dragging";
-  const viewportRevision = useViewportRevision(selections.length > 0 || interactionActive);
-  const activeCellId =
+  const viewportRevision = useViewportRevision(
+    selections.length > 0 || interactionActive,
+    selector,
+  );
+  const activeTarget =
     workflow.mode === "armed"
-      ? workflow.activeOutputCellId
+      ? (dom.listTargets(selector).find(({ key }) => key === workflow.activeTargetKey) ?? null)
       : workflow.mode === "dragging"
-        ? workflow.output.id
+        ? workflow.target
         : null;
-  const activeOutput = activeCellId ? dom.getOutputCell(activeCellId)?.element : null;
+  const activeOutput = activeTarget?.element ?? null;
   const activeBounds = activeOutput?.getBoundingClientRect();
   const draftAnchor = previewAnchor(workflow);
 
@@ -74,11 +79,11 @@ export function SelectionOverlay({
         />
       ) : null}
       {workflow.mode === "dragging" && draftAnchor ? (
-        <AnchorPreview output={workflow.output.element} anchor={draftAnchor} />
+        <AnchorPreview output={workflow.target.element} anchor={draftAnchor} />
       ) : null}
       {selections.map((selection) => {
-        if (!availableOutputCellIds.has(selection.outputCellId)) return null;
-        const output = dom.getOutputCell(selection.outputCellId)?.element;
+        if (!availableSelectionIds.has(selection.id)) return null;
+        const output = dom.getTarget(selection.target, selector)?.element;
         if (!output) return null;
         return (
           <SelectionMarker

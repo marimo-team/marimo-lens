@@ -9,6 +9,7 @@ import type {
   SelectionResolvedEvent,
   StoredSnapshot,
   TransportInput,
+  WIDGET_TRANSPORT_VERSION,
 } from "@marimo-lens/protocol";
 
 import { parseTransportEnvelope } from "@marimo-lens/protocol";
@@ -28,7 +29,7 @@ export type SnapshotAsset = {
 
 type OutputCaptureReadinessEvent = {
   protocol: "marimo-lens.event";
-  version: 2;
+  version: typeof WIDGET_TRANSPORT_VERSION;
   type: "output.capture.ready" | "output.capture.unready";
   payload: Readonly<Record<string, never>>;
 };

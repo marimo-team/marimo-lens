@@ -6,7 +6,7 @@ import threading
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from types import MappingProxyType
-from typing import Literal, TypedDict, cast
+from typing import Literal, TypeAlias, TypedDict, cast
 
 from pydantic import ValidationError
 from typing_extensions import NotRequired, Self
@@ -22,14 +22,36 @@ class NotebookReference(TypedDict):
     reason: NotRequired[str]
 
 
+class CellReference(TypedDict):
+    """One producing notebook cell linked to a Lens target."""
+
+    id: str
+    status: Literal["available", "missing", "unavailable"]
+
+
+class _NotebookTargetReference(TypedDict):
+    kind: Literal["notebook"]
+    cellIds: list[str]
+
+
+class _DomTargetReference(TypedDict):
+    kind: Literal["dom"]
+    cellIds: list[str]
+    documentPath: str
+    domSelector: str
+
+
+SelectionTargetReference: TypeAlias = _NotebookTargetReference | _DomTargetReference
+
+
 class SelectionReference(TypedDict):
     """One JSON-safe reference to an open Lens selection."""
 
     id: str
     label: str
     note: str
-    outputCellId: str
-    cellStatus: Literal["available", "missing", "unavailable"]
+    target: SelectionTargetReference
+    cells: list[CellReference]
     anchor: Mapping[str, object]
     snapshot: Mapping[str, object]
     domHint: NotRequired[Mapping[str, object]]
@@ -49,8 +71,8 @@ class LensReferences(TypedDict):
 class LensContext:
     """Detached live references, standalone text, and optional images.
 
-    ``references`` contains compact cell-backed selections for a live notebook
-    consumer. ``text`` contains bounded source and runtime context for a
+    ``references`` contains compact notebook or DOM targets and their
+    producing cells. ``text`` contains bounded source and runtime context for a
     text-only handoff. ``images`` maps selection IDs to captured PNG bytes.
     """
 
@@ -92,7 +114,7 @@ class LensContext:
 
     @property
     def references(self) -> LensReferences:
-        """Return compact cell-backed selection references."""
+        """Return compact target and producing-cell references."""
 
         return self._references
 
@@ -160,8 +182,10 @@ class LensContext:
 
 
 __all__ = [
+    "CellReference",
     "LensContext",
     "LensReferences",
     "NotebookReference",
     "SelectionReference",
+    "SelectionTargetReference",
 ]

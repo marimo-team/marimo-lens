@@ -159,7 +159,7 @@ def _set_mounted(lens: Lens, *, mounted: bool = True) -> None:
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.event",
-            "version": 2,
+            "version": 3,
             "type": f"output.capture.{'ready' if mounted else 'unready'}",
             "payload": {},
         },
@@ -205,8 +205,8 @@ def _lens_context(
                     "id": "selection-1",
                     "label": "S1",
                     "note": note,
-                    "outputCellId": "cell-view",
-                    "cellStatus": "available",
+                    "target": {"kind": "notebook", "cellIds": ["cell-view"]},
+                    "cells": [{"id": "cell-view", "status": "available"}],
                     "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
                     "domHint": {"tag": "svg", "text": "Quarterly revenue"},
                     "snapshot": {"status": "available"},

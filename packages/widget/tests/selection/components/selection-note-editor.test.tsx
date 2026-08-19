@@ -67,7 +67,7 @@ describe("selection note editor", () => {
 
     const editor = document.querySelector<HTMLDialogElement>("[data-marimo-lens-note-editor]")!;
     const textarea = editor.querySelector<HTMLTextAreaElement>("textarea")!;
-    expect(editor.getAttribute("aria-label")).toBe("Edit note for S1, cell cell-1");
+    expect(editor.getAttribute("aria-label")).toBe("Edit note for S1, Cell cell-1");
     expect(textarea.value).toBe(selection.note);
     expect(document.activeElement).toBe(textarea);
     expect(textarea.selectionStart).toBe(selection.note.length);
@@ -202,6 +202,7 @@ function editor(
   return (
     <SelectionNoteEditor
       selection={selection}
+      selector={null}
       initialNote={selection.note}
       saving={false}
       mutationPending={false}

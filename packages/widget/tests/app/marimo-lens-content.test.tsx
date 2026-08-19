@@ -89,6 +89,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: ".marimo_lens { color: rgb(8, 128, 234); }",
+      selector: null,
       protocol,
     };
     const container = document.createElement("div");
@@ -127,6 +128,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     const output = document.createElement("div");
@@ -193,6 +195,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     const container = document.createElement("div");
@@ -242,6 +245,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     const container = document.createElement("div");
@@ -281,6 +285,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     const output = document.createElement("div");
@@ -327,6 +332,7 @@ describe("marimo-lens content", () => {
         history: [],
       },
       css: "",
+      selector: null,
       protocol: protocolClient(),
     };
     currentActionsFor = (dispatch) => ({
@@ -363,7 +369,7 @@ describe("marimo-lens content", () => {
     expect(activateSelection).toHaveBeenCalledWith(selection.id);
     expect(row?.getAttribute("aria-current")).toBe("true");
     expect(document.querySelector("[data-marimo-lens-status]")?.textContent).toBe(
-      "Output unavailable.",
+      "Target unavailable.",
     );
   });
 
@@ -390,6 +396,7 @@ describe("marimo-lens content", () => {
         history: [],
       },
       css: "",
+      selector: null,
       protocol,
     };
     const cell = document.createElement("section");
@@ -407,7 +414,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.reveal",
         revision: 7,
         payload: {
@@ -449,14 +456,13 @@ describe("marimo-lens content", () => {
         history: [],
       },
       css: "",
+      selector: null,
       protocol: reboundProtocol,
     };
     act(() => root?.render(<MarimoLensContent />));
     expect(document.querySelector("[data-marimo-lens-cell-attention]")).not.toBeNull();
 
-    act(() =>
-      document.querySelector<HTMLButtonElement>('[aria-label="Select an output"]')?.click(),
-    );
+    act(() => document.querySelector<HTMLButtonElement>('[aria-label="Select a target"]')?.click());
     expect(document.querySelector("[data-marimo-lens-status]")?.textContent).toBe(
       "Select mode active. Click a point or drag a region.",
     );
@@ -472,7 +478,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.reveal",
         revision: 7,
         payload: {
@@ -498,7 +504,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.reveal",
         revision: 7,
         payload: {
@@ -514,7 +520,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.activity.start",
         revision: 7,
         payload: { cellId: "BYtC", message: "Updating the aggregation." },
@@ -531,7 +537,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.activity.stop",
         revision: 7,
         payload: { cellId: "other" },
@@ -542,7 +548,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.activity.stop",
         revision: 7,
         payload: { cellId: "BYtC" },
@@ -554,7 +560,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.activity.start",
         revision: 7,
         payload: { cellId: "BYtC", message: "Finishing the aggregation." },
@@ -571,7 +577,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.activity.stop",
         revision: 7,
         payload: { cellId: "BYtC" },
@@ -583,7 +589,7 @@ describe("marimo-lens content", () => {
   test("settles marked capture work when its output disappears", async () => {
     const selection = selectionFixture({ snapshot: { status: "pending" } });
     const output = document.createElement("div");
-    output.id = `output-${selection.outputCellId}`;
+    output.id = `output-${selection.target.cellIds[0]}`;
     output.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
     document.body.appendChild(output);
     const settleUnavailableSnapshot = vi.fn();
@@ -596,6 +602,7 @@ describe("marimo-lens content", () => {
         history: [],
       },
       css: "",
+      selector: null,
       protocol: protocolClient(),
     };
     currentModelFor = () => model;
@@ -642,6 +649,85 @@ describe("marimo-lens content", () => {
     expect(settleUnavailableSnapshot).not.toHaveBeenCalled();
   });
 
+  test("leaves a pending target from another document for its owning view", () => {
+    const selection = selectionFixture({
+      target: {
+        kind: "dom",
+        cellIds: [],
+        documentPath: "/another-view/",
+        domSelector: "#summary",
+      },
+      snapshot: { status: "pending" },
+    });
+    const settleUnavailableSnapshot = vi.fn();
+    currentModel = {
+      state: lensState({
+        revision: 1,
+        nextLabel: "S2",
+        currentSelectionId: selection.id,
+        selections: [selection],
+        history: [],
+      }),
+      css: "",
+      selector: "#summary",
+      protocol: protocolClient(),
+    };
+    currentActionsFor = (dispatch) => ({
+      ...actionsFor(dispatch),
+      settleUnavailableSnapshot,
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => root?.render(<MarimoLensContent />));
+
+    expect(settleUnavailableSnapshot).not.toHaveBeenCalled();
+  });
+
+  test("keeps an existing configured target available on first mount", () => {
+    const target = document.createElement("section");
+    target.id = "summary";
+    target.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
+    document.body.appendChild(target);
+    const selection = selectionFixture({
+      target: {
+        kind: "dom",
+        cellIds: [],
+        documentPath: "/",
+        domSelector: "#summary",
+      },
+      snapshot: { status: "pending" },
+    });
+    const settleUnavailableSnapshot = vi.fn();
+    currentModel = {
+      state: lensState({
+        revision: 1,
+        nextLabel: "S2",
+        currentSelectionId: selection.id,
+        selections: [selection],
+        history: [],
+      }),
+      css: "",
+      selector: "#summary",
+      protocol: protocolClient(),
+    };
+    currentActionsFor = (dispatch) => ({
+      ...actionsFor(dispatch),
+      settleUnavailableSnapshot,
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => root?.render(<MarimoLensContent />));
+
+    expect(settleUnavailableSnapshot).not.toHaveBeenCalled();
+    expect(
+      document.querySelector(`[data-marimo-lens-selection-id="${selection.id}"]`),
+    ).not.toBeNull();
+  });
+
   test("presents and announces a resolution only after canonical state removes it", () => {
     vi.useFakeTimers();
     let listener: ((event: SelectionResolvedEvent) => void) | undefined;
@@ -659,6 +745,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol: protocolClient({
         onSelectionResolved,
       }),
@@ -750,6 +837,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol: protocolClient({
         onCellAttention: vi.fn((next: (event: CellAttentionEvent) => void) => {
           attentionListener = next;
@@ -763,7 +851,7 @@ describe("marimo-lens content", () => {
     };
     currentModelFor = () => model;
     const cell = document.createElement("section");
-    cell.id = `cell-${selection.outputCellId}`;
+    cell.id = `cell-${selection.target.cellIds[0]}`;
     cell.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
     cell.scrollIntoView = vi.fn();
     document.body.appendChild(cell);
@@ -775,11 +863,11 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.reveal",
         revision: 3,
         payload: {
-          cellId: selection.outputCellId,
+          cellId: selection.target.cellIds[0]!,
           message: "Updated the chart.",
           durationMs: 4_000,
         },
@@ -812,11 +900,11 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.reveal",
         revision: 4,
         payload: {
-          cellId: selection.outputCellId,
+          cellId: selection.target.cellIds[0]!,
           message: "Showing the finished chart.",
           durationMs: 4_000,
         },
@@ -835,11 +923,11 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.activity.start",
         revision: 4,
         payload: {
-          cellId: selection.outputCellId,
+          cellId: selection.target.cellIds[0]!,
           label: "Checking another cell",
         },
       }),
@@ -851,11 +939,11 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.reveal",
         revision: 4,
         payload: {
-          cellId: selection.outputCellId,
+          cellId: selection.target.cellIds[0]!,
           durationMs: 4_000,
         },
       }),
@@ -880,6 +968,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol: protocolClient({
         onCellAttention: vi.fn((next: (event: CellAttentionEvent) => void) => {
           attentionListener = next;
@@ -893,7 +982,7 @@ describe("marimo-lens content", () => {
     };
     currentModelFor = () => model;
     const cell = document.createElement("section");
-    cell.id = `cell-${selection.outputCellId}`;
+    cell.id = `cell-${selection.target.cellIds[0]}`;
     cell.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
     cell.scrollIntoView = vi.fn();
     document.body.appendChild(cell);
@@ -905,11 +994,11 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.activity.start",
         revision: 3,
         payload: {
-          cellId: selection.outputCellId,
+          cellId: selection.target.cellIds[0]!,
           durationMs: 4_000,
           label: "Updating chart",
         },
@@ -956,6 +1045,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol: protocolClient({
         onSelectionResolved,
       }),
@@ -1033,6 +1123,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     currentModelFor = () => model;
@@ -1095,6 +1186,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     currentModelFor = () => model;
@@ -1151,7 +1243,7 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture();
     const output = document.createElement("div");
     let outputTop = 20;
-    output.id = `output-${selection.outputCellId}`;
+    output.id = `output-${selection.target.cellIds[0]}`;
     output.getBoundingClientRect = () => new DOMRect(20, outputTop, 400, 240);
     output.scrollIntoView = vi.fn(() => {
       outputTop = 300;
@@ -1180,6 +1272,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     currentModelFor = () => model;
@@ -1199,11 +1292,11 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 2,
+        version: 3,
         type: "cell.reveal",
         revision: 3,
         payload: {
-          cellId: selection.outputCellId,
+          cellId: selection.target.cellIds[0]!,
           message: "Showing the completed output.",
           durationMs: 4_000,
         },
@@ -1253,6 +1346,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     currentModelFor = () => model;
@@ -1293,6 +1387,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     currentModelFor = () => model;
@@ -1335,6 +1430,7 @@ describe("marimo-lens content", () => {
         history: [],
       }),
       css: "",
+      selector: null,
       protocol,
     };
     currentModelFor = () => model;
@@ -1393,7 +1489,7 @@ function resolvedEvent(overrides: ResolvedEventOptions = {}): SelectionResolvedE
   if (summary) payload.summary = summary;
   return {
     protocol: "marimo-lens.event",
-    version: 2,
+    version: 3,
     type: "selection.resolved",
     revision,
     payload,
@@ -1406,7 +1502,7 @@ function addressedReceipt(selection: Selection, event: SelectionResolvedEvent): 
     selectionId: selection.id,
     label: selection.label,
     note: selection.note,
-    outputCellId: selection.outputCellId,
+    target: selection.target,
     createdAt: selection.createdAt,
     addressedAt: "2026-07-23T08:00:00Z",
     anchor: selection.anchor,
@@ -1474,7 +1570,7 @@ function requireCaptureHandler(handler: OutputCaptureHandler | undefined): Outpu
 function outputCaptureCommand(): OutputCaptureCommand {
   return {
     protocol: "marimo-lens.command",
-    version: 2,
+    version: 3,
     requestId: "capture-1",
     type: "output.capture",
     payload: { outputCellId: "cell-1" },

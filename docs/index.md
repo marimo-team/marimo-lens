@@ -186,7 +186,7 @@ for _index, _selection in enumerate(_agent_selections, start=1):
             "id": _selection_id,
             "label": str(_selection.get("label", f"S{_index}")),
             "note": str(_selection.get("note", "")).strip(),
-            "cellId": str(_selection.get("outputCellId", "")),
+            "cellId": str((_selection.get("cells") or [{}])[0].get("id", "")),
             "imageStatus": (
                 "Ready"
                 if _selection_id in _agent_context.images
@@ -386,7 +386,7 @@ if handoff_to_agent.value:
             ),
             _handoff_selections[0],
         )
-        _handoff_cell_id = str(_activity_selection["outputCellId"])
+        _handoff_cell_id = str(_activity_selection["cells"][0]["id"])
         _ordered_notes = sorted(
             _noted_selections,
             key=lambda _selection: str(_selection.get("id", "")) != _handoff_current_id,

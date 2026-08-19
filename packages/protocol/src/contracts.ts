@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { hasTextContent } from "./bounded-text";
 
-export const WIDGET_TRANSPORT_VERSION = 2;
+export const WIDGET_TRANSPORT_VERSION = 3;
 
 export type TransportPrimitive = boolean | null | number | string | undefined;
 export type TransportRecord = { readonly [key: string]: TransportValue };
@@ -37,6 +37,7 @@ const TimestampSchema = v.pipe(
   v.check(hasValidTimestamp, "Timestamp must identify a valid calendar date and time"),
 );
 const DomFieldSchema = v.pipe(UnicodeStringSchema, v.maxLength(240));
+const DomSelectorSchema = v.pipe(NonEmptyStringSchema, v.maxLength(1_024));
 const SelectionImageIdSchema = v.pipe(NonEmptyStringSchema, v.maxLength(134));
 const OutputCaptureImageIdSchema = v.pipe(NonEmptyStringSchema, v.maxLength(262));
 const FiniteNumberSchema = v.pipe(v.number(), v.finite());
@@ -72,7 +73,7 @@ export const RectAnchorSchema = v.pipe(
   }),
   v.check(
     (anchor) => anchor.x + anchor.width <= 1 && anchor.y + anchor.height <= 1,
-    "Selection rectangle extends beyond its output cell",
+    "Selection rectangle extends beyond its target",
   ),
 );
 
@@ -87,7 +88,7 @@ export const DomHintBoundsSchema = v.pipe(
   }),
   v.check(
     (bounds) => bounds.x + bounds.width <= 1 && bounds.y + bounds.height <= 1,
-    "DOM hint bounds extend beyond their output cell",
+    "DOM hint bounds extend beyond their target",
   ),
 );
 
@@ -100,6 +101,35 @@ export const DomHintSchema = v.object({
   path: v.optional(DomFieldSchema),
   bounds: v.optional(DomHintBoundsSchema),
 });
+
+const TargetCellIdsSchema = v.pipe(
+  v.array(BoundedIdentifierSchema),
+  v.maxLength(64),
+  v.check((cellIds) => new Set(cellIds).size === cellIds.length, "Target cell ids must be unique"),
+  v.transform((cellIds) => [...cellIds].sort()),
+);
+
+export const NotebookSelectionTargetSchema = v.pipe(
+  v.object({
+    kind: v.literal("notebook"),
+    cellIds: TargetCellIdsSchema,
+  }),
+  v.check((target) => target.cellIds.length === 1, "Notebook targets require one cell id"),
+);
+
+export const DomSelectionTargetSchema = v.object({
+  kind: v.literal("dom"),
+  cellIds: TargetCellIdsSchema,
+  documentPath: DomSelectorSchema,
+  domSelector: DomSelectorSchema,
+});
+
+export const SelectionTargetSchema = v.variant("kind", [
+  NotebookSelectionTargetSchema,
+  DomSelectionTargetSchema,
+]);
+
+export const TargetSelectorSchema = v.nullable(DomSelectorSchema);
 
 export const AvailableSnapshotSchema = v.object({
   status: v.literal("available"),
@@ -152,7 +182,7 @@ const SelectionInputObjectSchema = v.object({
   id: BoundedIdentifierSchema,
   label: SelectionLabelSchema,
   note: v.pipe(UnicodeStringSchema, v.maxLength(4_000)),
-  outputCellId: BoundedIdentifierSchema,
+  target: SelectionTargetSchema,
   createdAt: TimestampSchema,
   anchor: SelectionAnchorSchema,
   domHint: v.optional(DomHintSchema),
@@ -185,7 +215,7 @@ export const AddressedSelectionSchema = v.object({
   selectionId: BoundedIdentifierSchema,
   label: SelectionLabelSchema,
   note: v.pipe(UnicodeStringSchema, v.maxLength(4_000)),
-  outputCellId: BoundedIdentifierSchema,
+  target: SelectionTargetSchema,
   createdAt: TimestampSchema,
   addressedAt: TimestampSchema,
   anchor: SelectionAnchorSchema,
@@ -453,6 +483,10 @@ export type RectAnchor = v.InferOutput<typeof RectAnchorSchema>;
 export type SelectionAnchor = v.InferOutput<typeof SelectionAnchorSchema>;
 export type DomHint = v.InferOutput<typeof DomHintSchema>;
 export type DomHintBounds = v.InferOutput<typeof DomHintBoundsSchema>;
+export type NotebookSelectionTarget = v.InferOutput<typeof NotebookSelectionTargetSchema>;
+export type DomSelectionTarget = v.InferOutput<typeof DomSelectionTargetSchema>;
+export type SelectionTarget = v.InferOutput<typeof SelectionTargetSchema>;
+export type TargetSelector = v.InferOutput<typeof TargetSelectorSchema>;
 export type AvailableSnapshot = v.InferOutput<typeof AvailableSnapshotSchema>;
 export type OutputCaptureImage = v.InferOutput<typeof OutputCaptureImageSchema>;
 export type OutdatedSnapshot = v.InferOutput<typeof OutdatedSnapshotSchema>;
@@ -519,6 +553,18 @@ export function parseLensState(
   input: v.InferInput<typeof LensStateSchema> | TransportValue,
 ): LensState {
   return parseContract(LensStateSchema, input, "Lens state");
+}
+
+export function parseSelectionTarget(
+  input: v.InferInput<typeof SelectionTargetSchema> | TransportValue,
+): SelectionTarget {
+  return parseContract(SelectionTargetSchema, input, "Lens selection target");
+}
+
+export function parseTargetSelector(
+  input: v.InferInput<typeof TargetSelectorSchema> | TransportValue,
+): TargetSelector {
+  return parseContract(TargetSelectorSchema, input, "Lens target selector");
 }
 
 export function parseLensResponse(
