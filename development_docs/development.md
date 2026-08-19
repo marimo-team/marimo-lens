@@ -93,11 +93,14 @@ make package
 ```
 
 The target builds the browser resources, creates the wheel and source
-distribution, checks their metadata, builds a wheel from the source
-distribution, and imports the public package from that rebuilt wheel.
+distribution, checks their metadata, and builds a second wheel from the source
+distribution. It installs both wheels in isolated environments and verifies the
+public Python API, code-mode capability, Agent Plugin, Lens skill, and browser
+resources.
 
-Hatch validates the generated ESM and stylesheet. The source distribution must
-carry both files into its wheel.
+Hatch validates the generated ESM and stylesheet. The `agent-plugins` build
+backend packages `plugin.json` and `skills/marimo-lens`. The source distribution
+must carry both resource sets into its wheel.
 
 ## Release
 
