@@ -1,19 +1,27 @@
-import { fileURLToPath } from "node:url";
 import { marimoVitePress } from "@marimo-team/mdx-marimo/vitepress";
-import { defineConfig } from "vitepress";
+import { fileURLToPath } from "node:url";
+import { defineConfig, type Plugin } from "vitepress";
+import llmstxt from "vitepress-plugin-llms";
 
 const repository = "https://github.com/marimo-team/marimo-lens";
 const siteUrl = "https://marimo-team.github.io/marimo-lens/";
 const description =
   "Point to a marimo notebook result and say what should change. Lens grounds your agent's work in the producing cell, related context, and an annotated image.";
-const socialDescription =
-  "Mark a result. Lens grounds your agent in the cells behind it.";
+const socialDescription = "Mark a result. Lens grounds your agent in the cells behind it.";
 const socialImage = `${siteUrl}brand/marimo-lens-og.png`;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const publicPath = (path: string): string => `${basePath}${path}`;
+// The plugin appends VitePress's base path when it builds Markdown URLs.
+const llmsDomain = basePath ? new URL(siteUrl).origin : siteUrl.replace(/\/$/, "");
+// SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
+// are loaded and executed by this VitePress version during every docs build.
+const llmsPlugins = llmstxt({
+  domain: llmsDomain,
+  excludeIndexPage: false,
+}) as [Plugin, Plugin];
 
 export default defineConfig({
   base: basePath ? `${basePath}/` : "/",
@@ -123,6 +131,7 @@ export default defineConfig({
   title: "marimo-lens",
   vite: {
     plugins: [
+      ...llmsPlugins,
       marimoVitePress({
         compiler: { cacheDir: false, uvCommand: "uv" },
         cwd: repositoryRoot,
