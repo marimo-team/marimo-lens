@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import inspect
+import pydoc
 import subprocess
 import sys
 from collections.abc import Mapping, Sequence
+from importlib.metadata import distribution
 from types import SimpleNamespace
 from typing import cast
 
+import marimo as mo
+import marimo._code_mode as code_mode
 import pytest
 from marimo_lens import Lens, LensContext, LensError, agent
 
@@ -29,7 +33,54 @@ def _active_runtime(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
 
 
 def test_agent_module_exports_the_handoff_surface() -> None:
-    assert set(agent.__all__) == {"MountedLens", "add_lens_cell", "connect"}
+    assert set(agent.__all__) == {
+        "MountedLens",
+        "add_lens_cell",
+        "agent_plugin",
+        "agent_skill",
+        "connect",
+    }
+
+
+def test_marimo_code_mode_discovers_the_lens_capability() -> None:
+    assert code_mode.capabilities()["lens"] == "marimo_lens.agent"
+
+
+def test_agent_capability_entry_point_loads_the_instruction_module() -> None:
+    capabilities = [
+        entry_point
+        for entry_point in distribution("marimo-lens").entry_points
+        if entry_point.group == "marimo.agent.capability"
+    ]
+
+    assert [(entry.name, entry.value) for entry in capabilities] == [
+        ("lens", "marimo_lens.agent")
+    ]
+    assert capabilities[0].load() is agent
+
+
+def test_agent_plugin_exposes_the_packaged_lens_skill() -> None:
+    plugin = agent.agent_plugin()
+    skill = agent.agent_skill()
+
+    assert plugin.manifest.name == "marimo-lens"
+    assert skill in plugin.skills
+    assert skill.path.name == "marimo-lens"
+    assert (skill / "SKILL.md").is_file()
+    assert (skill / "agents" / "openai.yaml").is_file()
+    assert (skill / "reference" / "workflow.md").is_file()
+    assert skill.frontmatter.splitlines()[0] == "name: marimo-lens"
+
+
+def test_agent_module_help_points_to_installed_resources() -> None:
+    plugin = agent.agent_plugin()
+    skill = agent.agent_skill()
+    rendered = pydoc.render_doc(agent)
+
+    assert str(plugin.path) in rendered
+    assert str(skill / "SKILL.md") in rendered
+    assert "resources = lens_agent.agent_plugin()" in rendered
+    assert "skill = lens_agent.agent_skill()" in rendered
 
 
 def test_package_import_exposes_agent_help() -> None:
@@ -53,13 +104,15 @@ def test_agent_help_defines_the_code_mode_context_for_mounting() -> None:
 
     assert doc is not None
     assert "import marimo._code_mode as cm" in doc
+    assert "import marimo_lens.agent as lens_agent" in doc
     assert "async with cm.get_context() as ctx:" in doc
+    assert "mounted = lens_agent.connect(ctx)" in doc
     assert "lens_agent.add_lens_cell(ctx)" in doc
 
 
 def test_agent_handoff_matches_documented_signatures() -> None:
     assert list(inspect.signature(agent.add_lens_cell).parameters) == ["ctx"]
-    assert list(inspect.signature(agent.connect).parameters) == ["identity"]
+    assert list(inspect.signature(agent.connect).parameters) == ["context", "identity"]
     assert (
         inspect.signature(agent.connect).parameters["identity"].kind
         is inspect.Parameter.KEYWORD_ONLY
@@ -118,6 +171,22 @@ def _mounted_lens() -> Lens:
     lens = Lens()
     _set_mounted(lens)
     return lens
+
+
+def _code_mode_context(**values: object) -> SimpleNamespace:
+    return SimpleNamespace(globals=values)
+
+
+def _marimo_wrapper(lens: Lens, monkeypatch: pytest.MonkeyPatch) -> object:
+    import marimo._runtime.context as context_module
+    from marimo._runtime.context import ContextNotInitializedError
+
+    def unavailable() -> None:
+        raise ContextNotInitializedError
+
+    with monkeypatch.context() as construction:
+        construction.setattr(context_module, "get_context", unavailable)
+        return mo.ui.anywidget(lens)
 
 
 def _lens_context(
@@ -189,6 +258,86 @@ def test_connect_preserves_identity_across_kernel_calls() -> None:
     assert raised.value.code == "lens_unavailable"
     assert raised.value.revision is None
     lens.close()
+
+
+def test_connect_uses_an_existing_lens_from_the_code_mode_context() -> None:
+    lens = Lens()
+    context = _code_mode_context(lens=lens)
+
+    mounted = agent.connect(context)
+    reconnected = agent.connect(context, identity=mounted.identity)
+
+    assert mounted.context().revision == 0
+    assert reconnected.identity == mounted.identity
+    lens.close()
+
+
+def test_connect_deduplicates_context_and_browser_discovery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lens = _mounted_lens()
+    context = _code_mode_context(
+        lens=lens,
+        lens_alias=lens,
+        wrapped=_marimo_wrapper(lens, monkeypatch),
+    )
+
+    assert agent.connect(context).identity == agent.connect().identity
+    lens.close()
+
+
+def test_connect_uses_a_lens_held_by_a_marimo_wrapper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lens = Lens()
+    context = _code_mode_context(wrapped=_marimo_wrapper(lens, monkeypatch))
+
+    assert agent.connect(context).context().revision == 0
+    lens.close()
+
+
+def test_connect_reports_ambiguous_context_lenses() -> None:
+    first = Lens()
+    second = Lens()
+    context = _code_mode_context(first=first, second=second)
+
+    with pytest.raises(LensError) as raised:
+        agent.connect(context)
+
+    assert raised.value.code == "lens_ambiguous"
+    first.close()
+    second.close()
+
+
+def test_connect_ignores_a_closed_context_lens() -> None:
+    closed = Lens()
+    available = Lens()
+    closed.close()
+
+    mounted = agent.connect(_code_mode_context(closed=closed, available=available))
+
+    assert mounted.context().revision == 0
+    available.close()
+
+
+def test_connect_uses_identity_to_select_an_available_context_lens() -> None:
+    first = Lens()
+    second = Lens()
+    identity = agent.connect(_code_mode_context(first=first)).identity
+
+    mounted = agent.connect(
+        _code_mode_context(first=first, second=second),
+        identity=identity,
+    )
+
+    assert mounted.identity == identity
+    first.close()
+    second.close()
+
+
+def test_connect_requires_a_context_globals_mapping() -> None:
+    with pytest.raises(TypeError, match="context must expose a globals mapping"):
+        agent.connect(SimpleNamespace())
 
 
 def test_connect_tracks_the_browser_mount_lifecycle() -> None:

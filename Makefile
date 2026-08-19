@@ -27,5 +27,10 @@ package:
 	uvx twine check dist/marimo_lens-*.whl dist/marimo_lens-*.tar.gz
 	mkdir -p dist/from-sdist
 	uv build --wheel dist/marimo_lens-*.tar.gz --out-dir dist/from-sdist
-	uv run --no-project --with dist/from-sdist/marimo_lens-*.whl \
-		python scripts/verify_release.py "$$(uv version --package marimo-lens --short)"
+	set -e; for wheel in dist/marimo_lens-*.whl dist/from-sdist/marimo_lens-*.whl; do \
+		uv run --no-project --isolated --no-cache --exclude-newer "3 days" \
+			--exclude-newer-package agent-plugins=false \
+			--exclude-newer-package marimo=false \
+			--default-index https://pypi.org/simple --with "$$wheel" \
+			python scripts/verify_release.py "$$(uv version --package marimo-lens --short)"; \
+	done

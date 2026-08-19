@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import pydoc
 import sys
 from importlib.metadata import distribution
 from pathlib import Path
+from types import SimpleNamespace
 
+import marimo._code_mode as code_mode
+import marimo_lens.agent as lens_agent
 from marimo_lens import (
     Lens,
     LensContext,
@@ -29,6 +33,51 @@ def verify_release(expected_version: str) -> None:
             f"marimo_lens.__version__ {__version__} does not match installed "
             f"distribution {installed_version}"
         )
+
+    requirements = installed_distribution.requires or ()
+    if "agent-plugins==0.1.0" not in requirements:
+        raise SystemExit("marimo-lens must require agent-plugins==0.1.0")
+    if distribution("agent-plugins").version != "0.1.0":
+        raise SystemExit("marimo-lens must install agent-plugins 0.1.0")
+
+    capabilities = [
+        entry_point
+        for entry_point in installed_distribution.entry_points
+        if entry_point.group == "marimo.agent.capability"
+    ]
+    if [(entry.name, entry.value) for entry in capabilities] != [
+        ("lens", "marimo_lens.agent")
+    ]:
+        raise SystemExit("marimo-lens has an invalid agent capability entry point")
+    if capabilities[0].load() is not lens_agent:
+        raise SystemExit("The Lens capability does not load marimo_lens.agent")
+    if code_mode.capabilities().get("lens") != "marimo_lens.agent":
+        raise SystemExit("Marimo code mode cannot discover the Lens capability")
+
+    plugin = lens_agent.agent_plugin()
+    skill = lens_agent.agent_skill()
+    if plugin.manifest.name != "marimo-lens":
+        raise SystemExit("The installed Agent Plugin manifest is not marimo-lens")
+    if plugin.path.name != f"marimo_lens-{installed_version}.agent-plugin":
+        raise SystemExit(f"Unexpected installed Agent Plugin path: {plugin.path}")
+    if skill not in plugin.skills or skill.path.name != "marimo-lens":
+        raise SystemExit("The installed Agent Plugin cannot resolve the Lens skill")
+    required_skill_files = (
+        skill / "SKILL.md",
+        skill / "agents" / "openai.yaml",
+        skill / "reference" / "workflow.md",
+    )
+    missing_skill_files = [path for path in required_skill_files if not path.is_file()]
+    if missing_skill_files:
+        raise SystemExit(
+            "The installed Lens skill is missing files: "
+            + ", ".join(str(path) for path in missing_skill_files)
+        )
+    if skill.frontmatter.splitlines()[0] != "name: marimo-lens":
+        raise SystemExit("The installed Lens skill has invalid frontmatter")
+    help_text = pydoc.render_doc(lens_agent)
+    if str(plugin.path) not in help_text or str(skill / "SKILL.md") not in help_text:
+        raise SystemExit("marimo_lens.agent help cannot locate its packaged resources")
 
     license_paths = [
         path
@@ -67,7 +116,15 @@ def verify_release(expected_version: str) -> None:
         raise SystemExit(
             f"marimo-lens exports are not classes: {', '.join(invalid_types)}"
         )
-    if not all(callable(function) for function in (add_lens_cell, connect)):
+    if not all(
+        callable(function)
+        for function in (
+            add_lens_cell,
+            lens_agent.agent_plugin,
+            lens_agent.agent_skill,
+            connect,
+        )
+    ):
         raise SystemExit("marimo_lens.agent handoff exports are not callable")
 
     lens = Lens()
@@ -79,6 +136,9 @@ def verify_release(expected_version: str) -> None:
             )
         if context.revision != 0 or context.current is not None or context.images:
             raise SystemExit("A new Lens returned unexpected selection state")
+        mounted = lens_agent.connect(SimpleNamespace(globals={"lens": lens}))
+        if mounted.context().revision != context.revision:
+            raise SystemExit("The agent adapter cannot bind an existing Lens")
     finally:
         lens.close()
 

@@ -2,11 +2,20 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 from marimo_lens.context import LensContext
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_primary_skill_routes_agents_into_code_mode_through_pair() -> None:
+    skill = (REPOSITORY_ROOT / "skills/marimo-lens/SKILL.md").read_text()
+
+    assert (
+        "npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair"
+    ) in skill
 
 
 def test_primary_skill_image_snippet_reads_selection_evidence() -> None:
@@ -25,44 +34,53 @@ def test_primary_skill_image_snippet_reads_selection_evidence() -> None:
     assert namespace["cell_png"] is None
 
 
-def test_workflow_image_snippet_executes_against_lens_context() -> None:
-    namespace: dict[str, object] = {"snapshot": _context()}
+def test_code_mode_reference_requests_cell_image_with_saved_revision() -> None:
+    calls: list[tuple[str, int]] = []
 
-    exec(  # noqa: S102 - Exercise the repository-owned skill example.
+    def cell_image(cell_id: str, *, expected_revision: int) -> bytes:
+        calls.append((cell_id, expected_revision))
+        return b"cell-png"
+
+    namespace: dict[str, object] = {
+        "mounted": SimpleNamespace(cell_image=cell_image),
+        "cell_id": "cell-view",
+        "revision": 4,
+    }
+
+    exec(  # noqa: S102 - Exercise the repository-owned reference example.
         _python_block(
             "skills/marimo-lens/reference/workflow.md",
-            "## Inspect selection evidence",
+            "## Capture a current cell image",
         ),
         namespace,
     )
 
-    assert namespace["selection_png"] == b"selection-png"
-    assert namespace["selection_status"] == "outdated"
+    assert namespace["cell_png"] == b"cell-png"
+    assert calls == [("cell-view", 4)]
 
 
 def test_address_mode_builds_evidence_workset_for_every_selection() -> None:
-    for relative_path in (
-        "skills/marimo-lens/SKILL.md",
-        "skills/marimo-lens/reference/workflow.md",
-    ):
-        namespace: dict[str, object] = {"snapshot": _context()}
+    namespace: dict[str, object] = {"snapshot": _context()}
 
-        exec(  # noqa: S102 - Exercise the repository-owned skill example.
-            _python_block(relative_path, "### Address every open selection"),
-            namespace,
-        )
+    exec(  # noqa: S102 - Exercise the canonical skill example.
+        _python_block(
+            "skills/marimo-lens/SKILL.md",
+            "### Address every open selection",
+        ),
+        namespace,
+    )
 
-        value = namespace["address_workset"]
-        assert isinstance(value, list)
-        workset = cast(list[dict[str, Any]], value)
-        assert [item["selection"]["id"] for item in workset] == [
-            "selection-1",
-            "selection-2",
-        ]
-        assert [item["selection_png"] for item in workset] == [
-            b"selection-png",
-            b"second-selection-png",
-        ]
+    value = namespace["address_workset"]
+    assert isinstance(value, list)
+    workset = cast(list[dict[str, Any]], value)
+    assert [item["selection"]["id"] for item in workset] == [
+        "selection-1",
+        "selection-2",
+    ]
+    assert [item["selection_png"] for item in workset] == [
+        b"selection-png",
+        b"second-selection-png",
+    ]
 
 
 def _python_block(relative_path: str, heading: str) -> str:

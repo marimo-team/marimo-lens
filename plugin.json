@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "marimo-lens",
+  "description": "Ground agent work in selected Marimo notebook outputs and their producing cells.",
+  "author": {
+    "name": "Péter Ferenc Gyarmati",
+    "email": "dev.petergy@gmail.com"
+  },
+  "repository": "https://github.com/marimo-team/marimo-lens",
+  "keywords": ["marimo", "notebooks", "agent-skills", "visual-grounding"]
+}

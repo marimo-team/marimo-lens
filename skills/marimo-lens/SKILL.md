@@ -2,35 +2,51 @@
 name: marimo-lens
 description: >-
   Use Lens to turn a user's point, region, or note on rendered notebook output
-  into a bounded task against the producing cells. Connect through
-  `marimo._code_mode`, inspect the selected cell, upstream context, and
-  available images, then show activity, verify the notebook result, reveal it,
-  and resolve the addressed selection to History. Use when the user refers to
-  "this" output, asks to address Lens selections, requests an overview or
-  walkthrough, or invokes `marimo-lens address` for every open selection. Treat
-  the human's mark and note as the request, and return notebook evidence for
-  their review.
+  into a bounded task against the producing cells. Work through a live marimo
+  code-mode environment, installing and using the marimo-pair skill first when
+  the current agent is not connected to one. Inspect the selected cell,
+  upstream context, and available images, then show activity, verify the
+  notebook result, reveal it, and resolve the addressed selection to History.
+  Use when the user refers to "this" output, asks to address Lens selections,
+  requests an overview or walkthrough, or invokes `$marimo-lens address` for
+  every open selection. Treat the human's mark and note as the request, and
+  return notebook evidence for their review.
 ---
 
 # Work with marimo Lens
 
-Run this skill through `marimo._code_mode` in a live marimo kernel. Code mode
-supplies notebook inspection, mutation, execution, and runtime verification.
-This skill owns Lens grounding, images, activity, reveals, and resolution.
+## Execution environment
+
+Run this skill in a live marimo code-mode environment. If the current agent can
+already execute code in the notebook kernel, continue with the Lens workflow.
+
+Otherwise, install the
+[marimo Pair skill](https://github.com/marimo-team/marimo-pair/tree/main/skills/marimo-pair):
+
+```console
+npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
+```
+
+Use `$marimo-pair` to connect to or start the notebook. Resume `$marimo-lens`
+after code-mode execution is available.
+
+Notebook discovery, connection, scratchpad execution, and general notebook
+inspection and mutation belong to the active code-mode integration, such as
+Pair. This skill owns Lens grounding, images, activity, reveals, and resolution.
 
 Activate this workflow after the request identifies Lens work through a
 selection, output reference, overview, or walkthrough.
 
-Use [reference/workflow.md](reference/workflow.md) for complete mutation
-templates, operation failures, and multi-cell walkthroughs. The workflow here
-covers inspection and straightforward changes.
+Use [reference/workflow.md](reference/workflow.md) for Lens-specific kernel-call
+recipes, image-byte handling, and focused operation recovery. `SKILL.md` owns
+the workflow and decision policy.
 
 ## Modes
 
-Read the word that follows the skill name as the mode. `marimo-lens` alone
-routes from the request and `snapshot.current`.
+Read the word that follows the skill invocation as the mode. `$marimo-lens`
+alone routes from the request and `snapshot.current`.
 
-`marimo-lens address` inspects every outstanding selection in
+`$marimo-lens address` inspects every outstanding selection in
 `snapshot.references["selections"]`, including its note and cell or image
 evidence. Address each actionable request, verify the result, then resolve its
 selection. Keep ambiguous, blocked, or unverified selections open and report
@@ -38,15 +54,17 @@ why.
 
 ## Connect and read the request
 
-Connect to the mounted Lens and take one detached context snapshot in the same
+Connect to Lens and take one detached context snapshot in the same
 kernel call:
 
 ```python
 import json
 
+import marimo._code_mode as cm
 import marimo_lens.agent as lens_agent
 
-mounted = lens_agent.connect()
+ctx = cm.get_context()
+mounted = lens_agent.connect(ctx)
 snapshot = mounted.context()
 selection = snapshot.current
 if selection is not None and selection["cellStatus"] == "available":
@@ -76,22 +94,18 @@ print(
 )
 ```
 
+Use `ctx` for notebook cells, graph relationships, globals, and runtime status.
+Use `snapshot` for Lens selections, bounded context, and captured evidence.
+
 Keep `mounted.identity` and `snapshot.revision` together. Reconnect in later
-kernel calls with `connect(identity=identity)`. Retry without the saved
-identity when that Lens becomes unavailable.
+kernel calls with `connect(cm.get_context(), identity=identity)`. Retry without
+the saved identity when that Lens becomes unavailable.
 
-When the first connection without an identity reports `lens_unavailable`, add
-one Lens cell and end that kernel call:
-
-```python
-import marimo_lens.agent as lens_agent
-import marimo._code_mode as cm
-
-async with cm.get_context() as ctx:
-    lens_agent.add_lens_cell(ctx)
-```
-
-Connect again in a fresh kernel call after the browser renders Lens.
+Passing `ctx` lets `connect()` reuse an existing Lens object from notebook
+globals before considering a new Lens cell. When the first `connect(ctx)` call
+without an identity reports `lens_unavailable`, use the
+[mount recipe](reference/workflow.md#mount-lens-when-unavailable). Connect again
+in a fresh kernel call after the browser renders Lens.
 
 Keep the first read compact. Print the identity, revision, current selection,
 and selection count. Do not print `snapshot.text`, every cell body, or the full
@@ -103,9 +117,9 @@ In selection-address mode, do not iterate over `ctx.cells` or print a notebook
 inventory. Notebook-order enumeration belongs to explicit overview and
 walkthrough requests.
 
-Ask the user to leave one Lens mounted when `connect()` reports
-`lens_ambiguous`. Report Lens as unavailable when adding or rendering the Lens
-cell fails.
+When `connect(ctx)` reports `lens_ambiguous`, reconnect with a saved identity.
+Without an identity, ask the user to close or remove extra Lens instances.
+Report Lens as unavailable when adding or rendering the Lens cell fails.
 
 `snapshot.current` is the likely referent for "this", "here", or "the selected
 output". The explicit request takes priority over an older selection note. An
@@ -139,9 +153,11 @@ mark, identify the plotted measure and its entity key. When an upstream join
 can multiply entities, compare the row count with the distinct entity count and
 name the plotted unit precisely.
 
-For an overview, inspect ordered cells and graph edges through code mode.
-Choose a short route through setup, inputs, transformations, and results.
-Reveal those cells in notebook order when the selection list is empty too.
+For an overview, use `ctx.cells` for notebook order and `ctx.graph.cells` for
+executable graph membership. Read non-graph cells when they clarify the
+narrative, but do not use them as activity or reveal targets. Choose a short
+graph-member route through setup, inputs, transformations, and results, and
+reveal that route in notebook order when the selection list is empty too.
 
 Selection PNGs are annotated capture-time evidence. Read the selection PNG
 when it supplies the required visual context. Start a fresh cell capture when
@@ -185,44 +201,14 @@ selection. Several selections can point to one output cell while marking
 different evidence, so inspect each annotated image. Keep blocked or ambiguous
 items in the workset until they can be reported as open.
 
-Request a fresh cell PNG after confirming that the output cell is available:
+Request a fresh cell PNG after confirming that the output cell is available.
+Follow the [cell-image recipe](reference/workflow.md#capture-a-current-cell-image)
+across kernel calls. Finish the current capture before requesting another cell.
 
-```python
-cell_id = selection["outputCellId"]
-cell_png = mounted.cell_image(
-    cell_id,
-    expected_revision=snapshot.revision,
-)
-print("ready" if cell_png is not None else "capture_pending")
-```
-
-When the call prints `capture_pending`, end that kernel execution immediately
-so marimo can dispatch the browser response. Repeat the same call with the saved
-Lens identity, cell ID, and revision in a fresh execution. Let the returned
-state drive the loop. Do not sleep inside a kernel execution. Continue until
-the call returns bytes or raises a terminal `LensError`.
-
-A pending capture owns Lens's single full-cell capture slot. Finish the current
-cell before requesting another one. A different cell while capture is pending
-raises `LensError(code="capture_busy")`.
-
-Write PNG bytes to a private temporary path visible to the image reader:
-
-```python
-from tempfile import NamedTemporaryFile
-
-image_bytes = cell_png if cell_png is not None else selection_png
-if image_bytes is not None:
-    with NamedTemporaryFile(
-        prefix="marimo-lens-", suffix=".png", delete=False
-    ) as image_file:
-        image_file.write(image_bytes)
-        print(image_file.name)
-```
-
-Open the printed path, then delete it after the image reader returns. The
-kernel and image reader must share a filesystem. Make visual claims after the
-reader returns visible pixels.
+When the image reader requires a path, use the
+[image-byte recipe](reference/workflow.md#write-image-bytes-for-inspection).
+Delete the private path after the image reader returns. Make visual claims only
+after it returns visible pixels.
 
 When the reader reports that the current model or session cannot display
 images, treat visual inspection as unavailable for the rest of that session.
@@ -270,16 +256,9 @@ call per reveal, print the hold, and wait for it before sending the next.
 Reveal the primary result before resolving its selections. Start with
 `revision = snapshot.revision`. Resolve selections together when they share one
 verified result. When results or rationales differ, assign the revision returned
-by each call and carry it into the next call:
-
-```python
-revision = mounted.resolve(
-    selection_ids,
-    expected_revision=revision,
-    summary=summary,
-)
-print(revision)
-```
+by each call and carry it into the next call. Follow the
+[presentation recipe](reference/workflow.md#present-and-resolve-across-calls)
+for the kernel-call sequence.
 
 The addressed receipt is the final presentation. Keep its summary to one short
 sentence of at most 240 UTF-16 code units. Put detailed evidence in notebook
