@@ -24,17 +24,31 @@ dependencies = [
 
 `marimo_lens.agent` is the handoff interface for code-mode agents.
 The package registers this module as the `lens` capability in the
-`marimo.agent.capability` entry-point group.
+`marimo.agent.capability` entry-point group. Its module help locates the Agent
+Skill installed with the current package version.
 
 Notebook cells mount Lens through the [public `Lens` API](#lens). Agent
 integrations call the adapter from a live code-mode kernel call:
 
 ```python
+import marimo._code_mode as cm
 import marimo_lens.agent as lens_agent
 
-mounted = lens_agent.connect()
+ctx = cm.get_context()
+mounted = lens_agent.connect(ctx)
 snapshot = mounted.context()
 ```
+
+### `agent_plugin() -> agent_plugins.Plugin`
+
+Returns the Agent Plugin installed by the `marimo-lens` distribution. The
+plugin contains the manifest, Lens skill, and every packaged skill resource.
+
+### `agent_skill() -> agent_plugins.Skill`
+
+Returns the packaged `marimo-lens` skill. Use `skill / "SKILL.md"` for its
+instructions, `skill.body` for the Markdown body, and `skill.files` for its
+resource inventory.
 
 ### `add_lens_cell(ctx) -> str`
 
@@ -52,31 +66,37 @@ async with cm.get_context() as ctx:
     cell_id = lens_agent.add_lens_cell(ctx)
 ```
 
-End the kernel call after adding the cell. Call `connect()` in a later call
+End the kernel call after adding the cell. Call `connect(ctx)` in a later call
 after the browser renders Lens. `ctx` must expose `create_cell()` and
 `run_cell()` as well as `cells.find()`. Other objects raise `TypeError`.
 Several agent-created Lens cells raise `LensError(code="lens_ambiguous")`.
 
-### `connect(*, identity=None) -> MountedLens`
+### `connect(context=None, *, identity=None) -> MountedLens`
 
-Returns a mounted Lens from the active marimo runtime. Pass an earlier handle's
-`identity` to reconnect to that exact Lens in a later kernel call.
+Returns a Lens from the active marimo runtime. Pass a code-mode `context` to
+include existing Lens objects from its kernel globals, including objects
+created by authored notebook cells before browser-ready registration. When
+`context` is omitted, discovery uses browser-ready Lens registrations. Pass an
+earlier handle's `identity` to reconnect to that exact Lens in a later kernel
+call.
 
 `connect()` raises `LensError(code="lens_unavailable")` when the requested Lens
 cannot be found. It raises `LensError(code="lens_ambiguous")` when several Lens
-widgets are mounted and no identity selects one.
+instances are available and no identity selects one. Reconnect with an identity,
+or close or remove extra Lens instances.
 
-A non-string identity raises `TypeError`. An empty identity raises `ValueError`.
+A context without a globals mapping or a non-string identity raises `TypeError`.
+An empty identity raises `ValueError`.
 
 ### `MountedLens`
 
 The handle's `identity` property is an opaque, read-only string. Pass it to
-`connect()` to reconnect to the same mounted Lens in another kernel call. The
+`connect()` to reconnect to the same Lens in another kernel call. The
 identity and Lens target remain fixed for the handle's lifetime.
 
 | Member                                                                   | Behavior                                                     |
 | ------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| `identity`                                                               | Reconnects to this mounted Lens across kernel calls           |
+| `identity`                                                               | Reconnects to this Lens across kernel calls                   |
 | `context()`                                                              | Returns the current detached `LensContext`                   |
 | `cell_image(cell_id, *, expected_revision)`                              | Returns fresh cell PNG bytes after browser capture completes |
 | `start_activity(cell_id, *, duration_ms=None, label=None, message=None)` | Shows the current agent work target                          |

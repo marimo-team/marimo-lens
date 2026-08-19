@@ -23,7 +23,7 @@ bring the result into view for review, and keep completed requests in
 **History** for another pass.
 
 [Read the user guide](https://marimo-team.github.io/marimo-lens/) for the
-code-mode agent workflow.
+agent workflow.
 
 ## Demo
 
@@ -63,10 +63,25 @@ change.
 
 ## Connect an agent
 
-Install the Lens skill:
+The `marimo-lens` package carries the Agent Skill that matches its Python API.
+An agent that already executes code in the live notebook kernel can continue
+directly with Lens.
 
-```bash
-npx skills add marimo-team/marimo-lens
+To give the agent live kernel execution, install
+[marimo Pair](https://github.com/marimo-team/marimo-pair/tree/main/skills/marimo-pair):
+
+```console
+npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
+```
+
+Use `$marimo-pair` to connect to or start the notebook, then resume
+`$marimo-lens`. Inside code mode, Marimo advertises `marimo_lens.agent` as the
+`lens` capability, and the module exposes the installed skill path:
+
+```python
+import marimo_lens.agent as lens_agent
+
+print(lens_agent.agent_skill() / "SKILL.md")
 ```
 
 After selecting an output and adding a note, ask the agent:
@@ -76,7 +91,7 @@ Resolve my Lens request.
 ```
 
 See [Agent workflow](https://marimo-team.github.io/marimo-lens/agents) to
-connect a code-mode agent.
+start with existing code-mode access or enter code mode through Pair.
 
 ## Python API
 

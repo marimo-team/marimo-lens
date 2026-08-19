@@ -194,10 +194,24 @@ agent can resolve those selections together after one verified change.
 
 ## Connect an agent
 
-Install the Lens skill for an agent that can use marimo code mode:
+The Python package carries its matching Lens Agent Skill. An agent that already
+executes code in the live notebook kernel can continue directly with Lens.
 
-```bash
-npx skills add marimo-team/marimo-lens
+To give the agent live kernel execution, install
+[marimo Pair](https://github.com/marimo-team/marimo-pair/tree/main/skills/marimo-pair):
+
+```console
+npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
+```
+
+Use `$marimo-pair` to connect to or start the notebook, then resume
+`$marimo-lens`. Inside code mode, inspect the installed Lens instructions from
+the notebook environment:
+
+```python
+import marimo_lens.agent as lens_agent
+
+print(lens_agent.agent_skill() / "SKILL.md")
 ```
 
 Then ask the agent to resolve the current request:
@@ -206,7 +220,7 @@ Then ask the agent to resolve the current request:
 Resolve my Lens request.
 ```
 
-The [Agent workflow](./agents) shows how a code-mode agent connects to Lens,
-edits and verifies cells, and returns the result for review. The
-[Overview](./overview) explains the collaboration loop. The [Python API
-reference](./api) defines each handoff method.
+The [Agent workflow](./agents) covers direct code-mode use and the Pair setup
+path, then shows how the agent edits and verifies cells and returns the result
+for review. The [Overview](./overview) explains the collaboration loop. The
+[Python API reference](./api) defines each handoff method.

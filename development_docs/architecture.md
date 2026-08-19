@@ -42,10 +42,12 @@ and publishes as `marimo-lens`.
   selection interaction, the document-scoped dock, and transient effects.
 - `@marimo-lens/python` owns the public API, durable state, runtime context,
   output-capture mailbox, runtime-scoped mounted-Lens registration, and packaged
-  browser resources.
-- `marimo_lens.agent` owns explicit code-mode Lens cell creation, mounted-Lens
-  connection, stable instance identity, detached context access, and full-cell
-  capture adaptation.
+  browser and agent resources.
+- `marimo_lens.agent` owns explicit code-mode Lens cell creation, Lens
+  connection, existing-Lens discovery from code-mode globals, stable instance
+  identity, detached context access, and full-cell capture adaptation. It also
+  resolves the Agent Plugin and Lens skill installed with the current Python
+  distribution.
 - `examples/lens.py` is the product example.
 
 Dependencies point toward the protocol package. Cross-package TypeScript
@@ -166,17 +168,21 @@ temporary file it creates from the returned bytes.
 
 Agents import `marimo_lens.agent` inside the active notebook kernel.
 `add_lens_cell()` queues a collapsed Lens cell through a live marimo code-mode
-context. The context creates and runs that cell when it exits. `connect()`
-resolves browser-ready Lens instances from the active runtime's mounted
-registry and returns one handle. The handle carries a stable opaque identity,
-returns the current detached context, guards cell images and mutations by
-revision, delegates public feedback methods, and returns selection and
+context. The context creates and runs that cell when it exits. `connect(ctx)`
+combines existing Lens objects from `ctx.globals` with browser-ready Lens
+instances from the active runtime's mounted registry, deduplicates them by
+object identity, and returns one handle. The handle carries a stable opaque
+identity, returns the current detached context, guards cell images and mutations
+by revision, delegates public feedback methods, and returns selection and
 full-cell images as PNG bytes.
 
-The top-level `skills/marimo-lens` directory owns agent workflow policy. A
-live-kernel executor owns session discovery, kernel calls, code-mode mutation,
-runtime verification, and writes of validated PNG bytes to private temporary
-files.
+The top-level `skills/marimo-lens` directory owns Lens workflow policy. Agents
+outside a live code-mode environment can install marimo Pair to enter one.
+Notebook discovery, connection, scratchpad execution, and general notebook
+inspection and mutation belong to the active code-mode integration, such as
+Pair. Lens owns selection grounding, evidence, activity, reveal, and resolution.
+The live-kernel executor writes validated PNG bytes to private temporary files
+when its image reader requires a path.
 
 ## Agent feedback
 
@@ -261,5 +267,10 @@ packaged browser resource contract. esbuild bundles the widget and its
 dependencies into the ESM file. Hatch validates and packages both files into
 the wheel and source distribution.
 
+The repository-root `plugin.json` and `skills/marimo-lens` tree are the authored
+Agent Plugin contract. The `agent-plugins` build backend packages that tree into
+the wheel and source distribution and records its installed location in the
+distribution metadata.
+
 A wheel built from the source distribution must load the browser resources
-carried by that archive.
+and Agent Skill carried by that archive.
