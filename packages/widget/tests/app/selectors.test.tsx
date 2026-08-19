@@ -46,7 +46,8 @@ describe("stable browser selectors", () => {
             selections={[selection]}
             history={[]}
             currentSelectionId={selection.id}
-            availableOutputCellIds={new Set([selection.outputCellId])}
+            availableSelectionIds={new Set([selection.id])}
+            selector={null}
             armed={false}
             listOpen
             sheetTab="open"
@@ -70,6 +71,7 @@ describe("stable browser selectors", () => {
           />
           <SelectionNoteEditor
             selection={selection}
+            selector={null}
             initialNote={selection.note}
             saving={false}
             mutationPending={false}
@@ -81,7 +83,8 @@ describe("stable browser selectors", () => {
           <SelectionOverlay
             selections={[selection]}
             currentSelectionId={selection.id}
-            availableOutputCellIds={new Set([selection.outputCellId])}
+            availableSelectionIds={new Set([selection.id])}
+            selector={null}
             workflow={{ mode: "idle" }}
             busySelectionIds={new Set()}
             capturingSelectionIds={new Set()}

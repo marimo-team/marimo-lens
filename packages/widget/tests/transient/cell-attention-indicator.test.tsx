@@ -388,7 +388,7 @@ function startActivityEvent(label?: string): CellActivityStartEvent {
   if (label) payload.label = label;
   return {
     protocol: "marimo-lens.event",
-    version: 2,
+    version: 3,
     type: "cell.activity.start",
     revision: 7,
     payload,
@@ -398,7 +398,7 @@ function startActivityEvent(label?: string): CellActivityStartEvent {
 function revealEvent(message = "Updated the aggregation."): CellRevealEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 2,
+    version: 3,
     type: "cell.reveal",
     revision: 7,
     payload: {

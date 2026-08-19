@@ -39,7 +39,11 @@ describe("Escape cancellation", () => {
         ...INITIAL_IDLE_STATE,
         workflow: {
           mode: "dragging",
-          output: { id: "cell-1", element: output },
+          target: {
+            key: "cell-1",
+            target: { kind: "notebook", cellIds: ["cell-1"] },
+            element: output,
+          },
           pointerId: 7,
           start: { x: 10, y: 10 },
           current: { x: 20, y: 20 },

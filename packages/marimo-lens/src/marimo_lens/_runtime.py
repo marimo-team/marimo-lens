@@ -27,6 +27,7 @@ class RuntimeSnapshot:
     available: bool
     filename: str
     reason: str
+    available_cell_ids: frozenset[str]
     cells: tuple[RuntimeCell, ...]
     controls: tuple[RuntimeControl, ...]
     omitted_cell_ids: tuple[str, ...] = ()

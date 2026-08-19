@@ -6,8 +6,8 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { SelectionList } from "@/selection/components/selection-list";
 import { SelectionOverlay } from "@/selection/components/selection-overlay";
-import { useAvailableOutputCellIds } from "@/selection/output-availability";
 import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
+import { useAvailableSelectionIds } from "@/selection/target-availability";
 
 import { selectionFixture } from "../support/fixtures";
 import { NotebookDomTestProvider } from "../support/notebook-dom";
@@ -21,7 +21,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("output availability", () => {
+describe("target availability", () => {
   test("observes the document only while selections reference outputs", () => {
     const NativeMutationObserver = window.MutationObserver;
     const observe = vi.fn<MutationObserver["observe"]>();
@@ -69,6 +69,7 @@ describe("output availability", () => {
     );
     expect(MutationObserverStub).toHaveBeenCalledOnce();
     expect(observe).toHaveBeenCalledWith(document.body, {
+      attributes: true,
       childList: true,
       subtree: true,
     });
@@ -105,7 +106,7 @@ describe("output availability", () => {
     vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
 
     const selection = selectionFixture();
-    const output = setupOutput(selection.outputCellId);
+    const output = setupOutput(selection.target.cellIds[0]!);
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -123,16 +124,16 @@ describe("output availability", () => {
     await mutateDocument(() => output.remove());
     expect(marker(selection)).toBeNull();
     expect(document.querySelector(".ml-selection-list__availability")?.textContent).toBe(
-      "Output unavailable",
+      "Target unavailable",
     );
 
     await mutateDocument(() => setupOutput("another-cell"));
     expect(marker(selection)).toBeNull();
     expect(document.querySelector(".ml-selection-list__availability")?.textContent).toBe(
-      "Output unavailable",
+      "Target unavailable",
     );
 
-    await mutateDocument(() => setupOutput(selection.outputCellId));
+    await mutateDocument(() => setupOutput(selection.target.cellIds[0]!));
     expect(marker(selection)?.textContent).toBe(selection.label);
     expect(document.querySelector(".ml-selection-list__availability")).toBeNull();
   });
@@ -159,7 +160,7 @@ describe("output availability", () => {
 
     const selection = selectionFixture();
     let width = 0;
-    const output = setupOutput(selection.outputCellId);
+    const output = setupOutput(selection.target.cellIds[0]!);
     output.getBoundingClientRect = () => new DOMRect(20, 20, width, 240);
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -185,16 +186,59 @@ describe("output availability", () => {
     });
     expect(container.textContent).toBe("1");
   });
+
+  test("updates configured target availability after producer metadata changes", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      return window.setTimeout(() => callback(performance.now()), 0);
+    });
+    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
+    const target = document.createElement("section");
+    target.id = "summary";
+    target.dataset.runtimeCellId = "cell-1";
+    target.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
+    document.body.appendChild(target);
+    const selection = selectionFixture({
+      target: {
+        kind: "dom",
+        cellIds: ["cell-1"],
+        documentPath: "/",
+        domSelector: "#summary",
+      },
+    });
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() =>
+      root?.render(
+        <NotebookDomTestProvider>
+          <AvailabilityProbe selections={[selection]} selector="#summary" />
+        </NotebookDomTestProvider>,
+      ),
+    );
+    expect(container.textContent).toBe("1");
+
+    await mutateDocument(() => {
+      target.dataset.runtimeCellId = "cell-2";
+    });
+    expect(container.textContent).toBe("0");
+  });
 });
 
-function AvailabilityProbe({ selections }: { selections: Selection[] }) {
-  const available = useAvailableOutputCellIds(selections);
+function AvailabilityProbe({
+  selections,
+  selector = null,
+}: {
+  selections: Selection[];
+  selector?: string | null;
+}) {
+  const available = useAvailableSelectionIds(selections, selector);
   return <span>{available.size}</span>;
 }
 
 function AvailabilitySurface({ selection }: { selection: Selection }) {
   const selections = [selection];
-  const availableOutputCellIds = useAvailableOutputCellIds(selections);
+  const availableSelectionIds = useAvailableSelectionIds(selections, null);
   const snapshotLoader = new SelectionSnapshotLoader(async () => {
     throw new Error("Snapshot loading is not expected in this test");
   });
@@ -203,7 +247,7 @@ function AvailabilitySurface({ selection }: { selection: Selection }) {
       <SelectionList
         selections={selections}
         currentSelectionId={selection.id}
-        availableOutputCellIds={availableOutputCellIds}
+        availableSelectionIds={availableSelectionIds}
         capturingSelectionIds={new Set()}
         busySelectionIds={new Set()}
         clearing={false}
@@ -216,7 +260,8 @@ function AvailabilitySurface({ selection }: { selection: Selection }) {
       <SelectionOverlay
         selections={selections}
         currentSelectionId={selection.id}
-        availableOutputCellIds={availableOutputCellIds}
+        availableSelectionIds={availableSelectionIds}
+        selector={null}
         workflow={{ mode: "idle" }}
         busySelectionIds={new Set()}
         capturingSelectionIds={new Set()}

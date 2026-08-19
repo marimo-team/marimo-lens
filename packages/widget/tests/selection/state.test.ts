@@ -20,7 +20,11 @@ describe("selection workflow", () => {
     const armed = uiReducer(INITIAL_UI_STATE, { type: "arm" });
     const dragging = uiReducer(armed, {
       type: "startDrag",
-      output: { id: "cell-1", element: output },
+      target: {
+        key: "cell-1",
+        target: { kind: "notebook", cellIds: ["cell-1"] },
+        element: output,
+      },
       pointerId: 4,
       point: { x: 20, y: 30 },
     });
@@ -88,14 +92,14 @@ describe("selection workflow", () => {
   test("keeps armed output focus stable across repeated pointer moves", () => {
     const armed = uiReducer(INITIAL_UI_STATE, { type: "arm" });
     const focused = uiReducer(armed, {
-      type: "focusOutput",
-      outputCellId: "cell-1",
+      type: "focusTarget",
+      targetKey: "cell-1",
     });
 
     expect(
       uiReducer(focused, {
-        type: "focusOutput",
-        outputCellId: "cell-1",
+        type: "focusTarget",
+        targetKey: "cell-1",
       }),
     ).toBe(focused);
   });

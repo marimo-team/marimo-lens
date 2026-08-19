@@ -423,7 +423,7 @@ def _put_selection(
         lens,
         {
             "protocol": "marimo-lens.command",
-            "version": 2,
+            "version": 3,
             "requestId": f"put-{revision}",
             "type": "selection.put",
             "payload": {
@@ -441,7 +441,7 @@ def _set_browser_ready(lens: RecordingLens, ready: bool) -> None:
         lens,
         {
             "protocol": "marimo-lens.event",
-            "version": 2,
+            "version": 3,
             "type": f"output.capture.{'ready' if ready else 'unready'}",
             "payload": {},
         },
@@ -464,7 +464,7 @@ def _reply(
         lens,
         {
             "protocol": "marimo-lens.response",
-            "version": 2,
+            "version": 3,
             "requestId": command["requestId"],
             "ok": True,
             "revision": 0,
@@ -498,7 +498,7 @@ def _fail_reply(
         lens,
         {
             "protocol": "marimo-lens.response",
-            "version": 2,
+            "version": 3,
             "requestId": command["requestId"],
             "ok": False,
             "revision": 0,

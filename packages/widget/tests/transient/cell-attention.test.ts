@@ -561,7 +561,7 @@ function startActivityEvent(
   if (message) payload.message = message;
   return {
     protocol: "marimo-lens.event",
-    version: 2,
+    version: 3,
     type: "cell.activity.start",
     revision: 7,
     payload,
@@ -571,7 +571,7 @@ function startActivityEvent(
 function activityStopEvent(cellId: string): CellActivityStopEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 2,
+    version: 3,
     type: "cell.activity.stop",
     revision: 7,
     payload: { cellId },
@@ -583,7 +583,7 @@ function revealEvent(cellId: string, message?: string, durationMs = 4_000): Cell
   if (message) payload.message = message;
   return {
     protocol: "marimo-lens.event",
-    version: 2,
+    version: 3,
     type: "cell.reveal",
     revision: 7,
     payload,

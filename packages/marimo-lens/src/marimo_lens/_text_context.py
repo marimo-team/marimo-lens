@@ -35,20 +35,24 @@ def render_text(
     if not selections:
         return "No Lens selections were collected."
 
-    live_cell_ids = {cell.id for cell in snapshot.cells}
+    live_cell_ids = snapshot.available_cell_ids
     selection_items = [
         (
             {
                 **selection,
-                "cellStatus": (
-                    "unavailable"
-                    if not snapshot.available
-                    else (
-                        "available"
-                        if selection["outputCellId"] in live_cell_ids
-                        else "missing"
-                    )
-                ),
+                "cells": [
+                    {
+                        "id": str(cell_id),
+                        "status": (
+                            "unavailable"
+                            if not snapshot.available
+                            else (
+                                "available" if cell_id in live_cell_ids else "missing"
+                            )
+                        ),
+                    }
+                    for cell_id in selection["target"]["cellIds"]
+                ],
             },
             selection,
             selection.get("id") == current_selection_id,
@@ -64,8 +68,8 @@ def render_text(
             budget=_TEXT_SELECTION_CHARACTERS,
             render=_render_selection_block,
             notice=(
-                "Context note: Some selection notes or DOM hints were "
-                "truncated by the total text budget."
+                "Context note: Some selection notes, target details, producer "
+                "lists, or DOM hints were truncated by the total text budget."
             ),
         ),
         _fair_section(
@@ -171,26 +175,69 @@ def _render_selection_block(
 ) -> tuple[str, bool]:
     selection, source, current = item
     label = str(selection.get("label") or "selection")
-    output_cell_id = str(selection.get("outputCellId") or "unknown")
-    cell_status = str(selection.get("cellStatus") or "unknown")
+    target = selection.get("target")
     note = str(source.get("note") or "")
     snapshot_text, snapshot_truncated = _snapshot_text(
         source.get("snapshot"), maximum=120
     )
     current_text = " (current)" if current else ""
-    header = (
-        f"### {label}{current_text} on output cell `{output_cell_id}` ({cell_status})"
-    )
     anchor = f"- Attention: {_anchor_text(selection.get('anchor'))}"
     snapshot = f"- Snapshot: {snapshot_text}"
+    header_prefix = f"### {label}{current_text} on "
+    cells_prefix = "- Producing cells: "
     note_prefix = "- Note: "
-    fixed_lines = [header, note_prefix, anchor, snapshot]
-    fixed = len("\n".join(fixed_lines))
+    fixed = (
+        len(header_prefix)
+        + len(cells_prefix)
+        + len(note_prefix)
+        + len(anchor)
+        + len(snapshot)
+        + 4
+    )
+    content_budget = quota - fixed
+    if content_budget < 3:
+        raise RuntimeError("Selection identity cannot fit its text quota.")
+    target_budget = max(1, content_budget // 4)
+    cells_budget = max(1, content_budget // 3)
+    note_budget = max(1, content_budget - target_budget - cells_budget)
+    target_text, target_truncated = _truncate_text(_target_text(target), target_budget)
+    cells_text, cells_truncated = _target_cells_text(
+        selection.get("cells"), maximum=cells_budget
+    )
     note_text, note_truncated = _truncate_text(
         note or "none",
-        max(1, quota - fixed),
+        note_budget,
     )
-    lines = [header, f"{note_prefix}{note_text}", anchor]
+    header = f"{header_prefix}{target_text}"
+    cells = f"{cells_prefix}{cells_text}"
+    lines = [header, f"{note_prefix}{note_text}", cells, anchor]
+    document_path = _target_document_path(target)
+    location_truncated = False
+    if document_path:
+        prefix = "- Document: "
+        remaining = quota - len("\n".join((*lines, snapshot))) - len(prefix) - 1
+        if remaining > 3:
+            shown, location_truncated = _truncate_text(
+                json.dumps(document_path, ensure_ascii=False), remaining
+            )
+            lines.append(f"{prefix}{shown}")
+        else:
+            location_truncated = True
+    selector = _target_dom_selector(target)
+    if selector:
+        selector_prefix = "- DOM selector: "
+        remaining = (
+            quota - len("\n".join((*lines, snapshot))) - len(selector_prefix) - 1
+        )
+        if remaining > 3:
+            selector_text, selector_truncated = _truncate_text(
+                json.dumps(selector, ensure_ascii=False), remaining
+            )
+            lines.append(f"{selector_prefix}{selector_text}")
+        else:
+            selector_truncated = True
+    else:
+        selector_truncated = False
     dom_hint = _dom_hint_text(source.get("domHint"))
     dom_truncated = False
     base_with_snapshot = "\n".join((*lines, snapshot))
@@ -208,8 +255,68 @@ def _render_selection_block(
         raise RuntimeError("Selection block cannot fit its text quota.")
     return (
         block,
-        note_truncated or dom_truncated or snapshot_truncated,
+        target_truncated
+        or cells_truncated
+        or note_truncated
+        or location_truncated
+        or selector_truncated
+        or dom_truncated
+        or snapshot_truncated,
     )
+
+
+def _target_text(value: object) -> str:
+    if not isinstance(value, Mapping):
+        return "unknown target"
+    kind = value.get("kind")
+    if kind == "notebook":
+        return "notebook output"
+    if kind == "dom":
+        return "DOM element"
+    return "unknown target"
+
+
+def _target_cells_text(value: object, *, maximum: int) -> tuple[str, bool]:
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        return _truncate_text("none", maximum)
+    cells = [
+        f"`{cell.get('id', 'unknown')}` ({cell.get('status', 'unknown')})"
+        for cell in value
+        if isinstance(cell, Mapping)
+    ]
+    if not cells:
+        return _truncate_text("none", maximum)
+    result: list[str] = []
+    length = 0
+    for index, cell in enumerate(cells):
+        separator = ", " if result else ""
+        if length + len(separator) + len(cell) <= maximum:
+            result.append(cell)
+            length += len(separator) + len(cell)
+            continue
+        omitted = len(cells) - index
+        marker = f", ... (+{omitted})" if result else f"... (+{omitted})"
+        if length + len(marker) <= maximum:
+            return "".join((", ".join(result), marker)), True
+        if result:
+            return ", ".join(result), True
+        shown, _truncated = _truncate_text(cell, maximum)
+        return shown, True
+    return ", ".join(result), False
+
+
+def _target_dom_selector(value: object) -> str:
+    if not isinstance(value, Mapping):
+        return ""
+    selector = value.get("domSelector")
+    return selector if isinstance(selector, str) else ""
+
+
+def _target_document_path(value: object) -> str:
+    if not isinstance(value, Mapping):
+        return ""
+    path = value.get("documentPath")
+    return path if isinstance(path, str) else ""
 
 
 def _render_control_block(
@@ -326,8 +433,10 @@ def _context_limit_lines(
             provenance.omitted_cell_ids,
             maximum=900,
         )
+        noun = "cell" if provenance.omitted_cell_count == 1 else "cells"
+        verb = "was" if provenance.omitted_cell_count == 1 else "were"
         lines.append(
-            f"- {provenance.omitted_cell_count} upstream cells were omitted. "
+            f"- {provenance.omitted_cell_count} relevant {noun} {verb} omitted. "
             f"First omitted IDs: {omitted}."
         )
     if provenance.truncated_cell_ids:

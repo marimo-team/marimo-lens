@@ -15,7 +15,7 @@ import anywidget
 import traitlets
 from pydantic import TypeAdapter, ValidationError
 
-from ._context import build_lens_context
+from ._context import build_lens_context, target_cell_ids
 from ._images import ImageError
 from ._marimo_runtime import MarimoRuntimeAdapter, current_runtime_scope
 from ._output_capture import OutputCaptureSlot
@@ -38,6 +38,7 @@ from ._protocol import (
 from ._protocol_models import (
     ATTENTION_DURATION_ADAPTER,
     CELL_ID_ADAPTER,
+    DOM_SELECTOR_ADAPTER,
     MAX_ATTENTION_DURATION_MS,
     MAX_SELECTIONS,
     OPTIONAL_ATTENTION_LABEL_ADAPTER,
@@ -93,7 +94,7 @@ def _unregister_mounted_lens(lens: Lens) -> None:
 
 
 class Lens(anywidget.AnyWidget):
-    """Collect cell-grounded selections from rendered marimo outputs."""
+    """Collect grounded selections from notebook outputs and configured DOM roots."""
 
     _marimo_lens_widget = True
     _esm = _STATIC / "widget.js"
@@ -108,15 +109,26 @@ class Lens(anywidget.AnyWidget):
             "history": [],
         }
     ).tag(sync=True)
+    _selector = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        dom_selector: str | None = None,
+    ) -> None:
         self._lock = threading.RLock()
+        self._lens_closed = True
+        selector = _validated_dom_selector(dom_selector)
         self._lens_closed = False
+        self._dom_selector = selector
         # One kernel model may be rendered by several browser consumers.
         self._browser_views = 0
         self._selection_store = SelectionStore()
         self._runtime = MarimoRuntimeAdapter()
-        super().__init__(_state=self._selection_store.state.payload())
+        super().__init__(
+            _state=self._selection_store.state.payload(),
+            _selector=selector,
+        )
         self._output_capture = OutputCaptureSlot(
             lock=self._lock,
             send=self.send,
@@ -137,7 +149,7 @@ class Lens(anywidget.AnyWidget):
             self._require_open()
             state = self._selection_store.state
         runtime = self._runtime.snapshot(
-            tuple(str(record.selection["outputCellId"]) for record in state.records)
+            target_cell_ids(state.selections(), state.current_selection_id)
         )
         return build_lens_context(runtime, state)
 
@@ -385,6 +397,13 @@ class Lens(anywidget.AnyWidget):
             if change.get("new") != canonical:
                 self.set_trait("_state", canonical)
 
+    @traitlets.observe("_selector")
+    def _keep_selector_authoritative(self, change: traitlets.Bunch) -> None:
+        if not hasattr(self, "_dom_selector"):
+            return
+        if change.get("new") != self._dom_selector:
+            self.set_trait("_selector", self._dom_selector)
+
     def _handle_lens_message(
         self,
         _widget: object,
@@ -577,6 +596,23 @@ class Lens(anywidget.AnyWidget):
     def _require_protocol_open(self) -> None:
         if self._lens_closed:
             raise ProtocolError("lens_closed", "Lens is closed.")
+
+
+def _validated_dom_selector(dom_selector: str | None) -> str | None:
+    if dom_selector is None:
+        return None
+    if not isinstance(dom_selector, str):
+        raise TypeError("dom_selector must be a string or None.")
+    selector = dom_selector.strip()
+    if not selector:
+        raise ValueError("dom_selector must not be empty.")
+    try:
+        return DOM_SELECTOR_ADAPTER.validate_python(selector)
+    except ValidationError as error:
+        raise ValueError(
+            "dom_selector must contain nonblank valid Unicode with at most "
+            "1,024 UTF-16 code units."
+        ) from error
 
 
 def _selection_id(value: object) -> str:

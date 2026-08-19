@@ -15,7 +15,7 @@ type SelectionSheetProps = {
   selections: Selection[];
   history: AddressedSelection[];
   currentSelectionId: string | null;
-  availableOutputCellIds: ReadonlySet<string>;
+  availableSelectionIds: ReadonlySet<string>;
   capturingSelectionIds: ReadonlySet<string>;
   busySelectionIds: ReadonlySet<string>;
   clearingSelections: boolean;
@@ -37,7 +37,7 @@ export function SelectionSheet({
   selections,
   history,
   currentSelectionId,
-  availableOutputCellIds,
+  availableSelectionIds,
   capturingSelectionIds,
   busySelectionIds,
   clearingSelections,
@@ -156,7 +156,7 @@ export function SelectionSheet({
         <SelectionList
           selections={selections}
           currentSelectionId={currentSelectionId}
-          availableOutputCellIds={availableOutputCellIds}
+          availableSelectionIds={availableSelectionIds}
           capturingSelectionIds={capturingSelectionIds}
           busySelectionIds={busySelectionIds}
           clearing={clearingSelections}

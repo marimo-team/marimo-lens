@@ -1,6 +1,6 @@
-import type { OutputCell, ViewportPoint } from "@/notebook/types";
+import type { ViewportPoint } from "@/notebook/types";
 
-import { isOutputRoot, outputCellFromElement, outputCellFromRoot } from "@/notebook/output-root";
+import { containsOpenTree } from "@/notebook/open-tree";
 
 export type InteractionSurface = {
   document: Document;
@@ -8,14 +8,14 @@ export type InteractionSurface = {
 };
 
 export type InteractionSurfaceOptions = {
-  includeOutputFrames: boolean;
+  includeTargetFrames: boolean;
   lockSelectionGestures: boolean;
+  targetRoots: () => readonly HTMLElement[];
 };
 
 type OpenTreeScan = {
   frames: HTMLIFrameElement[];
   shadows: ShadowRoot[];
-  outputs: HTMLElement[];
 };
 
 export function observeInteractionSurfaces(
@@ -23,7 +23,7 @@ export function observeInteractionSurfaces(
   options: InteractionSurfaceOptions,
   attach: (surface: InteractionSurface) => () => void,
 ): () => void {
-  if (!options.includeOutputFrames) return attach({ document: ownerDocument, frame: null });
+  if (!options.includeTargetFrames) return attach({ document: ownerDocument, frame: null });
 
   const attached = new Map<Document, () => void>();
   const boundaries = new Set<HTMLIFrameElement>();
@@ -32,7 +32,20 @@ export function observeInteractionSurfaces(
   const touchActionLocks = new Map<HTMLElement, InlineStyleValue>();
   const observedRoots = new Set<Node>();
   const ownerWindow = requireOwnerWindow(ownerDocument);
-  const observer = new ownerWindow.MutationObserver(() => scheduleRefresh());
+  let activeTargets: readonly HTMLElement[] = [];
+  const observer = new ownerWindow.MutationObserver((records) => {
+    const affectsTargets =
+      records.length === 0 ||
+      records.some((record) => {
+        if (record.type !== "attributes") return true;
+        const target = record.target;
+        if (!(target instanceof ownerWindow.HTMLElement)) return false;
+        const related = (root: HTMLElement) =>
+          containsOpenTree(root, target) || containsOpenTree(target, root);
+        return activeTargets.some(related) || options.targetRoots().some(related);
+      });
+    if (affectsTargets) scheduleRefresh();
+  });
   let refreshFrame = 0;
   let disposed = false;
 
@@ -47,7 +60,7 @@ export function observeInteractionSurfaces(
   function observeRoot(root: Node) {
     if (observedRoots.has(root)) return;
     observedRoots.add(root);
-    observer.observe(root, { childList: true, subtree: true });
+    observer.observe(root, { attributes: true, childList: true, subtree: true });
   }
 
   function syncObservedRoots(currentRoots: Set<Node>) {
@@ -62,7 +75,11 @@ export function observeInteractionSurfaces(
   function refresh() {
     if (disposed) return;
     const scan = scanOpenTree(ownerDocument);
-    const frames = scan.frames.filter((frame) => outputCellFromElement(frame) !== null);
+    const targets = options.targetRoots().filter((target) => target.isConnected);
+    activeTargets = targets;
+    const frames = scan.frames.filter((frame) =>
+      targets.some((target) => containsOpenTree(target, frame)),
+    );
     const surfaces = discoverInteractionSurfaces(ownerDocument, frames);
     const currentDocuments = new Set(surfaces.map((surface) => surface.document));
     for (const [surfaceDocument, detach] of attached) {
@@ -85,6 +102,7 @@ export function observeInteractionSurfaces(
       boundaries.delete(frame);
     }
     for (const frame of boundaryFrames) {
+      if (boundaries.has(frame)) continue;
       frame.dataset.marimoLensPointerBoundary = "true";
       boundaries.add(frame);
     }
@@ -102,7 +120,7 @@ export function observeInteractionSurfaces(
     }
 
     const touchTargets = options.lockSelectionGestures
-      ? new Set<HTMLElement>(scan.outputs)
+      ? new Set<HTMLElement>(targets)
       : new Set<HTMLElement>();
     if (options.lockSelectionGestures) {
       for (const surface of surfaces) {
@@ -143,12 +161,8 @@ export function parentViewportPoint(
   };
 }
 
-export function outputFromFrame(frame: HTMLIFrameElement): OutputCell | null {
-  return outputCellFromElement(frame);
-}
-
-export function iframeAtPoint(point: ViewportPoint, output: OutputCell): HTMLIFrameElement | null {
-  const frames = scanOpenTree(output.element).frames;
+export function iframeAtPoint(point: ViewportPoint, target: HTMLElement): HTMLIFrameElement | null {
+  const frames = scanOpenTree(target).frames;
   for (let index = frames.length - 1; index >= 0; index -= 1) {
     const frame = frames[index];
     if (!frame) continue;
@@ -180,21 +194,16 @@ function discoverInteractionSurfaces(
 function scanOpenTree(root: ParentNode): OpenTreeScan {
   const frames: HTMLIFrameElement[] = [];
   const shadows: ShadowRoot[] = [];
-  const outputs: HTMLElement[] = [];
   const visit = (tree: ParentNode) => {
     for (const element of tree.querySelectorAll("*")) {
       if (isIFrameElement(element)) frames.push(element);
-      if (isOutputRoot(element)) {
-        const output = outputCellFromRoot(element);
-        if (output) outputs.push(output.element);
-      }
       if (!element.shadowRoot) continue;
       shadows.push(element.shadowRoot);
       visit(element.shadowRoot);
     }
   };
   visit(root);
-  return { frames, shadows, outputs };
+  return { frames, shadows };
 }
 
 function isIFrameElement(element: Element): element is HTMLIFrameElement {

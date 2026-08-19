@@ -39,16 +39,15 @@ def test_selection_store_preserves_publish_error_when_rollback_publish_fails() -
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
-    [("id", "   "), ("outputCellId", "\t")],
+    "selected",
+    [
+        selection(selection_id="   "),
+        selection(target={"kind": "notebook", "cellIds": ["\t"]}),
+    ],
 )
 def test_selection_state_rejects_whitespace_only_identifiers(
-    field: str,
-    value: str,
+    selected: dict[str, Any],
 ) -> None:
-    selected = selection()
-    selected[field] = value
-
     with pytest.raises(RuntimeError, match="Selection record is invalid"):
         _state_with_records(
             SelectionRecord(
@@ -200,7 +199,7 @@ def test_resolve_reopen_and_clear_history_preserve_selection_identity() -> None:
     assert reopened_state.history == addressed_state.history
     assert reopened["label"] == selected["label"]
     assert reopened["note"] == selected["note"]
-    assert reopened["outputCellId"] == selected["outputCellId"]
+    assert reopened["target"] == selected["target"]
     assert reopened["anchor"] == selected["anchor"]
     assert reopened["snapshot"] == {"status": "pending"}
     assert reopened["previousResolution"] == {

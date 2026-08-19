@@ -75,8 +75,9 @@ describe("interaction documents", () => {
     const dispose = observeInteractionSurfaces(
       document,
       {
-        includeOutputFrames: true,
+        includeTargetFrames: true,
         lockSelectionGestures: true,
+        targetRoots: () => [output],
       },
       attach,
     );
@@ -136,8 +137,9 @@ describe("interaction documents", () => {
     const dispose = observeInteractionSurfaces(
       document,
       {
-        includeOutputFrames: true,
+        includeTargetFrames: true,
         lockSelectionGestures: false,
+        targetRoots: () => [output],
       },
       (surface) => {
         attachedDocuments.push(surface.document);
@@ -196,8 +198,9 @@ describe("interaction documents", () => {
     const dispose = observeInteractionSurfaces(
       document,
       {
-        includeOutputFrames: true,
+        includeTargetFrames: true,
         lockSelectionGestures: false,
+        targetRoots: () => [],
       },
       () => () => {},
     );
@@ -231,8 +234,9 @@ describe("interaction documents", () => {
     const dispose = observeInteractionSurfaces(
       document,
       {
-        includeOutputFrames: true,
+        includeTargetFrames: true,
         lockSelectionGestures: true,
+        targetRoots: () => [content],
       },
       () => () => {},
     );
@@ -242,5 +246,70 @@ describe("interaction documents", () => {
 
     dispose();
     expect(content.style.getPropertyValue("touch-action")).toBe("");
+  });
+
+  test("observes frames across an open shadow tree in a generic target root", () => {
+    const target = document.createElement("section");
+    target.style.setProperty("touch-action", "pan-y");
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    const frame = document.createElement("iframe");
+    const frameDocument = document.implementation.createHTMLDocument("frame");
+    Object.defineProperty(frame, "contentDocument", {
+      configurable: true,
+      value: frameDocument,
+    });
+    shadow.appendChild(frame);
+    target.appendChild(host);
+    document.body.appendChild(target);
+    const attachedDocuments: Document[] = [];
+
+    const dispose = observeInteractionSurfaces(
+      document,
+      {
+        includeTargetFrames: true,
+        lockSelectionGestures: true,
+        targetRoots: () => [target],
+      },
+      (surface) => {
+        attachedDocuments.push(surface.document);
+        return () => {};
+      },
+    );
+
+    expect(attachedDocuments).toEqual([document, frameDocument]);
+    expect(target.style.getPropertyValue("touch-action")).toBe("none");
+    expect(frameDocument.documentElement.style.getPropertyValue("touch-action")).toBe("none");
+
+    dispose();
+    expect(target.style.getPropertyValue("touch-action")).toBe("pan-y");
+  });
+
+  test("marks an inaccessible frame across an open shadow tree as a pointer boundary", () => {
+    const target = document.createElement("section");
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    const frame = document.createElement("iframe");
+    Object.defineProperty(frame, "contentDocument", { configurable: true, value: null });
+    shadow.appendChild(frame);
+    target.appendChild(host);
+    document.body.appendChild(target);
+
+    const dispose = observeInteractionSurfaces(
+      document,
+      {
+        includeTargetFrames: true,
+        lockSelectionGestures: true,
+        targetRoots: () => [target],
+      },
+      () => () => {},
+    );
+
+    expect(frame.dataset.marimoLensPointerBoundary).toBe("true");
+    expect(frame.style.getPropertyValue("pointer-events")).toBe("none");
+
+    dispose();
+    expect(frame.dataset.marimoLensPointerBoundary).toBeUndefined();
+    expect(frame.style.getPropertyValue("pointer-events")).toBe("");
   });
 });

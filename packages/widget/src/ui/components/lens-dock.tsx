@@ -1,4 +1,9 @@
-import type { AddressedSelection, Selection, SelectionResolvedEvent } from "@marimo-lens/protocol";
+import type {
+  AddressedSelection,
+  Selection,
+  SelectionResolvedEvent,
+  TargetSelector,
+} from "@marimo-lens/protocol";
 
 import { ChevronDown, List, MousePointer2 } from "lucide-react";
 import {
@@ -27,7 +32,8 @@ type LensDockProps = {
   selections: Selection[];
   history: AddressedSelection[];
   currentSelectionId: string | null;
-  availableOutputCellIds: ReadonlySet<string>;
+  availableSelectionIds: ReadonlySet<string>;
+  selector: TargetSelector;
   armed: boolean;
   listOpen: boolean;
   sheetTab: SelectionSheetTab;
@@ -62,7 +68,8 @@ export function LensDock({
   selections,
   history,
   currentSelectionId,
-  availableOutputCellIds,
+  availableSelectionIds,
+  selector,
   armed,
   listOpen,
   sheetTab,
@@ -158,15 +165,16 @@ export function LensDock({
 
     return dom.observeInteractionSurfaces(
       {
-        includeOutputFrames: true,
+        includeTargetFrames: true,
         lockSelectionGestures: false,
+        targetRoots: () => dom.listTargets(selector).map(({ element }) => element),
       },
       (surface) => {
         surface.document.addEventListener("keydown", enterSelection, true);
         return () => surface.document.removeEventListener("keydown", enterSelection, true);
       },
     );
-  }, [dom, enterSelectionMode, interactionLocked]);
+  }, [dom, enterSelectionMode, interactionLocked, selector]);
 
   const openHistory = (event: SelectionResolvedEvent) => {
     setExpanded(true);
@@ -189,7 +197,7 @@ export function LensDock({
             selections={selections}
             history={history}
             currentSelectionId={currentSelectionId}
-            availableOutputCellIds={availableOutputCellIds}
+            availableSelectionIds={availableSelectionIds}
             capturingSelectionIds={capturingSelectionIds}
             busySelectionIds={busySelectionIds}
             clearingSelections={clearPending}
@@ -246,11 +254,11 @@ export function LensDock({
             data-ml-select
             disabled={interactionLocked}
             onClick={onToggleArmed}
-            aria-label={armed ? "Cancel selection mode" : "Select an output"}
+            aria-label={armed ? "Cancel selection mode" : "Select a target"}
             title={
               armed
                 ? "Selection mode active (Escape to exit)"
-                : `Select an output (${LENS_SELECTION_SHORTCUT_LABEL})`
+                : `Select a target (${LENS_SELECTION_SHORTCUT_LABEL})`
             }
           >
             <MousePointer2 size={15} aria-hidden="true" />

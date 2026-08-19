@@ -107,9 +107,8 @@ def collect_runtime_snapshot(
         omitted_id_set = set(omitted_ids)
         cell_truncated_output_ids = frozenset(
             output_id
-            for output_id in retained_ids
-            if output_id in requested_output_ids
-            and _closure_intersects(output_id, parents, omitted_id_set)
+            for output_id in requested_output_ids
+            if _closure_intersects(output_id, parents, omitted_id_set)
         )
     namespace, namespace_complete = _runtime_globals(context)
     (
@@ -130,6 +129,7 @@ def collect_runtime_snapshot(
         available=True,
         filename=str(getattr(context, "filename", "") or ""),
         reason="",
+        available_cell_ids=frozenset(requested_output_ids),
         cells=cells,
         controls=controls,
         omitted_cell_ids=tuple(omitted_ids[:MAX_REPORTED_OMITTED_CELL_IDS]),
@@ -455,6 +455,7 @@ def _unavailable(reason: str) -> RuntimeSnapshot:
         available=False,
         filename="",
         reason=reason,
+        available_cell_ids=frozenset(),
         cells=(),
         controls=(),
     )

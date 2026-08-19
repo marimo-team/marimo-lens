@@ -1,4 +1,4 @@
-import type { Selection } from "@marimo-lens/protocol";
+import type { Selection, TargetSelector } from "@marimo-lens/protocol";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
@@ -8,8 +8,9 @@ export function revealSelection(
   dom: NotebookDomAdapter,
   selection: Selection,
   motion: RevealMotion,
+  selector: TargetSelector,
 ): boolean {
-  const output = dom.getOutputCell(selection.outputCellId)?.element;
+  const output = dom.getTarget(selection.target, selector)?.element;
   if (!output || isSubstantiallyVisible(dom, output)) return false;
 
   const reducedMotion =

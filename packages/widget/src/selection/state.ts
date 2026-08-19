@@ -2,7 +2,8 @@ import type { Selection, SelectionAnchor } from "@marimo-lens/protocol";
 
 import { outputContentMetrics } from "@marimo-lens/image-capture";
 
-import type { OutputCell, ViewportPoint } from "@/notebook/types";
+import type { TargetSurface } from "@/notebook/selection-target";
+import type { ViewportPoint } from "@/notebook/types";
 
 export type SelectionMotion = "animate" | "instant";
 export type SelectionSheetTab = "open" | "history";
@@ -13,10 +14,10 @@ export type PendingSelection = {
 
 export type WorkflowState =
   | { mode: "idle" }
-  | { mode: "armed"; activeOutputCellId: string | null }
+  | { mode: "armed"; activeTargetKey: string | null }
   | {
       mode: "dragging";
-      output: OutputCell;
+      target: TargetSurface;
       pointerId: number;
       start: ViewportPoint;
       current: ViewportPoint;
@@ -44,10 +45,10 @@ export type UiState = {
 export type UiAction =
   | { type: "arm" }
   | { type: "disarm" }
-  | { type: "focusOutput"; outputCellId: string | null }
+  | { type: "focusTarget"; targetKey: string | null }
   | {
       type: "startDrag";
-      output: OutputCell;
+      target: TargetSurface;
       pointerId: number;
       point: ViewportPoint;
     }
@@ -93,7 +94,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
     case "arm":
       return {
         ...state,
-        workflow: { mode: "armed", activeOutputCellId: null },
+        workflow: { mode: "armed", activeTargetKey: null },
         listOpen: false,
         announcement: "Select mode active. Click a point or drag a region.",
       };
@@ -103,14 +104,14 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
         workflow: { mode: "idle" },
         announcement: "Select mode closed.",
       };
-    case "focusOutput":
+    case "focusTarget":
       if (state.workflow.mode !== "armed") return state;
-      if (state.workflow.activeOutputCellId === action.outputCellId) return state;
+      if (state.workflow.activeTargetKey === action.targetKey) return state;
       return {
         ...state,
         workflow: {
           ...state.workflow,
-          activeOutputCellId: action.outputCellId,
+          activeTargetKey: action.targetKey,
         },
       };
     case "startDrag":
@@ -119,7 +120,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
         ...state,
         workflow: {
           mode: "dragging",
-          output: action.output,
+          target: action.target,
           pointerId: action.pointerId,
           start: action.point,
           current: action.point,
@@ -284,7 +285,7 @@ export function locksCompetingInteractions(state: UiState): boolean {
 
 export function previewAnchor(workflow: WorkflowState): SelectionAnchor | null {
   if (workflow.mode !== "dragging") return null;
-  return gestureAnchor(workflow.output.element, workflow.start, workflow.current);
+  return gestureAnchor(workflow.target.element, workflow.start, workflow.current);
 }
 
 export function gestureAnchor(

@@ -1,24 +1,21 @@
-import type { SelectionAnchor } from "@marimo-lens/protocol";
+import type { SelectionAnchor, SelectionTarget, TargetSelector } from "@marimo-lens/protocol";
 
 import { useEffect, type Dispatch, type RefObject } from "react";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
+import type { TargetSurface } from "@/notebook/selection-target";
 import type { SelectionMotion, UiAction, UiState, WorkflowState } from "@/selection/state";
 
-import { outputFromFrame, parentViewportPoint } from "@/notebook/interaction-documents";
-import {
-  deepestElementFromEvent,
-  outputCellFromElement,
-  outputCellFromEvent,
-} from "@/notebook/output-root";
+import { parentViewportPoint } from "@/notebook/interaction-documents";
+import { deepestElementFromEvent } from "@/notebook/output-root";
 import { anchorToViewport } from "@/selection/anchor";
 import { handleLensEscape } from "@/selection/escape";
 import { gestureAnchor, normalizedPoint } from "@/selection/state";
 import { focusDock, focusListTrigger, focusSelectionOrDock } from "@/ui/focus";
 
 export type BeginSelection = (
-  outputCellId: string,
-  output: HTMLElement,
+  target: SelectionTarget,
+  element: HTMLElement,
   anchor: SelectionAnchor,
   detailElement: Element,
   motion?: SelectionMotion,
@@ -29,12 +26,21 @@ export function useDocumentInteractions(options: {
   uiRef: RefObject<UiState>;
   dispatch: Dispatch<UiAction>;
   dom: NotebookDomAdapter;
+  selector: TargetSelector;
   beginSelection: BeginSelection;
   canceledPointerIds: RefObject<Set<number>>;
   cancelAdjustment: () => boolean;
 }): void {
-  const { workflow, uiRef, dispatch, dom, beginSelection, canceledPointerIds, cancelAdjustment } =
-    options;
+  const {
+    workflow,
+    uiRef,
+    dispatch,
+    dom,
+    selector,
+    beginSelection,
+    canceledPointerIds,
+    cancelAdjustment,
+  } = options;
   const interactionActive = workflow.mode === "armed" || workflow.mode === "dragging";
 
   useEffect(() => {
@@ -42,34 +48,37 @@ export function useDocumentInteractions(options: {
     else delete dom.document.documentElement.dataset.marimoLensArmed;
 
     const surfaceOptions = {
-      includeOutputFrames: interactionActive,
+      includeTargetFrames: interactionActive,
       lockSelectionGestures: interactionActive,
+      targetRoots: () => dom.listTargets(selector).map(({ element }) => element),
     };
     const detachSurfaces = dom.observeInteractionSurfaces(surfaceOptions, (surface) => {
-      const outputForEvent = (event: Event) =>
-        surface.frame ? outputFromFrame(surface.frame) : outputCellFromEvent(event);
+      const targetForEvent = (event: Event) =>
+        surface.frame
+          ? dom.targetFromElement(surface.frame, selector)
+          : dom.targetFromEvent(event, selector);
 
       const onPointerDown = (event: PointerEvent) => {
         const workflow = uiRef.current.workflow;
         if (workflow.mode !== "armed" || event.button !== 0) return;
-        const output = outputForEvent(event);
-        if (!output) return;
+        const target = targetForEvent(event);
+        if (!target) return;
         const point = parentViewportPoint(event, surface.frame);
         canceledPointerIds.current.delete(event.pointerId);
         event.preventDefault();
         event.stopPropagation();
         try {
-          output.element.setPointerCapture(event.pointerId);
+          target.element.setPointerCapture(event.pointerId);
         } catch {
           // Cross-document pointers remain tracked by listeners on both documents.
         }
-        dispatch({ type: "startDrag", output, pointerId: event.pointerId, point });
+        dispatch({ type: "startDrag", target, pointerId: event.pointerId, point });
       };
 
       const onPointerMove = (event: PointerEvent) => {
         const workflow = uiRef.current.workflow;
         if (workflow.mode === "armed") {
-          dispatch({ type: "focusOutput", outputCellId: outputForEvent(event)?.id ?? null });
+          dispatch({ type: "focusTarget", targetKey: targetForEvent(event)?.key ?? null });
         } else if (workflow.mode === "dragging" && workflow.pointerId === event.pointerId) {
           event.preventDefault();
           dispatch({
@@ -91,19 +100,19 @@ export function useDocumentInteractions(options: {
         event.preventDefault();
         event.stopPropagation();
         const end = parentViewportPoint(event, surface.frame);
-        const anchor = gestureAnchor(workflow.output.element, workflow.start, end);
-        const detailPoint = anchorCenter(workflow.output.element, anchor);
-        const frame = surface.frame ?? dom.iframeAtPoint(detailPoint, workflow.output);
+        const anchor = gestureAnchor(workflow.target.element, workflow.start, end);
+        const detailPoint = anchorCenter(workflow.target.element, anchor);
+        const frame = surface.frame ?? dom.iframeAtPoint(detailPoint, workflow.target);
         const candidate = frame ?? dom.deepestElementAtPoint(detailPoint.x, detailPoint.y);
         const detail =
-          candidate && outputCellFromElement(candidate)?.id === workflow.output.id
+          candidate && dom.targetFromElement(candidate, selector)?.key === workflow.target.key
             ? candidate
             : surface.frame
               ? surface.frame
-              : deepestElementFromEvent(event, workflow.output.element);
-        beginSelection(workflow.output.id, workflow.output.element, anchor, detail);
-        if (workflow.output.element.hasPointerCapture(event.pointerId)) {
-          workflow.output.element.releasePointerCapture(event.pointerId);
+              : deepestElementFromEvent(event, workflow.target.element);
+        beginSelection(workflow.target.target, workflow.target.element, anchor, detail);
+        if (workflow.target.element.hasPointerCapture(event.pointerId)) {
+          workflow.target.element.releasePointerCapture(event.pointerId);
         }
       };
 
@@ -136,7 +145,7 @@ export function useDocumentInteractions(options: {
         const target = eventTargetElement(event, surface.document);
         const lensUi = target?.closest("[data-marimo-lens-ui]");
         if (lensUi && !target?.closest("[data-ml-select]")) return;
-        navigateOutputs(dom, event, workflow, beginSelection, dispatch);
+        navigateTargets(dom, selector, event, workflow, beginSelection, dispatch);
       };
 
       surface.document.addEventListener("pointerdown", onPointerDown, true);
@@ -164,6 +173,7 @@ export function useDocumentInteractions(options: {
     dispatch,
     dom,
     interactionActive,
+    selector,
     uiRef,
   ]);
 }
@@ -178,50 +188,51 @@ function anchorCenter(output: HTMLElement, anchor: SelectionAnchor): { x: number
       };
 }
 
-function navigateOutputs(
+function navigateTargets(
   dom: NotebookDomAdapter,
+  selector: TargetSelector,
   event: KeyboardEvent,
   workflow: Extract<WorkflowState, { mode: "armed" }>,
   beginSelection: BeginSelection,
   dispatch: Dispatch<UiAction>,
 ): void {
-  const outputs = dom.listOutputCells();
-  if (outputs.length === 0) return;
+  const targets = dom.listTargets(selector);
+  if (targets.length === 0) return;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
-    const current = outputs.findIndex((output) => output.id === workflow.activeOutputCellId);
+    const current = targets.findIndex((target) => target.key === workflow.activeTargetKey);
     const backwards = event.key === "ArrowUp";
     const next =
       current < 0
         ? backwards
-          ? outputs.length - 1
+          ? targets.length - 1
           : 0
-        : (current + (backwards ? -1 : 1) + outputs.length) % outputs.length;
-    const output = outputs[next];
-    if (!output) return;
-    output.element.scrollIntoView({ block: "nearest" });
-    dispatch({ type: "focusOutput", outputCellId: output.id });
+        : (current + (backwards ? -1 : 1) + targets.length) % targets.length;
+    const target = targets[next];
+    if (!target) return;
+    target.element.scrollIntoView({ block: "nearest" });
+    dispatch({ type: "focusTarget", targetKey: target.key });
     dispatch({
       type: "announce",
-      message: outputAnnouncement(output.element, next, outputs.length),
+      message: targetAnnouncement(target, next, targets.length),
     });
   } else if (event.key === "Enter") {
     event.preventDefault();
-    const output =
-      outputs.find((candidate) => candidate.id === workflow.activeOutputCellId) ?? outputs[0];
-    if (!output) return;
-    const rect = output.element.getBoundingClientRect();
+    const target =
+      targets.find((candidate) => candidate.key === workflow.activeTargetKey) ?? targets[0];
+    if (!target) return;
+    const rect = target.element.getBoundingClientRect();
     const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
     const detail =
-      dom.iframeAtPoint(point, output) ??
+      dom.iframeAtPoint(point, target) ??
       dom.deepestElementAtPoint(point.x, point.y) ??
-      output.element;
+      target.element;
     beginSelection(
-      output.id,
-      output.element,
+      target.target,
+      target.element,
       {
         kind: "point",
-        ...normalizedPoint(output.element, point),
+        ...normalizedPoint(target.element, point),
       },
       detail,
       "instant",
@@ -229,7 +240,8 @@ function navigateOutputs(
   }
 }
 
-function outputAnnouncement(output: HTMLElement, index: number, count: number): string {
+function targetAnnouncement(target: TargetSurface, index: number, count: number): string {
+  const output = target.element;
   const headingSelector = "h1, h2, h3, h4, h5, h6, [role='heading']";
   const heading = output.matches(headingSelector)
     ? output
@@ -238,7 +250,7 @@ function outputAnnouncement(output: HTMLElement, index: number, count: number): 
     ? output
     : output.querySelector<HTMLElement>("[aria-label]");
   const label = normalizeLabel(heading?.textContent ?? labelled?.getAttribute("aria-label"));
-  return label ? `Output ${index + 1} of ${count}, ${label}.` : `Output ${index + 1} of ${count}.`;
+  return label ? `Target ${index + 1} of ${count}, ${label}.` : `Target ${index + 1} of ${count}.`;
 }
 
 function normalizeLabel(value: string | null | undefined): string {

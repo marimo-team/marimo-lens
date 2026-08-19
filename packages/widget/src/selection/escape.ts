@@ -23,7 +23,7 @@ export function handleLensEscape(event: KeyboardEvent, controller: EscapeControl
     controller.focusListTrigger();
   } else if (workflow.mode === "armed" || workflow.mode === "dragging") {
     if (workflow.mode === "dragging") {
-      controller.cancelDrag(workflow.pointerId, workflow.output.element);
+      controller.cancelDrag(workflow.pointerId, workflow.target.element);
     }
     controller.dispatch({ type: "disarm" });
     controller.focusDock();

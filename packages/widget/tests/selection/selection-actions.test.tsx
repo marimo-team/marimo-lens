@@ -1,6 +1,12 @@
 import type { AnyModel } from "@anywidget/types";
 import type { CaptureResult } from "@marimo-lens/image-capture";
-import type { AddressedSelection, LensResponse, LensState, Selection } from "@marimo-lens/protocol";
+import type {
+  AddressedSelection,
+  LensResponse,
+  LensState,
+  Selection,
+  SelectionTarget,
+} from "@marimo-lens/protocol";
 
 import { act, StrictMode, useLayoutEffect, useMemo, useReducer } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -16,6 +22,7 @@ import { INITIAL_UI_STATE, uiReducer, type UiState } from "@/selection/state";
 import { addressedSelectionFixture, selectionFixture } from "../support/fixtures";
 
 type Actions = ReturnType<typeof useSelectionActions>;
+const NOTEBOOK_TARGET: SelectionTarget = { kind: "notebook", cellIds: ["cell-1"] };
 
 const captureSnapshot = vi.fn<SelectionSnapshotCapture>();
 let root: Root | null = null;
@@ -41,7 +48,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
 
     expect(latestUi?.workflow).toEqual({
       mode: "editingNote",
@@ -80,7 +87,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
 
     expect(stateRef.current.selections[0]).toMatchObject({
@@ -103,7 +110,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
 
     expect(protocol.putSelection).toHaveBeenCalledTimes(1);
@@ -123,7 +130,7 @@ describe("selection mutations", () => {
       .mockRejectedValueOnce(new Error("Image persistence failed"));
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
 
     expect(stateRef.current.selections[0]?.snapshot).toMatchObject({
@@ -146,7 +153,7 @@ describe("selection mutations", () => {
     });
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
@@ -169,7 +176,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     const signal = captureSignal();
 
@@ -214,7 +221,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     output.replaceWith(replacementOutput());
 
@@ -258,7 +265,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     expect(protocol.putSelection).toHaveBeenCalledTimes(1);
     const signal = captureSignal();
@@ -286,7 +293,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     const signal = captureSignal();
     stateRef.current = {
@@ -313,7 +320,7 @@ describe("selection mutations", () => {
     mount(stateRef, protocol.client);
 
     act(() => {
-      actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output);
+      beginPointSelection(output);
       actions?.invalidateSnapshotCapture("selection-fixed");
     });
     await flush();
@@ -330,7 +337,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client, true);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
 
     expect(protocol.putSelection).toHaveBeenCalledTimes(2);
@@ -347,7 +354,7 @@ describe("selection mutations", () => {
     protocol.deleteSelection.mockRejectedValueOnce(new Error("Remove failed"));
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     output.remove();
     act(() => actions?.deleteSelection(stateRef.current.selections[0]!));
@@ -372,7 +379,7 @@ describe("selection mutations", () => {
     protocol.clearSelections.mockRejectedValueOnce(new Error("Clear failed"));
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     output.remove();
     act(() => actions?.clearSelections());
@@ -396,7 +403,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     const signal = captureSignal();
     act(() => actions?.deleteSelection(stateRef.current.selections[0]!));
@@ -442,7 +449,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     const signal = captureSignal();
     act(() => actions?.clearSelections());
@@ -466,7 +473,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     const firstSignal = captureSignal(0);
 
@@ -497,7 +504,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     const signal = captureSignal();
     protocol.putSelection.mockRejectedValueOnce(new Error("Adjust failed"));
@@ -528,7 +535,7 @@ describe("selection mutations", () => {
     const protocol = statefulProtocol(stateRef);
     mount(stateRef, protocol.client);
 
-    act(() => actions?.beginSelection("cell-1", output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    act(() => beginPointSelection(output));
     await flush();
     const signal = captureSignal();
 
@@ -657,7 +664,7 @@ describe("selection mutations", () => {
       id: receipt.selectionId,
       label: receipt.label,
       note: receipt.note,
-      outputCellId: receipt.outputCellId,
+      target: receipt.target,
       previousResolution: {
         addressedAt: receipt.addressedAt,
         summary: receipt.summary,
@@ -729,6 +736,7 @@ function Harness({
     stateRef,
     dispatch,
     dom,
+    selector: null,
     protocol,
     captureSnapshot,
   });
@@ -898,7 +906,7 @@ function reopenedSelection(receipt: AddressedSelection): Selection {
     id: receipt.selectionId,
     label: receipt.label,
     note: receipt.note,
-    outputCellId: receipt.outputCellId,
+    target: receipt.target,
     createdAt: receipt.createdAt,
     anchor: receipt.anchor,
     snapshot: {
@@ -929,6 +937,10 @@ function failedCapture(): Extract<CaptureResult, { status: "failed" }> {
 
 function nextLabel(label: string): string {
   return `S${Number(label.slice(1)) + 1}`;
+}
+
+function beginPointSelection(output: HTMLElement): void {
+  actions?.beginSelection(NOTEBOOK_TARGET, output, { kind: "point", x: 0.4, y: 0.5 }, output);
 }
 
 function visibleOutput(): HTMLElement {
@@ -977,7 +989,7 @@ function deferred<T>() {
 function successResponse(revision: number): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 2,
+    version: 3,
     requestId: "request-1",
     ok: true,
     revision,

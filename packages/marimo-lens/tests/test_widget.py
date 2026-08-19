@@ -11,6 +11,7 @@ from typing import Any, cast
 import marimo_lens
 import pytest
 from marimo_lens import (
+    CellReference,
     Lens,
     LensContext,
     LensError,
@@ -84,15 +85,20 @@ class DelayedEventLens(RecordingLens):
 
 def test_public_api_exposes_context_and_resolution_contracts() -> None:
     assert marimo_lens.__all__ == [
+        "CellReference",
         "Lens",
         "LensContext",
         "LensError",
         "LensReferences",
         "NotebookReference",
         "SelectionReference",
+        "SelectionTargetReference",
         "__version__",
     ]
-    assert inspect.signature(Lens).parameters == {}
+    lens_parameters = inspect.signature(Lens).parameters
+    assert list(lens_parameters) == ["dom_selector"]
+    assert lens_parameters["dom_selector"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert lens_parameters["dom_selector"].default is None
     resolve_parameters = inspect.signature(Lens.resolve).parameters
     assert list(resolve_parameters) == [
         "self",
@@ -139,6 +145,7 @@ def test_public_api_exposes_context_and_resolution_contracts() -> None:
     assert LensContext.__module__ == "marimo_lens.context"
     assert LensError.__module__ == "marimo_lens.errors"
     assert LensReferences.__module__ == "marimo_lens.context"
+    assert CellReference.__module__ == "marimo_lens.context"
     assert NotebookReference.__module__ == "marimo_lens.context"
     assert SelectionReference.__module__ == "marimo_lens.context"
 
@@ -178,7 +185,7 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
-            "version": 2,
+            "version": 3,
             "type": "cell.reveal",
             "revision": 1,
             "payload": {
@@ -250,7 +257,7 @@ def test_start_activity_sends_one_transient_event_without_changing_selection_sta
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
-            "version": 2,
+            "version": 3,
             "type": "cell.activity.start",
             "revision": 1,
             "payload": {
@@ -290,7 +297,7 @@ def test_stop_activity_sends_one_matching_cell_event_without_runtime_access(
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
-            "version": 2,
+            "version": 3,
             "type": "cell.activity.stop",
             "revision": 1,
             "payload": {"cellId": "cell-view"},
@@ -552,6 +559,32 @@ def test_cell_attention_rejects_a_closed_lens_before_runtime_access(
     assert not runtime_accessed
 
 
+def test_lens_serializes_the_optional_dom_selector() -> None:
+    lens = Lens(dom_selector="#app-shell :is(header, section)")
+
+    assert lens._selector == "#app-shell :is(header, section)"
+    lens.close()
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "error", "message"),
+    [
+        ({"dom_selector": 3}, TypeError, "must be a string or None"),
+        ({"dom_selector": "  "}, ValueError, "must not be empty"),
+        ({"dom_selector": "\ufeff"}, ValueError, "nonblank valid Unicode"),
+        ({"dom_selector": "\ud800"}, ValueError, "nonblank valid Unicode"),
+        ({"dom_selector": "x" * 1_025}, ValueError, "at most 1,024"),
+    ],
+)
+def test_lens_rejects_invalid_target_configuration(
+    kwargs: dict[str, object],
+    error: type[Exception],
+    message: str,
+) -> None:
+    with pytest.raises(error, match=message):
+        cast(Any, Lens)(**kwargs)
+
+
 def test_stop_activity_rejects_a_closed_lens() -> None:
     lens = RecordingLens()
     lens.close()
@@ -568,7 +601,7 @@ def test_pointer_release_selection_exists_before_image_capture() -> None:
     response = _put(lens, revision=0, selection_value=selection(note=""))
 
     assert response["ok"] is True
-    assert response["version"] == 2
+    assert response["version"] == 3
     assert response["revision"] == 1
     assert response["payload"]["selection"]["label"] == "S1"
     assert _state(lens)["nextLabel"] == "S2"
@@ -629,6 +662,15 @@ def test_synced_state_is_a_python_owned_projection() -> None:
         "selections": [],
         "history": [],
     }
+
+
+def test_synced_selector_is_a_python_owned_configuration() -> None:
+    lens = Lens(dom_selector="#summary")
+
+    lens.set_trait("_selector", "#other")
+
+    assert lens._selector == "#summary"
+    lens.close()
 
 
 def test_close_releases_images_and_rejects_later_context_and_commands() -> None:
@@ -707,7 +749,7 @@ def test_selection_growth_is_rejected_before_state_changes() -> None:
     assert lens.context().images == {}
 
 
-def test_identifier_heavy_growth_is_rejected_before_state_changes() -> None:
+def test_identifier_heavy_selections_fit_the_supported_selection_count() -> None:
     lens = RecordingLens()
     response: dict[str, Any] = {}
     for index in range(63):
@@ -723,17 +765,14 @@ def test_identifier_heavy_growth_is_rejected_before_state_changes() -> None:
             revision=index,
             selection_value=selection_value,
         )
-        if index < 62:
-            assert response["ok"] is True
+        assert response["ok"] is True
 
-    assert response["ok"] is False
-    assert response["error"]["code"] == "selection_context_limit"
-    assert _state(lens)["revision"] == 62
-    assert _state(lens)["nextLabel"] == "S63"
-    assert len(_selections(lens)) == 62
+    assert _state(lens)["revision"] == 63
+    assert _state(lens)["nextLabel"] == "S64"
+    assert len(_selections(lens)) == 63
     projected = lens.context().references["selections"]
     assert isinstance(projected, list)
-    assert len(projected) == 62
+    assert len(projected) == 63
 
 
 def test_new_labels_are_server_checked_and_never_reused() -> None:
@@ -794,7 +833,7 @@ def test_resolve_removes_selection_and_image_and_preserves_label_allocation() ->
         "selectionId": "selection-1",
         "label": "S1",
         "note": "",
-        "outputCellId": "cell-view",
+        "target": {"kind": "notebook", "cellIds": ["cell-view"]},
         "createdAt": "2026-07-14T11:58:00Z",
         "addressedAt": _state(lens)["history"][0]["addressedAt"],
         "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
@@ -833,7 +872,7 @@ def test_resolve_emits_one_transient_resolution_receipt() -> None:
     event, buffers = lens.sent[-1]
     assert event == {
         "protocol": "marimo-lens.event",
-        "version": 2,
+        "version": 3,
         "type": "selection.resolved",
         "revision": 2,
         "payload": {
@@ -927,7 +966,7 @@ def test_browser_reopens_addressed_selection_and_clears_history() -> None:
     assert restored["id"] == selected["id"]
     assert restored["label"] == selected["label"]
     assert restored["note"] == selected["note"]
-    assert restored["outputCellId"] == selected["outputCellId"]
+    assert restored["target"] == selected["target"]
     assert restored["anchor"] == selected["anchor"]
     assert restored["snapshot"] == {"status": "pending"}
     assert restored["previousResolution"] == {
@@ -1387,7 +1426,7 @@ def test_snapshot_get_returns_the_exact_stored_png() -> None:
     response, buffers = lens.sent[-1]
 
     assert response["ok"] is True
-    assert response["version"] == 2
+    assert response["version"] == 3
     assert response["payload"]["selectionId"] == "selection-1"
     assert (
         response["payload"]["snapshot"]["sha256"] == snapshot_metadata(data)["sha256"]
@@ -1484,7 +1523,7 @@ def _send(
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.command",
-            "version": 2,
+            "version": 3,
             "requestId": f"request-{len(lens.sent) + 1}",
             "type": command_type,
             "payload": payload,

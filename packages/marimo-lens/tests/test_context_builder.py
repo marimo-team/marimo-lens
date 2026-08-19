@@ -4,7 +4,7 @@ import json
 from dataclasses import replace
 
 import pytest
-from marimo_lens._context import build_context
+from marimo_lens._context import build_context, target_cell_ids
 from marimo_lens._control_state import (
     MAX_CONTROL_CHARACTERS,
     MAX_CONTROLS,
@@ -17,7 +17,7 @@ from marimo_lens._selection_state import (
     MAX_SELECTION_STATE_BYTES,
     validate_selection_admission,
 )
-from marimo_lens._text_context import MAX_CONTEXT_TEXT_CHARACTERS
+from marimo_lens._text_context import MAX_CONTEXT_TEXT_CHARACTERS, _target_cells_text
 
 from tests.support.factories import cell, selection, snapshot
 
@@ -84,14 +84,18 @@ def test_references_are_compact_and_text_is_standalone() -> None:
         "id",
         "label",
         "note",
-        "outputCellId",
-        "cellStatus",
+        "target",
+        "cells",
         "anchor",
         "domHint",
         "snapshot",
     }
     assert reference["note"] == "Compare this region."
-    assert reference["cellStatus"] == "available"
+    assert reference["target"] == {
+        "kind": "notebook",
+        "cellIds": ["cell-view"],
+    }
+    assert reference["cells"] == [{"id": "cell-view", "status": "available"}]
     assert reference["snapshot"] == {"status": "pending"}
     assert len(compact.encode()) < 2_000
     assert "chart_source_sentinel" not in compact
@@ -127,6 +131,32 @@ def test_empty_note_and_no_images_still_produce_complete_text() -> None:
     assert "result = compute()" in text
 
 
+def test_dom_target_keeps_document_grounding_without_a_producing_cell() -> None:
+    selected = selection(
+        note="Tighten the spacing in this card.",
+        target={
+            "kind": "dom",
+            "cellIds": [],
+            "documentPath": "/dashboard/",
+            "domSelector": "#app-shell > article:nth-of-type(2)",
+        },
+    )
+
+    references, text = build_context(
+        snapshot(),
+        [selected],
+        revision=1,
+        current_selection_id="selection-1",
+    )
+
+    reference = references["selections"][0]
+    assert reference["target"] == selected["target"]
+    assert reference["cells"] == []
+    assert "DOM element" in text
+    assert 'Document: "/dashboard/"' in text
+    assert 'DOM selector: "#app-shell > article:nth-of-type(2)"' in text
+
+
 def test_references_distinguish_missing_cells_from_unavailable_runtime() -> None:
     missing_references, missing_text = build_context(
         snapshot(),
@@ -138,6 +168,7 @@ def test_references_distinguish_missing_cells_from_unavailable_runtime() -> None
         available=False,
         filename="",
         reason="not running in a marimo kernel",
+        available_cell_ids=frozenset(),
         cells=(),
         controls=(),
     )
@@ -148,8 +179,10 @@ def test_references_distinguish_missing_cells_from_unavailable_runtime() -> None
         current_selection_id="selection-1",
     )
 
-    assert missing_references["selections"][0]["cellStatus"] == "missing"
-    assert unavailable_references["selections"][0]["cellStatus"] == "unavailable"
+    assert missing_references["selections"][0]["cells"][0]["status"] == "missing"
+    assert (
+        unavailable_references["selections"][0]["cells"][0]["status"] == "unavailable"
+    )
     assert unavailable_references["notebook"] == {
         "path": "",
         "available": False,
@@ -371,7 +404,10 @@ def test_context_enforces_independent_reference_and_text_budgets() -> None:
     assert reference_bytes <= MAX_CONTEXT_REFERENCES_BYTES
     assert len(references["notebook"]["path"].encode()) <= 2_048
     assert len(text) <= MAX_CONTEXT_TEXT_CHARACTERS
-    assert "Some selection notes or DOM hints were truncated" in text
+    assert (
+        "Some selection notes, target details, producer lists, or DOM hints were truncated"
+        in text
+    )
     assert "Some cell metadata or source was truncated" in text
     assert all(f"### S{index + 1}" in text for index in range(9))
 
@@ -436,9 +472,11 @@ def test_reference_budget_fits_maximal_valid_selection_state() -> None:
     for source, reference in zip(selections, references["selections"], strict=True):
         assert reference["id"] == source["id"]
         assert reference["label"] == source["label"]
-        assert reference["outputCellId"] == source["outputCellId"]
+        assert reference["target"] == source["target"]
         assert reference["anchor"] == source["anchor"]
-        assert reference["cellStatus"] == "available"
+        assert reference["cells"] == [
+            {"id": source["target"]["cellIds"][0], "status": "available"}
+        ]
         assert reference["snapshot"] == {"status": "pending"}
 
     assert all(
@@ -456,25 +494,27 @@ def test_context_rejects_aggregate_selection_growth() -> None:
             label=f"S{index + 1}",
             note="x" * 4_000,
         )
-        for index in range(10)
+        for index in range(12)
     ]
 
-    with pytest.raises(ValueError, match="shared 40,000-byte limit"):
+    with pytest.raises(ValueError, match="shared 48,000-byte limit"):
         validate_selection_admission(selections)
 
 
 def test_context_accepts_dense_identity_state_within_selection_budget() -> None:
     selections = []
+    output_cell_ids = []
     for index in range(63):
         prefix = f"{index}-"
         selection_id = prefix + "漢" * (80 - len(prefix))
         output_cell_id = prefix + "界" * (80 - len(prefix))
+        output_cell_ids.append(output_cell_id)
         selections.append(
             {
                 "id": selection_id,
                 "label": f"S{index + 1}",
                 "note": "",
-                "outputCellId": output_cell_id,
+                "target": {"kind": "notebook", "cellIds": [output_cell_id]},
                 "createdAt": "2026-01-01T00:00:00+00:00",
                 "anchor": {"kind": "point", "x": 0.5, "y": 0.5},
                 "snapshot": {"status": "pending"},
@@ -489,14 +529,156 @@ def test_context_accepts_dense_identity_state_within_selection_budget() -> None:
             separators=(",", ":"),
         ).encode("utf-8")
     )
-    assert selection_bytes == 39_974
+    assert selection_bytes <= MAX_SELECTION_STATE_BYTES
     assert all(
-        len(str(item["id"]).encode("utf-16-le")) // 2 == 80
-        and len(str(item["outputCellId"]).encode("utf-16-le")) // 2 == 80
-        for item in selections
+        len(str(item["id"]).encode("utf-16-le")) // 2 == 80 for item in selections
+    )
+    assert all(
+        len(cell_id.encode("utf-16-le")) // 2 == 80 for cell_id in output_cell_ids
     )
 
     validate_selection_admission(selections)
+
+
+def test_context_keeps_cell_availability_separate_from_bounded_source() -> None:
+    producer_ids = [f"c{index}" for index in range(65)]
+    selections = [
+        selection(
+            selection_id="selection-1",
+            label="S1",
+            target={
+                "kind": "dom",
+                "cellIds": producer_ids[:64],
+                "documentPath": "/dashboard/",
+                "domSelector": "#all-results",
+            },
+        ),
+        selection(
+            selection_id="selection-2",
+            label="S2",
+            target={
+                "kind": "dom",
+                "cellIds": [producer_ids[64]],
+                "documentPath": "/dashboard/",
+                "domSelector": "#last-result",
+            },
+        ),
+    ]
+    validate_selection_admission(selections)
+    retained_ids = [producer_ids[64], *producer_ids[:63]]
+    runtime = replace(
+        snapshot(
+            *(cell(cell_id, code=f"value_{cell_id} = 1") for cell_id in retained_ids)
+        ),
+        available_cell_ids=frozenset(producer_ids),
+        omitted_cell_ids=(producer_ids[63],),
+        omitted_cell_count=1,
+        cell_truncated_output_ids=frozenset({producer_ids[63]}),
+    )
+
+    references, text = build_context(
+        runtime,
+        selections,
+        revision=2,
+        current_selection_id="selection-2",
+    )
+
+    statuses = {
+        cell_reference["id"]: cell_reference["status"]
+        for reference in references["selections"]
+        for cell_reference in reference["cells"]
+    }
+    assert statuses == {cell_id: "available" for cell_id in producer_ids}
+    assert "1 relevant cell was omitted" in text
+    assert f"### Cell `{producer_ids[64]}` (producer)" in text
+
+
+def test_target_cell_ids_prioritize_the_current_selection() -> None:
+    selections = [
+        selection(
+            selection_id="selection-old",
+            target={
+                "kind": "dom",
+                "cellIds": ["cell-a", "cell-b"],
+                "documentPath": "/dashboard/",
+                "domSelector": "#old",
+            },
+        ),
+        selection(
+            selection_id="selection-current",
+            target={
+                "kind": "dom",
+                "cellIds": ["cell-current", "cell-a"],
+                "documentPath": "/dashboard/",
+                "domSelector": "#current",
+            },
+        ),
+    ]
+
+    assert target_cell_ids(selections, "selection-current") == (
+        "cell-current",
+        "cell-a",
+        "cell-b",
+    )
+
+
+def test_admitted_multi_producer_targets_always_render_bounded_text() -> None:
+    producer_ids = [f"{index:02d}-" + "x" * 118 for index in range(64)]
+    selections = [
+        selection(
+            selection_id="selection-1",
+            label="S1",
+            note="n" * 4_000,
+            target={
+                "kind": "dom",
+                "cellIds": producer_ids,
+                "documentPath": "/dashboard/",
+                "domSelector": "#all-results",
+            },
+        ),
+        *(
+            selection(
+                selection_id=f"selection-{index}",
+                label=f"S{index}",
+                note="n" * 4_000,
+                output_cell_id=f"cell-{index}",
+            )
+            for index in range(2, 5)
+        ),
+    ]
+    validate_selection_admission(selections)
+    runtime = replace(
+        snapshot(*(cell(cell_id) for cell_id in producer_ids[:64])),
+        available_cell_ids=frozenset((*producer_ids, "cell-2", "cell-3", "cell-4")),
+    )
+
+    _references, text = build_context(
+        runtime,
+        selections,
+        revision=4,
+        current_selection_id="selection-1",
+    )
+
+    assert len(text) <= MAX_CONTEXT_TEXT_CHARACTERS
+    assert "producer lists" in text
+
+
+def test_producer_text_keeps_the_first_complete_entry_when_the_marker_cannot_fit() -> (
+    None
+):
+    first = "a" * 80
+    second = "b" * 80
+
+    rendered, truncated = _target_cells_text(
+        [
+            {"id": first, "status": "available"},
+            {"id": second, "status": "available"},
+        ],
+        maximum=103,
+    )
+
+    assert rendered == f"`{first}` (available)"
+    assert truncated is True
 
 
 def test_text_uses_a_fence_longer_than_source_backticks() -> None:
