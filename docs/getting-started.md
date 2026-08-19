@@ -151,7 +151,7 @@ else:
     _starter_note = (
         escape(str(_starter_current.get("note", "")).strip()) or "No note added"
     )
-    _starter_cell = escape(str(_starter_current["outputCellId"]))
+    _starter_cell = escape(str(_starter_current["cells"][0]["id"]))
     _starter_snapshot = _starter_current.get("snapshot", {})
     _starter_image_status = (
         "Ready"

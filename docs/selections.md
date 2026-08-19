@@ -1,13 +1,14 @@
 ---
 title: Selections
-description: Mark points and regions in notebook outputs, add notes, and manage open or addressed selections.
+description: Mark points and regions in notebook outputs or configured DOM roots, add notes, and manage open or addressed selections.
 ---
 
 # Selections
 
-A selection points an agent to one part of a rendered notebook output. Click to
-mark a point, drag to mark a region, and add a note when the mark needs more
-context. One request can refer to several selections.
+A selection points an agent to one rendered target. Notebook outputs are
+available by default. `dom_selector` adds page regions selected by a host-owned
+CSS policy. Click to mark a point, drag to mark a region, and add a note when
+the mark needs more context. One request can refer to several selections.
 
 ```marimo-config
 requires-python = ">=3.10"
@@ -195,21 +196,22 @@ change, then press **Done**.
 Press **Select** again when the request refers to another point or region. An
 agent can resolve those selections together after one verified change.
 
-Lens keeps each open selection connected as the notebook changes:
+Lens keeps each open selection connected as the document changes:
 
-| Selection detail | What Lens keeps                                                                                                                            |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Label and note   | The `S<n>` label stays stable and is never reused.                                                                                         |
-| Output cell      | The exact marimo output cell ID reconnects after a rerender. If the output disappears temporarily, the selection remains open.             |
-| Annotated image  | Moving or resizing starts a fresh PNG capture. The previous image remains available and is marked outdated until the new capture succeeds. |
+| Selection detail | What Lens keeps                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Label and note   | The `S<n>` label stays stable and is never reused.                                                                                          |
+| Target           | Notebook outputs reconnect by cell ID. DOM targets reconnect by document path and an exact DOM selector.                                  |
+| Producing cells  | A DOM target includes producer IDs inferred from nested `data-runtime-cell-id` metadata.                                                   |
+| Annotated image  | Moving or resizing starts a fresh PNG capture. The previous image remains available and is marked outdated until the new capture succeeds.  |
 
 Cross-origin images and external iframes can block image capture. The selection,
-cell reference, and note remain available.
+target reference, producing cells, and note remain available.
 
 ## Finish or reopen a selection
 
 After completing the request, an agent marks the selection **Addressed**. Lens
-moves it from **Open** to **History** with its cell, note, point or region,
+moves it from **Open** to **History** with its target, note, point or region,
 timestamps, and optional completion summary.
 
 Selections completed by the same verified change can move together and share
@@ -226,8 +228,8 @@ Use these keys while **Select** mode is active:
 | Keys                                     | Result                                                                            |
 | ---------------------------------------- | --------------------------------------------------------------------------------- |
 | `Option+L` on macOS or `Alt+L` elsewhere | Start or refocus **Select** mode from the notebook or a same-origin output frame. |
-| `↑` / `↓`                                | Move between selectable outputs.                                                  |
-| `Enter`                                  | Create a point in the center of the focused output.                               |
+| `↑` / `↓`                                | Move between selectable targets.                                                  |
+| `Enter`                                  | Create a point in the center of the focused target.                               |
 | `Tab`                                    | Exit **Select** mode and continue to the next dock control.                       |
 | `Escape`                                 | Exit **Select** mode and return focus to **Select**.                              |
 

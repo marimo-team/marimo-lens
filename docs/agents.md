@@ -59,9 +59,17 @@ mounted = lens_agent.connect(ctx)
 snapshot = mounted.context()
 selection = snapshot.current
 
-if selection is not None and selection["cellStatus"] == "available":
+cell = (
+    next(
+        (cell for cell in selection["cells"] if cell["status"] == "available"),
+        None,
+    )
+    if selection is not None
+    else None
+)
+if selection is not None and selection["target"]["kind"] == "notebook" and cell:
     mounted.start_activity(
-        selection["outputCellId"],
+        cell["id"],
         label="Inspecting selected output",
         message="Reading the marked result and its producing cell.",
     )
@@ -119,7 +127,8 @@ async with cm.get_context() as ctx:
 
 The context creates and runs the collapsed cell when it exits. End that kernel
 call, then call `connect(cm.get_context())` in a fresh call so the browser can
-render and register Lens.
+render and register Lens. Host documents can require an authored Lens mount and
+a host-owned `dom_selector`. Follow that integration's skill for both.
 
 ## Keep the handle stable across calls
 
@@ -129,7 +138,8 @@ agent's working state:
 - `mounted.identity` reconnects to the same Lens.
 - `snapshot.revision` guards the later `resolve()` call.
 - Each addressed selection ID identifies the selection to move into History.
-- `selection["outputCellId"]` identifies the work and result cell.
+- `selection["target"]` identifies the notebook output or DOM element.
+- `selection["cells"]` lists inferred producing cells and their runtime status.
 
 Reconnect in a later call:
 
@@ -148,16 +158,14 @@ fresh snapshot before continuing.
 
 Handle one request in this order:
 
-1. Call `context()` and identify the selected output and graph-grounded code.
-2. Call `start_activity()` as soon as the primary work cell is known.
-3. Inspect, edit, and run cells through code mode while activity remains
-   visible.
-4. Verify the affected cells in a fresh kernel call. Inspect a fresh cell image
-   when the result depends on appearance.
-5. Call `stop_activity()`, then `reveal()` the verified result for a readable
-   hold.
-6. After the reveal hold, call `resolve()` with the captured revision and a
-   concise summary.
+1. Call `context()` and inspect the selected target, producing cells, and image.
+2. Route notebook logic through code mode. Route layout, copy, CSS, and browser
+   behavior through the host view source.
+3. Call `start_activity()` when notebook work has a primary cell.
+4. Verify notebook cells in a fresh kernel call. Verify host view work through
+   its saved-source and live browser boundaries.
+5. Call `stop_activity()` and `reveal()` for notebook results when applicable.
+6. Resolve the selection with the captured revision after verification.
 
 `reveal()` preserves the user's focus while bringing the result into view.
 `resolve()` moves addressed selections into **History**. A user can reopen one
@@ -197,14 +205,14 @@ blocked, or unverified selections open and report what remains.
 
 ## Handle expected failures
 
-| Error code              | Agent response                                                   |
-| ----------------------- | ---------------------------------------------------------------- |
-| `lens_unavailable`      | Retry without identity, then add a Lens cell when none is mounted. |
-| `lens_ambiguous`        | Reconnect with an identity, or close or remove extra Lens instances. |
-| `revision_conflict`     | Read current Lens state and reassess the requested work.          |
-| `selection_not_found`   | Read current selections before resolving again.                   |
-| `capture_busy`          | Finish the pending cell capture before requesting another cell.   |
-| `runtime_unavailable`   | Keep the request open and report that the kernel cannot verify it. |
+| Error code            | Agent response                                                       |
+| --------------------- | -------------------------------------------------------------------- |
+| `lens_unavailable`    | Retry without identity, then add a Lens cell when none is mounted.   |
+| `lens_ambiguous`      | Reconnect with an identity, or close or remove extra Lens instances. |
+| `revision_conflict`   | Read current Lens state and reassess the requested work.             |
+| `selection_not_found` | Read current selections before resolving again.                      |
+| `capture_busy`        | Finish the pending cell capture before requesting another cell.      |
+| `runtime_unavailable` | Keep the request open and report that the kernel cannot verify it.   |
 
 Read the [Overview](./overview) for the human-agent interaction and the
 [Python API reference](./api) for signatures, limits, and lifecycle errors.
