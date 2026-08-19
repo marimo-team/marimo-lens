@@ -1,0 +1,29 @@
+development_docs/development.md
+  s_17e304d876206f::t_a56d30329ac227 96-103
+scripts/verify_release.py
+  s_17e304d876206f::t_92acaef71143b4 49,53-54,80
+  s_17e304d876206f::t_accc1d5dcf95f6 7,139-141
+  s_17e304d876206f::t_4e80a416b84142 9,55-56
+  s_17e304d876206f::t_d6e58f7bf5b47f 10,52,57-58,78,123-124
+  s_17e304d876206f::t_18e66141d16f4b 3,37-48,50-51,59-77,79,81,119-122,125-127
+Makefile
+  s_17e304d876206f::t_18e66141d16f4b 34-36
+  s_17e304d876206f::t_1554e76d6bf13b 31-33
+  s_17e304d876206f::t_e99baf6e87b220 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6cc880fb8b52c18c7bc56dd5bcbba4a17ad36312",
+  "prompts": {},
+  "sessions": {
+    "s_17e304d876206f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a01527-3cde-77b0-a4e0-589076708f4d",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
