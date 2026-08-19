@@ -1,24 +1,61 @@
-"""Connect agents to Lens so humans direct analysis and judge evidence agents return.
+"""Connect code-mode agents to Lens."""
 
-Treat a Lens selection as both a visual request and a computational address.
-The marked output and note capture what drew the human's attention. Stable
-output-cell identity names the producing cell. Lens follows the current marimo
-dependency graph upstream from that cell and supplies a bounded closure of the
-code that produced the result. Start with this graph-grounded context before
-inspecting live values or changing the notebook.
+from __future__ import annotations
 
-Use Lens to expose your work, return focus to verified results, and preserve
-addressed requests in History so the human can review, repair, and continue the
-analysis across turns.
+import secrets
+import sys
+import threading
+import weakref
+from collections.abc import Mapping, Sequence
+from textwrap import indent
+from types import ModuleType
+from typing import Protocol, cast
 
-Use this module inside a live marimo code-mode kernel call:
+import agent_plugins
 
+from .context import LensContext
+from .errors import LensError
+from .widget import Lens, _mounted_lenses
+
+_DISTRIBUTION_NAME = "marimo-lens"
+_SKILL_NAME = "marimo-lens"
+
+
+def agent_plugin() -> agent_plugins.Plugin:
+    """Return the Agent Plugin installed with this Lens version."""
+    return agent_plugins.locate(_DISTRIBUTION_NAME)
+
+
+def _agent_skill(plugin: agent_plugins.Plugin) -> agent_plugins.Skill:
+    for skill in plugin.skills:
+        if skill.path.name == _SKILL_NAME:
+            return skill
+    raise agent_plugins.AgentPluginError(
+        "The marimo-lens Agent Plugin has no marimo-lens skill. Reinstall marimo-lens."
+    )
+
+
+def agent_skill() -> agent_plugins.Skill:
+    """Return Lens's packaged Agent Skill."""
+    return _agent_skill(agent_plugin())
+
+
+def _module_help(summary: str) -> str:
+    plugin = agent_plugin()
+    skill = _agent_skill(plugin)
+    tree = indent(plugin.tree(max_depth=3, max_files=50), "    ")
+    return f"""{summary}
+
+Connect to Lens inside a live marimo code-mode kernel call:
+
+    import marimo._code_mode as cm
     import marimo_lens.agent as lens_agent
 
-    mounted = lens_agent.connect()
+    ctx = cm.get_context()
+    mounted = lens_agent.connect(ctx)
     snapshot = mounted.context()
 
-After connect() raises LensError(code="lens_unavailable"), queue a Lens cell
+After connect(ctx) raises LensError(code="lens_unavailable"), queue a Lens cell
 in a fresh kernel call:
 
     import marimo._code_mode as cm
@@ -27,32 +64,22 @@ in a fresh kernel call:
     async with cm.get_context() as ctx:
         lens_agent.add_lens_cell(ctx)
 
-End that kernel call, then connect again after the browser renders Lens.
+The installed Agent Plugin carries the complete Lens workflow and the resources
+that match this package version:
 
-Keep mounted.identity and snapshot.revision together when work spans kernel
-calls. Reconnect with connect(identity=identity).
+{tree}
 
-Use code mode to inspect, edit, and run notebook cells. The Lens snapshot
-supplies bounded text, selection references, and annotated selection PNG bytes.
-MountedLens.cell_image() transfers a fresh unannotated cell PNG across kernel
-calls.
+Read the Lens skill instructions at:
 
-Start activity when the work cell is known. After a fresh runtime check, stop
-activity and reveal the verified result. Wait for the reveal hold before
-resolving the addressed selections.
+    {skill / "SKILL.md"}
+
+Traverse the same resources programmatically:
+
+    resources = lens_agent.agent_plugin()
+    skill = lens_agent.agent_skill()
+    print(resources)
+    print(skill.body)
 """
-
-from __future__ import annotations
-
-import secrets
-import threading
-import weakref
-from collections.abc import Sequence
-from typing import Protocol, cast
-
-from .context import LensContext
-from .errors import LensError
-from .widget import Lens, _mounted_lenses
 
 
 class _CodeModeCell(Protocol):
@@ -76,8 +103,8 @@ _mo.output.append(_lens)
 class MountedLens:
     """A live Lens handle returned by connect().
 
-    Its identity and mounted Lens remain fixed for the handle's lifetime.
-    Keep identity to reconnect to the same mounted Lens in a later kernel call.
+    Its identity and Lens remain fixed for the handle's lifetime. Keep identity
+    to reconnect to the same Lens in a later kernel call.
     """
 
     __slots__ = ("__identity", "__lens")
@@ -90,7 +117,7 @@ class MountedLens:
 
     @property
     def identity(self) -> str:
-        """Return the opaque identity used to reconnect this mounted Lens."""
+        """Return the opaque identity used to reconnect this Lens."""
 
         return self.__identity
 
@@ -111,7 +138,7 @@ class MountedLens:
         after the notebook or Lens state changes.
 
         Raises:
-            LensError: The mounted Lens is closed.
+            LensError: The Lens is closed.
         """
 
         return self._lens.context()
@@ -168,7 +195,7 @@ class MountedLens:
         """Stop activity when it is attached to the supplied cell.
 
         Raises:
-            LensError: The mounted Lens is closed.
+            LensError: The Lens is closed.
             TypeError: The cell ID has the wrong type.
             ValueError: The cell ID is outside its accepted range.
         """
@@ -267,31 +294,50 @@ def add_lens_cell(ctx: object) -> str:
     return str(cell_id)
 
 
-def connect(*, identity: str | None = None) -> MountedLens:
-    """Return the mounted Lens selected from the active marimo runtime.
+def connect(
+    context: object | None = None,
+    *,
+    identity: str | None = None,
+) -> MountedLens:
+    """Return the Lens selected from code-mode context or browser registration.
 
-    Pass an earlier handle's identity to reconnect to that Lens in a later
-    kernel call.
+    Pass a code-mode context to include existing Lens objects from its kernel
+    globals. Pass an earlier handle's identity to reconnect to that Lens in a
+    later kernel call.
 
     Raises:
-        LensError: No mounted Lens matches, or several are mounted without an
-            identity selecting one.
-        TypeError: Identity has the wrong type.
+        LensError: No available Lens matches, or several are available without
+            an identity selecting one.
+        TypeError: The context lacks a globals mapping or identity has the wrong
+            type.
         ValueError: Identity is empty.
     """
 
+    namespace: Mapping[str, object] | None = None
+    if context is not None:
+        raw_namespace = getattr(context, "globals", None)
+        if not isinstance(raw_namespace, Mapping):
+            raise TypeError("context must expose a globals mapping")
+        namespace = cast(Mapping[str, object], raw_namespace)
     if identity is not None:
         if not isinstance(identity, str):
             raise TypeError("identity must be a string or None")
         if not identity:
             raise ValueError("identity must not be empty")
 
+    candidates = {id(lens): lens for lens in _mounted_lenses()}
+    if namespace is not None:
+        for value in namespace.values():
+            lens = _as_lens(value)
+            if lens is not None:
+                candidates.setdefault(id(lens), lens)
+
     mounted = tuple(
         MountedLens(
             identity=_identity(lens),
             lens=lens,
         )
-        for lens in _mounted_lenses()
+        for lens in candidates.values()
     )
     if identity is not None:
         for lens in mounted:
@@ -299,25 +345,36 @@ def connect(*, identity: str | None = None) -> MountedLens:
                 return lens
         raise LensError(
             "lens_unavailable",
-            (
-                "The requested mounted Lens is unavailable. "
-                "Connect again without an identity."
-            ),
+            ("The requested Lens is unavailable. Connect again without an identity."),
         )
     if len(mounted) == 1:
         return mounted[0]
     if not mounted:
         raise LensError(
             "lens_unavailable",
-            "No mounted Lens is available in the active notebook.",
+            "No Lens is available in the active notebook.",
         )
     raise LensError(
         "lens_ambiguous",
         (
-            "The active notebook has multiple mounted Lens widgets. "
-            "Leave one mounted before connecting."
+            "The active notebook has multiple available Lens instances. "
+            "Reconnect with an identity, or close or remove extra Lens instances."
         ),
     )
+
+
+def _as_lens(value: object) -> Lens | None:
+    if isinstance(value, Lens):
+        lens = value
+    elif type(value).__module__.startswith("marimo."):
+        lens = getattr(value, "widget", None)
+        if not isinstance(lens, Lens):
+            return None
+    else:
+        return None
+    if getattr(lens, "_lens_closed", False) or getattr(lens, "comm", None) is None:
+        return None
+    return lens
 
 
 def _identity(lens: Lens) -> str:
@@ -332,5 +389,21 @@ def _identity(lens: Lens) -> str:
 __all__ = [
     "MountedLens",
     "add_lens_cell",
+    "agent_plugin",
+    "agent_skill",
     "connect",
 ]
+
+
+class _AgentModule(ModuleType):
+    @property
+    def __doc__(self) -> str | None:  # pyrefly: ignore [bad-override]
+        summary = self.__dict__.get("__doc__")
+        return _module_help(summary) if isinstance(summary, str) else None
+
+    @__doc__.setter
+    def __doc__(self, value: str | None) -> None:
+        self.__dict__["__doc__"] = value
+
+
+sys.modules[__name__].__class__ = _AgentModule

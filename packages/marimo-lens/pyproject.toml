@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["agent-plugins==0.1.0", "hatchling==1.31.0"]
+build-backend = "agent_plugins.build.hatchling"
 
 [project]
 name = "marimo-lens"
@@ -20,8 +20,9 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
+  "agent-plugins==0.1.0",
   "anywidget>=0.11.0",
-  "marimo>=0.23.0",
+  "marimo>=0.24.0",
   "pydantic>=2",
   "traitlets>=5",
   "typing-extensions>=4.4",
@@ -36,7 +37,7 @@ Issues = "https://github.com/marimo-team/marimo-lens/issues"
 Source = "https://github.com/marimo-team/marimo-lens"
 
 [dependency-groups]
-dev = ["hatchling>=1.29"]
+dev = ["hatchling==1.31.0"]
 
 [tool.hatch.build]
 only-packages = true
@@ -50,3 +51,6 @@ include = ["/hatch_build.py", "/README.md", "/pyproject.toml", "/src/marimo_lens
 
 [tool.hatch.build.hooks.custom]
 path = "hatch_build.py"
+
+[tool.agent-plugins]
+root = "../.."
