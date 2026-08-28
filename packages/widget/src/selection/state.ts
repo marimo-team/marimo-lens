@@ -14,7 +14,7 @@ export type PendingSelection = {
 
 export type WorkflowState =
   | { mode: "idle" }
-  | { mode: "armed"; activeTargetKey: string | null }
+  | { mode: "armed"; activeTarget: TargetSurface | null }
   | {
       mode: "dragging";
       target: TargetSurface;
@@ -45,7 +45,7 @@ export type UiState = {
 export type UiAction =
   | { type: "arm" }
   | { type: "disarm" }
-  | { type: "focusTarget"; targetKey: string | null }
+  | { type: "focusTarget"; target: TargetSurface | null }
   | {
       type: "startDrag";
       target: TargetSurface;
@@ -94,7 +94,7 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
     case "arm":
       return {
         ...state,
-        workflow: { mode: "armed", activeTargetKey: null },
+        workflow: { mode: "armed", activeTarget: null },
         listOpen: false,
         announcement: "Select mode active. Click a point or drag a region.",
       };
@@ -106,12 +106,17 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       };
     case "focusTarget":
       if (state.workflow.mode !== "armed") return state;
-      if (state.workflow.activeTargetKey === action.targetKey) return state;
+      if (
+        state.workflow.activeTarget?.key === action.target?.key &&
+        state.workflow.activeTarget?.element === action.target?.element
+      ) {
+        return state;
+      }
       return {
         ...state,
         workflow: {
           ...state.workflow,
-          activeTargetKey: action.targetKey,
+          activeTarget: action.target,
         },
       };
     case "startDrag":

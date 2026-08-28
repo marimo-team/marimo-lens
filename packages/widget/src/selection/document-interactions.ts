@@ -78,7 +78,7 @@ export function useDocumentInteractions(options: {
       const onPointerMove = (event: PointerEvent) => {
         const workflow = uiRef.current.workflow;
         if (workflow.mode === "armed") {
-          dispatch({ type: "focusTarget", targetKey: targetForEvent(event)?.key ?? null });
+          dispatch({ type: "focusTarget", target: targetForEvent(event) });
         } else if (workflow.mode === "dragging" && workflow.pointerId === event.pointerId) {
           event.preventDefault();
           dispatch({
@@ -200,7 +200,7 @@ function navigateTargets(
   if (targets.length === 0) return;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
-    const current = targets.findIndex((target) => target.key === workflow.activeTargetKey);
+    const current = targets.findIndex((target) => target.key === workflow.activeTarget?.key);
     const backwards = event.key === "ArrowUp";
     const next =
       current < 0
@@ -211,7 +211,7 @@ function navigateTargets(
     const target = targets[next];
     if (!target) return;
     target.element.scrollIntoView({ block: "nearest" });
-    dispatch({ type: "focusTarget", targetKey: target.key });
+    dispatch({ type: "focusTarget", target });
     dispatch({
       type: "announce",
       message: targetAnnouncement(target, next, targets.length),
@@ -219,7 +219,7 @@ function navigateTargets(
   } else if (event.key === "Enter") {
     event.preventDefault();
     const target =
-      targets.find((candidate) => candidate.key === workflow.activeTargetKey) ?? targets[0];
+      targets.find((candidate) => candidate.key === workflow.activeTarget?.key) ?? targets[0];
     if (!target) return;
     const rect = target.element.getBoundingClientRect();
     const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };

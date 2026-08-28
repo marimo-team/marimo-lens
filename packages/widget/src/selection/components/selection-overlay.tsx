@@ -56,7 +56,7 @@ export function SelectionOverlay({
   );
   const activeTarget =
     workflow.mode === "armed"
-      ? (dom.listTargets(selector).find(({ key }) => key === workflow.activeTargetKey) ?? null)
+      ? workflow.activeTarget
       : workflow.mode === "dragging"
         ? workflow.target
         : null;
