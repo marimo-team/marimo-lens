@@ -1,0 +1,19 @@
+packages/marimo-lens/pyproject.toml
+  s_89805034d79557::t_41919c15995d4c 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f23ab0816e748e039a8a742487ba5aa91105b75d",
+  "prompts": {},
+  "sessions": {
+    "s_89805034d79557": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0471d-67cd-7ca1-85b7-fdb8aa60b97f",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
