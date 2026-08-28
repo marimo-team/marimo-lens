@@ -90,16 +90,21 @@ describe("selection workflow", () => {
   });
 
   test("keeps armed output focus stable across repeated pointer moves", () => {
+    const target = {
+      key: "cell-1",
+      target: { kind: "notebook" as const, cellIds: ["cell-1"] },
+      element: document.createElement("div"),
+    };
     const armed = uiReducer(INITIAL_UI_STATE, { type: "arm" });
     const focused = uiReducer(armed, {
       type: "focusTarget",
-      targetKey: "cell-1",
+      target,
     });
 
     expect(
       uiReducer(focused, {
         type: "focusTarget",
-        targetKey: "cell-1",
+        target,
       }),
     ).toBe(focused);
   });

@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
+import { targetFromElement } from "@/notebook/selection-target";
 import { SelectionOverlay } from "@/selection/components/selection-overlay";
 
 import { selectionFixture } from "../../support/fixtures";
@@ -20,6 +21,28 @@ afterEach(() => {
 });
 
 describe("selection overlay", () => {
+  test("keeps a hovered DOM target highlighted while producer metadata updates", () => {
+    const target = document.createElement("section");
+    target.id = "summary";
+    target.dataset.feedbackTarget = "";
+    target.dataset.runtimeCellId = "cell-1";
+    target.getBoundingClientRect = () => new DOMRect(20, 30, 400, 240);
+    document.body.appendChild(target);
+    const selector = "[data-feedback-target]";
+    const activeTarget = targetFromElement(target, selector);
+    expect(activeTarget).not.toBeNull();
+
+    target.dataset.runtimeCellId = "cell-2";
+    renderOverlay([], null, {
+      selector,
+      workflow: { mode: "armed", activeTarget: activeTarget! },
+    });
+
+    const highlight = document.querySelector<HTMLElement>(".ml-output-highlight");
+    expect(highlight?.style.left).toBe("20px");
+    expect(highlight?.style.width).toBe("400px");
+  });
+
   test("renders markers only inside the visible output viewport", () => {
     setupOutput({ scrollHeight: 800, scrollTop: 400 });
     const hidden = selectionFixture({ anchor: { kind: "point", x: 0.5, y: 0.1 } });
@@ -134,14 +157,14 @@ describe("selection overlay", () => {
   });
 
   test("makes existing markers inert while selecting another output", () => {
-    setupOutput();
+    const output = setupOutput();
     const selection = selectionFixture({
       anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.3, height: 0.3 },
     });
     const rerender = renderOverlay([selection], selection.id);
 
     rerender({
-      workflow: { mode: "armed", activeTargetKey: JSON.stringify(selection.target) },
+      workflow: { mode: "armed", activeTarget: targetFromElement(output, null) },
     });
 
     expect(
