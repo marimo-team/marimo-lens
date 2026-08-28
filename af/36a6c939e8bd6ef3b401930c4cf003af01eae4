@@ -1,0 +1,29 @@
+packages/widget/src/selection/state.ts
+  s_eb03fad27df8b3::t_c879eb0ebe645b 17,48,97,109-114,119
+packages/widget/tests/selection/components/selection-overlay.test.tsx
+  s_eb03fad27df8b3::t_a5b1d4ec74ac0e 7,24-31,34-37,39-40,44-45
+  s_eb03fad27df8b3::t_5e2702572be881 41-43
+  s_eb03fad27df8b3::t_c879eb0ebe645b 32-33,38,160,167
+packages/widget/src/selection/document-interactions.ts
+  s_eb03fad27df8b3::t_c879eb0ebe645b 81,203,214,222
+packages/widget/src/selection/components/selection-overlay.tsx
+  s_eb03fad27df8b3::t_c879eb0ebe645b 59
+packages/widget/tests/selection/state.test.ts
+  s_eb03fad27df8b3::t_c879eb0ebe645b 93-97,101,107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "af36a6c939e8bd6ef3b401930c4cf003af01eae4",
+  "prompts": {},
+  "sessions": {
+    "s_eb03fad27df8b3": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a047ab-593a-7900-957d-8de47cdadf18",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
