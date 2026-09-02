@@ -1,0 +1,74 @@
+docs/api.md
+  s_c72bb206ca0256::t_9656b393ff194e 11
+  s_c72bb206ca0256::t_4954647dea62e8 98-106
+  s_c72bb206ca0256::t_ba1dc6b4878d23 145-148,342-344
+  s_c72bb206ca0256::t_68cddb0d071c55 190,192-198,204-207,209,213-215,217-221,223-227,229-232,234,236-237,240,248,250,256,258-259,262,266-269,271-274,276-278
+  s_c72bb206ca0256::t_9460b992d69ae8 243-246
+  s_c72bb206ca0256::t_2724320fb7a302 312,341
+skills/marimo-lens/SKILL.md
+  s_c72bb206ca0256::t_bb3e557b81b91e 5-12,118-119,152-160,162-165,169-205,219-221,313-317,348-352,366-369
+  s_c72bb206ca0256::t_ed3a841ad6a107 120-121,208-209,346
+  s_c72bb206ca0256::t_accd2c9b3b9957 132-134
+  s_c72bb206ca0256::t_d3f67d8ad4c5f0 166-168,364-365
+  s_c72bb206ca0256::t_027296a529d94d 300-312
+  s_c72bb206ca0256::t_7e12d927de6936 354-357
+docs/agents.md
+  s_c72bb206ca0256::t_de89a902ddf3e6 61-66,77,135-136,158-170
+AGENTS.md
+  s_c72bb206ca0256::t_ba1dc6b4878d23 89-90
+  s_c72bb206ca0256::t_9c99dde4fb1731 99
+docs/index.md
+  s_c72bb206ca0256::t_d9407b3d09dcc9 426-428,435,461-467,469-473,504-506,511,514-515
+packages/marimo-lens/README.md
+  s_c72bb206ca0256::t_85fb0c9c0606fe 21-24,99,113-116
+  s_c72bb206ca0256::t_ba1dc6b4878d23 60-63
+  s_c72bb206ca0256::t_4954647dea62e8 106-112
+docs/selections.md
+  s_c72bb206ca0256::t_4954647dea62e8 201-203,206
+  s_c72bb206ca0256::t_ba1dc6b4878d23 204
+skills/marimo-lens/reference/workflow.md
+  s_c72bb206ca0256::t_f29f710c699bcf 98-99
+  s_c72bb206ca0256::t_4e5ee2e3b1f3f5 100
+  s_c72bb206ca0256::t_9460b992d69ae8 106
+  s_c72bb206ca0256::t_1e59be4fa29073 108-114,117-118
+  s_c72bb206ca0256::t_51fa3d9cd8df1f 145-150
+  s_c72bb206ca0256::t_d3f67d8ad4c5f0 157
+README.md
+  s_c72bb206ca0256::t_85fb0c9c0606fe 21-24,114,128-131
+  s_c72bb206ca0256::t_ba1dc6b4878d23 75-78
+  s_c72bb206ca0256::t_4954647dea62e8 121-127
+docs/overview.md
+  s_c72bb206ca0256::t_96605095a2aba4 44,288-307,316-318,322,331-332
+  s_c72bb206ca0256::t_7a29337964d8d0 102,474-475
+  s_c72bb206ca0256::t_7b0ede211f06e1 431
+packages/marimo-lens/tests/test_skill.py
+  s_c72bb206ca0256::t_7096a839a7192d 37-41,43-48,53-55,58,62-63
+  s_c72bb206ca0256::t_9d79b161d1178c 42,49-52,59-61,108-111,116-123,158-162,168-170
+  s_c72bb206ca0256::t_c140e32f6ced8b 56-57
+  s_c72bb206ca0256::t_34c89819808bdd 89-107,112-115,124-125
+  s_c72bb206ca0256::t_42430660b3784e 163-167
+  s_c72bb206ca0256::t_6d4f15497d8d63 185-187,189-190,199-201,203-204
+  s_c72bb206ca0256::t_5436c75dbfb50e 188,202
+development_docs/architecture.md
+  s_c72bb206ca0256::t_2c8c740e3c313c 6,75
+  s_c72bb206ca0256::t_ba1dc6b4878d23 7-8,109-112,267-268
+  s_c72bb206ca0256::t_de1d1709c52e3f 205-209,215-230,241,247-248,269-270
+  s_c72bb206ca0256::t_9c99dde4fb1731 263
+  s_c72bb206ca0256::t_112738b28d076c 284-290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "52ede3a0abedbd9bf0a5ddd3e24193aaee46699a",
+  "prompts": {},
+  "sessions": {
+    "s_c72bb206ca0256": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06261-b5de-73b0-b45c-d460b9a03eba",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}

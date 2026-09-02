@@ -1,0 +1,23 @@
+scripts/verify_release.py
+  s_c72bb206ca0256::t_7523e8f5e2948a 38-39
+  s_c72bb206ca0256::t_187a7023b1b619 40-41
+  s_c72bb206ca0256::t_9460b992d69ae8 117-118
+packages/marimo-lens/pyproject.toml
+  s_c72bb206ca0256::t_7523e8f5e2948a 2,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "60d88361f1ba81e09fd63d205017140385637e96",
+  "prompts": {},
+  "sessions": {
+    "s_c72bb206ca0256": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06261-b5de-73b0-b45c-d460b9a03eba",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
