@@ -162,9 +162,10 @@ Handle one request in this order:
 5. Apply the change through code mode or the host source boundary.
 6. Verify against fresh runtime and browser evidence.
 7. Stop the owned activity with its handle.
-8. Reveal the selected target with the captured revision.
-9. Wait for the reveal hold.
-10. Resolve the verified selection with the captured revision.
+8. Read a fresh `LensContext` and re-find the verified selection by ID.
+9. Reveal that fresh `SelectionReference` with its revision.
+10. Wait for the reveal hold.
+11. Resolve the verified selection with the fresh revision.
 
 For a notebook overview or zero-selection walkthrough, pass graph-member cell
 IDs to `start_activity()` and `reveal()`.

@@ -265,9 +265,11 @@ also carry a request ID.
 
 Selection and History mutations carry `expectedRevision`. A selection target is
 `notebook` or `dom` and carries its owning document ID, document path, and
-bounded producing cell IDs. DOM targets also carry an exact DOM selector. Attention events use a
-tagged address with either a cell ID or a stored selection ID and revision.
-Activity start and stop events share one opaque activity ID. Python validates
+bounded producing cell IDs. DOM targets also carry an exact DOM selector.
+Activity-start and reveal events carry a tagged address with either a cell ID
+or a stored selection ID and revision. Activity-start and activity-stop events
+share one opaque activity ID. The activity-stop payload contains only that ID.
+Python validates
 buffer cardinality before accepting image bytes. Selection image replacement
 commands, snapshot responses, and successful full-cell captures carry one PNG
 buffer. Other Lens messages carry none. Python and TypeScript schemas must
