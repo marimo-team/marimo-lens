@@ -36,6 +36,8 @@ def test_primary_skill_image_snippet_reads_selection_evidence() -> None:
 
 def test_primary_skill_starts_activity_against_the_selection() -> None:
     calls: list[tuple[object, ...]] = []
+    expected_selection = _context().current
+    assert expected_selection is not None
 
     def start_activity(selection: object, **kwargs: object) -> str:
         calls.append((selection, kwargs))
@@ -45,17 +47,19 @@ def test_primary_skill_starts_activity_against_the_selection() -> None:
         context=_context,
         start_activity=start_activity,
     )
+    namespace: dict[str, object] = {"mounted": mounted}
     exec(  # noqa: S102 - Exercise the canonical skill example.
         _code_mode_block(
             "skills/marimo-lens/SKILL.md",
             "## Start meaningful activity",
         ),
-        {"mounted": mounted},
+        namespace,
     )
 
     selection, raw_kwargs = calls[0]
     kwargs = cast(dict[str, object], raw_kwargs)
-    assert cast(dict[str, object], selection)["id"] == "selection-1"
+    assert namespace["activity"] == "activity-owner"
+    assert selection == expected_selection
     assert kwargs["expected_revision"] == 4
     assert isinstance(kwargs["label"], str) and kwargs["label"]
     assert isinstance(kwargs["message"], str) and kwargs["message"]
