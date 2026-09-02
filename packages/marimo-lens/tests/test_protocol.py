@@ -253,8 +253,7 @@ def test_command_ignores_unrelated_envelopes() -> None:
 @pytest.mark.parametrize(
     ("updates", "code"),
     [
-        ({"version": 1}, "unsupported_version"),
-        ({"version": 2}, "unsupported_version"),
+        ({"version": 3}, "unsupported_version"),
         ({"version": 5}, "unsupported_version"),
         ({"version": True}, "unsupported_version"),
         ({"type": "selection.unknown"}, "unsupported_command"),

@@ -88,9 +88,11 @@ def test_code_mode_reference_requests_cell_image_with_saved_revision() -> None:
 
 def test_code_mode_reference_restores_activity_before_reveal() -> None:
     calls: list[tuple[object, ...]] = []
+    selection = _context().references["selections"][0].copy()
+    selection["id"] = "243110..."
     snapshot = SimpleNamespace(
         revision=8,
-        references={"selections": [{"id": "243110...", "label": "S1"}]},
+        references={"selections": [selection]},
     )
 
     def stop_activity(activity: str) -> None:
@@ -104,18 +106,17 @@ def test_code_mode_reference_restores_activity_before_reveal() -> None:
         stop_activity=stop_activity,
         reveal=reveal,
     )
+    namespace: dict[str, object] = {"mounted": mounted}
     exec(  # noqa: S102 - Exercise the repository-owned reference example.
         _code_mode_block(
             "skills/marimo-lens/reference/workflow.md",
             "## Present and resolve across calls",
         ),
-        {"mounted": mounted},
+        namespace,
     )
 
-    assert calls[0][0] == "stop"
-    assert isinstance(calls[0][1], str) and calls[0][1]
-    assert calls[1][0] == "reveal"
-    assert calls[1][1] == {"id": "243110...", "label": "S1"}
+    assert calls[0] == ("stop", namespace["activity"])
+    assert calls[1][:2] == ("reveal", selection)
     reveal_kwargs = cast(dict[str, object], calls[1][2])
     assert reveal_kwargs["expected_revision"] == 8
     assert reveal_kwargs["duration_ms"] == 8_000

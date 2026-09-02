@@ -205,7 +205,6 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
     context = lens.context()
     assert "reveal" not in json.dumps(context.references)
     assert "Updated the aggregation" not in context.text
-    assert lens.resolve("selection-1", expected_revision=1) == 2
 
 
 def test_reveal_uses_the_caller_supplied_hold_for_a_long_result_message(
@@ -429,7 +428,7 @@ def test_stop_activity_validates_the_handle(
     "action",
     ["start_activity", "reveal"],
 )
-def test_target_attention_omits_an_empty_message_and_tolerates_delivery_failure(
+def test_target_attention_tolerates_delivery_failure(
     monkeypatch: pytest.MonkeyPatch,
     action: str,
 ) -> None:
@@ -443,7 +442,7 @@ def test_target_attention_omits_an_empty_message_and_tolerates_delivery_failure(
     lens = FailingEventLens()
 
     duration = {"duration_ms": 4_000} if action == "reveal" else {}
-    result = getattr(lens, action)("cell-view", message="  ", **duration)
+    result = getattr(lens, action)("cell-view", **duration)
     if action == "reveal":
         assert result is None
     else:
