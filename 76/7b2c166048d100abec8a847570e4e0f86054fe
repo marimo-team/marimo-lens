@@ -1,0 +1,24 @@
+packages/marimo-lens/tests/test_skill.py
+  s_c72bb206ca0256::t_5e5e57a9cb7b10 91-92,119
+  s_c72bb206ca0256::t_f13bd4192815a5 95,109,115,118
+packages/marimo-lens/tests/test_widget.py
+  s_c72bb206ca0256::t_1a0efd9f75689d 431,445
+packages/marimo-lens/tests/test_protocol.py
+  s_c72bb206ca0256::t_f13bd4192815a5 256
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "767b2c166048d100abec8a847570e4e0f86054fe",
+  "prompts": {},
+  "sessions": {
+    "s_c72bb206ca0256": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06261-b5de-73b0-b45c-d460b9a03eba",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
