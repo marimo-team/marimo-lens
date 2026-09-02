@@ -245,7 +245,9 @@ work, target attention, and layout observation.
 selector. Configured roots outrank nested notebook renderer roots. Selection,
 marked capture, availability, and layout observation consume the same resolved
 target element. Agent-requested full-cell capture and cell-addressed attention
-continue to use canonical notebook outputs.
+follow separate notebook paths. Full-cell capture uses the canonical output.
+Cell-addressed attention targets the rendered cell when available and falls
+back to its canonical output.
 
 Gesture targeting attaches to the active document, same-origin iframe
 documents, and open shadow roots. One shared layout subscription coordinates
