@@ -7,10 +7,10 @@ import pytest
 from marimo_lens._images import prepare_selection_image
 from marimo_lens._protocol import (
     ProtocolError,
+    attention_activity_start_event,
+    attention_activity_stop_event,
+    attention_reveal_event,
     capture_command,
-    cell_activity_start_event,
-    cell_activity_stop_event,
-    cell_reveal_event,
     error_response,
     mutation_ack_response,
     parse_capture_response,
@@ -24,24 +24,31 @@ from marimo_lens._protocol import (
 from marimo_lens._protocol import (
     snapshot_metadata as build_snapshot_metadata,
 )
+from marimo_lens._protocol_models import CellAttentionAddress, SelectionAttentionAddress
 
 from tests.support.factories import png, selection, snapshot_metadata
 
 
-def test_cell_reveal_event_uses_transient_transport() -> None:
-    assert cell_reveal_event(
-        cell_id="cell-view",
+def test_target_reveal_event_uses_transient_transport() -> None:
+    assert attention_reveal_event(
+        address=SelectionAttentionAddress(
+            kind="selection",
+            selection_id="selection-1",
+            revision=3,
+        ),
         label="Updated chart",
         message="Updated the aggregation.",
         duration_ms=8_000,
-        revision=3,
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 3,
-        "type": "cell.reveal",
-        "revision": 3,
+        "version": 4,
+        "type": "attention.reveal",
         "payload": {
-            "cellId": "cell-view",
+            "address": {
+                "kind": "selection",
+                "selectionId": "selection-1",
+                "revision": 3,
+            },
             "label": "Updated chart",
             "message": "Updated the aggregation.",
             "durationMs": 8_000,
@@ -49,30 +56,32 @@ def test_cell_reveal_event_uses_transient_transport() -> None:
     }
 
 
-def test_cell_reveal_event_omits_an_absent_message() -> None:
-    assert cell_reveal_event(
-        cell_id="cell-view",
+def test_target_reveal_event_omits_an_absent_message() -> None:
+    assert attention_reveal_event(
+        address=CellAttentionAddress(kind="cell", cell_id="cell-view"),
         label=None,
         message=None,
         duration_ms=4_000,
-        revision=0,
-    )["payload"] == {"cellId": "cell-view", "durationMs": 4_000}
+    )["payload"] == {
+        "address": {"kind": "cell", "cellId": "cell-view"},
+        "durationMs": 4_000,
+    }
 
 
-def test_cell_activity_start_event_uses_transient_transport() -> None:
-    assert cell_activity_start_event(
-        cell_id="cell-view",
+def test_target_activity_start_event_uses_transient_transport() -> None:
+    assert attention_activity_start_event(
+        activity_id="activity-1",
+        address=CellAttentionAddress(kind="cell", cell_id="cell-view"),
         duration_ms=8_000,
         label="On it",
         message="Updating the aggregation.",
-        revision=3,
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 3,
-        "type": "cell.activity.start",
-        "revision": 3,
+        "version": 4,
+        "type": "attention.activity.start",
         "payload": {
-            "cellId": "cell-view",
+            "activityId": "activity-1",
+            "address": {"kind": "cell", "cellId": "cell-view"},
             "durationMs": 8_000,
             "label": "On it",
             "message": "Updating the aggregation.",
@@ -80,26 +89,25 @@ def test_cell_activity_start_event_uses_transient_transport() -> None:
     }
 
 
-def test_cell_activity_start_event_omits_an_absent_duration() -> None:
-    assert cell_activity_start_event(
-        cell_id="cell-view",
+def test_target_activity_start_event_omits_an_absent_duration() -> None:
+    assert attention_activity_start_event(
+        activity_id="activity-1",
+        address=CellAttentionAddress(kind="cell", cell_id="cell-view"),
         duration_ms=None,
         label=None,
         message=None,
-        revision=0,
-    )["payload"] == {"cellId": "cell-view"}
+    )["payload"] == {
+        "activityId": "activity-1",
+        "address": {"kind": "cell", "cellId": "cell-view"},
+    }
 
 
-def test_cell_activity_stop_event_targets_one_cell() -> None:
-    assert cell_activity_stop_event(
-        cell_id="cell-view",
-        revision=3,
-    ) == {
+def test_target_activity_stop_event_targets_one_owner() -> None:
+    assert attention_activity_stop_event(activity_id="activity-1") == {
         "protocol": "marimo-lens.event",
-        "version": 3,
-        "type": "cell.activity.stop",
-        "revision": 3,
-        "payload": {"cellId": "cell-view"},
+        "version": 4,
+        "type": "attention.activity.stop",
+        "payload": {"activityId": "activity-1"},
     }
 
 
@@ -245,9 +253,8 @@ def test_command_ignores_unrelated_envelopes() -> None:
 @pytest.mark.parametrize(
     ("updates", "code"),
     [
-        ({"version": 1}, "unsupported_version"),
-        ({"version": 2}, "unsupported_version"),
-        ({"version": 4}, "unsupported_version"),
+        ({"version": 3}, "unsupported_version"),
+        ({"version": 5}, "unsupported_version"),
         ({"version": True}, "unsupported_version"),
         ({"type": "selection.unknown"}, "unsupported_command"),
     ],
@@ -330,7 +337,14 @@ def test_commands_reject_revisions_outside_the_json_safe_integer_contract(
     "value",
     [
         selection(selection_id="   "),
-        selection(target={"kind": "notebook", "cellIds": ["   "]}),
+        selection(
+            target={
+                "kind": "notebook",
+                "cellIds": ["   "],
+                "documentId": "document-1",
+                "documentPath": "/",
+            }
+        ),
     ],
 )
 def test_selection_commands_reject_whitespace_only_identifiers(
@@ -356,6 +370,7 @@ def test_selection_commands_accept_dom_targets() -> None:
     target: dict[str, object] = {
         "kind": "dom",
         "cellIds": ["cell-b", "cell-a"],
+        "documentId": "document-1",
         "documentPath": "/dashboard/",
         "domSelector": "#forecast-summary",
     }
@@ -655,9 +670,9 @@ def test_responses_use_current_version_and_include_an_object_payload() -> None:
         message="Bad request.",
     )
 
-    assert success["version"] == 3
+    assert success["version"] == 4
     assert success["payload"] == {}
-    assert error["version"] == 3
+    assert error["version"] == 4
     assert error["payload"] == {}
     assert error["error"] == {
         "code": "invalid_request",
@@ -722,7 +737,7 @@ def test_output_capture_uses_a_separate_outgoing_command_path() -> None:
 
     assert command == {
         "protocol": "marimo-lens.command",
-        "version": 3,
+        "version": 4,
         "requestId": "request-1",
         "type": "output.capture",
         "payload": {"outputCellId": "cell-view"},
@@ -737,7 +752,7 @@ def test_output_capture_response_requires_metadata_and_one_png() -> None:
     response = parse_capture_response(
         {
             "protocol": "marimo-lens.response",
-            "version": 3,
+            "version": 4,
             "requestId": "request-1",
             "ok": True,
             "revision": 4,
@@ -769,7 +784,7 @@ def test_output_capture_response_rejects_image_for_another_request() -> None:
         parse_capture_response(
             {
                 "protocol": "marimo-lens.response",
-                "version": 3,
+                "version": 4,
                 "requestId": "request-1",
                 "ok": True,
                 "revision": 4,
@@ -797,7 +812,7 @@ def test_output_capture_failure_rejects_binary_buffers() -> None:
         parse_capture_response(
             {
                 "protocol": "marimo-lens.response",
-                "version": 3,
+                "version": 4,
                 "requestId": "request-1",
                 "ok": False,
                 "revision": 4,
@@ -814,7 +829,7 @@ def test_output_capture_response_accepts_additive_fields() -> None:
     response = parse_capture_response(
         {
             "protocol": "marimo-lens.response",
-            "version": 3,
+            "version": 4,
             "requestId": "request-1",
             "ok": False,
             "revision": 4,
@@ -858,7 +873,7 @@ def test_invalid_request_id_is_not_echoed(request_id: str) -> None:
 def _command(command_type: str, payload: dict[str, object]) -> dict[str, object]:
     return {
         "protocol": "marimo-lens.command",
-        "version": 3,
+        "version": 4,
         "requestId": "request-1",
         "type": command_type,
         "payload": payload,

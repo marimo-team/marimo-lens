@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { hasTextContent } from "./bounded-text";
 
-export const WIDGET_TRANSPORT_VERSION = 3;
+export const WIDGET_TRANSPORT_VERSION = 4;
 
 export type TransportPrimitive = boolean | null | number | string | undefined;
 export type TransportRecord = { readonly [key: string]: TransportValue };
@@ -113,6 +113,8 @@ export const NotebookSelectionTargetSchema = v.pipe(
   v.object({
     kind: v.literal("notebook"),
     cellIds: TargetCellIdsSchema,
+    documentId: BoundedIdentifierSchema,
+    documentPath: DomSelectorSchema,
   }),
   v.check((target) => target.cellIds.length === 1, "Notebook targets require one cell id"),
 );
@@ -120,6 +122,7 @@ export const NotebookSelectionTargetSchema = v.pipe(
 export const DomSelectionTargetSchema = v.object({
   kind: v.literal("dom"),
   cellIds: TargetCellIdsSchema,
+  documentId: BoundedIdentifierSchema,
   documentPath: DomSelectorSchema,
   domSelector: DomSelectorSchema,
 });
@@ -436,47 +439,67 @@ export const SelectionResolvedEventSchema = v.object({
   }),
 });
 
-const CellRevealPayloadSchema = v.object({
+export const CellAttentionAddressSchema = v.object({
+  kind: v.literal("cell"),
   cellId: BoundedIdentifierSchema,
+});
+
+export const SelectionAttentionAddressSchema = v.object({
+  kind: v.literal("selection"),
+  selectionId: BoundedIdentifierSchema,
+  revision: RevisionSchema,
+});
+
+export const AttentionAddressSchema = v.variant("kind", [
+  CellAttentionAddressSchema,
+  SelectionAttentionAddressSchema,
+]);
+
+const AttentionRevealPayloadSchema = v.object({
+  address: AttentionAddressSchema,
   durationMs: AttentionDurationSchema,
   label: v.optional(AttentionLabelSchema),
   message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(1_000))),
 });
 
-const CellActivityStartPayloadSchema = v.object({
-  cellId: BoundedIdentifierSchema,
+const AttentionActivityStartPayloadSchema = v.object({
+  activityId: BoundedIdentifierSchema,
+  address: AttentionAddressSchema,
   durationMs: v.optional(AttentionDurationSchema),
   label: v.optional(AttentionLabelSchema),
   message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(240))),
 });
 
-const CellActivityStopPayloadSchema = v.object({
-  cellId: BoundedIdentifierSchema,
+const AttentionActivityStopPayloadSchema = v.object({
+  activityId: BoundedIdentifierSchema,
 });
 
-export const CellRevealEventSchema = v.object({
+export const AttentionRevealEventSchema = v.object({
   protocol: v.literal("marimo-lens.event"),
   version: v.literal(WIDGET_TRANSPORT_VERSION),
-  type: v.literal("cell.reveal"),
-  revision: RevisionSchema,
-  payload: CellRevealPayloadSchema,
+  type: v.literal("attention.reveal"),
+  payload: AttentionRevealPayloadSchema,
 });
 
-export const CellActivityStartEventSchema = v.object({
+export const AttentionActivityStartEventSchema = v.object({
   protocol: v.literal("marimo-lens.event"),
   version: v.literal(WIDGET_TRANSPORT_VERSION),
-  type: v.literal("cell.activity.start"),
-  revision: RevisionSchema,
-  payload: CellActivityStartPayloadSchema,
+  type: v.literal("attention.activity.start"),
+  payload: AttentionActivityStartPayloadSchema,
 });
 
-export const CellActivityStopEventSchema = v.object({
+export const AttentionActivityStopEventSchema = v.object({
   protocol: v.literal("marimo-lens.event"),
   version: v.literal(WIDGET_TRANSPORT_VERSION),
-  type: v.literal("cell.activity.stop"),
-  revision: RevisionSchema,
-  payload: CellActivityStopPayloadSchema,
+  type: v.literal("attention.activity.stop"),
+  payload: AttentionActivityStopPayloadSchema,
 });
+
+export const AttentionEventSchema = v.variant("type", [
+  AttentionActivityStartEventSchema,
+  AttentionActivityStopEventSchema,
+  AttentionRevealEventSchema,
+]);
 
 export type PointAnchor = v.InferOutput<typeof PointAnchorSchema>;
 export type RectAnchor = v.InferOutput<typeof RectAnchorSchema>;
@@ -486,6 +509,9 @@ export type DomHintBounds = v.InferOutput<typeof DomHintBoundsSchema>;
 export type NotebookSelectionTarget = v.InferOutput<typeof NotebookSelectionTargetSchema>;
 export type DomSelectionTarget = v.InferOutput<typeof DomSelectionTargetSchema>;
 export type SelectionTarget = v.InferOutput<typeof SelectionTargetSchema>;
+export type CellAttentionAddress = v.InferOutput<typeof CellAttentionAddressSchema>;
+export type SelectionAttentionAddress = v.InferOutput<typeof SelectionAttentionAddressSchema>;
+export type AttentionAddress = v.InferOutput<typeof AttentionAddressSchema>;
 export type TargetSelector = v.InferOutput<typeof TargetSelectorSchema>;
 export type AvailableSnapshot = v.InferOutput<typeof AvailableSnapshotSchema>;
 export type OutputCaptureImage = v.InferOutput<typeof OutputCaptureImageSchema>;
@@ -515,17 +541,17 @@ export type LensCommand = v.InferOutput<typeof LensCommandSchema>;
 export type LensResponse = v.InferOutput<typeof LensResponseSchema>;
 export type ResolvedSelection = v.InferOutput<typeof ResolvedSelectionSchema>;
 export type SelectionResolvedEvent = v.InferOutput<typeof SelectionResolvedEventSchema>;
-export type CellRevealEvent = v.InferOutput<typeof CellRevealEventSchema>;
-export type CellActivityStartEvent = v.InferOutput<typeof CellActivityStartEventSchema>;
-export type CellActivityStopEvent = v.InferOutput<typeof CellActivityStopEventSchema>;
-export type CellAttentionEvent = CellActivityStartEvent | CellActivityStopEvent | CellRevealEvent;
+export type AttentionRevealEvent = v.InferOutput<typeof AttentionRevealEventSchema>;
+export type AttentionActivityStartEvent = v.InferOutput<typeof AttentionActivityStartEventSchema>;
+export type AttentionActivityStopEvent = v.InferOutput<typeof AttentionActivityStopEventSchema>;
+export type AttentionEvent = v.InferOutput<typeof AttentionEventSchema>;
 export type TransportEnvelope = v.InferOutput<typeof TransportEnvelopeSchema>;
 export type TransportInput =
   | TransportValue
   | LensCommand
   | LensResponse
   | SelectionResolvedEvent
-  | CellAttentionEvent;
+  | AttentionEvent;
 
 export type CommandType = ClientCommand["type"];
 export type CommandPayload<TType extends CommandType> = Extract<
@@ -585,22 +611,10 @@ export function parseSelectionResolvedEvent(
   return parseContract(SelectionResolvedEventSchema, input, "Lens resolution event");
 }
 
-export function parseCellRevealEvent(
-  input: v.InferInput<typeof CellRevealEventSchema> | TransportEnvelope | TransportValue,
-): CellRevealEvent {
-  return parseContract(CellRevealEventSchema, input, "Lens cell reveal event");
-}
-
-export function parseCellActivityStartEvent(
-  input: v.InferInput<typeof CellActivityStartEventSchema> | TransportEnvelope | TransportValue,
-): CellActivityStartEvent {
-  return parseContract(CellActivityStartEventSchema, input, "Lens cell activity start event");
-}
-
-export function parseCellActivityStopEvent(
-  input: v.InferInput<typeof CellActivityStopEventSchema> | TransportEnvelope | TransportValue,
-): CellActivityStopEvent {
-  return parseContract(CellActivityStopEventSchema, input, "Lens cell activity stop event");
+export function parseAttentionEvent(
+  input: v.InferInput<typeof AttentionEventSchema> | TransportEnvelope | TransportValue,
+): AttentionEvent {
+  return parseContract(AttentionEventSchema, input, "Lens attention event");
 }
 
 function isValidUnicodeText(value: string): boolean {

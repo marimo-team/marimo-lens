@@ -32,11 +32,14 @@ class CellReference(TypedDict):
 class _NotebookTargetReference(TypedDict):
     kind: Literal["notebook"]
     cellIds: list[str]
+    documentId: str
+    documentPath: str
 
 
 class _DomTargetReference(TypedDict):
     kind: Literal["dom"]
     cellIds: list[str]
+    documentId: str
     documentPath: str
     domSelector: str
 

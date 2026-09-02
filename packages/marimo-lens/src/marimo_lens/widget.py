@@ -5,11 +5,12 @@ from __future__ import annotations
 import logging
 import pathlib
 import threading
+import uuid
 import weakref
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import suppress
 from datetime import datetime, timezone
-from typing import Any, Literal, cast
+from typing import Any, cast
 
 import anywidget
 import traitlets
@@ -22,9 +23,9 @@ from ._output_capture import OutputCaptureSlot
 from ._protocol import (
     Command,
     ProtocolError,
-    cell_activity_start_event,
-    cell_activity_stop_event,
-    cell_reveal_event,
+    attention_activity_start_event,
+    attention_activity_stop_event,
+    attention_reveal_event,
     error_response,
     is_response_envelope,
     mutation_ack_response,
@@ -46,6 +47,9 @@ from ._protocol_models import (
     OPTIONAL_REVEAL_TEXT_ADAPTER,
     REVISION_ADAPTER,
     SELECTION_ID_ADAPTER,
+    AttentionAddress,
+    CellAttentionAddress,
+    SelectionAttentionAddress,
 )
 from ._selection_state import (
     SelectionStore,
@@ -58,7 +62,8 @@ from ._selection_state import (
     reopen_selection,
     resolve_selections,
 )
-from .context import LensContext
+from .activity import ActivityHandle
+from .context import LensContext, SelectionReference
 from .errors import LensError
 
 _LOGGER = logging.getLogger(__name__)
@@ -155,111 +160,125 @@ class Lens(anywidget.AnyWidget):
 
     def reveal(
         self,
-        cell_id: str,
+        target: str | SelectionReference,
         *,
+        expected_revision: int | None = None,
         duration_ms: int,
         label: str | None = None,
         message: str | None = None,
     ) -> None:
-        """Reveal one exact notebook cell for the supplied hold."""
+        """Reveal an exact cell or stored selection for the supplied hold.
 
-        self._send_cell_attention(
-            "reveal",
-            cell_id,
-            message,
-            label=label,
-            duration_ms=duration_ms,
+        A SelectionReference requires its captured expected_revision. A cell ID
+        may omit the revision and must belong to the current marimo graph.
+        """
+
+        reveal_message = _reveal_message(message)
+        attention_label = _attention_label(label)
+        reveal_duration = _validated_duration_ms(duration_ms)
+        self._send_attention(
+            target,
+            expected_revision=expected_revision,
+            event=lambda address: attention_reveal_event(
+                address=address,
+                label=attention_label,
+                message=reveal_message,
+                duration_ms=reveal_duration,
+            ),
         )
 
     def start_activity(
         self,
-        cell_id: str,
+        target: str | SelectionReference,
         *,
+        expected_revision: int | None = None,
         duration_ms: int | None = None,
         label: str | None = None,
         message: str | None = None,
-    ) -> None:
-        """Mark one work cell until stopped or the optional duration ends."""
+    ) -> ActivityHandle:
+        """Mark an exact cell or stored selection and return its activity owner.
 
-        self._send_cell_attention(
-            "activity",
-            cell_id,
-            message,
-            label=label,
-            duration_ms=duration_ms,
+        A SelectionReference requires its captured expected_revision. The
+        returned JSON-safe handle stops this activity when it still owns the
+        browser presentation.
+        """
+
+        activity_id = uuid.uuid4().hex
+        activity_message = _attention_message(message)
+        attention_label = _attention_label(label)
+        activity_duration = (
+            _validated_duration_ms(duration_ms) if duration_ms is not None else None
         )
+        self._send_attention(
+            target,
+            expected_revision=expected_revision,
+            event=lambda address: attention_activity_start_event(
+                activity_id=activity_id,
+                address=address,
+                duration_ms=activity_duration,
+                label=attention_label,
+                message=activity_message,
+            ),
+        )
+        return ActivityHandle(activity_id)
 
-    def stop_activity(self, cell_id: str) -> None:
-        """Stop active work when it is attached to the supplied cell."""
+    def stop_activity(self, activity: ActivityHandle) -> None:
+        """Stop activity when ``activity`` still owns the presentation.
 
-        cell_id = _cell_id(cell_id)
+        The handle may cross a JSON round trip. A non-current handle has no
+        effect.
+        """
+
+        activity_id = _activity_id(activity)
         with self._lock:
             self._require_open()
-            event = cell_activity_stop_event(
-                cell_id=cell_id,
-                revision=self._selection_store.state.revision,
-            )
+            event = attention_activity_stop_event(activity_id=activity_id)
             with suppress(Exception):
                 self.send(event)
 
-    def _send_cell_attention(
+    def _send_attention(
         self,
-        kind: Literal["activity", "reveal"],
-        cell_id: str,
-        message: str | None,
+        target: str | SelectionReference,
         *,
-        label: str | None = None,
-        duration_ms: int | None = None,
+        expected_revision: int | None,
+        event: Callable[[AttentionAddress], dict[str, Any]],
     ) -> None:
-        cell_id = _cell_id(cell_id)
-        message = (
-            _reveal_message(message)
-            if kind == "reveal"
-            else _attention_message(message)
+        address, expected_revision = _attention_address(
+            target,
+            expected_revision=expected_revision,
         )
-        attention_label = _attention_label(label)
-        validated_duration_ms = (
-            _validated_duration_ms(duration_ms)
-            if kind == "reveal" or duration_ms is not None
-            else None
-        )
+        cell_status: str | None = None
+        if isinstance(address, CellAttentionAddress):
+            with self._lock:
+                self._require_open()
+            cell_status = self._runtime.cell_status(address.cell_id)
         with self._lock:
             self._require_open()
-        cell_status = self._runtime.cell_status(cell_id)
-        with self._lock:
-            self._require_open()
-            revision = self._selection_store.state.revision
-            if cell_status == "unavailable":
+            state = self._selection_store.state
+            revision = state.revision
+            if expected_revision is not None and revision != expected_revision:
+                raise _revision_conflict(expected_revision, revision)
+            if isinstance(address, SelectionAttentionAddress):
+                if state.record(address.selection_id) is None:
+                    raise LensError(
+                        "selection_not_found",
+                        "The Lens selection does not exist.",
+                        revision=revision,
+                    )
+            elif cell_status == "unavailable":
                 raise LensError(
                     "runtime_unavailable",
                     "Lens cannot inspect the active marimo runtime.",
                     revision=revision,
                 )
-            if cell_status == "missing":
+            elif cell_status == "missing":
                 raise LensError(
                     "cell_not_found",
                     "The active marimo dataflow graph has no cell with this ID.",
                     revision=revision,
                 )
-            if kind == "activity":
-                event = cell_activity_start_event(
-                    cell_id=cell_id,
-                    duration_ms=validated_duration_ms,
-                    label=attention_label,
-                    message=message,
-                    revision=revision,
-                )
-            else:
-                assert validated_duration_ms is not None
-                event = cell_reveal_event(
-                    cell_id=cell_id,
-                    label=attention_label,
-                    message=message,
-                    duration_ms=validated_duration_ms,
-                    revision=revision,
-                )
             with suppress(Exception):
-                self.send(event)
+                self.send(event(address))
 
     def resolve(
         self,
@@ -645,6 +664,39 @@ def _cell_id(value: object) -> str:
     return _validated_identifier(CELL_ID_ADAPTER, value, name="cell_id")
 
 
+def _activity_id(value: object) -> str:
+    return _validated_identifier(SELECTION_ID_ADAPTER, value, name="activity")
+
+
+def _attention_address(
+    target: str | SelectionReference,
+    *,
+    expected_revision: int | None,
+) -> tuple[AttentionAddress, int | None]:
+    if isinstance(target, str):
+        revision = (
+            _expected_revision(expected_revision)
+            if expected_revision is not None
+            else None
+        )
+        return CellAttentionAddress(kind="cell", cell_id=_cell_id(target)), revision
+    if not isinstance(target, Mapping):
+        raise TypeError("target must be a cell ID or SelectionReference.")
+    if expected_revision is None:
+        raise TypeError(
+            "expected_revision is required when target is a SelectionReference."
+        )
+    revision = _expected_revision(expected_revision)
+    return (
+        SelectionAttentionAddress(
+            kind="selection",
+            selection_id=_selection_id(target.get("id")),
+            revision=revision,
+        ),
+        revision,
+    )
+
+
 def _validated_identifier(
     adapter: TypeAdapter[str],
     value: object,
@@ -670,6 +722,14 @@ def _expected_revision(value: object) -> int:
         raise ValueError(
             "expected_revision must be a non-negative integer within JSON's safe range."
         ) from None
+
+
+def _revision_conflict(expected: int, current: int) -> LensError:
+    return LensError(
+        "revision_conflict",
+        f"Expected Lens revision {expected}, but the current revision is {current}.",
+        revision=current,
+    )
 
 
 def _resolution_summary(value: object) -> str | None:

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import marimo._code_mode as code_mode
 import marimo_lens.agent as lens_agent
 from marimo_lens import (
+    ActivityHandle,
     Lens,
     LensContext,
     LensError,
@@ -35,10 +36,8 @@ def verify_release(expected_version: str) -> None:
         )
 
     requirements = installed_distribution.requires or ()
-    if "agent-plugins==0.1.0" not in requirements:
-        raise SystemExit("marimo-lens must require agent-plugins==0.1.0")
-    if distribution("agent-plugins").version != "0.1.0":
-        raise SystemExit("marimo-lens must install agent-plugins 0.1.0")
+    if "agent-plugins>=0.1.0" not in requirements:
+        raise SystemExit("marimo-lens must require agent-plugins>=0.1.0")
 
     capabilities = [
         entry_point
@@ -116,6 +115,8 @@ def verify_release(expected_version: str) -> None:
         raise SystemExit(
             f"marimo-lens exports are not classes: {', '.join(invalid_types)}"
         )
+    if not isinstance(ActivityHandle("activity"), str):
+        raise SystemExit("ActivityHandle values must be JSON-safe strings")
     if not all(
         callable(function)
         for function in (

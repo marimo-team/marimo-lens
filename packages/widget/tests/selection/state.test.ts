@@ -22,7 +22,12 @@ describe("selection workflow", () => {
       type: "startDrag",
       target: {
         key: "cell-1",
-        target: { kind: "notebook", cellIds: ["cell-1"] },
+        target: {
+          kind: "notebook",
+          cellIds: ["cell-1"],
+          documentId: "document-1",
+          documentPath: "/",
+        },
         element: output,
       },
       pointerId: 4,
@@ -92,7 +97,12 @@ describe("selection workflow", () => {
   test("keeps armed output focus stable across repeated pointer moves", () => {
     const target = {
       key: "cell-1",
-      target: { kind: "notebook" as const, cellIds: ["cell-1"] },
+      target: {
+        kind: "notebook" as const,
+        cellIds: ["cell-1"],
+        documentId: "document-1",
+        documentPath: "/",
+      },
       element: document.createElement("div"),
     };
     const armed = uiReducer(INITIAL_UI_STATE, { type: "arm" });

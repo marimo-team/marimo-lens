@@ -95,18 +95,27 @@ kernel and image reader must share a filesystem.
 
 ## Present and resolve across calls
 
-After fresh verification succeeds, stop persistent activity and reveal the
-primary result:
+After fresh verification succeeds, substitute the saved Lens identity, activity
+handle, and selection ID into the next call. Stop that activity and reveal the
+selected target:
 
 ```python
 import marimo._code_mode as cm
 import marimo_lens.agent as lens_agent
 
+activity = "0123456789abcdef0123456789abcdef"
 mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
-mounted.stop_activity("BYtC")
+snapshot = mounted.context()
+selection = next(
+    selection
+    for selection in snapshot.references["selections"]
+    if selection["id"] == "243110..."
+)
+mounted.stop_activity(activity)
 hold_ms = 8_000
 mounted.reveal(
-    "BYtC",
+    selection,
+    expected_revision=snapshot.revision,
     duration_ms=hold_ms,
     label="Updated aggregation",
     message="Updated the aggregation and verified the output.",
@@ -133,13 +142,19 @@ print(revision)
 For separate resolution groups, pass the revision returned by one call into
 the next call.
 
+Selection activity and reveal resolve the stored target in its owning browser
+document. An owning-document **Target unavailable** notice can appear while a
+host view rebuilds. Keep the activity handle and verify that the target
+reattaches. A full browser-document replacement gives the surface a new opaque
+document identity, so reconnect and read fresh Lens context before continuing.
+
 ## Operation recovery
 
 | Error code            | Next action                                                          |
 | --------------------- | -------------------------------------------------------------------- |
 | `lens_unavailable`    | Retry without identity, then mount Lens when none is available.      |
 | `lens_ambiguous`      | Reconnect with an identity, or close or remove extra Lens instances. |
-| `revision_conflict`   | Reconnect and read a fresh Lens context.                             |
+| `revision_conflict`   | Stop saved activity, reconnect, and reassess fresh Lens context.     |
 | `selection_not_found` | Reconnect and inspect the current selections.                        |
 | `capture_busy`        | Finish the pending cell capture before requesting another.           |
 | `runtime_unavailable` | Keep the request open and report that verification is unavailable.   |

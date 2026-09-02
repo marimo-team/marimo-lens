@@ -2,9 +2,9 @@ import { describe, expect, test } from "vite-plus/test";
 
 import {
   ActivateSelectionCommandSchema,
-  CellActivityStartEventSchema,
-  CellActivityStopEventSchema,
-  CellRevealEventSchema,
+  AttentionActivityStartEventSchema,
+  AttentionActivityStopEventSchema,
+  AttentionRevealEventSchema,
   ClearHistoryCommandSchema,
   GetSnapshotCommandSchema,
   DeleteSelectionCommandSchema,
@@ -156,7 +156,12 @@ describe("selection contracts", () => {
       selectionId: "selection-1",
       label: "S1",
       note: "Align this label",
-      target: { kind: "notebook" as const, cellIds: ["cell-1"] },
+      target: {
+        kind: "notebook" as const,
+        cellIds: ["cell-1"],
+        documentId: "document-1",
+        documentPath: "/",
+      },
       createdAt: "2026-07-14T10:00:00Z",
       addressedAt: "2026-07-14T10:05:00Z",
       anchor: { kind: "point" as const, x: 0.25, y: 0.5 },
@@ -211,7 +216,7 @@ describe("selection contracts", () => {
   test("requires an exact addressed receipt for reopen commands", () => {
     const reopen = {
       protocol: "marimo-lens.command",
-      version: 3,
+      version: 4,
       requestId: "request-1",
       type: "selection.reopen",
       payload: {
@@ -234,7 +239,7 @@ describe("selection contracts", () => {
 
     const clearHistory = {
       protocol: "marimo-lens.command",
-      version: 3,
+      version: 4,
       requestId: "request-2",
       type: "history.clear",
       payload: { expectedRevision: 4 },
@@ -256,10 +261,16 @@ describe("selection contracts", () => {
 
   test("accepts notebook and DOM target contracts", () => {
     const targets = [
-      { kind: "notebook" as const, cellIds: ["cell-1"] },
+      {
+        kind: "notebook" as const,
+        cellIds: ["cell-1"],
+        documentId: "document-1",
+        documentPath: "/",
+      },
       {
         kind: "dom" as const,
         cellIds: [],
+        documentId: "document-1",
         documentPath: "/dashboard/",
         domSelector: "#forecast-summary",
       },
@@ -275,6 +286,7 @@ describe("selection contracts", () => {
       target: {
         kind: "dom",
         cellIds: ["cell-b", "cell-a"],
+        documentId: "document-1",
         documentPath: "/dashboard/",
         domSelector: "#forecast-summary",
       },
@@ -305,7 +317,7 @@ describe("selection contracts", () => {
           ActivateSelectionCommandSchema,
           {
             protocol: "marimo-lens.command",
-            version: 3,
+            version: 4,
             requestId: "request-1",
             type: "selection.activate",
             payload: { selectionId: blank, expectedRevision: 0 },
@@ -327,7 +339,7 @@ describe("selection contracts", () => {
 
     const failed = {
       protocol: "marimo-lens.response",
-      version: 3,
+      version: 4,
       requestId: "request-1",
       ok: false,
       revision: 1,
@@ -346,7 +358,7 @@ describe("selection contracts", () => {
         PutSelectionCommandSchema,
         {
           protocol: "marimo-lens.command",
-          version: 3,
+          version: 4,
           requestId: "request-1",
           type: "selection.put",
           payload: { selection: selectionFixture(), imageAction: "replace" },
@@ -359,7 +371,7 @@ describe("selection contracts", () => {
         ActivateSelectionCommandSchema,
         {
           protocol: "marimo-lens.command",
-          version: 3,
+          version: 4,
           requestId: "request-1",
           type: "selection.activate",
           payload: { selectionId: "selection-1" },
@@ -372,7 +384,7 @@ describe("selection contracts", () => {
         DeleteSelectionCommandSchema,
         {
           protocol: "marimo-lens.command",
-          version: 3,
+          version: 4,
           requestId: "request-1",
           type: "selection.delete",
           payload: { selectionId: "selection-1" },
@@ -388,7 +400,7 @@ describe("selection contracts", () => {
         GetSnapshotCommandSchema,
         {
           protocol: "marimo-lens.command",
-          version: 3,
+          version: 4,
           requestId: "request-2",
           type: "snapshot.get",
           payload: { selectionId: "selection-1" },
@@ -401,7 +413,7 @@ describe("selection contracts", () => {
   test("keeps image actions aligned with snapshot status", () => {
     const command = (selection: ReturnType<typeof selectionFixture>, imageAction: string) => ({
       protocol: "marimo-lens.command",
-      version: 3,
+      version: 4,
       requestId: "request-1",
       type: "selection.put",
       payload: { selection, imageAction, expectedRevision: 0 },
@@ -433,7 +445,7 @@ describe("selection contracts", () => {
   test("validates bounded selection resolution events", () => {
     const event = {
       protocol: "marimo-lens.event",
-      version: 3,
+      version: 4,
       type: "selection.resolved",
       revision: 4,
       payload: {
@@ -477,7 +489,7 @@ describe("selection contracts", () => {
         "event",
       ),
     ).toEqual(event);
-    for (const version of [1, 2, 4]) {
+    for (const version of [1, 2, 3, 5]) {
       expect(() =>
         parseContract(SelectionResolvedEventSchema, { ...event, version }, "event"),
       ).toThrow();
@@ -496,44 +508,50 @@ describe("selection contracts", () => {
     ).toThrow();
   });
 
-  test("accepts bounded cell reveal events", () => {
+  test("accepts bounded target reveal events", () => {
     const reveal = {
       protocol: "marimo-lens.event",
-      version: 3,
-      type: "cell.reveal",
-      revision: 4,
+      version: 4,
+      type: "attention.reveal",
       payload: {
-        cellId: "BYtC",
+        address: { kind: "cell" as const, cellId: "BYtC" },
         label: "Updated chart",
         message: "Updated the aggregation.",
         durationMs: 8_000,
       },
     };
-    expect(parseContract(CellRevealEventSchema, reveal, "event")).toEqual(reveal);
-    expect(() =>
-      parseContract(CellRevealEventSchema, { ...reveal, payload: { cellId: "BYtC" } }, "event"),
-    ).toThrow();
+    expect(parseContract(AttentionRevealEventSchema, reveal, "event")).toEqual(reveal);
     expect(() =>
       parseContract(
-        CellRevealEventSchema,
-        { ...reveal, payload: { cellId: "x".repeat(129) } },
+        AttentionRevealEventSchema,
+        { ...reveal, payload: { address: reveal.payload.address } },
         "event",
       ),
     ).toThrow();
     expect(() =>
       parseContract(
-        CellRevealEventSchema,
-        { ...reveal, payload: { cellId: "BYtC", message: "   " } },
+        AttentionRevealEventSchema,
+        {
+          ...reveal,
+          payload: { ...reveal.payload, address: { kind: "cell", cellId: "x".repeat(129) } },
+        },
+        "event",
+      ),
+    ).toThrow();
+    expect(() =>
+      parseContract(
+        AttentionRevealEventSchema,
+        { ...reveal, payload: { ...reveal.payload, message: "   " } },
         "event",
       ),
     ).toThrow();
     expect(
       parseContract(
-        CellRevealEventSchema,
+        AttentionRevealEventSchema,
         {
           ...reveal,
           payload: {
-            cellId: "BYtC",
+            address: reveal.payload.address,
             message: "x".repeat(1_000),
             durationMs: 300_000,
           },
@@ -545,102 +563,124 @@ describe("selection contracts", () => {
     });
     expect(() =>
       parseContract(
-        CellRevealEventSchema,
-        { ...reveal, payload: { cellId: "BYtC", message: "x".repeat(1_001) } },
+        AttentionRevealEventSchema,
+        { ...reveal, payload: { ...reveal.payload, message: "x".repeat(1_001) } },
         "event",
       ),
     ).toThrow();
     expect(() =>
       parseContract(
-        CellRevealEventSchema,
-        { ...reveal, payload: { cellId: "BYtC", label: "x".repeat(41) } },
+        AttentionRevealEventSchema,
+        { ...reveal, payload: { ...reveal.payload, label: "x".repeat(41) } },
         "event",
       ),
     ).toThrow();
     for (const durationMs of [0, 300_001, 1.5]) {
       expect(() =>
         parseContract(
-          CellRevealEventSchema,
-          { ...reveal, payload: { cellId: "BYtC", durationMs } },
+          AttentionRevealEventSchema,
+          { ...reveal, payload: { ...reveal.payload, durationMs } },
           "event",
         ),
       ).toThrow();
     }
     expect(
       parseContract(
-        CellRevealEventSchema,
+        AttentionRevealEventSchema,
         { ...reveal, payload: { ...reveal.payload, displayHint: "compact" } },
         "event",
       ),
     ).toEqual(reveal);
   });
 
-  test("accepts bounded cell activity start events", () => {
+  test("accepts bounded target activity start events", () => {
     const activity = {
       protocol: "marimo-lens.event",
-      version: 3,
-      type: "cell.activity.start",
-      revision: 4,
+      version: 4,
+      type: "attention.activity.start",
       payload: {
-        cellId: "BYtC",
+        activityId: "activity-1",
+        address: { kind: "selection" as const, selectionId: "selection-1", revision: 4 },
         durationMs: 8_000,
         label: "On it",
         message: "Updating the aggregation.",
       },
     };
-    expect(parseContract(CellActivityStartEventSchema, activity, "event")).toEqual(activity);
-    const persistent = { ...activity, payload: { cellId: "BYtC" } };
-    expect(parseContract(CellActivityStartEventSchema, persistent, "event")).toEqual(persistent);
+    expect(parseContract(AttentionActivityStartEventSchema, activity, "event")).toEqual(activity);
+    const persistent = {
+      ...activity,
+      payload: { activityId: "activity-1", address: activity.payload.address },
+    };
+    expect(parseContract(AttentionActivityStartEventSchema, persistent, "event")).toEqual(
+      persistent,
+    );
     expect(
       parseContract(
-        CellActivityStartEventSchema,
+        AttentionActivityStartEventSchema,
         { ...activity, payload: { ...activity.payload, displayHint: "compact" } },
         "event",
       ),
     ).toEqual(activity);
     expect(() =>
       parseContract(
-        CellActivityStartEventSchema,
-        { ...activity, payload: { cellId: "BYtC", message: "   " } },
+        AttentionActivityStartEventSchema,
+        { ...activity, payload: { ...activity.payload, message: "   " } },
         "event",
       ),
     ).toThrow();
     expect(() =>
       parseContract(
-        CellActivityStartEventSchema,
-        { ...activity, payload: { cellId: "BYtC", label: "x".repeat(41) } },
+        AttentionActivityStartEventSchema,
+        { ...activity, payload: { ...activity.payload, label: "x".repeat(41) } },
         "event",
       ),
     ).toThrow();
     for (const durationMs of [0, 300_001, 1.5]) {
       expect(() =>
         parseContract(
-          CellActivityStartEventSchema,
-          { ...activity, payload: { cellId: "BYtC", durationMs } },
+          AttentionActivityStartEventSchema,
+          { ...activity, payload: { ...activity.payload, durationMs } },
+          "event",
+        ),
+      ).toThrow();
+    }
+    for (const address of [
+      { kind: "selection", selectionId: "selection-1" },
+      { kind: "selection", selectionId: "selection-1", revision: -1 },
+      { kind: "cell", cellId: "" },
+      { kind: "selector", selector: "#projection" },
+    ]) {
+      expect(() =>
+        parseContract(
+          AttentionActivityStartEventSchema,
+          { ...activity, payload: { ...activity.payload, address } },
           "event",
         ),
       ).toThrow();
     }
   });
 
-  test("accepts a cell-specific activity stop event", () => {
+  test("accepts an owner-specific activity stop event", () => {
     const stop = {
       protocol: "marimo-lens.event",
-      version: 3,
-      type: "cell.activity.stop",
-      revision: 4,
-      payload: { cellId: "BYtC" },
+      version: 4,
+      type: "attention.activity.stop",
+      payload: { activityId: "activity-1" },
     };
-    expect(parseContract(CellActivityStopEventSchema, stop, "event")).toEqual(stop);
+    expect(parseContract(AttentionActivityStopEventSchema, stop, "event")).toEqual(stop);
     expect(() =>
-      parseContract(CellActivityStopEventSchema, { ...stop, payload: { cellId: "" } }, "event"),
+      parseContract(
+        AttentionActivityStopEventSchema,
+        { ...stop, payload: { activityId: "" } },
+        "event",
+      ),
     ).toThrow();
   });
 
   test("correlates output capture messages by request and exact cell", () => {
     const command = {
       protocol: "marimo-lens.command",
-      version: 3,
+      version: 4,
       requestId: "capture-1",
       type: "output.capture",
       payload: {

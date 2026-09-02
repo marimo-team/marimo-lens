@@ -42,7 +42,14 @@ def test_selection_store_preserves_publish_error_when_rollback_publish_fails() -
     "selected",
     [
         selection(selection_id="   "),
-        selection(target={"kind": "notebook", "cellIds": ["\t"]}),
+        selection(
+            target={
+                "kind": "notebook",
+                "cellIds": ["\t"],
+                "documentId": "document-1",
+                "documentPath": "/",
+            }
+        ),
     ],
 )
 def test_selection_state_rejects_whitespace_only_identifiers(

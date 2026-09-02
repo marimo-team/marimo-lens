@@ -2,15 +2,14 @@
 name: marimo-lens
 description: >-
   Use Lens to turn a user's point, region, or note on a rendered notebook or
-  configured DOM target into a bounded task against producing cells or host source. Work through a live marimo
-  code-mode environment, installing and using the marimo-pair skill first when
-  the current agent is not connected to one. Inspect the selected cell,
-  upstream context, and available images, then show activity, verify the
-  notebook or host result, reveal it, and resolve the addressed selection to History.
-  Use when the user refers to "this" output, asks to address Lens selections,
-  requests an overview or walkthrough, or invokes `$marimo-lens address` for
-  every open selection. Treat the human's mark and note as the request, and
-  return notebook evidence for their review.
+  configured DOM target into a bounded task against producing cells or host
+  source. Work through a live marimo code-mode environment, using marimo-pair
+  when the current agent needs that connection. Inspect the selected target,
+  producer context, and available images, then show activity on that target,
+  verify the result, reveal it, and resolve the selection to History. Use when
+  the user refers to "this" output, asks to address Lens selections, requests a
+  notebook walkthrough, or invokes `$marimo-lens address` for every open
+  selection.
 ---
 
 # Work with marimo Lens
@@ -91,25 +90,6 @@ import marimo_lens.agent as lens_agent
 ctx = cm.get_context()
 mounted = lens_agent.connect(ctx)
 snapshot = mounted.context()
-selection = snapshot.current
-available_cell = (
-    next(
-        (cell for cell in selection["cells"] if cell["status"] == "available"),
-        None,
-    )
-    if selection is not None
-    else None
-)
-if (
-    selection is not None
-    and selection["target"]["kind"] == "notebook"
-    and available_cell is not None
-):
-    mounted.start_activity(
-        available_cell["id"],
-        label="Inspecting selected output",
-        message="Reading the marked view and its producing cell.",
-    )
 print(
     json.dumps(
         {
@@ -135,9 +115,10 @@ print(
 Use `ctx` for notebook cells, graph relationships, globals, and runtime status.
 Use `snapshot` for Lens targets, bounded context, and captured evidence.
 
-Keep `mounted.identity` and `snapshot.revision` together. Reconnect in later
-kernel calls with `connect(cm.get_context(), identity=identity)`. Retry without
-the saved identity when that Lens becomes unavailable.
+Keep `mounted.identity`, `snapshot.revision`, and the chosen selection ID
+together. Reconnect in later kernel calls with
+`connect(cm.get_context(), identity=identity)`. Retry without the saved identity
+when that Lens becomes unavailable.
 
 Passing `ctx` lets `connect()` reuse an existing Lens object from notebook
 globals before considering a new Lens cell. When the first `connect(ctx)` call
@@ -148,9 +129,9 @@ kernel call after the target document renders Lens.
 
 Keep the first read compact. Print the identity, revision, current selection,
 and selection count. Do not print `snapshot.text`, every cell body, or the full
-notebook graph during connection. Read the selected cell and the bounded graph
-ancestors needed for the request, then expand only when a concrete uncertainty
-requires another cell.
+notebook graph during connection. Read the selected target's producer cells and
+bounded graph ancestors, then expand only when a concrete uncertainty requires
+another cell.
 
 In selection-address mode, do not iterate over `ctx.cells` or print a notebook
 inventory. Notebook-order enumeration belongs to explicit overview and
@@ -168,22 +149,64 @@ graph.
 
 ## Start meaningful activity
 
-Call `start_activity()` as soon as the primary work cell is known. Start it in
-the initial context call when the current selection already identifies that
-cell. For a visual or deictic request, begin with a neutral cell-grounded label
-such as `Inspecting selected output`. Update the activity after image inspection
-when a more specific label is supported. Do this before extended context
-loading, planning, mutation, or verification.
+Choose the relevant `SelectionReference`, then start activity against that
+selection. The selected surface owns presentation when its producer list is
+empty, contains one cell, or contains several cells.
 
-Use the selected or edited cell as the activity target for notebook work. For a
-DOM target, use the host integration's status surface while editing its source.
-For an overview, use the first inspected cell whose ID is present in
-`ctx.graph.cells`. Start activity again when the primary target changes. A
-direct result can proceed to `reveal()`.
+```python
+import json
+
+import marimo._code_mode as cm
+import marimo_lens.agent as lens_agent
+
+mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
+snapshot = mounted.context()
+selection = snapshot.current
+if selection is None:
+    raise RuntimeError(
+        "Lens has no current selection; use a cell-addressed overview or walkthrough"
+    )
+
+activity = mounted.start_activity(
+    selection,
+    expected_revision=snapshot.revision,
+    label="Inspecting selected target",
+    message="Reading the marked view and its producer context.",
+)
+print(
+    json.dumps(
+        {
+            "activity": activity,
+            "revision": snapshot.revision,
+            "selectionId": selection["id"],
+        },
+        sort_keys=True,
+    )
+)
+```
+
+Keep the returned `activity` value exactly as printed. It is a JSON-safe opaque
+owner for this activity. A later `stop_activity(activity)` clears the
+presentation when this handle still owns it. Starting newer activity returns a
+new handle, and a delayed stop for an older handle leaves the newer presentation
+visible.
+
+Use these addressing rules:
+
+- Pass a `SelectionReference` with its captured revision for every human
+  selection, including notebook outputs and DOM targets with zero or several
+  producer cells.
+- Pass a graph-member cell ID for notebook overviews and walkthroughs that have
+  no selection.
+- Use `selection["cells"]` as provenance and edit locations. Keep
+  `selection` as the activity and reveal target.
+- Treat `documentId`, `documentPath`, and `domSelector` as target evidence.
+  Pass the stored selection to feedback methods so the browser resolves its
+  owning document and surface.
 
 Leave `duration_ms` unset for work spanning context, edits, execution, and
-verification, then call `stop_activity(cell_id)` when that work finishes. Pass
-`duration_ms` for a bounded status that should clear itself after its hold.
+verification. Pass `duration_ms` for a bounded status that should clear itself
+after its hold.
 
 ## Inspect the required evidence
 
@@ -192,6 +215,9 @@ Route work from `selection["target"]["kind"]` before planning a mutation:
 - `notebook`: Inspect the producing cell and its required graph neighbors.
 - `dom`: Use `documentPath` and `domSelector` to locate the authored view region.
   Treat `cells` as related provenance. A DOM target can have no producing cell.
+
+`documentId` is an opaque browser-document identity. Preserve it inside the
+`SelectionReference`; do not construct, compare, or pass it separately.
 
 Use the host integration's skill and source tools for authored view changes and
 browser handoff. The exact selector locates the rendered element.
@@ -271,11 +297,24 @@ claims supplied by the user or a source to that observer.
 
 ## Apply, verify, and present
 
-Keep activity visible through context gathering, edits, execution, and fresh
-verification for notebook work. Start activity on a new result cell as soon as
-its returned cell ID is available. Verify changed cells in a fresh kernel call.
-Each claimed result must be idle and free of relevant errors. Inspect a fresh
-cell image for notebook visual work.
+Use this lifecycle for each addressed selection:
+
+1. Capture `LensContext` and its revision.
+2. Choose the relevant `SelectionReference`.
+3. Start activity against that selection.
+4. Inspect its producing cells and host source.
+5. Apply the change.
+6. Verify against fresh runtime and browser evidence.
+7. Stop the owned activity.
+8. Reveal the selected target.
+9. Wait for the reveal hold.
+10. Resolve the verified selection.
+
+Keep selection-addressed activity visible while inspecting and editing its
+producer cells or host source. The selection remains the presentation target.
+Verify changed cells in a fresh kernel call. Each claimed result must be idle
+and free of relevant errors. Inspect a fresh cell image for notebook visual
+work.
 
 For host view work, inspect the saved source, activate the exact view, and
 collect fresh browser evidence at desktop and narrow widths. Compare the result
@@ -304,23 +343,30 @@ path. Read that cell, confirm its status and relevant errors, inspect a fresh
 cell image when the claim is visual, then reveal and resolve. Do not enumerate
 the full notebook or create a duplicate cell.
 
-After verification succeeds, call `stop_activity(cell_id)` for persistent
+After verification succeeds, call `stop_activity(activity)` for persistent
 activity. Timed activity may be stopped early or allowed to finish its hold.
-Reveal verified results in reading order. Set each `duration_ms` long enough for
-the user to orient to the cell and read its message comfortably. Use one kernel
-call per reveal, print the hold, and wait for it before sending the next.
+Read fresh Lens context and find the same selection ID. Reassess its note,
+target, and revision when Lens state changed. Reveal that `SelectionReference`
+with the fresh captured revision. Set `duration_ms` long enough for the user to
+orient to the selected surface and read its message. Use one kernel call per
+reveal, print the hold, and wait for it before sending the next.
 
-Reveal the primary result before resolving its selections. Start with
-`revision = snapshot.revision`. Resolve selections together when they share one
-verified result. When results or rationales differ, assign the revision returned
-by each call and carry it into the next call. Follow the
+Reveal each distinct selected surface before resolving it. Selections on one
+verified surface can share one reveal and batch resolve. Start with
+`revision = snapshot.revision`. When results or rationales differ, assign the
+revision returned by each resolve and carry it into the next call. Follow the
 [presentation recipe](reference/workflow.md#present-and-resolve-across-calls)
 for the kernel-call sequence.
 
 The addressed receipt is the final presentation. Keep its summary to one short
 sentence of at most 240 UTF-16 code units. Put detailed evidence in notebook
 cells and reveal messages. On `revision_conflict`, leave selections open,
-reconnect, and reassess a fresh context.
+stop the saved activity handle, reconnect, and reassess fresh context. Start new
+activity if work continues.
+
+An owning-document **Target unavailable** notice is transient browser state.
+Keep the activity handle while the host view rebuilds and verify that the target
+reattaches. Other rendered documents ignore selection-addressed feedback.
 
 Finish after the walkthrough when no selection was addressed. Keep selections
 open when verification fails or the next step needs user input. Leave activity

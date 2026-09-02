@@ -18,9 +18,10 @@ Point to a notebook result and say what should change. Lens gives your agent
 the producing cell, related notebook context, and an annotated image to ground
 its work in the result you marked.
 
-While the agent works, Lens can show which cell it is changing or checking,
-bring the result into view for review, and keep completed requests in
-**History** for another pass.
+While the agent works, Lens can mark the selected result, bring that same
+surface into view for review, and keep completed requests in **History** for
+another pass. Cell-addressed feedback remains available for notebook
+walkthroughs.
 
 [Read the user guide](https://marimo-team.github.io/marimo-lens/) for the
 agent workflow.
@@ -71,10 +72,10 @@ lens = Lens(
 )
 ```
 
-Notebook outputs remain selectable. Each additional selection keeps the
-document path, an exact DOM locator, producer IDs inferred from generic runtime
-metadata, and the marked PNG. Host integrations own the selector they pass to
-Lens.
+Notebook outputs remain selectable. Each additional selection keeps an opaque
+document ID, the document path, an exact DOM locator, producer IDs inferred
+from generic runtime metadata, and the marked PNG. Host integrations own the
+selector they pass to Lens.
 
 ## Connect an agent
 
@@ -110,20 +111,24 @@ start with existing code-mode access or enter code mode through Pair.
 
 ## Python API
 
-The package exports `CellReference`, `Lens`, `LensContext`, `LensError`,
+The package exports `ActivityHandle`, `CellReference`, `Lens`, `LensContext`, `LensError`,
 `LensReferences`, `NotebookReference`, `SelectionReference`,
 `SelectionTargetReference`, and `__version__`. The version string comes from the
 installed `marimo-lens` distribution metadata.
 
 Agent integrations use five methods:
 
-| Method                                                                        | Behavior                                                         |
-| ----------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `lens.context()`                                                              | Returns detached selection context with lazy notebook text       |
-| `lens.start_activity(cell_id, *, duration_ms=None, label=None, message=None)` | Marks current work until stopped or its optional hold ends       |
-| `lens.stop_activity(cell_id)`                                                 | Stops activity attached to that exact cell                       |
-| `lens.reveal(cell_id, *, duration_ms, label=None, message=None)`              | Brings one verified or explanatory cell into view                |
-| `lens.resolve(selection_ids, *, expected_revision, summary=None)`             | Moves one or more selections to History in one guarded operation |
+| Method                                                                                               | Behavior                                                         |
+| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `lens.context()`                                                                                     | Returns detached selection context with lazy notebook text       |
+| `lens.start_activity(target, *, expected_revision=None, duration_ms=None, label=None, message=None)` | Marks one selection or cell and returns its activity owner       |
+| `lens.stop_activity(activity)`                                                                       | Stops activity when the handle still owns the presentation       |
+| `lens.reveal(target, *, expected_revision=None, duration_ms, label=None, message=None)`              | Brings one selected surface or notebook cell into view           |
+| `lens.resolve(selection_ids, *, expected_revision, summary=None)`                                    | Moves one or more selections to History in one guarded operation |
+
+Pass a `SelectionReference` from `LensContext` with its captured revision to
+address the selected surface. Pass a cell ID string for a notebook walkthrough
+that has no selection.
 
 The [Python API reference](https://marimo-team.github.io/marimo-lens/api)
 documents return values, errors, limits, and lifecycle behavior.

@@ -44,7 +44,7 @@ type LensDockProps = {
   busySelectionIds: ReadonlySet<string>;
   interactionLocked: boolean;
   resolutionReceipt?: SelectionResolvedEvent | null;
-  cellAttentionFallback?: ReactNode;
+  targetAttentionFallback?: ReactNode;
   onToggleArmed: () => void;
   onToggleList: () => void;
   onSheetTabChange: (tab: SelectionSheetTab) => void;
@@ -80,7 +80,7 @@ export function LensDock({
   busySelectionIds,
   interactionLocked,
   resolutionReceipt,
-  cellAttentionFallback,
+  targetAttentionFallback,
   onToggleArmed,
   onToggleList,
   onSheetTabChange,
@@ -224,11 +224,11 @@ export function LensDock({
             onReopen={onReopenSelection}
             snapshotLoader={snapshotLoader}
           />
-          {cellAttentionFallback}
+          {targetAttentionFallback}
         </div>
       ) : (
         <>
-          {cellAttentionFallback ??
+          {targetAttentionFallback ??
             (resolutionReceipt ? (
               <ResolutionReceipt
                 event={resolutionReceipt}

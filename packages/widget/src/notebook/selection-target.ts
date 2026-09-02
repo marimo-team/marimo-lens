@@ -11,6 +11,7 @@ import {
 } from "@/notebook/output-root";
 
 const DOCUMENT_POSITION_FOLLOWING = 4;
+const DOCUMENT_IDS = new WeakMap<Document, string>();
 
 export type TargetSurface = {
   key: string;
@@ -64,7 +65,10 @@ export function getTargetSurface(
 }
 
 export function targetBelongsToDocument(target: SelectionTarget, ownerDocument: Document): boolean {
-  return target.kind === "notebook" || target.documentPath === documentPath(ownerDocument);
+  return (
+    target.documentId === documentIdentity(ownerDocument) &&
+    target.documentPath === documentPath(ownerDocument)
+  );
 }
 
 export function listTargetSurfaces(
@@ -132,7 +136,15 @@ function bestTarget(elements: Element[], selector: TargetSelector): TargetSurfac
 function notebookTarget(element: Element): TargetSurface | null {
   const output = outputCellFromRoot(element);
   if (!output || !isVisible(output.element)) return null;
-  return surface({ kind: "notebook", cellIds: [output.id] }, output.element);
+  return surface(
+    {
+      kind: "notebook",
+      cellIds: [output.id],
+      documentId: documentIdentity(output.element.ownerDocument),
+      documentPath: documentPath(output.element.ownerDocument),
+    },
+    output.element,
+  );
 }
 
 function configuredDomTarget(element: Element, selector: string): TargetSurface | null {
@@ -150,6 +162,7 @@ function domTarget(element: Element): TargetSurface | null {
       {
         kind: "dom",
         cellIds,
+        documentId: documentIdentity(element.ownerDocument),
         documentPath: documentPath(element.ownerDocument),
         domSelector: selector,
       },
@@ -251,6 +264,19 @@ function documentOrder(left: Element, right: Element): number {
 
 function documentPath(ownerDocument: Document): string {
   return ownerDocument.location?.pathname || "/";
+}
+
+export function documentIdentity(ownerDocument: Document): string {
+  const existing = DOCUMENT_IDS.get(ownerDocument);
+  if (existing) return existing;
+  const ownerWindow = ownerDocument.defaultView;
+  if (!ownerWindow) throw new Error("Lens requires a browser window");
+  const id =
+    ownerWindow.crypto.randomUUID?.() ??
+    `${ownerWindow.Date.now().toString(36)}-${ownerWindow.Math.random().toString(36).slice(2, 10)}`;
+  const created = `document:${id}`;
+  DOCUMENT_IDS.set(ownerDocument, created);
+  return created;
 }
 
 function escapeIdentifier(value: string, ownerDocument: Document): string {

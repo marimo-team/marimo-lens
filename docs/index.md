@@ -423,15 +423,16 @@ if handoff_to_agent.value:
             else f"Working through {_selection_count} selections"
         )
         set_response_completion(None)
-        lens.start_activity(
-            _handoff_cell_id,
+        _activity_handle = lens.start_activity(
+            _activity_selection,
+            expected_revision=_handoff_context.revision,
             label="Reviewing chart request",
             message=_activity_message,
         )
         await asyncio.sleep(5)
         if _color_supported:
             set_bar_color(_color_candidate)
-        lens.stop_activity(_handoff_cell_id)
+        lens.stop_activity(_activity_handle)
         set_response_request(
             {
                 "selectionIds": [
@@ -457,10 +458,19 @@ if _verified_request is not None:
         str(_selection.get("id", ""))
         for _selection in _verified_context.references.get("selections", [])
     }
-    if _verified_selection_ids and all(
-        _selection_id in _open_selection_ids
-        for _selection_id in _verified_selection_ids
+    if (
+        _verified_selection_ids
+        and _verified_context.revision == int(_verified_request["revision"])
+        and all(
+            _selection_id in _open_selection_ids
+            for _selection_id in _verified_selection_ids
+        )
     ):
+        _verified_selection = next(
+            _selection
+            for _selection in _verified_context.references["selections"]
+            if str(_selection["id"]) == _verified_selection_ids[0]
+        )
         _verified_cell_id = str(_verified_request["cellId"])
         _verified_color = str(_verified_request["color"])
         _verified_count = int(_verified_request["count"])
@@ -491,16 +501,18 @@ if _verified_request is not None:
             if _verified_request["colorSupported"]
             else "Checking what this demo can change."
         )
-        lens.start_activity(
-            _verified_cell_id,
+        _verification_activity = lens.start_activity(
+            _verified_selection,
+            expected_revision=_verified_context.revision,
             label="Checking updated chart",
             message=_verification_message,
         )
         await asyncio.sleep(5)
-        lens.stop_activity(_verified_cell_id)
+        lens.stop_activity(_verification_activity)
         _reveal_hold_ms = 10_000
         lens.reveal(
-            _verified_cell_id,
+            _verified_selection,
+            expected_revision=_verified_context.revision,
             duration_ms=_reveal_hold_ms,
             label="Updated chart",
             message=_verified_summary,

@@ -1,18 +1,16 @@
-import type { CellActivityStartEvent, CellRevealEvent } from "@marimo-lens/protocol";
-
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import type { CellAttentionPresentation } from "@/transient/cell-attention";
+import type { TargetAttentionPresentation } from "@/transient/target-attention";
 
 import {
-  CellAttentionAnnouncement,
-  CellAttentionFallback,
-  CellAttentionIndicator,
-  projectCellAttention,
-  projectCellAttentionSurface,
-} from "@/transient/cell-attention-indicator";
+  TargetAttentionAnnouncement,
+  TargetAttentionFallback,
+  TargetAttentionIndicator,
+  projectTargetAttention,
+  projectTargetAttentionSurface,
+} from "@/transient/target-attention-indicator";
 
 let root: Root | null = null;
 
@@ -23,7 +21,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("cell attention presentation", () => {
+describe("target attention presentation", () => {
   test("anchors a visible label above the target at its top-right edge", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(980, 80, 200, 160);
@@ -31,7 +29,7 @@ describe("cell attention presentation", () => {
     const presentation = activityPresentation(target);
     const ownerWindow = viewport(1280, 720);
 
-    const view = projectCellAttention(presentation, ownerWindow);
+    const view = projectTargetAttention(presentation, ownerWindow);
 
     expect(view?.ring).toMatchObject({ top: 80, left: 980, width: 200, height: 160 });
     expect(view?.label.right).toBe(108);
@@ -47,7 +45,7 @@ describe("cell attention presentation", () => {
     const presentation = activityPresentation(target);
     const ownerWindow = viewport(480, 720);
 
-    const surface = projectCellAttentionSurface(presentation, ownerWindow, {
+    const surface = projectTargetAttentionSurface(presentation, ownerWindow, {
       height: 226,
       maxWidth: 400,
     });
@@ -63,7 +61,7 @@ describe("cell attention presentation", () => {
     const presentation = { ...activityPresentation(target), framing: "pending" as const };
     const ownerWindow = viewport(480, 720);
 
-    expect(projectCellAttentionSurface(presentation, ownerWindow)).toEqual({
+    expect(projectTargetAttentionSurface(presentation, ownerWindow)).toEqual({
       view: null,
       fallback: null,
     });
@@ -76,7 +74,7 @@ describe("cell attention presentation", () => {
     const presentation = activityPresentation(target);
     const ownerWindow = viewport(480, 720);
 
-    expect(projectCellAttentionSurface(presentation, ownerWindow)).toEqual({
+    expect(projectTargetAttentionSurface(presentation, ownerWindow)).toEqual({
       view: null,
       fallback: { presentation, reason: "offscreen" },
     });
@@ -88,7 +86,7 @@ describe("cell attention presentation", () => {
     document.body.appendChild(target);
     const ownerWindow = viewport(1280, 720);
 
-    const view = projectCellAttention(activityPresentation(target), ownerWindow);
+    const view = projectTargetAttention(activityPresentation(target), ownerWindow);
 
     expect(view?.label.bottom).toBe(428);
     expect(view?.label.top).toBeUndefined();
@@ -98,14 +96,15 @@ describe("cell attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
     document.body.appendChild(target);
-    const presentation: CellAttentionPresentation = {
+    const presentation: TargetAttentionPresentation = {
       ...activityPresentation(target),
       kind: "reveal",
-      event: revealEvent("A".repeat(300)),
+      label: "Updated chart",
+      message: "A".repeat(300),
     };
     const ownerWindow = viewport(1280, 720);
 
-    const view = projectCellAttention(presentation, ownerWindow, {
+    const view = projectTargetAttention(presentation, ownerWindow, {
       height: 226,
       maxWidth: 400,
     });
@@ -120,7 +119,7 @@ describe("cell attention presentation", () => {
     document.body.appendChild(target);
     const narrowWindow = viewport(480, 720);
 
-    const view = projectCellAttention(activityPresentation(target), narrowWindow);
+    const view = projectTargetAttention(activityPresentation(target), narrowWindow);
 
     expect(view?.label.right).toBe(218);
     expect(view?.label.left).toBeUndefined();
@@ -133,7 +132,7 @@ describe("cell attention presentation", () => {
     document.body.appendChild(target);
     const ownerWindow = viewport(1280, 720);
 
-    expect(projectCellAttention(activityPresentation(target), ownerWindow)).toBeNull();
+    expect(projectTargetAttention(activityPresentation(target), ownerWindow)).toBeNull();
   });
 
   test("suppresses a rendered label that cannot fit above the target", () => {
@@ -143,7 +142,7 @@ describe("cell attention presentation", () => {
     const ownerWindow = viewport(480, 720);
 
     expect(
-      projectCellAttention(activityPresentation(target), ownerWindow, {
+      projectTargetAttention(activityPresentation(target), ownerWindow, {
         height: 226,
         maxWidth: 400,
       }),
@@ -158,11 +157,11 @@ describe("cell attention presentation", () => {
     const presentation = activityPresentation(target);
     const measurement = { height: 226, maxWidth: 400 };
 
-    expect(projectCellAttention(presentation, viewport(480, 720), measurement)).toBeNull();
+    expect(projectTargetAttention(presentation, viewport(480, 720), measurement)).toBeNull();
 
     targetWidth = 900;
     expect(
-      projectCellAttention(presentation, viewport(1_280, 720), measurement)?.labelMaxWidth,
+      projectTargetAttention(presentation, viewport(1_280, 720), measurement)?.labelMaxWidth,
     ).toBe(480);
   });
 
@@ -171,11 +170,11 @@ describe("cell attention presentation", () => {
     target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
     document.body.appendChild(target);
     const presentation = activityPresentation(target);
-    const view = projectCellAttention(presentation, window);
+    const view = projectTargetAttention(presentation, window);
     const onLabelMeasure = vi.fn();
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
       function (this: HTMLElement) {
-        return this.classList.contains("ml-cell-attention__label")
+        return this.classList.contains("ml-target-attention__label")
           ? new DOMRect(0, 0, 320, 226)
           : new DOMRect();
       },
@@ -184,7 +183,9 @@ describe("cell attention presentation", () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    act(() => root?.render(<CellAttentionIndicator view={view} onLabelMeasure={onLabelMeasure} />));
+    act(() =>
+      root?.render(<TargetAttentionIndicator view={view} onLabelMeasure={onLabelMeasure} />),
+    );
 
     expect(onLabelMeasure).toHaveBeenCalledWith(presentation.sequence, {
       height: 226,
@@ -197,7 +198,7 @@ describe("cell attention presentation", () => {
     target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
     document.body.appendChild(target);
     const presentation = activityPresentation(target);
-    const view = projectCellAttention(presentation, window);
+    const view = projectTargetAttention(presentation, window);
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -205,21 +206,21 @@ describe("cell attention presentation", () => {
     act(() =>
       root?.render(
         <>
-          <CellAttentionIndicator view={view} />
-          <CellAttentionAnnouncement presentation={presentation} />
+          <TargetAttentionIndicator view={view} />
+          <TargetAttentionAnnouncement presentation={presentation} />
         </>,
       ),
     );
 
-    const indicator = document.querySelector<HTMLElement>("[data-marimo-lens-cell-attention]");
+    const indicator = document.querySelector<HTMLElement>("[data-marimo-lens-target-attention]");
     expect(indicator?.dataset.marimoLensUi).toBe("true");
-    expect(indicator?.querySelector(".ml-cell-attention__status")?.textContent).toBe("Working");
-    expect(indicator?.querySelector(".ml-cell-attention__message")?.textContent).toBe(
+    expect(indicator?.querySelector(".ml-target-attention__status")?.textContent).toBe("Working");
+    expect(indicator?.querySelector(".ml-target-attention__message")?.textContent).toBe(
       "Updating the aggregation.",
     );
-    expect(indicator?.querySelector(".ml-cell-attention__cell")?.textContent).toBe("BYtC");
+    expect(indicator?.dataset.targetLabel).toBe("BYtC");
     expect(indicator?.querySelector("[data-marimo-lens-working-indicator]")).not.toBeNull();
-    expect(document.querySelector("[data-marimo-lens-cell-attention-status]")?.textContent).toBe(
+    expect(document.querySelector("[data-marimo-lens-target-attention-status]")?.textContent).toBe(
       "Working in cell BYtC. Updating the aggregation.",
     );
     expect(target.attributes).toHaveLength(0);
@@ -234,11 +235,11 @@ describe("cell attention presentation", () => {
     document.body.appendChild(container);
     root = createRoot(container);
 
-    expect(projectCellAttention(presentation, window)).toBeNull();
+    expect(projectTargetAttention(presentation, window)).toBeNull();
     act(() =>
-      root?.render(<CellAttentionFallback presentation={presentation} reason="offscreen" />),
+      root?.render(<TargetAttentionFallback presentation={presentation} reason="offscreen" />),
     );
-    expect(document.querySelector("[data-marimo-lens-cell-attention-notice]")?.textContent).toBe(
+    expect(document.querySelector("[data-marimo-lens-target-attention-notice]")?.textContent).toBe(
       "WorkingBYtCUpdating the aggregation.",
     );
   });
@@ -255,16 +256,18 @@ describe("cell attention presentation", () => {
     act(() =>
       root?.render(
         <>
-          <CellAttentionIndicator view={projectCellAttention(presentation, window)} />
-          <CellAttentionFallback presentation={presentation} reason="target-unavailable" />
-          <CellAttentionAnnouncement presentation={presentation} />
+          <TargetAttentionIndicator view={projectTargetAttention(presentation, window)} />
+          <TargetAttentionFallback presentation={presentation} reason="target-unavailable" />
+          <TargetAttentionAnnouncement presentation={presentation} />
         </>,
       ),
     );
 
-    expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe("On it");
-    expect(document.querySelector(".ml-cell-attention-notice__status")?.textContent).toBe("On it");
-    expect(document.querySelector("[data-marimo-lens-cell-attention-status]")?.textContent).toBe(
+    expect(document.querySelector(".ml-target-attention__status")?.textContent).toBe("On it");
+    expect(document.querySelector(".ml-target-attention-notice__status")?.textContent).toBe(
+      "On it",
+    );
+    expect(document.querySelector("[data-marimo-lens-target-attention-status]")?.textContent).toBe(
       "On it in cell BYtC. Updating the aggregation.",
     );
   });
@@ -275,10 +278,11 @@ describe("cell attention presentation", () => {
     document.body.appendChild(target);
     const message =
       "Updated the aggregation and verified the chart.\nThe regional totals now match the source table.";
-    const presentation: CellAttentionPresentation = {
+    const presentation: TargetAttentionPresentation = {
       ...activityPresentation(target),
       kind: "reveal",
-      event: revealEvent(message),
+      label: "Updated chart",
+      message,
     };
     const container = document.createElement("div");
     document.body.appendChild(container);
@@ -287,19 +291,21 @@ describe("cell attention presentation", () => {
     act(() =>
       root?.render(
         <>
-          <CellAttentionIndicator view={projectCellAttention(presentation, window)} />
-          <CellAttentionFallback presentation={presentation} reason="target-unavailable" />
-          <CellAttentionAnnouncement presentation={presentation} />
+          <TargetAttentionIndicator view={projectTargetAttention(presentation, window)} />
+          <TargetAttentionFallback presentation={presentation} reason="target-unavailable" />
+          <TargetAttentionAnnouncement presentation={presentation} />
         </>,
       ),
     );
 
-    expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe("Updated chart");
-    expect(document.querySelector(".ml-cell-attention-notice__status")?.textContent).toBe(
+    expect(document.querySelector(".ml-target-attention__status")?.textContent).toBe(
       "Updated chart",
     );
-    expect(document.querySelector(".ml-cell-attention__message")?.textContent).toBe(message);
-    expect(document.querySelector("[data-marimo-lens-cell-attention-status]")?.textContent).toBe(
+    expect(document.querySelector(".ml-target-attention-notice__status")?.textContent).toBe(
+      "Updated chart",
+    );
+    expect(document.querySelector(".ml-target-attention__message")?.textContent).toBe(message);
+    expect(document.querySelector("[data-marimo-lens-target-attention-status]")?.textContent).toBe(
       `Updated chart in cell BYtC. ${message}`,
     );
     expect(document.querySelector("[data-marimo-lens-working-indicator]")).toBeNull();
@@ -309,38 +315,36 @@ describe("cell attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
     document.body.appendChild(target);
-    const presentation: CellAttentionPresentation = {
+    const presentation: TargetAttentionPresentation = {
       ...activityPresentation(target),
       kind: "reveal",
-      event: {
-        ...revealEvent(),
-        payload: { cellId: "BYtC", durationMs: 4_000 },
-      },
+      label: null,
+      message: null,
     };
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
 
     act(() =>
-      root?.render(<CellAttentionIndicator view={projectCellAttention(presentation, window)} />),
+      root?.render(
+        <TargetAttentionIndicator view={projectTargetAttention(presentation, window)} />,
+      ),
     );
 
-    expect(document.querySelector(".ml-cell-attention__status")?.textContent).toBe("Ready");
+    expect(document.querySelector(".ml-target-attention__status")?.textContent).toBe("Ready");
   });
 
   test("uses a neutral reveal fallback when a visible label cannot fit", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
     document.body.appendChild(target);
-    const presentation: CellAttentionPresentation = {
+    const presentation: TargetAttentionPresentation = {
       ...activityPresentation(target),
       kind: "reveal",
-      event: {
-        ...revealEvent(),
-        payload: { cellId: "BYtC", durationMs: 4_000 },
-      },
+      label: null,
+      message: null,
     };
-    const surface = projectCellAttentionSurface(presentation, viewport(480, 720), {
+    const surface = projectTargetAttentionSurface(presentation, viewport(480, 720), {
       height: 226,
       maxWidth: 400,
     });
@@ -349,22 +353,26 @@ describe("cell attention presentation", () => {
     root = createRoot(container);
 
     act(() =>
-      root?.render(surface.fallback ? <CellAttentionFallback {...surface.fallback} /> : null),
+      root?.render(surface.fallback ? <TargetAttentionFallback {...surface.fallback} /> : null),
     );
 
-    expect(document.querySelector(".ml-cell-attention-notice__status")?.textContent).toBe("Ready");
+    expect(document.querySelector(".ml-target-attention-notice__status")?.textContent).toBe(
+      "Ready",
+    );
   });
 });
 
-function activityPresentation(target: HTMLElement, label?: string): CellAttentionPresentation {
+function activityPresentation(target: HTMLElement, label?: string): TargetAttentionPresentation {
   return {
     kind: "activity",
-    event: startActivityEvent(label),
     sequence: 1,
+    locator: { kind: "cell", label: "BYtC", resolve: () => target },
     target,
     expiresAt: null,
     framing: "settled",
     phase: "active",
+    label: label ?? null,
+    message: "Updating the aggregation.",
   };
 }
 
@@ -378,34 +386,4 @@ function viewport(width: number, height: number) {
     innerHeight: { configurable: true, value: height },
   });
   return ownerWindow;
-}
-
-function startActivityEvent(label?: string): CellActivityStartEvent {
-  const payload: CellActivityStartEvent["payload"] = {
-    cellId: "BYtC",
-    message: "Updating the aggregation.",
-  };
-  if (label) payload.label = label;
-  return {
-    protocol: "marimo-lens.event",
-    version: 3,
-    type: "cell.activity.start",
-    revision: 7,
-    payload,
-  };
-}
-
-function revealEvent(message = "Updated the aggregation."): CellRevealEvent {
-  return {
-    protocol: "marimo-lens.event",
-    version: 3,
-    type: "cell.reveal",
-    revision: 7,
-    payload: {
-      cellId: "BYtC",
-      durationMs: 4_000,
-      label: "Updated chart",
-      message,
-    },
-  };
 }

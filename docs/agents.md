@@ -58,27 +58,23 @@ ctx = cm.get_context()
 mounted = lens_agent.connect(ctx)
 snapshot = mounted.context()
 selection = snapshot.current
-
-cell = (
-    next(
-        (cell for cell in selection["cells"] if cell["status"] == "available"),
-        None,
+activity = (
+    mounted.start_activity(
+        selection,
+        expected_revision=snapshot.revision,
+        label="Inspecting selected output",
+        message="Reading the marked result and its producer context.",
     )
     if selection is not None
     else None
 )
-if selection is not None and selection["target"]["kind"] == "notebook" and cell:
-    mounted.start_activity(
-        cell["id"],
-        label="Inspecting selected output",
-        message="Reading the marked result and its producing cell.",
-    )
 
 print(
     json.dumps(
         {
             "identity": mounted.identity,
             "revision": snapshot.revision,
+            "activity": activity,
             "current": snapshot.current,
             "selectionCount": len(snapshot.references["selections"]),
         }
@@ -136,7 +132,8 @@ Each code-mode kernel call gets a fresh scratchpad. Keep these values in the
 agent's working state:
 
 - `mounted.identity` reconnects to the same Lens.
-- `snapshot.revision` guards the later `resolve()` call.
+- `snapshot.revision` guards selection-addressed feedback and `resolve()`.
+- The activity handle returned by `start_activity()` owns the current work mark.
 - Each addressed selection ID identifies the selection to move into History.
 - `selection["target"]` identifies the notebook output or DOM element.
 - `selection["cells"]` lists inferred producing cells and their runtime status.
@@ -158,14 +155,20 @@ fresh snapshot before continuing.
 
 Handle one request in this order:
 
-1. Call `context()` and inspect the selected target, producing cells, and image.
-2. Route notebook logic through code mode. Route layout, copy, CSS, and browser
-   behavior through the host view source.
-3. Call `start_activity()` when notebook work has a primary cell.
-4. Verify notebook cells in a fresh kernel call. Verify host view work through
-   its saved-source and live browser boundaries.
-5. Call `stop_activity()` and `reveal()` for notebook results when applicable.
-6. Resolve the selection with the captured revision after verification.
+1. Capture `LensContext` and its revision.
+2. Choose the relevant `SelectionReference`.
+3. Start activity against that selection and keep the returned handle.
+4. Inspect its producing cells and host source.
+5. Apply the change through code mode or the host source boundary.
+6. Verify against fresh runtime and browser evidence.
+7. Stop the owned activity with its handle.
+8. Read a fresh `LensContext` and re-find the verified selection by ID.
+9. Reveal that fresh `SelectionReference` with its revision.
+10. Wait for the reveal hold.
+11. Resolve the verified selection with the fresh revision.
+
+For a notebook overview or zero-selection walkthrough, pass graph-member cell
+IDs to `start_activity()` and `reveal()`.
 
 `reveal()` preserves the user's focus while bringing the result into view.
 `resolve()` moves addressed selections into **History**. A user can reopen one

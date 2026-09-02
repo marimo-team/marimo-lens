@@ -26,7 +26,7 @@ from typing_extensions import Self
 COMMAND_PROTOCOL = "marimo-lens.command"
 RESPONSE_PROTOCOL = "marimo-lens.response"
 EVENT_PROTOCOL = "marimo-lens.event"
-PROTOCOL_VERSION = 3
+PROTOCOL_VERSION = 4
 
 MAX_SELECTIONS = 64
 MAX_HISTORY = 64
@@ -296,6 +296,7 @@ class DomHint(TransportModel):
 
 class SelectionTargetBase(TransportModel):
     cell_ids: Annotated[list[CellId], Field(max_length=64)]
+    document_id: Identifier
 
     @field_validator("cell_ids")
     @classmethod
@@ -310,6 +311,7 @@ class SelectionTargetBase(TransportModel):
 
 class NotebookSelectionTarget(SelectionTargetBase):
     kind: Literal["notebook"]
+    document_path: DomSelectorText
 
     @model_validator(mode="after")
     def one_cell(self) -> Self:
@@ -590,50 +592,65 @@ CaptureBrowserMessage: TypeAlias = Annotated[
 ]
 
 
-class CellRevealPayload(TransportModel):
+class CellAttentionAddress(TransportModel):
+    kind: Literal["cell"]
     cell_id: CellId
+
+
+class SelectionAttentionAddress(TransportModel):
+    kind: Literal["selection"]
+    selection_id: Identifier
+    revision: Revision
+
+
+AttentionAddress: TypeAlias = Annotated[
+    CellAttentionAddress | SelectionAttentionAddress,
+    Field(discriminator="kind"),
+]
+
+
+class AttentionRevealPayload(TransportModel):
+    address: AttentionAddress
     duration_ms: AttentionDuration
     label: AttentionLabel | None = None
     message: RevealText | None = None
 
 
-class CellRevealEvent(TransportModel):
+class AttentionRevealEvent(TransportModel):
     protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
     version: ProtocolVersion = PROTOCOL_VERSION
-    type: Literal["cell.reveal"] = "cell.reveal"
-    revision: Revision
-    payload: CellRevealPayload
+    type: Literal["attention.reveal"] = "attention.reveal"
+    payload: AttentionRevealPayload
 
 
-class CellActivityStartPayload(TransportModel):
-    cell_id: CellId
+class AttentionActivityStartPayload(TransportModel):
+    activity_id: Identifier
+    address: AttentionAddress
     duration_ms: AttentionDuration | None = None
     label: AttentionLabel | None = None
     message: AttentionText | None = None
 
 
-class CellActivityStartEvent(TransportModel):
+class AttentionActivityStartEvent(TransportModel):
     protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
     version: ProtocolVersion = PROTOCOL_VERSION
-    type: Literal["cell.activity.start"] = "cell.activity.start"
-    revision: Revision
-    payload: CellActivityStartPayload
+    type: Literal["attention.activity.start"] = "attention.activity.start"
+    payload: AttentionActivityStartPayload
 
 
-class CellActivityStopPayload(TransportModel):
-    cell_id: CellId
+class AttentionActivityStopPayload(TransportModel):
+    activity_id: Identifier
 
 
-class CellActivityStopEvent(TransportModel):
+class AttentionActivityStopEvent(TransportModel):
     protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
     version: ProtocolVersion = PROTOCOL_VERSION
-    type: Literal["cell.activity.stop"] = "cell.activity.stop"
-    revision: Revision
-    payload: CellActivityStopPayload
+    type: Literal["attention.activity.stop"] = "attention.activity.stop"
+    payload: AttentionActivityStopPayload
 
 
-CellAttentionEvent: TypeAlias = (
-    CellActivityStartEvent | CellActivityStopEvent | CellRevealEvent
+AttentionEvent: TypeAlias = (
+    AttentionActivityStartEvent | AttentionActivityStopEvent | AttentionRevealEvent
 )
 
 

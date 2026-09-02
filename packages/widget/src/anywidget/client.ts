@@ -1,6 +1,6 @@
 import type { OutputCaptureHandler } from "@marimo-lens/image-capture";
 import type {
-  CellAttentionEvent,
+  AttentionEvent,
   ClientCommand,
   ImageAction,
   LensState,
@@ -82,8 +82,8 @@ export class LensProtocolClient {
     return this.#events.onSelectionResolved(listener);
   }
 
-  onCellAttention(listener: (event: CellAttentionEvent) => void): () => void {
-    return this.#events.onCellAttention(listener);
+  onAttention(listener: (event: AttentionEvent) => void): () => void {
+    return this.#events.onAttention(listener);
   }
 
   onOutputCapture(handler: OutputCaptureHandler): () => void {

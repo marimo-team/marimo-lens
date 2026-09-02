@@ -511,7 +511,7 @@ describe("Lens dock", () => {
       selections: [selectionFixture()],
       currentSelectionId: "selection-1",
       listOpen: true,
-      cellAttentionFallback: <div data-test-attention-notice>Cell cell-1</div>,
+      targetAttentionFallback: <div data-test-attention-notice>Cell cell-1</div>,
     });
 
     const stack = document.querySelector(".ml-sheet-stack");
@@ -525,7 +525,7 @@ describe("Lens dock", () => {
   test("gives the external notice slot to current cell attention", () => {
     renderDock({
       resolutionReceipt: resolutionEvent(),
-      cellAttentionFallback: <div data-test-attention-notice>Cell cell-1</div>,
+      targetAttentionFallback: <div data-test-attention-notice>Cell cell-1</div>,
     });
 
     expect(document.querySelector("[data-test-attention-notice]")).not.toBeNull();
@@ -626,7 +626,7 @@ function defaultProps(): React.ComponentProps<typeof LensDock> {
 function resolutionEvent(): SelectionResolvedEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 3,
+    version: 4,
     type: "selection.resolved",
     revision: 2,
     payload: {

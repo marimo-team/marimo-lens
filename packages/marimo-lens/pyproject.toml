@@ -1,5 +1,5 @@
 [build-system]
-requires = ["agent-plugins==0.1.0", "hatchling==1.31.0"]
+requires = ["agent-plugins>=0.1.0", "hatchling==1.31.0"]
 build-backend = "agent_plugins.build.hatchling"
 
 [project]
@@ -20,7 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
 ]
 dependencies = [
-  "agent-plugins==0.1.0",
+  "agent-plugins>=0.1.0",
   "anywidget>=0.11.0",
   "marimo>=0.24.0",
   "pydantic>=2",
