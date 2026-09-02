@@ -94,6 +94,8 @@ def test_references_are_compact_and_text_is_standalone() -> None:
     assert reference["target"] == {
         "kind": "notebook",
         "cellIds": ["cell-view"],
+        "documentId": "document-1",
+        "documentPath": "/",
     }
     assert reference["cells"] == [{"id": "cell-view", "status": "available"}]
     assert reference["snapshot"] == {"status": "pending"}
@@ -137,6 +139,7 @@ def test_dom_target_keeps_document_grounding_without_a_producing_cell() -> None:
         target={
             "kind": "dom",
             "cellIds": [],
+            "documentId": "document-1",
             "documentPath": "/dashboard/",
             "domSelector": "#app-shell > article:nth-of-type(2)",
         },
@@ -514,7 +517,12 @@ def test_context_accepts_dense_identity_state_within_selection_budget() -> None:
                 "id": selection_id,
                 "label": f"S{index + 1}",
                 "note": "",
-                "target": {"kind": "notebook", "cellIds": [output_cell_id]},
+                "target": {
+                    "kind": "notebook",
+                    "cellIds": [output_cell_id],
+                    "documentId": "document-1",
+                    "documentPath": "/",
+                },
                 "createdAt": "2026-01-01T00:00:00+00:00",
                 "anchor": {"kind": "point", "x": 0.5, "y": 0.5},
                 "snapshot": {"status": "pending"},
@@ -600,6 +608,7 @@ def test_target_cell_ids_prioritize_the_current_selection() -> None:
             target={
                 "kind": "dom",
                 "cellIds": ["cell-a", "cell-b"],
+                "documentId": "document-1",
                 "documentPath": "/dashboard/",
                 "domSelector": "#old",
             },
@@ -609,6 +618,7 @@ def test_target_cell_ids_prioritize_the_current_selection() -> None:
             target={
                 "kind": "dom",
                 "cellIds": ["cell-current", "cell-a"],
+                "documentId": "document-1",
                 "documentPath": "/dashboard/",
                 "domSelector": "#current",
             },

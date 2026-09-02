@@ -2,9 +2,9 @@ import { LocateFixed, MousePointer2 } from "lucide-react";
 import { useLayoutEffect, useRef, type CSSProperties } from "react";
 
 import {
-  CELL_ATTENTION_TOP_GUTTER,
-  type CellAttentionPresentation,
-} from "@/transient/cell-attention";
+  TARGET_ATTENTION_TOP_GUTTER,
+  type TargetAttentionPresentation,
+} from "@/transient/target-attention";
 
 const VIEWPORT_MARGIN = 12;
 const LABEL_MIN_HEIGHT = 28;
@@ -17,34 +17,34 @@ const WORKING_DOTS = Array.from({ length: 9 }, (_, index) => ({
   column: index % 3,
 }));
 
-export type CellAttentionView = {
-  presentation: CellAttentionPresentation;
+export type TargetAttentionView = {
+  presentation: TargetAttentionPresentation;
   ring: CSSProperties;
   label: CSSProperties;
   labelMaxWidth: number;
 };
 
-export type CellAttentionLabelMeasurement = {
+export type TargetAttentionLabelMeasurement = {
   height: number;
   maxWidth: number;
 };
 
-export type CellAttentionSurface = {
-  view: CellAttentionView | null;
-  fallback: CellAttentionFallbackView | null;
+export type TargetAttentionSurface = {
+  view: TargetAttentionView | null;
+  fallback: TargetAttentionFallbackView | null;
 };
 
-export type CellAttentionFallbackView = {
-  presentation: CellAttentionPresentation;
+export type TargetAttentionFallbackView = {
+  presentation: TargetAttentionPresentation;
   reason: "target-unavailable" | "offscreen" | "label-space";
 };
 
-export function projectCellAttentionSurface(
-  presentation: CellAttentionPresentation | null,
+export function projectTargetAttentionSurface(
+  presentation: TargetAttentionPresentation | null,
   ownerWindow: Window,
-  measurement?: CellAttentionLabelMeasurement,
-): CellAttentionSurface {
-  const view = projectCellAttention(presentation, ownerWindow, measurement);
+  measurement?: TargetAttentionLabelMeasurement,
+): TargetAttentionSurface {
+  const view = projectTargetAttention(presentation, ownerWindow, measurement);
   if (view !== null || presentation === null) {
     return { view, fallback: null };
   }
@@ -65,11 +65,11 @@ export function projectCellAttentionSurface(
   };
 }
 
-export function projectCellAttention(
-  presentation: CellAttentionPresentation | null,
+export function projectTargetAttention(
+  presentation: TargetAttentionPresentation | null,
   ownerWindow: Window,
-  measurement?: CellAttentionLabelMeasurement,
-): CellAttentionView | null {
+  measurement?: TargetAttentionLabelMeasurement,
+): TargetAttentionView | null {
   const target = presentation?.target;
   if (!presentation || !target?.isConnected) return null;
   const rect = target.getBoundingClientRect();
@@ -84,7 +84,7 @@ export function projectCellAttention(
   const labelMaxWidth = Math.floor(Math.min(LABEL_MAX_WIDTH, availableLabelWidth));
   const labelHeight =
     measurement?.maxWidth === labelMaxWidth ? measurement.height : LABEL_MIN_HEIGHT;
-  if (rect.top < Math.max(CELL_ATTENTION_TOP_GUTTER, labelHeight + LABEL_GAP + VIEWPORT_MARGIN)) {
+  if (rect.top < Math.max(TARGET_ATTENTION_TOP_GUTTER, labelHeight + LABEL_GAP + VIEWPORT_MARGIN)) {
     return null;
   }
 
@@ -105,12 +105,12 @@ export function projectCellAttention(
   };
 }
 
-export function CellAttentionIndicator({
+export function TargetAttentionIndicator({
   view,
   onLabelMeasure,
 }: {
-  view: CellAttentionView | null;
-  onLabelMeasure?: (sequence: number, measurement: CellAttentionLabelMeasurement) => void;
+  view: TargetAttentionView | null;
+  onLabelMeasure?: (sequence: number, measurement: TargetAttentionLabelMeasurement) => void;
 }) {
   const labelRef = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -126,60 +126,62 @@ export function CellAttentionIndicator({
 
   if (!view) return null;
   const { presentation } = view;
-  const { cellId, message } = presentation.event.payload;
-  const status =
-    presentation.event.payload.label ??
-    (presentation.event.type === "cell.activity.start" ? "Working" : "Ready");
+  const { message } = presentation;
+  const targetLabel = presentation.locator.label;
+  const status = presentation.label ?? (presentation.kind === "activity" ? "Working" : "Ready");
   const detail = message;
 
   return (
     <div
-      className="ml-cell-attention"
-      data-marimo-lens-cell-attention
+      className="ml-target-attention"
+      data-marimo-lens-target-attention
       data-kind={presentation.kind}
       data-phase={presentation.phase}
-      data-cell-id={cellId}
+      data-target-kind={presentation.locator.kind}
+      data-target-label={targetLabel}
       data-marimo-lens-ui
       aria-hidden="true"
     >
-      <div className="ml-cell-attention__ring" style={view.ring} />
-      <div ref={labelRef} className="ml-cell-attention__label" style={view.label}>
+      <div className="ml-target-attention__ring" style={view.ring} />
+      <div ref={labelRef} className="ml-target-attention__label" style={view.label}>
         {presentation.kind === "activity" ? (
           <WorkingIndicator />
         ) : (
           <MousePointer2 size={14} strokeWidth={2} aria-hidden="true" />
         )}
-        <span className="ml-cell-attention__status">{status}</span>
-        <span className="ml-cell-attention__cell">{cellId}</span>
-        {detail ? <span className="ml-cell-attention__message">{detail}</span> : null}
+        <span className="ml-target-attention__status">{status}</span>
+        <span className="ml-target-attention__target">{targetLabel}</span>
+        {detail ? <span className="ml-target-attention__message">{detail}</span> : null}
       </div>
     </div>
   );
 }
 
-export function CellAttentionFallback({ presentation, reason }: CellAttentionFallbackView) {
-  const { cellId, message } = presentation.event.payload;
+export function TargetAttentionFallback({ presentation, reason }: TargetAttentionFallbackView) {
+  const { message } = presentation;
+  const targetLabel = presentation.locator.label;
   const status =
-    presentation.event.payload.label ??
-    (presentation.event.type === "cell.activity.start"
+    presentation.label ??
+    (presentation.kind === "activity"
       ? "Working"
       : reason === "label-space"
         ? "Ready"
         : "Not visible");
   return (
     <div
-      className="ml-cell-attention-notice"
-      data-marimo-lens-cell-attention-notice
+      className="ml-target-attention-notice"
+      data-marimo-lens-target-attention-notice
       data-kind={presentation.kind}
       data-phase={presentation.phase}
-      data-cell-id={cellId}
+      data-target-kind={presentation.locator.kind}
+      data-target-label={targetLabel}
       data-marimo-lens-ui
       aria-hidden="true"
     >
       <LocateFixed size={14} strokeWidth={2} aria-hidden="true" />
-      <span className="ml-cell-attention-notice__status">{status}</span>
-      <span className="ml-cell-attention-notice__cell">{cellId}</span>
-      {message ? <span className="ml-cell-attention-notice__message">{message}</span> : null}
+      <span className="ml-target-attention-notice__status">{status}</span>
+      <span className="ml-target-attention-notice__target">{targetLabel}</span>
+      {message ? <span className="ml-target-attention-notice__message">{message}</span> : null}
     </div>
   );
 }
@@ -206,33 +208,35 @@ function WorkingIndicator() {
   );
 }
 
-export function CellAttentionAnnouncement({
+export function TargetAttentionAnnouncement({
   presentation,
 }: {
-  presentation: CellAttentionPresentation | null;
+  presentation: TargetAttentionPresentation | null;
 }) {
   return (
     <output
       className="ml-sr-status"
-      data-marimo-lens-cell-attention-status
+      data-marimo-lens-target-attention-status
       aria-live="polite"
       aria-atomic="true"
     >
       {presentation ? (
-        <span key={presentation.sequence}>{announceCellAttention(presentation)}</span>
+        <span key={presentation.sequence}>{attentionAnnouncement(presentation)}</span>
       ) : null}
     </output>
   );
 }
 
-function announceCellAttention(presentation: CellAttentionPresentation): string {
-  const { cellId, label, message } = presentation.event.payload;
+function attentionAnnouncement(presentation: TargetAttentionPresentation): string {
+  const { label, message } = presentation;
+  const target = `${presentation.locator.kind} ${presentation.locator.label}`;
+  const preposition = presentation.locator.kind === "cell" ? "in" : "on";
   const status =
-    presentation.event.type === "cell.activity.start"
-      ? `${label ?? "Working"} in cell ${cellId}.`
+    presentation.kind === "activity"
+      ? `${label ?? "Working"} ${preposition} ${target}.`
       : label
-        ? `${label} in cell ${cellId}.`
-        : `Revealed cell ${cellId}.`;
+        ? `${label} ${preposition} ${target}.`
+        : `Revealed ${target}.`;
   return message ? `${status} ${message}` : status;
 }
 

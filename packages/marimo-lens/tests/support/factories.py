@@ -55,7 +55,13 @@ def selection(
         "id": selection_id,
         "label": label,
         "note": note,
-        "target": target or {"kind": "notebook", "cellIds": [output_cell_id]},
+        "target": target
+        or {
+            "kind": "notebook",
+            "cellIds": [output_cell_id],
+            "documentId": "document-1",
+            "documentPath": "/",
+        },
         "createdAt": "2026-07-14T11:58:00Z",
         "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
         "domHint": {

@@ -1,7 +1,7 @@
 import type {
-  CellActivityStartEvent,
-  CellActivityStopEvent,
-  CellRevealEvent,
+  AttentionActivityStartEvent,
+  AttentionActivityStopEvent,
+  AttentionRevealEvent,
 } from "@marimo-lens/protocol";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
@@ -9,32 +9,31 @@ import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 const ACTIVITY_EXIT_MS = 120;
 const REVEAL_EXIT_MS = 180;
 const FRAMING_SETTLE_MS = 600;
-export const CELL_ATTENTION_TOP_GUTTER = 48;
+export const TARGET_ATTENTION_TOP_GUTTER = 48;
 
-export type CellAttentionKind = "activity" | "reveal";
-export type CellAttentionPhase = "active" | "exiting";
+export type TargetAttentionKind = "activity" | "reveal";
+export type TargetAttentionPhase = "active" | "exiting";
 
-type CellAttentionPresentationState = {
+export type TargetLocator = {
+  kind: "cell" | "selection";
+  label: string;
+  resolve: () => HTMLElement | null;
+};
+
+export type TargetAttentionPresentation = {
   sequence: number;
+  locator: TargetLocator;
+  kind: TargetAttentionKind;
   target: HTMLElement | null;
   expiresAt: number | null;
   framing: "pending" | "settled";
-  phase: CellAttentionPhase;
+  phase: TargetAttentionPhase;
+  label: string | null;
+  message: string | null;
 };
 
-type ActivityAttentionPresentation = CellAttentionPresentationState & {
-  kind: "activity";
-  event: CellActivityStartEvent;
-};
-
-type RevealAttentionPresentation = CellAttentionPresentationState & {
-  kind: "reveal";
-  event: CellRevealEvent;
-};
-
-export type CellAttentionPresentation = ActivityAttentionPresentation | RevealAttentionPresentation;
-
-type ActiveAttention = CellAttentionPresentation & {
+type ActiveAttention = TargetAttentionPresentation & {
+  activityId: string | null;
   exitDuration: number;
   framingTimeout: number;
   observedTarget: HTMLElement | null;
@@ -47,50 +46,62 @@ type ActiveAttention = CellAttentionPresentation & {
   visibilityListener: () => void;
 };
 
-type ActiveActivityAttention = ActiveAttention & {
-  kind: "activity";
-  event: CellActivityStartEvent;
+type AttentionRequest = {
+  kind: TargetAttentionKind;
+  activityId: string | null;
+  durationMs: number | null;
+  label: string | null;
+  message: string | null;
 };
-
-type AttentionStart =
-  | { kind: "activity"; event: CellActivityStartEvent }
-  | { kind: "reveal"; event: CellRevealEvent };
 
 type ElementSize = {
   width: number;
   height: number;
 };
 
-export class CellAttentionController {
+export class TargetAttentionController {
   readonly #dom: NotebookDomAdapter;
-  readonly #onChange: (presentation: CellAttentionPresentation | null) => void;
+  readonly #onChange: (presentation: TargetAttentionPresentation | null) => void;
   #active: ActiveAttention | null = null;
   #sequence = 0;
 
   constructor(
     dom: NotebookDomAdapter,
-    onChange: (presentation: CellAttentionPresentation | null) => void,
+    onChange: (presentation: TargetAttentionPresentation | null) => void,
   ) {
     this.#dom = dom;
     this.#onChange = onChange;
   }
 
-  startActivity(event: CellActivityStartEvent): void {
-    const active = this.#active;
-    if (active?.kind === "activity" && active.event.payload.cellId === event.payload.cellId) {
-      this.#renewActivity(active, event);
-      return;
-    }
-    this.#start({ kind: "activity", event });
+  startActivity(event: AttentionActivityStartEvent, locator: TargetLocator): void {
+    this.#start(
+      {
+        kind: "activity",
+        activityId: event.payload.activityId,
+        durationMs: event.payload.durationMs ?? null,
+        label: event.payload.label ?? null,
+        message: event.payload.message ?? null,
+      },
+      locator,
+    );
   }
 
-  reveal(event: CellRevealEvent): void {
-    this.#start({ kind: "reveal", event });
+  reveal(event: AttentionRevealEvent, locator: TargetLocator): void {
+    this.#start(
+      {
+        kind: "reveal",
+        activityId: null,
+        durationMs: event.payload.durationMs,
+        label: event.payload.label ?? null,
+        message: event.payload.message ?? null,
+      },
+      locator,
+    );
   }
 
-  stopActivity(event: CellActivityStopEvent): void {
+  stopActivity(event: AttentionActivityStopEvent): void {
     const active = this.#active;
-    if (active?.kind === "activity" && active.event.payload.cellId === event.payload.cellId) {
+    if (active?.kind === "activity" && active.activityId === event.payload.activityId) {
       this.#clear(true);
     }
   }
@@ -99,17 +110,18 @@ export class CellAttentionController {
     this.#clear(true);
   }
 
-  #start(start: AttentionStart): void {
+  #start(request: AttentionRequest, locator: TargetLocator): void {
     this.#clear(false);
-    const target = attentionTarget(this.#dom, start.event.payload.cellId);
-    const frameRequested = this.#reframe(start.kind, target);
+    const target = locator.resolve();
+    const frameRequested = this.#reframe(request.kind, target);
 
-    const exitDuration = start.kind === "activity" ? ACTIVITY_EXIT_MS : REVEAL_EXIT_MS;
-    const duration = start.event.payload.durationMs ?? null;
+    const exitDuration = request.kind === "activity" ? ACTIVITY_EXIT_MS : REVEAL_EXIT_MS;
+    const duration = request.durationMs;
     const expiresAt = duration === null ? null : this.#now() + duration + exitDuration;
     const active: ActiveAttention = {
-      ...start,
+      ...request,
       sequence: ++this.#sequence,
+      locator,
       target,
       expiresAt,
       exitDuration,
@@ -119,7 +131,7 @@ export class CellAttentionController {
       observedTargetSize: null,
       phase: "active",
       reframeAfterPending: false,
-      revealFramed: start.kind === "reveal" && frameRequested,
+      revealFramed: request.kind === "reveal" && frameRequested,
       resizeObserver: null,
       stopLayout: () => undefined,
       timeout: 0,
@@ -134,33 +146,13 @@ export class CellAttentionController {
     this.#emit(active);
   }
 
-  #renewActivity(active: ActiveActivityAttention, event: CellActivityStartEvent): void {
-    const previous = active.event;
-    const samePresentation =
-      previous.payload.label === event.payload.label &&
-      previous.payload.message === event.payload.message;
-    const target = attentionTarget(this.#dom, event.payload.cellId);
-    active.event = event;
-    active.target = target;
-    if (active.framing === "settled") this.#beginFraming(active, target);
-    this.#observeTarget(active, target);
-    active.phase = "active";
-    active.expiresAt =
-      event.payload.durationMs === undefined
-        ? null
-        : this.#now() + event.payload.durationMs + active.exitDuration;
-    if (!samePresentation) active.sequence = ++this.#sequence;
-    this.#schedule(active);
-    this.#emit(active);
-  }
-
   #refresh(active: ActiveAttention, reframe = false): void {
     if (this.#active !== active) return;
     if (active.expiresAt !== null && this.#now() >= active.expiresAt) {
       this.#clear(true);
       return;
     }
-    const target = attentionTarget(this.#dom, active.event.payload.cellId);
+    const target = active.locator.resolve();
     const activityTargetChanged = target !== null && active.observedTarget !== target;
     active.target = target;
     if (
@@ -182,7 +174,7 @@ export class CellAttentionController {
     this.#emit(active);
   }
 
-  #reframe(kind: CellAttentionKind, target: HTMLElement | null): boolean {
+  #reframe(kind: TargetAttentionKind, target: HTMLElement | null): boolean {
     if (!target) return false;
     const rect = target.getBoundingClientRect();
     if (kind !== "reveal" && isFullyVisible(this.#dom.window, rect)) {
@@ -270,18 +262,18 @@ export class CellAttentionController {
   }
 
   #emit(active: ActiveAttention): void {
-    const state: CellAttentionPresentationState = {
-      sequence: active.sequence,
-      target: active.target,
-      expiresAt: active.expiresAt,
-      framing: active.framing,
-      phase: active.phase,
-    };
-    const presentation: CellAttentionPresentation =
-      active.kind === "activity"
-        ? { ...state, kind: "activity", event: active.event }
-        : { ...state, kind: "reveal", event: active.event };
-    this.#onChange(presentation);
+    const { sequence, locator, kind, target, expiresAt, framing, phase, label, message } = active;
+    this.#onChange({
+      sequence,
+      locator,
+      kind,
+      target,
+      expiresAt,
+      framing,
+      phase,
+      label,
+      message,
+    });
   }
 
   #observeTarget(active: ActiveAttention, target: HTMLElement | null): void {
@@ -319,7 +311,7 @@ export class CellAttentionController {
   }
 }
 
-function attentionTarget(dom: NotebookDomAdapter, cellId: string): HTMLElement | null {
+export function cellAddressTarget(dom: NotebookDomAdapter, cellId: string): HTMLElement | null {
   const cell = dom.getCell(cellId);
   if (cell && isRendered(dom.window, cell)) return cell;
   const output = dom.getOutputCell(cellId)?.element ?? null;
@@ -340,7 +332,7 @@ function isRendered(ownerWindow: Window, element: HTMLElement): boolean {
 
 function isFullyVisible(ownerWindow: Window, rect: DOMRect): boolean {
   return (
-    rect.top >= CELL_ATTENTION_TOP_GUTTER &&
+    rect.top >= TARGET_ATTENTION_TOP_GUTTER &&
     rect.bottom <= ownerWindow.innerHeight &&
     rect.left >= 0 &&
     rect.right <= ownerWindow.innerWidth

@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
+import { documentIdentity } from "@/notebook/selection-target";
 import { SelectionList } from "@/selection/components/selection-list";
 import { SelectionOverlay } from "@/selection/components/selection-overlay";
 import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
@@ -201,6 +202,7 @@ describe("target availability", () => {
       target: {
         kind: "dom",
         cellIds: ["cell-1"],
+        documentId: documentIdentity(document),
         documentPath: "/",
         domSelector: "#summary",
       },

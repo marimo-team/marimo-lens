@@ -180,7 +180,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
 }
 
 .ml-resolution-receipt,
-.ml-cell-attention-notice {
+.ml-target-attention-notice {
   position: absolute;
   z-index: 1;
   bottom: calc(100% + 8px);
@@ -243,7 +243,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
 
 @starting-style {
   .ml-resolution-receipt,
-  .ml-cell-attention-notice {
+  .ml-target-attention-notice {
     opacity: 0;
     transform: translate(-50%, 3px);
   }
@@ -282,23 +282,23 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   overflow-wrap: anywhere;
 }
 
-.ml-cell-attention {
+.ml-target-attention {
   position: fixed;
   inset: 0;
   pointer-events: none;
   transition: opacity 180ms var(--ml-ease-out);
 }
 
-.ml-cell-attention[data-kind="activity"] {
+.ml-target-attention[data-kind="activity"] {
   transition-duration: 120ms;
 }
 
-.ml-cell-attention[data-phase="exiting"],
-.ml-cell-attention-notice[data-phase="exiting"] {
+.ml-target-attention[data-phase="exiting"],
+.ml-target-attention-notice[data-phase="exiting"] {
   opacity: 0;
 }
 
-.ml-cell-attention__ring {
+.ml-target-attention__ring {
   position: fixed;
   z-index: 1;
   background: color-mix(in srgb, var(--ml-primary) 2%, transparent);
@@ -306,7 +306,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   border-radius: 10px;
 }
 
-.ml-cell-attention__ring::after {
+.ml-target-attention__ring::after {
   position: absolute;
   inset: -4px;
   border: 3px solid color-mix(in srgb, var(--ml-primary) 12%, transparent);
@@ -314,7 +314,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   content: "";
 }
 
-.ml-cell-attention__label {
+.ml-target-attention__label {
   position: fixed;
   z-index: 6;
   display: grid;
@@ -338,8 +338,8 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
     transform 160ms var(--ml-ease-out);
 }
 
-.ml-cell-attention__label > svg,
-.ml-cell-attention-notice > svg {
+.ml-target-attention__label > svg,
+.ml-target-attention-notice > svg {
   grid-column: 1;
   grid-row: 1;
   color: var(--ml-primary);
@@ -355,7 +355,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   animation: ml-working-dot-wave 1.2s ease-in-out infinite;
 }
 
-.ml-cell-attention__status {
+.ml-target-attention__status {
   grid-column: 2;
   grid-row: 1;
   min-width: 0;
@@ -363,7 +363,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   overflow-wrap: anywhere;
 }
 
-.ml-cell-attention__message {
+.ml-target-attention__message {
   grid-column: 2 / 4;
   grid-row: 2;
   min-width: 0;
@@ -374,20 +374,20 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   white-space: pre-wrap;
 }
 
-.ml-cell-attention__cell,
-.ml-cell-attention-notice__cell {
+.ml-target-attention__target,
+.ml-target-attention-notice__target {
   color: var(--ml-muted-foreground);
   font-family: "Fira Mono", ui-monospace, monospace;
   font-size: 10px;
   font-weight: 600;
 }
 
-.ml-cell-attention__cell {
+.ml-target-attention__target {
   grid-column: 3;
   grid-row: 1;
 }
 
-.ml-cell-attention-notice {
+.ml-target-attention-notice {
   z-index: 3;
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr) auto;
@@ -399,19 +399,19 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
     transform 180ms var(--ml-ease-out);
 }
 
-.ml-cell-attention-notice[data-kind="activity"] {
+.ml-target-attention-notice[data-kind="activity"] {
   transition-duration: 120ms;
 }
 
-.ml-cell-attention-notice[data-kind="reveal"] {
+.ml-target-attention-notice[data-kind="reveal"] {
   transition-delay: 400ms;
 }
 
-.ml-cell-attention-notice[data-kind="reveal"][data-phase="exiting"] {
+.ml-target-attention-notice[data-kind="reveal"][data-phase="exiting"] {
   transition-delay: 0ms;
 }
 
-.ml-cell-attention-notice__status {
+.ml-target-attention-notice__status {
   grid-column: 2;
   grid-row: 1;
   color: var(--ml-foreground);
@@ -419,12 +419,12 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   font-weight: 600;
 }
 
-.ml-cell-attention-notice__cell {
+.ml-target-attention-notice__target {
   grid-column: 3;
   grid-row: 1;
 }
 
-.ml-cell-attention-notice__message {
+.ml-target-attention-notice__message {
   grid-column: 2 / 4;
   grid-row: 2;
   min-width: 0;
@@ -447,11 +447,11 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
 }
 
 @starting-style {
-  .ml-cell-attention {
+  .ml-target-attention {
     opacity: 0;
   }
 
-  .ml-cell-attention__label {
+  .ml-target-attention__label {
     transform: translateY(2px);
   }
 }
@@ -1597,7 +1597,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   }
 
   .ml-resolution-receipt,
-  .ml-cell-attention-notice {
+  .ml-target-attention-notice {
     max-width: calc(100vw - 24px);
   }
 
@@ -1699,7 +1699,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   }
 
   .ml-resolution-receipt,
-  .ml-cell-attention-notice {
+  .ml-target-attention-notice {
     transition: opacity 120ms linear;
   }
 
@@ -1711,7 +1711,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
     }
 
     .ml-resolution-receipt,
-    .ml-cell-attention-notice {
+    .ml-target-attention-notice {
       opacity: 0;
     }
   }
@@ -1734,9 +1734,9 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
     opacity: 0.9;
   }
 
-  .ml-cell-attention,
-  .ml-cell-attention__label,
-  .ml-cell-attention-notice {
+  .ml-target-attention,
+  .ml-target-attention__label,
+  .ml-target-attention-notice {
     transition: none;
     transform: none;
   }
@@ -1753,25 +1753,25 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
     border-color: Highlight;
   }
 
-  .ml-cell-attention__ring,
-  .ml-cell-attention__ring::after,
-  .ml-cell-attention__label,
-  .ml-cell-attention-notice {
+  .ml-target-attention__ring,
+  .ml-target-attention__ring::after,
+  .ml-target-attention__label,
+  .ml-target-attention-notice {
     border-color: Highlight;
   }
 
-  .ml-cell-attention__ring {
+  .ml-target-attention__ring {
     background: transparent;
   }
 
-  .ml-cell-attention__label,
-  .ml-cell-attention-notice {
+  .ml-target-attention__label,
+  .ml-target-attention-notice {
     color: CanvasText;
     background: Canvas;
   }
 
-  .ml-cell-attention__label > svg,
-  .ml-cell-attention-notice > svg {
+  .ml-target-attention__label > svg,
+  .ml-target-attention-notice > svg {
     color: Highlight;
   }
 

@@ -115,7 +115,7 @@ def test_add_lens_cell_output_is_discoverable(
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.event",
-            "version": 3,
+            "version": 4,
             "type": "output.capture.ready",
             "payload": {},
         },
@@ -134,7 +134,7 @@ def test_lens_loads_esbuild_assets_and_handles_lens_messages() -> None:
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.command",
-            "version": 3,
+            "version": 4,
             "requestId": "clear-request",
             "type": "selections.clear",
             "payload": {"expectedRevision": 0},

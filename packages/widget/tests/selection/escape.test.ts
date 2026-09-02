@@ -41,7 +41,12 @@ describe("Escape cancellation", () => {
           mode: "dragging",
           target: {
             key: "cell-1",
-            target: { kind: "notebook", cellIds: ["cell-1"] },
+            target: {
+              kind: "notebook",
+              cellIds: ["cell-1"],
+              documentId: "document-1",
+              documentPath: "/",
+            },
             element: output,
           },
           pointerId: 7,

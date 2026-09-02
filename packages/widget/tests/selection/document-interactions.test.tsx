@@ -5,6 +5,7 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import type { UiState } from "@/selection/state";
 
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
+import { documentIdentity } from "@/notebook/selection-target";
 import { useDocumentInteractions, type BeginSelection } from "@/selection/document-interactions";
 import { uiReducer } from "@/selection/state";
 import { LensStatus } from "@/ui/components/lens-status";
@@ -38,7 +39,12 @@ describe("document selection interactions", () => {
     });
 
     expect(beginSelection).toHaveBeenCalledWith(
-      { kind: "notebook", cellIds: ["cell-1"] },
+      {
+        kind: "notebook",
+        cellIds: ["cell-1"],
+        documentId: documentIdentity(document),
+        documentPath: "/",
+      },
       expect.any(HTMLElement),
       { kind: "point", x: 0.5, y: 0.5 },
       expect.any(Element),
@@ -125,7 +131,12 @@ describe("document selection interactions", () => {
     void act(() => target.dispatchEvent(pointer("pointerup", 20, 30, 7)));
 
     expect(beginSelection).toHaveBeenCalledWith(
-      { kind: "notebook", cellIds: ["cell-1"] },
+      {
+        kind: "notebook",
+        cellIds: ["cell-1"],
+        documentId: documentIdentity(document),
+        documentPath: "/",
+      },
       output,
       { kind: "point", x: 0.3, y: 0.4 },
       frame,
@@ -146,7 +157,12 @@ describe("document selection interactions", () => {
     void act(() => output.dispatchEvent(pointer("pointerup", 150, 80, 9)));
 
     expect(beginSelection).toHaveBeenCalledWith(
-      { kind: "notebook", cellIds: ["cell-1"] },
+      {
+        kind: "notebook",
+        cellIds: ["cell-1"],
+        documentId: documentIdentity(document),
+        documentPath: "/",
+      },
       output,
       { kind: "point", x: 0.375, y: 0.4 },
       frame,
@@ -202,7 +218,12 @@ describe("document selection interactions", () => {
     void act(() => output.dispatchEvent(pointer("pointerup", 292, 180, 13)));
 
     expect(beginSelection).toHaveBeenCalledWith(
-      { kind: "notebook", cellIds: ["cell-1"] },
+      {
+        kind: "notebook",
+        cellIds: ["cell-1"],
+        documentId: documentIdentity(document),
+        documentPath: "/",
+      },
       output,
       expect.objectContaining({ kind: "rect" }),
       selectedMark,

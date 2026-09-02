@@ -7,6 +7,7 @@ from typing import Any, Literal, cast, get_args, get_type_hints
 import marimo_lens
 import pytest
 from marimo_lens import (
+    ActivityHandle,
     CellReference,
     Lens,
     LensContext,
@@ -21,6 +22,7 @@ from marimo_lens._runtime import RuntimeSnapshot
 
 def test_package_exports_the_public_api() -> None:
     expected = {
+        "ActivityHandle": ActivityHandle,
         "CellReference": CellReference,
         "Lens": Lens,
         "LensContext": LensContext,
@@ -52,6 +54,14 @@ def test_context_exposes_typed_reference_dictionaries() -> None:
         get_type_hints(target)["kind"] for target in get_args(SelectionTargetReference)
     }
     assert target_kinds == {Literal["notebook"], Literal["dom"]}
+    assert all(
+        get_type_hints(target)["documentPath"] is str
+        for target in get_args(SelectionTargetReference)
+    )
+    assert all(
+        get_type_hints(target)["documentId"] is str
+        for target in get_args(SelectionTargetReference)
+    )
 
 
 def test_context_exposes_immutable_png_bytes_by_selection_id() -> None:

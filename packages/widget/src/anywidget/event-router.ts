@@ -1,40 +1,35 @@
 import type {
-  CellAttentionEvent,
+  AttentionEvent,
   SelectionResolvedEvent,
   TransportEnvelope,
 } from "@marimo-lens/protocol";
 
-import {
-  parseCellActivityStartEvent,
-  parseCellActivityStopEvent,
-  parseCellRevealEvent,
-  parseSelectionResolvedEvent,
-} from "@marimo-lens/protocol";
+import { parseAttentionEvent, parseSelectionResolvedEvent } from "@marimo-lens/protocol";
 
 type SelectionResolvedListener = (event: SelectionResolvedEvent) => void;
-type CellAttentionListener = (event: CellAttentionEvent) => void;
+type AttentionListener = (event: AttentionEvent) => void;
 
 export class EventRouter {
   readonly #selectionResolvedListeners = new Set<SelectionResolvedListener>();
-  readonly #cellAttentionListeners = new Set<CellAttentionListener>();
+  readonly #attentionListeners = new Set<AttentionListener>();
 
   onSelectionResolved(listener: SelectionResolvedListener): () => void {
     this.#selectionResolvedListeners.add(listener);
     return () => this.#selectionResolvedListeners.delete(listener);
   }
 
-  onCellAttention(listener: CellAttentionListener): () => void {
-    this.#cellAttentionListeners.add(listener);
-    return () => this.#cellAttentionListeners.delete(listener);
+  onAttention(listener: AttentionListener): () => void {
+    this.#attentionListeners.add(listener);
+    return () => this.#attentionListeners.delete(listener);
   }
 
   accept(message: TransportEnvelope, buffers: readonly DataView[] = []): boolean {
     if (message.protocol !== "marimo-lens.event") return false;
     if (
       message.type !== "selection.resolved" &&
-      message.type !== "cell.activity.start" &&
-      message.type !== "cell.activity.stop" &&
-      message.type !== "cell.reveal"
+      message.type !== "attention.activity.start" &&
+      message.type !== "attention.activity.stop" &&
+      message.type !== "attention.reveal"
     ) {
       return false;
     }
@@ -49,24 +44,19 @@ export class EventRouter {
       dispatch(this.#selectionResolvedListeners, event);
       return true;
     }
-    let event: CellAttentionEvent;
+    let event: AttentionEvent;
     try {
-      event =
-        message.type === "cell.activity.start"
-          ? parseCellActivityStartEvent(message)
-          : message.type === "cell.activity.stop"
-            ? parseCellActivityStopEvent(message)
-            : parseCellRevealEvent(message);
+      event = parseAttentionEvent(message);
     } catch {
       return true;
     }
-    dispatch(this.#cellAttentionListeners, event);
+    dispatch(this.#attentionListeners, event);
     return true;
   }
 
   clear(): void {
     this.#selectionResolvedListeners.clear();
-    this.#cellAttentionListeners.clear();
+    this.#attentionListeners.clear();
   }
 }
 

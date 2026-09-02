@@ -13,7 +13,8 @@ from typing import Protocol, cast
 
 import agent_plugins
 
-from .context import LensContext
+from .activity import ActivityHandle
+from .context import LensContext, SelectionReference
 from .errors import LensError
 from .widget import Lens, _mounted_lenses
 
@@ -165,42 +166,45 @@ class MountedLens:
 
     def start_activity(
         self,
-        cell_id: str,
+        target: str | SelectionReference,
         *,
+        expected_revision: int | None = None,
         duration_ms: int | None = None,
         label: str | None = None,
         message: str | None = None,
-    ) -> None:
-        """Show one cell as the current work target.
+    ) -> ActivityHandle:
+        """Show one cell or selection as the current work target.
 
-        Leave duration_ms unset to keep activity visible until stop_activity()
-        or another attention event replaces it. A supplied duration clears the
-        activity after that hold.
+        Pass a LensContext revision with a SelectionReference. Leave duration_ms
+        unset to keep activity visible until stop_activity() or another
+        attention event replaces it. A supplied duration clears the activity
+        after that hold.
 
         Raises:
-            LensError: The Lens is closed or the runtime cannot resolve the
-                supplied cell.
+            LensError: The Lens is closed, a selection revision changed, a
+                selection is missing, or the runtime cannot resolve a cell.
             TypeError: An argument has the wrong type.
             ValueError: An argument is outside its accepted range.
         """
 
-        self._lens.start_activity(
-            cell_id,
+        return self._lens.start_activity(
+            target,
+            expected_revision=expected_revision,
             duration_ms=duration_ms,
             label=label,
             message=message,
         )
 
-    def stop_activity(self, cell_id: str) -> None:
-        """Stop activity when it is attached to the supplied cell.
+    def stop_activity(self, activity: ActivityHandle) -> None:
+        """Stop activity when ``activity`` still owns the presentation.
 
         Raises:
             LensError: The Lens is closed.
-            TypeError: The cell ID has the wrong type.
-            ValueError: The cell ID is outside its accepted range.
+            TypeError: The argument is not a string activity handle.
+            ValueError: The handle is empty or exceeds its size limit.
         """
 
-        self._lens.stop_activity(cell_id)
+        self._lens.stop_activity(activity)
 
     def resolve(
         self,
@@ -229,26 +233,29 @@ class MountedLens:
 
     def reveal(
         self,
-        cell_id: str,
+        target: str | SelectionReference,
         *,
+        expected_revision: int | None = None,
         duration_ms: int,
         label: str | None = None,
         message: str | None = None,
     ) -> None:
-        """Bring one exact cell into view for the supplied hold.
+        """Bring one exact cell or selection into view for the supplied hold.
 
-        Wait for duration_ms before resolving addressed selections when the
-        resolution receipt should follow the revealed result.
+        Pass a LensContext revision with a SelectionReference. Wait for
+        duration_ms before resolving addressed selections when the resolution
+        receipt should follow the revealed result.
 
         Raises:
-            LensError: The Lens is closed or the runtime cannot resolve the
-                supplied cell.
+            LensError: The Lens is closed, a selection revision changed, a
+                selection is missing, or the runtime cannot resolve a cell.
             TypeError: An argument has the wrong type.
             ValueError: An argument is outside its accepted range.
         """
 
         self._lens.reveal(
-            cell_id,
+            target,
+            expected_revision=expected_revision,
             label=label,
             message=message,
             duration_ms=duration_ms,

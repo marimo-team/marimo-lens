@@ -22,13 +22,14 @@ from ._protocol_models import (
     RESPONSE_PROTOCOL,
     SELECTION_ADAPTER,
     SELECTION_ID_ADAPTER,
+    AttentionActivityStartEvent,
+    AttentionActivityStartPayload,
+    AttentionActivityStopEvent,
+    AttentionActivityStopPayload,
+    AttentionAddress,
+    AttentionRevealEvent,
+    AttentionRevealPayload,
     AvailableSnapshot,
-    CellActivityStartEvent,
-    CellActivityStartPayload,
-    CellActivityStopEvent,
-    CellActivityStopPayload,
-    CellRevealEvent,
-    CellRevealPayload,
     ErrorDetail,
     FailureResponse,
     OutdatedSnapshot,
@@ -167,70 +168,66 @@ def is_response_envelope(content: object) -> bool:
     return isinstance(content, Mapping) and content.get("protocol") == RESPONSE_PROTOCOL
 
 
-def cell_reveal_event(
+def attention_reveal_event(
     *,
-    cell_id: str,
+    address: AttentionAddress,
     label: str | None,
     message: str | None,
-    revision: int,
     duration_ms: int,
 ) -> dict[str, Any]:
-    """Build one transient request to reveal an exact notebook cell."""
+    """Build one transient request to reveal an addressed target."""
 
     try:
-        event = CellRevealEvent(
-            revision=revision,
-            payload=CellRevealPayload(
-                cell_id=cell_id,
+        event = AttentionRevealEvent(
+            payload=AttentionRevealPayload(
+                address=address,
                 label=label,
                 message=message,
                 duration_ms=duration_ms,
             ),
         )
     except ValidationError as error:
-        raise _protocol_error(error, context="Cell reveal event") from None
+        raise _protocol_error(error, context="Attention reveal event") from None
     return dump_model(event)
 
 
-def cell_activity_start_event(
+def attention_activity_start_event(
     *,
-    cell_id: str,
+    activity_id: str,
+    address: AttentionAddress,
     duration_ms: int | None,
     label: str | None,
     message: str | None,
-    revision: int,
 ) -> dict[str, Any]:
-    """Build one transient request to mark active work on a notebook cell."""
+    """Build one transient request to mark active work on an addressed target."""
 
     try:
-        event = CellActivityStartEvent(
-            revision=revision,
-            payload=CellActivityStartPayload(
-                cell_id=cell_id,
+        event = AttentionActivityStartEvent(
+            payload=AttentionActivityStartPayload(
+                activity_id=activity_id,
+                address=address,
                 duration_ms=duration_ms,
                 label=label,
                 message=message,
             ),
         )
     except ValidationError as error:
-        raise _protocol_error(error, context="Cell activity start event") from None
+        raise _protocol_error(error, context="Attention activity start event") from None
     return dump_model(event)
 
 
-def cell_activity_stop_event(
+def attention_activity_stop_event(
     *,
-    cell_id: str,
-    revision: int,
+    activity_id: str,
 ) -> dict[str, Any]:
-    """Build one transient request to stop active work on a notebook cell."""
+    """Build one transient request to stop its matching activity owner."""
 
     try:
-        event = CellActivityStopEvent(
-            revision=revision,
-            payload=CellActivityStopPayload(cell_id=cell_id),
+        event = AttentionActivityStopEvent(
+            payload=AttentionActivityStopPayload(activity_id=activity_id),
         )
     except ValidationError as error:
-        raise _protocol_error(error, context="Cell activity stop event") from None
+        raise _protocol_error(error, context="Attention activity stop event") from None
     return dump_model(event)
 
 
@@ -507,10 +504,10 @@ __all__ = [
     "CaptureResponse",
     "Command",
     "ProtocolError",
+    "attention_activity_start_event",
+    "attention_activity_stop_event",
+    "attention_reveal_event",
     "capture_command",
-    "cell_activity_start_event",
-    "cell_activity_stop_event",
-    "cell_reveal_event",
     "error_response",
     "is_response_envelope",
     "mutation_ack_response",

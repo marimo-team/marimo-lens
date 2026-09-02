@@ -1,14 +1,18 @@
 import type {
-  CellActivityStartEvent,
-  CellActivityStopEvent,
-  CellRevealEvent,
+  AttentionActivityStartEvent,
+  AttentionActivityStopEvent,
+  AttentionRevealEvent,
 } from "@marimo-lens/protocol";
 
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
-import { CellAttentionController } from "@/transient/cell-attention";
-import { projectCellAttentionSurface } from "@/transient/cell-attention-indicator";
+import {
+  TargetAttentionController,
+  type TargetAttentionPresentation,
+  type TargetLocator,
+} from "@/transient/target-attention";
+import { projectTargetAttentionSurface } from "@/transient/target-attention-indicator";
 
 afterEach(() => {
   document.body.replaceChildren();
@@ -16,11 +20,11 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("cell attention", () => {
+describe("target attention", () => {
   test("marks visible activity without scrolling or moving focus", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     const cell = setupCell("BYtC");
     cell.scrollIntoView = vi.fn();
     const focused = document.createElement("button");
@@ -44,7 +48,7 @@ describe("cell attention", () => {
   test("brings an offscreen activity target into view once", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     const cell = setupCell("new-cell");
     cell.getBoundingClientRect = () => new DOMRect(20, window.innerHeight + 100, 400, 300);
     cell.scrollIntoView = vi.fn();
@@ -77,7 +81,7 @@ describe("cell attention", () => {
     const cell = setupCell("new-cell");
     cell.getBoundingClientRect = () => new DOMRect(20, window.innerHeight + 100, 400, 300);
     cell.scrollIntoView = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), vi.fn());
 
     controller.startActivity(startActivityEvent("new-cell"));
     for (const notifyResize of notifyResizes) notifyResize();
@@ -92,11 +96,11 @@ describe("cell attention", () => {
     const cell = setupCell("fixed-cell");
     cell.getBoundingClientRect = () => new DOMRect(20, window.innerHeight + 100, 400, 300);
     cell.scrollIntoView = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
 
     controller.startActivity(startActivityEvent("fixed-cell"));
     const pending = onChange.mock.lastCall?.[0];
-    expect(projectCellAttentionSurface(pending, window)).toEqual({
+    expect(projectTargetAttentionSurface(pending, window)).toEqual({
       view: null,
       fallback: null,
     });
@@ -104,7 +108,7 @@ describe("cell attention", () => {
     vi.runOnlyPendingTimers();
     const settled = onChange.mock.lastCall?.[0];
 
-    expect(projectCellAttentionSurface(settled, window)).toEqual({
+    expect(projectTargetAttentionSurface(settled, window)).toEqual({
       view: null,
       fallback: { presentation: settled, reason: "offscreen" },
     });
@@ -113,7 +117,7 @@ describe("cell attention", () => {
 
   test("reframes an activity target that has no room for its label", () => {
     vi.useFakeTimers();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), vi.fn());
     const cell = setupCell("near-top");
     cell.getBoundingClientRect = () => new DOMRect(20, 20, 400, 300);
     cell.scrollIntoView = vi.fn();
@@ -131,7 +135,7 @@ describe("cell attention", () => {
   test("reveals the exact cell once and expires after its exit", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     const cell = setupCell("BYtC");
     cell.scrollIntoView = vi.fn();
     const output = setupOutput("BYtC");
@@ -156,7 +160,7 @@ describe("cell attention", () => {
   test("uses the duration carried by the reveal event", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     const cell = setupCell("BYtC");
     cell.scrollIntoView = vi.fn();
 
@@ -171,35 +175,10 @@ describe("cell attention", () => {
     controller.dispose();
   });
 
-  test("keeps same-cell activity until another attention event replaces it", () => {
-    vi.useFakeTimers();
-    const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
-    setupCell("same");
-    const event = startActivityEvent("same", "Updating the chart.");
-
-    controller.startActivity(event);
-    const first = onChange.mock.lastCall?.[0];
-    vi.advanceTimersByTime(19_000);
-    controller.startActivity(event);
-    const renewed = onChange.mock.lastCall?.[0];
-
-    expect(renewed.sequence).toBe(first.sequence);
-    expect(renewed.expiresAt).toBeNull();
-    vi.advanceTimersByTime(120_000);
-    expect(onChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        kind: "activity",
-        phase: "active",
-      }),
-    );
-    controller.dispose();
-  });
-
   test("expires timed activity after its hold and exit", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     setupCell("timed");
 
     controller.startActivity(startActivityEvent("timed", "Checking the chart.", 8_000));
@@ -213,89 +192,46 @@ describe("cell attention", () => {
     controller.dispose();
   });
 
-  test("restarts a timed activity hold on the same cell", () => {
+  test("a stale stop cannot clear the activity that replaced it", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
-    setupCell("timed");
-    const event = startActivityEvent("timed", "Checking the chart.", 4_000);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
+    setupCell("first");
+    const second = setupCell("second");
 
-    controller.startActivity(event);
-    vi.advanceTimersByTime(3_000);
-    controller.startActivity(event);
-    vi.advanceTimersByTime(3_999);
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "active" }));
-    vi.advanceTimersByTime(1);
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "exiting" }));
-    controller.dispose();
-  });
+    controller.startActivity(startActivityEvent("first", "Editing.", undefined, "old"));
+    controller.startActivity(startActivityEvent("second", "Running.", undefined, "current"));
+    controller.stopActivity(activityStopEvent("old"));
+    expect(onChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: "activity", message: "Running.", target: second }),
+    );
 
-  test("stops activity only for its active cell", () => {
-    vi.useFakeTimers();
-    const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
-    setupCell("working");
-
-    controller.startActivity(startActivityEvent("working", "Updating the chart."));
-    controller.stopActivity(activityStopEvent("other"));
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ kind: "activity" }));
-
-    controller.stopActivity(activityStopEvent("working"));
+    controller.stopActivity(activityStopEvent("current"));
     expect(onChange).toHaveBeenLastCalledWith(null);
     controller.dispose();
   });
 
-  test("updates a same-cell activity message and replaces activity with reveal", () => {
+  test("reveal replaces activity", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     const cell = setupCell("same");
     cell.scrollIntoView = vi.fn();
 
     controller.startActivity(startActivityEvent("same", "Editing."));
-    const firstSequence = onChange.mock.lastCall?.[0].sequence;
-    controller.startActivity(startActivityEvent("same", "Running."));
-    expect(onChange.mock.lastCall?.[0]).toMatchObject({
-      kind: "activity",
-      event: startActivityEvent("same", "Running."),
-    });
-    expect(onChange.mock.lastCall?.[0].sequence).toBeGreaterThan(firstSequence);
-
     controller.reveal(revealEvent("same", "Verified."));
     expect(onChange.mock.lastCall?.[0]).toMatchObject({
       kind: "reveal",
-      event: revealEvent("same", "Verified."),
+      message: "Verified.",
     });
     expect(cell.scrollIntoView).toHaveBeenCalledOnce();
-    controller.dispose();
-  });
-
-  test("replaces activity when the primary working cell changes", () => {
-    vi.useFakeTimers();
-    const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
-    setupCell("first");
-    const second = setupCell("second");
-
-    controller.startActivity(startActivityEvent("first", "Editing."));
-    vi.advanceTimersByTime(19_000);
-    controller.startActivity(startActivityEvent("second", "Running."));
-    vi.advanceTimersByTime(1_001);
-
-    expect(onChange).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        kind: "activity",
-        event: startActivityEvent("second", "Running."),
-        target: second,
-      }),
-    );
     controller.dispose();
   });
 
   test("attaches pending activity when its cell starts rendering", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     controller.startActivity(startActivityEvent("new-cell"));
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ target: null }));
 
@@ -312,7 +248,7 @@ describe("cell attention", () => {
     const onChange = vi.fn();
     const output = setupOutput("promoted");
     output.scrollIntoView = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     controller.startActivity(startActivityEvent("promoted"));
 
     const cell = setupCell("promoted");
@@ -330,7 +266,7 @@ describe("cell attention", () => {
   test("re-resolves a replaced reveal target without scrolling again", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     const first = setupCell("replaced");
     first.scrollIntoView = vi.fn();
     controller.reveal(revealEvent("replaced"));
@@ -365,7 +301,7 @@ describe("cell attention", () => {
     );
     const cell = setupCell("resized-reveal");
     cell.scrollIntoView = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), vi.fn());
 
     controller.reveal(revealEvent("resized-reveal"));
     for (const notifyResize of notifyResizes) notifyResize();
@@ -376,7 +312,7 @@ describe("cell attention", () => {
 
   test("frames an initially missing reveal once when its target appears", () => {
     vi.useFakeTimers();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), vi.fn());
     controller.reveal(revealEvent("late"));
 
     const cell = setupCell("late");
@@ -411,7 +347,7 @@ describe("cell attention", () => {
     let rect = new DOMRect(20, 80, 400, 300);
     cell.getBoundingClientRect = () => rect;
     cell.scrollIntoView = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     controller.startActivity(startActivityEvent("resized"));
     const callsBeforeResize = onChange.mock.calls.length;
     expect(cell.scrollIntoView).not.toHaveBeenCalled();
@@ -430,7 +366,7 @@ describe("cell attention", () => {
   test("uses reduced motion on an output fallback", () => {
     vi.useFakeTimers();
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), vi.fn());
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), vi.fn());
     const output = setupOutput("fallback");
     output.scrollIntoView = vi.fn();
 
@@ -447,7 +383,7 @@ describe("cell attention", () => {
   test("keeps activity through target removal and reattaches it", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     const cell = setupCell("removed");
     controller.startActivity(startActivityEvent("removed"));
 
@@ -472,7 +408,7 @@ describe("cell attention", () => {
   test("keeps activity while its notebook document is hidden", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     setupCell("hidden");
     const visibility = Object.getOwnPropertyDescriptor(document, "visibilityState");
 
@@ -505,7 +441,7 @@ describe("cell attention", () => {
     secondary.getBoundingClientRect = () => new DOMRect(20, 20, 400, 300);
     secondary.scrollIntoView = vi.fn();
     secondaryDocument.body.appendChild(secondary);
-    const controller = new CellAttentionController(
+    const controller = new TestAttentionController(
       new NotebookDomAdapter(secondaryDocument),
       vi.fn(),
     );
@@ -520,7 +456,7 @@ describe("cell attention", () => {
   test("disposal clears the presentation and cancels later updates", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
-    const controller = new CellAttentionController(new NotebookDomAdapter(document), onChange);
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
     setupCell("disposed");
     controller.startActivity(startActivityEvent("disposed"));
 
@@ -551,41 +487,85 @@ function setupOutput(cellId: string): HTMLElement {
   return output;
 }
 
+class TestAttentionController extends TargetAttentionController {
+  readonly #testDom: NotebookDomAdapter;
+
+  constructor(
+    dom: NotebookDomAdapter,
+    onChange: (presentation: TargetAttentionPresentation | null) => void,
+  ) {
+    super(dom, onChange);
+    this.#testDom = dom;
+  }
+
+  startActivity(event: AttentionActivityStartEvent): void {
+    super.startActivity(event, cellTarget(this.#testDom.document, event.payload.address));
+  }
+
+  reveal(event: AttentionRevealEvent): void {
+    super.reveal(event, cellTarget(this.#testDom.document, event.payload.address));
+  }
+}
+
+function cellTarget(
+  ownerDocument: Document,
+  address: AttentionActivityStartEvent["payload"]["address"],
+): TargetLocator {
+  if (address.kind !== "cell") throw new Error("Expected a cell address");
+  return {
+    kind: "cell",
+    label: address.cellId,
+    resolve: () => {
+      const ownerWindow = ownerDocument.defaultView;
+      const cell = ownerDocument.getElementById(`cell-${address.cellId}`);
+      if (ownerWindow && cell instanceof ownerWindow.HTMLElement && cell.isConnected) return cell;
+      const output = ownerDocument.getElementById(`output-${address.cellId}`);
+      return ownerWindow && output instanceof ownerWindow.HTMLElement && output.isConnected
+        ? output
+        : null;
+    },
+  };
+}
+
 function startActivityEvent(
   cellId: string,
   message?: string,
   durationMs?: number,
-): CellActivityStartEvent {
-  const payload: CellActivityStartEvent["payload"] = { cellId };
+  activityId = cellId,
+): AttentionActivityStartEvent {
+  const payload: AttentionActivityStartEvent["payload"] = {
+    activityId,
+    address: { kind: "cell", cellId },
+  };
   if (durationMs !== undefined) payload.durationMs = durationMs;
   if (message) payload.message = message;
   return {
     protocol: "marimo-lens.event",
-    version: 3,
-    type: "cell.activity.start",
-    revision: 7,
+    version: 4,
+    type: "attention.activity.start",
     payload,
   };
 }
 
-function activityStopEvent(cellId: string): CellActivityStopEvent {
+function activityStopEvent(activityId: string): AttentionActivityStopEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 3,
-    type: "cell.activity.stop",
-    revision: 7,
-    payload: { cellId },
+    version: 4,
+    type: "attention.activity.stop",
+    payload: { activityId },
   };
 }
 
-function revealEvent(cellId: string, message?: string, durationMs = 4_000): CellRevealEvent {
-  const payload: CellRevealEvent["payload"] = { cellId, durationMs };
+function revealEvent(cellId: string, message?: string, durationMs = 4_000): AttentionRevealEvent {
+  const payload: AttentionRevealEvent["payload"] = {
+    address: { kind: "cell", cellId },
+    durationMs,
+  };
   if (message) payload.message = message;
   return {
     protocol: "marimo-lens.event",
-    version: 3,
-    type: "cell.reveal",
-    revision: 7,
+    version: 4,
+    type: "attention.reveal",
     payload,
   };
 }

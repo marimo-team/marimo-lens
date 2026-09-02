@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "vite-plus/test";
 
 import { registerLensHostOutput } from "@/notebook/output-root";
 import {
+  documentIdentity,
   getTargetSurface,
   listTargetSurfaces,
   targetBelongsToDocument,
@@ -21,7 +22,12 @@ describe("selection targets", () => {
 
     const target = targetFromElement(mark, null);
 
-    expect(target?.target).toEqual({ kind: "notebook", cellIds: ["cell-1"] });
+    expect(target?.target).toEqual({
+      kind: "notebook",
+      cellIds: ["cell-1"],
+      documentId: documentIdentity(document),
+      documentPath: "/",
+    });
     expect(target?.element).toBe(output);
   });
 
@@ -34,7 +40,12 @@ describe("selection targets", () => {
     document.body.appendChild(host);
 
     expect(listTargetSurfaces(document, null).map(({ target }) => target)).toEqual([
-      { kind: "notebook", cellIds: ["shadow-cell"] },
+      {
+        kind: "notebook",
+        cellIds: ["shadow-cell"],
+        documentId: documentIdentity(document),
+        documentPath: "/",
+      },
     ]);
   });
 
@@ -74,6 +85,7 @@ describe("selection targets", () => {
     expect(target?.target).toEqual({
       kind: "dom",
       cellIds: ["producer-cell"],
+      documentId: documentIdentity(document),
       documentPath: "/",
       domSelector: "#summary-host",
     });
@@ -113,6 +125,7 @@ describe("selection targets", () => {
     expect(target?.target).toEqual({
       kind: "dom",
       cellIds: ["chart-cell", "report-cell"],
+      documentId: documentIdentity(document),
       documentPath: "/",
       domSelector: "#forecast-summary",
     });
@@ -158,22 +171,34 @@ describe("selection targets", () => {
     expect(
       getTargetSurface(
         document,
-        { kind: "dom", cellIds: [], documentPath: "/", domSelector: "[" },
+        {
+          kind: "dom",
+          cellIds: [],
+          documentId: documentIdentity(document),
+          documentPath: "/",
+          domSelector: "[",
+        },
         "*",
       ),
     ).toBeNull();
   });
 
-  test("scopes DOM targets to their originating document", () => {
-    const target = {
+  test("requires both the originating document ID and path", () => {
+    const current = {
       kind: "dom" as const,
       cellIds: [],
-      documentPath: "/another-view/",
+      documentId: documentIdentity(document),
+      documentPath: document.location.pathname || "/",
       domSelector: "#forecast-summary",
     };
 
-    expect(targetBelongsToDocument(target, document)).toBe(false);
-    expect(getTargetSurface(document, target, "*")).toBeNull();
+    for (const target of [
+      { ...current, documentId: "another-document" },
+      { ...current, documentPath: "/another-view/" },
+    ]) {
+      expect(targetBelongsToDocument(target, document)).toBe(false);
+      expect(getTargetSurface(document, target, "*")).toBeNull();
+    }
   });
 
   test("skips roots whose exact selector cannot fit the protocol", () => {

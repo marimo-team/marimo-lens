@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import marimo._code_mode as code_mode
 import marimo_lens.agent as lens_agent
 from marimo_lens import (
+    ActivityHandle,
     Lens,
     LensContext,
     LensError,
@@ -114,6 +115,8 @@ def verify_release(expected_version: str) -> None:
         raise SystemExit(
             f"marimo-lens exports are not classes: {', '.join(invalid_types)}"
         )
+    if not isinstance(ActivityHandle("activity"), str):
+        raise SystemExit("ActivityHandle values must be JSON-safe strings")
     if not all(
         callable(function)
         for function in (

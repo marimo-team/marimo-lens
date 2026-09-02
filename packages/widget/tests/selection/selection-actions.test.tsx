@@ -16,13 +16,19 @@ import type { SelectionSnapshotCapture } from "@/selection/selection-capture";
 
 import { LensProtocolClient } from "@/anywidget/client";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
+import { documentIdentity } from "@/notebook/selection-target";
 import { useSelectionActions } from "@/selection/selection-actions";
 import { INITIAL_UI_STATE, uiReducer, type UiState } from "@/selection/state";
 
 import { addressedSelectionFixture, selectionFixture } from "../support/fixtures";
 
 type Actions = ReturnType<typeof useSelectionActions>;
-const NOTEBOOK_TARGET: SelectionTarget = { kind: "notebook", cellIds: ["cell-1"] };
+const NOTEBOOK_TARGET: SelectionTarget = {
+  kind: "notebook",
+  cellIds: ["cell-1"],
+  documentId: documentIdentity(document),
+  documentPath: "/",
+};
 
 const captureSnapshot = vi.fn<SelectionSnapshotCapture>();
 let root: Root | null = null;
@@ -989,7 +995,7 @@ function deferred<T>() {
 function successResponse(revision: number): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 3,
+    version: 4,
     requestId: "request-1",
     ok: true,
     revision,

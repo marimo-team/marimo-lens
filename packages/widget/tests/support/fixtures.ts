@@ -1,11 +1,18 @@
 import type { AddressedSelection, Selection } from "@marimo-lens/protocol";
 
+import { documentIdentity } from "@/notebook/selection-target";
+
 export function selectionFixture(overrides: Partial<Selection> = {}): Selection {
   return {
     id: "selection-1",
     label: "S1",
     note: "Align this label",
-    target: { kind: "notebook", cellIds: ["cell-1"] },
+    target: {
+      kind: "notebook",
+      cellIds: ["cell-1"],
+      documentId: documentIdentity(document),
+      documentPath: "/",
+    },
     createdAt: "2026-07-14T10:00:00Z",
     anchor: { kind: "point", x: 0.25, y: 0.5 },
     snapshot: {
@@ -28,7 +35,12 @@ export function addressedSelectionFixture(
     selectionId: "selection-1",
     label: "S1",
     note: "Align this label",
-    target: { kind: "notebook", cellIds: ["cell-1"] },
+    target: {
+      kind: "notebook",
+      cellIds: ["cell-1"],
+      documentId: documentIdentity(document),
+      documentPath: "/",
+    },
     createdAt: "2026-07-14T10:00:00Z",
     addressedAt: "2026-07-23T08:00:00Z",
     anchor: { kind: "point", x: 0.25, y: 0.5 },

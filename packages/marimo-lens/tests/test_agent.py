@@ -12,7 +12,7 @@ from typing import cast
 import marimo as mo
 import marimo._code_mode as code_mode
 import pytest
-from marimo_lens import Lens, LensContext, LensError, agent
+from marimo_lens import ActivityHandle, Lens, LensContext, LensError, agent
 
 from tests.support.factories import png
 
@@ -122,14 +122,22 @@ def test_agent_handoff_matches_documented_signatures() -> None:
         "cell_image": ["self", "cell_id", "expected_revision"],
         "start_activity": [
             "self",
-            "cell_id",
+            "target",
+            "expected_revision",
             "duration_ms",
             "label",
             "message",
         ],
-        "stop_activity": ["self", "cell_id"],
+        "stop_activity": ["self", "activity"],
         "resolve": ["self", "selection_ids", "expected_revision", "summary"],
-        "reveal": ["self", "cell_id", "duration_ms", "label", "message"],
+        "reveal": [
+            "self",
+            "target",
+            "expected_revision",
+            "duration_ms",
+            "label",
+            "message",
+        ],
     }
     for method_name, expected in expected_parameters.items():
         parameters = inspect.signature(
@@ -159,7 +167,7 @@ def _set_mounted(lens: Lens, *, mounted: bool = True) -> None:
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.event",
-            "version": 3,
+            "version": 4,
             "type": f"output.capture.{'ready' if mounted else 'unready'}",
             "payload": {},
         },
@@ -205,7 +213,12 @@ def _lens_context(
                     "id": "selection-1",
                     "label": "S1",
                     "note": note,
-                    "target": {"kind": "notebook", "cellIds": ["cell-view"]},
+                    "target": {
+                        "kind": "notebook",
+                        "cellIds": ["cell-view"],
+                        "documentId": "document-1",
+                        "documentPath": "/",
+                    },
                     "cells": [{"id": "cell-view", "status": "available"}],
                     "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
                     "domHint": {"tag": "svg", "text": "Quarterly revenue"},
@@ -498,41 +511,45 @@ def test_mounted_lens_forwards_attention_workflow(
 ) -> None:
     calls: list[tuple[object, ...]] = []
     lens = _mounted_lens()
+    activity = ActivityHandle("1" * 32)
 
     def start_activity(
         _self: Lens,
-        cell_id: str,
+        target: str,
         *,
+        expected_revision: int | None = None,
         duration_ms: int | None = None,
         label: str | None = None,
         message: str | None = None,
-    ) -> None:
-        calls.append(("start", cell_id, duration_ms, label, message))
+    ) -> ActivityHandle:
+        calls.append(("start", target, expected_revision, duration_ms, label, message))
+        return activity
 
-    def stop_activity(_self: Lens, cell_id: str) -> None:
-        calls.append(("stop", cell_id))
+    def stop_activity(_self: Lens, owner: ActivityHandle) -> None:
+        calls.append(("stop", owner))
 
     def reveal(
         _self: Lens,
-        cell_id: str,
+        target: str,
         *,
+        expected_revision: int | None = None,
         duration_ms: int,
         label: str | None = None,
         message: str | None = None,
     ) -> None:
-        calls.append(("reveal", cell_id, duration_ms, label, message))
+        calls.append(("reveal", target, expected_revision, duration_ms, label, message))
 
     monkeypatch.setattr(Lens, "start_activity", start_activity)
     monkeypatch.setattr(Lens, "stop_activity", stop_activity)
     monkeypatch.setattr(Lens, "reveal", reveal)
     mounted = agent.connect()
 
-    mounted.start_activity(
+    returned = mounted.start_activity(
         "cell-view",
         label="Updating aggregation",
         message="Applying the requested grouping.",
     )
-    mounted.stop_activity("cell-view")
+    mounted.stop_activity(returned)
     mounted.reveal(
         "cell-view",
         label="Updated chart",
@@ -545,13 +562,15 @@ def test_mounted_lens_forwards_attention_workflow(
             "start",
             "cell-view",
             None,
+            None,
             "Updating aggregation",
             "Applying the requested grouping.",
         ),
-        ("stop", "cell-view"),
+        ("stop", activity),
         (
             "reveal",
             "cell-view",
+            None,
             8_000,
             "Updated chart",
             "Updated the chart and verified its labels.",

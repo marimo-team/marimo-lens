@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import type { UiAction } from "@/selection/state";
-import type { CellAttentionKind } from "@/transient/cell-attention";
+import type { TargetAttentionKind } from "@/transient/target-attention";
 
 import { focusSelectionOrDock } from "@/ui/focus";
 
@@ -15,7 +15,7 @@ type ResolutionReceiptOptions = {
   dom: NotebookDomAdapter;
   dispatch: Dispatch<UiAction>;
   invalidateSnapshotCapture: (selectionId: string) => void;
-  attentionKind: CellAttentionKind | null;
+  attentionKind: TargetAttentionKind | null;
 };
 
 type ResolutionReceiptState = {

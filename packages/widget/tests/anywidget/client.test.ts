@@ -1,6 +1,6 @@
 import type { AnyModel } from "@anywidget/types";
 import type {
-  CellAttentionEvent,
+  AttentionEvent,
   ClearSelectionsResponsePayload,
   ClientCommand,
   LensCommand,
@@ -18,7 +18,7 @@ import { selectionFixture } from "../support/fixtures";
 
 type OutputCaptureReadinessEvent = {
   protocol: "marimo-lens.event";
-  version: 3;
+  version: 4;
   type: "output.capture.ready" | "output.capture.unready";
   payload: ClearSelectionsResponsePayload;
 };
@@ -27,7 +27,7 @@ type ModelMessage =
   | LensCommand
   | LensResponse
   | SelectionResolvedEvent
-  | CellAttentionEvent
+  | AttentionEvent
   | OutputCaptureReadinessEvent;
 type MessageHandler = (message: TransportInput, buffers: DataView[]) => void;
 type SentMessage = { message: ModelMessage; buffers: ArrayBuffer[] };
@@ -99,7 +99,7 @@ describe("Lens protocol client", () => {
     client.start();
     client.start();
     client.onSelectionResolved(() => undefined);
-    client.onCellAttention(() => undefined);
+    client.onAttention(() => undefined);
     client.onOutputCapture(async () => outputCaptureAsset("unused"));
 
     expect(model.handlers).toHaveLength(1);
@@ -160,7 +160,7 @@ describe("Lens protocol client", () => {
     expect(handler).toHaveBeenCalledWith(command, expect.any(AbortSignal));
     expect(model.sent[0]?.message).toEqual({
       protocol: "marimo-lens.response",
-      version: 3,
+      version: 4,
       requestId: "capture-1",
       ok: true,
       revision: 7,
@@ -328,7 +328,7 @@ describe("Lens protocol client", () => {
     expect(handler).toHaveBeenCalledOnce();
     expect(model.sent[1]?.message).toEqual({
       protocol: "marimo-lens.response",
-      version: 3,
+      version: 4,
       requestId: "capture-1",
       ok: true,
       revision: 7,
@@ -409,14 +409,14 @@ describe("Lens protocol client", () => {
     const attended = vi.fn();
     client.start();
     client.onSelectionResolved(resolved);
-    client.onCellAttention(attended);
+    client.onAttention(attended);
 
     const request = client.activateSelection("selection-2", 4);
     const command = model.sent[0]?.message;
     if (!command || !isClientCommand(command)) throw new Error("Expected Lens command");
     model.emit({
       protocol: "marimo-lens.event",
-      version: 3,
+      version: 4,
       type: "selection.resolved",
       revision: 4,
       payload: {
@@ -431,11 +431,10 @@ describe("Lens protocol client", () => {
     });
     model.emit({
       protocol: "marimo-lens.event",
-      version: 3,
-      type: "cell.reveal",
-      revision: 4,
+      version: 4,
+      type: "attention.reveal",
       payload: {
-        cellId: "cell-2",
+        address: { kind: "cell", cellId: "cell-2" },
         message: "Updated the chart.",
         durationMs: 8_000,
         displayHint: "compact",
@@ -444,11 +443,11 @@ describe("Lens protocol client", () => {
     });
     model.emit({
       protocol: "marimo-lens.event",
-      version: 3,
-      type: "cell.activity.start",
-      revision: 4,
+      version: 4,
+      type: "attention.activity.start",
       payload: {
-        cellId: "cell-3",
+        activityId: "activity-1",
+        address: { kind: "cell", cellId: "cell-3" },
         durationMs: 8_000,
         label: "On it",
         message: "Updating the table.",
@@ -456,10 +455,9 @@ describe("Lens protocol client", () => {
     });
     model.emit({
       protocol: "marimo-lens.event",
-      version: 3,
-      type: "cell.activity.stop",
-      revision: 4,
-      payload: { cellId: "cell-3" },
+      version: 4,
+      type: "attention.activity.stop",
+      payload: { activityId: "activity-1" },
     });
     model.emit({
       ...success(command, { selectionId: "selection-2", trace: "python" }),
@@ -470,24 +468,27 @@ describe("Lens protocol client", () => {
     expect(resolved).toHaveBeenCalledOnce();
     expect(attended).toHaveBeenCalledTimes(3);
     expect(attended.mock.calls.map(([event]) => event.type)).toEqual([
-      "cell.reveal",
-      "cell.activity.start",
-      "cell.activity.stop",
+      "attention.reveal",
+      "attention.activity.start",
+      "attention.activity.stop",
     ]);
     expect(attended.mock.calls[0]?.[0]).toEqual({
       protocol: "marimo-lens.event",
-      version: 3,
-      type: "cell.reveal",
-      revision: 4,
+      version: 4,
+      type: "attention.reveal",
       payload: {
-        cellId: "cell-2",
+        address: { kind: "cell", cellId: "cell-2" },
         message: "Updated the chart.",
         durationMs: 8_000,
       },
     });
     expect(attended.mock.calls[1]?.[0]).toMatchObject({
-      type: "cell.activity.start",
-      payload: { cellId: "cell-3", durationMs: 8_000 },
+      type: "attention.activity.start",
+      payload: {
+        activityId: "activity-1",
+        address: { kind: "cell", cellId: "cell-3" },
+        durationMs: 8_000,
+      },
     });
     client.dispose();
   });
@@ -497,7 +498,7 @@ describe("Lens protocol client", () => {
     const client = new LensProtocolClient(model.asAnyModel(), window);
     const event: SelectionResolvedEvent = {
       protocol: "marimo-lens.event",
-      version: 3,
+      version: 4,
       type: "selection.resolved",
       revision: 4,
       payload: {
@@ -550,7 +551,7 @@ describe("Lens protocol client", () => {
     model.onCommand = (command) =>
       model.emit({
         protocol: "marimo-lens.response",
-        version: 3,
+        version: 4,
         requestId: command.requestId,
         ok: false,
         revision: 7,
@@ -589,7 +590,7 @@ describe("Lens protocol client", () => {
 function success(command: ClientCommand, payload: LensResponse["payload"] = {}): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 3,
+    version: 4,
     requestId: command.requestId,
     ok: true,
     revision: command.type === "snapshot.get" ? 4 : command.payload.expectedRevision + 1,
@@ -605,7 +606,7 @@ type OutputCaptureCommandOptions = {
 function outputCaptureCommand(overrides: OutputCaptureCommandOptions = {}): OutputCaptureCommand {
   return {
     protocol: "marimo-lens.command",
-    version: 3,
+    version: 4,
     requestId: overrides.requestId ?? "capture-1",
     type: "output.capture",
     payload: {
@@ -640,7 +641,7 @@ function captureFailure(
 ): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 3,
+    version: 4,
     requestId,
     ok: false,
     revision: 7,
@@ -652,7 +653,7 @@ function captureFailure(
 function readinessEvent(
   type: "output.capture.ready" | "output.capture.unready",
 ): OutputCaptureReadinessEvent {
-  return { protocol: "marimo-lens.event", version: 3, type, payload: {} };
+  return { protocol: "marimo-lens.event", version: 4, type, payload: {} };
 }
 
 function isReadinessEvent(message: ModelMessage): message is OutputCaptureReadinessEvent {
