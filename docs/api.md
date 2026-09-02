@@ -8,7 +8,7 @@ description: Python API contracts for reading Lens requests and returning agent 
 The Python API lets code-mode agents read the current selection, show their work
 in the notebook, reveal a result, and complete a request.
 
-The package exports `CellReference`, `Lens`, `LensContext`, `LensError`,
+The package exports `ActivityHandle`, `CellReference`, `Lens`, `LensContext`, `LensError`,
 `LensReferences`, `NotebookReference`, `SelectionReference`,
 `SelectionTargetReference`, and `__version__`. The version string comes from the
 installed `marimo-lens` distribution metadata.
@@ -95,15 +95,15 @@ The handle's `identity` property is an opaque, read-only string. Pass it to
 `connect()` to reconnect to the same Lens in another kernel call. The
 identity and Lens target remain fixed for the handle's lifetime.
 
-| Member                                                                   | Behavior                                                     |
-| ------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| `identity`                                                               | Reconnects to this Lens across kernel calls                  |
-| `context()`                                                              | Returns the current detached `LensContext`                   |
-| `cell_image(cell_id, *, expected_revision)`                              | Returns fresh cell PNG bytes after browser capture completes |
-| `start_activity(cell_id, *, duration_ms=None, label=None, message=None)` | Shows the current agent work target                          |
-| `stop_activity(cell_id)`                                                 | Stops activity attached to that exact cell                   |
-| `reveal(cell_id, *, duration_ms, label=None, message=None)`              | Brings the primary result into view                          |
-| `resolve(selection_ids, *, expected_revision, summary=None)`             | Moves verified selections to History                         |
+| Member                                                                                          | Behavior                                                     |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `identity`                                                                                      | Reconnects to this Lens across kernel calls                  |
+| `context()`                                                                                     | Returns the current detached `LensContext`                   |
+| `cell_image(cell_id, *, expected_revision)`                                                     | Returns fresh cell PNG bytes after browser capture completes |
+| `start_activity(target, *, expected_revision=None, duration_ms=None, label=None, message=None)` | Shows the current agent work target and returns its owner    |
+| `stop_activity(activity)`                                                                       | Stops activity owned by that handle                          |
+| `reveal(target, *, expected_revision=None, duration_ms, label=None, message=None)`              | Brings the addressed target into view                        |
+| `resolve(selection_ids, *, expected_revision, summary=None)`                                    | Moves verified selections to History                         |
 
 `context.images` maps selection IDs to annotated capture-time PNG bytes. The
 matching selection reports `selection["snapshot"]["status"] == "outdated"`
@@ -142,10 +142,10 @@ handoff method on a selectable chart.
 Creates a Lens for notebook outputs and optional DOM roots.
 
 - `dom_selector`: A CSS selector for additional authored page roots. Each DOM
-  selection records the current document path, an exact selector for the chosen
-  element, and producer cell IDs inferred from nested `data-runtime-cell-id`
-  metadata. Matching roots live in the widget owner's light DOM. Interactions
-  inside their open shadow trees remain attached to the selected root.
+  selection records an opaque document ID, the current document path, an exact
+  selector for the chosen element, and producer cell IDs inferred from nested
+  `data-runtime-cell-id` metadata. Matching roots live in the widget owner's
+  light DOM. Interactions inside their open shadow trees remain attached to the selected root.
   The selector accepts at most 1,024 UTF-16 code units.
 
 An empty selector raises `ValueError`. A selector with another type raises
@@ -187,104 +187,95 @@ captured runtime snapshot.
 `context()` raises `LensError(code="lens_closed")` after Lens closes. Contexts
 created before closing remain readable.
 
-### `lens.start_activity(cell_id, *, duration_ms=None, label=None, message=None) -> None`
+### `lens.start_activity(target, *, expected_revision=None, duration_ms=None, label=None, message=None) -> ActivityHandle`
 
-Validates that `cell_id` belongs to the current marimo graph, then sends a
-best-effort browser event. When the displayed Lens receives it, the cell is
-marked until its optional hold ends, `stop_activity()` targets that cell, or
-another activity, reveal, or Lens teardown replaces it.
+Marks `target` as the current work surface and returns the opaque owner accepted
+by `stop_activity()`.
+
+Pass a `SelectionReference` and its captured revision to address the selected
+surface. Lens validates that the selection still exists at that revision. The
+browser resolves its stored `SelectionTarget`, so DOM selections can have zero
+or several producing cells and repeated projections remain distinct.
 
 ```python
 context = lens.context()
 selection = context.current
 
-cell = (
-    next(
-        (cell for cell in selection["cells"] if cell["status"] == "available"),
-        None,
-    )
-    if selection is not None
-    else None
-)
-if cell is not None:
-    lens.start_activity(
-        cell["id"],
+if selection is not None:
+    activity = lens.start_activity(
+        selection,
+        expected_revision=context.revision,
         label="Updating aggregation",
-        message="Updating the aggregation",
+        message="Updating the selected result.",
     )
 ```
 
-Activity preserves selection state. It keeps the current scroll position when
-the work cell has room for the label above it. It frames offscreen and near-top
-work cells so the label stays outside the cell. Later target growth triggers a
-corrective reframe when it clips the cell.
-Another `start_activity()` call updates the label and message or marks a
-different cell. Starting timed activity again on the same cell restarts its
-hold.
+Pass a cell ID string for notebook walkthrough activity that has no selection.
+Lens validates cell IDs against the current marimo graph. `expected_revision`
+is required for selection targets and optional for cell targets.
 
-`duration_ms` defaults to `None`, which keeps activity visible until an explicit
-stop or replacement. Pass a positive integer up to 300,000 to clear it after
-that hold. `stop_activity()` can dismiss timed activity before its hold ends.
-`label` defaults to **Working** and accepts at most 40 UTF-16 code units.
+Activity preserves selection state. It keeps the current scroll position for a
+visible target, frames an offscreen target, and re-resolves the surface after
+document or layout changes. An unavailable selection target shows a bounded
+notice in its owning document until the target returns. Other documents ignore
+the event.
 
-Call `stop_activity()` after verification and before `reveal()` or `resolve()`.
+Each call creates a new activity owner and replaces the visible presentation.
+A delayed stop for an earlier handle leaves newer activity intact.
+`duration_ms=None` keeps activity visible until a matching stop, replacement,
+or teardown. A positive integer up to 300,000 expires the activity after that
+hold. `label` defaults to **Working** and accepts at most 40 UTF-16 code units.
 
-Expected `LensError.code` values are `runtime_unavailable`, `cell_not_found`,
-and `lens_closed`.
+Selection targets can raise `LensError` codes `revision_conflict`,
+`selection_not_found`, or `lens_closed`. Cell targets can raise
+`runtime_unavailable`, `cell_not_found`, `revision_conflict`, or `lens_closed`.
+Browser delivery is best effort after validation succeeds.
 
-### `lens.stop_activity(cell_id) -> None`
+### `lens.stop_activity(activity) -> None`
 
-Sends a best-effort browser event that clears persistent or timed activity when
-`cell_id` matches the active work cell. Activity on another cell remains
-visible.
+Sends a best-effort stop for one `ActivityHandle`. The browser clears activity
+when the handle still owns the current presentation.
 
 ```python
-lens.stop_activity("cell-view")
+lens.stop_activity(activity)
 ```
 
-Call `stop_activity()` after the cell edit or creation has run and fresh
-verification succeeds. The method accepts the original cell ID after that cell
-has been replaced or removed from the current graph.
+Pass the handle returned by `start_activity()`. Handles remain strings across a
+JSON round trip. A non-current handle has no effect. A non-string value raises
+`TypeError`, and an empty or oversized value raises `ValueError`. Closing Lens
+before the stop raises `LensError(code="lens_closed")`.
 
-### `lens.reveal(cell_id, *, duration_ms, label=None, message=None) -> None`
+### `lens.reveal(target, *, expected_revision=None, duration_ms, label=None, message=None) -> None`
 
-Validates `cell_id`, then sends a best-effort browser event. When the displayed
-Lens receives it, the notebook scrolls once to the rendered cell and highlights
-it for `duration_ms`.
+Brings one stored selection or notebook cell into view for `duration_ms`.
 
 ```python
 context = lens.context()
 selection = context.current
 
-cell = (
-    next(
-        (cell for cell in selection["cells"] if cell["status"] == "available"),
-        None,
-    )
-    if selection is not None
-    else None
-)
-if cell is not None:
+if selection is not None:
     lens.reveal(
-        cell["id"],
+        selection,
+        expected_revision=context.revision,
         duration_ms=10_000,
         label="Updated chart",
-        message="Updated the aggregation and verified the chart.",
+        message="Updated the aggregation and verified the selected result.",
     )
 ```
 
-`duration_ms` accepts a positive integer up to 300,000 milliseconds. Choose a
-hold that lets the user orient to the highlighted cell and read the message
-comfortably. Longer or denser messages need more time. `label` accepts up to 40
-UTF-16 code units and appears as the reveal heading.
+Selection reveal resolves the same stored `SelectionTarget` used for capture,
+availability, and reattachment. Cell reveal accepts a cell ID string for
+walkthroughs. `expected_revision` follows the same rules as
+`start_activity()`.
 
-Reveal messages accept up to 1,000 UTF-16 code units and wrap below the status
-and cell ID. Reveal preserves keyboard focus and selection state. A second
-reveal replaces the current highlight. Wait for `duration_ms` before revealing
-another cell or resolving the selections addressed by the result.
+`duration_ms` accepts a positive integer up to 300,000 milliseconds. Reveal
+messages accept up to 1,000 UTF-16 code units. `label` accepts up to 40 UTF-16
+code units. Reveal preserves keyboard focus and selection state. A later
+attention event replaces the current presentation.
 
-Expected `LensError.code` values are `runtime_unavailable`, `cell_not_found`,
-and `lens_closed`.
+Wait for `duration_ms` before resolving the addressed selection. The browser
+queues the resolution receipt until reveal exits. Selection and cell targets
+raise the same validation errors listed for `start_activity()`.
 
 ### `lens.resolve(selection_ids, *, expected_revision, summary=None) -> int`
 
@@ -318,7 +309,7 @@ after `LensError(code="revision_conflict")`.
 
 The state change commits before Lens sends the best-effort **Addressed**
 presentation event. A browser delivery failure does not roll back the completed
-selection. When a cell reveal is active, the browser holds the receipt until
+selection. When a reveal is active, the browser holds the receipt until
 the reveal exits so the two presentations remain sequential.
 
 Expected `LensError.code` values are `lens_closed`, `revision_conflict`, and
@@ -347,10 +338,10 @@ Later calls to `context()`, `start_activity()`, `stop_activity()`, `reveal()`, a
 Each compact selection reference includes its stable ID and label, note,
 `target`, producing `cells`, point or region, and annotated image status.
 
-`target.kind` is `notebook` or `dom`. Notebook targets carry one cell ID. DOM
-targets carry the document path, exact DOM selector, and zero or more inferred
-producing cell IDs. Producer IDs are sorted and their order has no semantic
-meaning.
+`target.kind` is `notebook` or `dom`. Both variants carry the originating
+document ID and path. Notebook targets carry one cell ID. DOM targets also
+carry an exact DOM selector and zero or more inferred producing cell IDs.
+Producer IDs are sorted and their order has no semantic meaning.
 
 Each `CellReference` in `cells` contains `id` and `status`. Status is
 `available` when the current graph contains the cell, `missing` when the runtime

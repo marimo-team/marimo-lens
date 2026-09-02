@@ -34,6 +34,33 @@ def test_primary_skill_image_snippet_reads_selection_evidence() -> None:
     assert namespace["cell_png"] is None
 
 
+def test_primary_skill_starts_activity_against_the_selection() -> None:
+    calls: list[tuple[object, ...]] = []
+
+    def start_activity(selection: object, **kwargs: object) -> str:
+        calls.append((selection, kwargs))
+        return "activity-owner"
+
+    mounted = SimpleNamespace(
+        context=_context,
+        start_activity=start_activity,
+    )
+    exec(  # noqa: S102 - Exercise the canonical skill example.
+        _code_mode_block(
+            "skills/marimo-lens/SKILL.md",
+            "## Start meaningful activity",
+        ),
+        {"mounted": mounted},
+    )
+
+    selection, raw_kwargs = calls[0]
+    kwargs = cast(dict[str, object], raw_kwargs)
+    assert cast(dict[str, object], selection)["id"] == "selection-1"
+    assert kwargs["expected_revision"] == 4
+    assert isinstance(kwargs["label"], str) and kwargs["label"]
+    assert isinstance(kwargs["message"], str) and kwargs["message"]
+
+
 def test_code_mode_reference_requests_cell_image_with_saved_revision() -> None:
     calls: list[tuple[str, int]] = []
 
@@ -57,6 +84,43 @@ def test_code_mode_reference_requests_cell_image_with_saved_revision() -> None:
 
     assert namespace["cell_png"] == b"cell-png"
     assert calls == [("cell-view", 4)]
+
+
+def test_code_mode_reference_restores_activity_before_reveal() -> None:
+    calls: list[tuple[object, ...]] = []
+    snapshot = SimpleNamespace(
+        revision=8,
+        references={"selections": [{"id": "243110...", "label": "S1"}]},
+    )
+
+    def stop_activity(activity: str) -> None:
+        calls.append(("stop", activity))
+
+    def reveal(selection: object, **kwargs: object) -> None:
+        calls.append(("reveal", selection, kwargs))
+
+    mounted = SimpleNamespace(
+        context=lambda: snapshot,
+        stop_activity=stop_activity,
+        reveal=reveal,
+    )
+    exec(  # noqa: S102 - Exercise the repository-owned reference example.
+        _code_mode_block(
+            "skills/marimo-lens/reference/workflow.md",
+            "## Present and resolve across calls",
+        ),
+        {"mounted": mounted},
+    )
+
+    assert calls[0][0] == "stop"
+    assert isinstance(calls[0][1], str) and calls[0][1]
+    assert calls[1][0] == "reveal"
+    assert calls[1][1] == {"id": "243110...", "label": "S1"}
+    reveal_kwargs = cast(dict[str, object], calls[1][2])
+    assert reveal_kwargs["expected_revision"] == 8
+    assert reveal_kwargs["duration_ms"] == 8_000
+    assert isinstance(reveal_kwargs["label"], str) and reveal_kwargs["label"]
+    assert isinstance(reveal_kwargs["message"], str) and reveal_kwargs["message"]
 
 
 def test_address_mode_builds_evidence_workset_for_every_selection() -> None:
@@ -91,6 +155,21 @@ def _python_block(relative_path: str, heading: str) -> str:
     return match.group(1)
 
 
+def _code_mode_block(relative_path: str, heading: str) -> str:
+    code = _python_block(relative_path, heading)
+    lines = [
+        line
+        for line in code.splitlines()
+        if line
+        not in {
+            "import marimo._code_mode as cm",
+            "import marimo_lens.agent as lens_agent",
+        }
+        and not line.startswith("mounted = lens_agent.connect(")
+    ]
+    return "\n".join(lines)
+
+
 def _context() -> LensContext:
     return LensContext(
         references={
@@ -103,7 +182,12 @@ def _context() -> LensContext:
                     "id": "selection-1",
                     "label": "S1",
                     "note": "",
-                    "target": {"kind": "notebook", "cellIds": ["cell-view"]},
+                    "target": {
+                        "kind": "notebook",
+                        "cellIds": ["cell-view"],
+                        "documentId": "document-1",
+                        "documentPath": "/",
+                    },
                     "cells": [{"id": "cell-view", "status": "available"}],
                     "anchor": {"kind": "point", "x": 0.5, "y": 0.5},
                     "snapshot": {"status": "outdated"},
@@ -112,7 +196,12 @@ def _context() -> LensContext:
                     "id": "selection-2",
                     "label": "S2",
                     "note": "Check the second mark",
-                    "target": {"kind": "notebook", "cellIds": ["cell-view"]},
+                    "target": {
+                        "kind": "notebook",
+                        "cellIds": ["cell-view"],
+                        "documentId": "document-1",
+                        "documentPath": "/",
+                    },
                     "cells": [{"id": "cell-view", "status": "available"}],
                     "anchor": {"kind": "point", "x": 0.75, "y": 0.5},
                     "snapshot": {"status": "available"},

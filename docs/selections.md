@@ -198,12 +198,12 @@ agent can resolve those selections together after one verified change.
 
 Lens keeps each open selection connected as the document changes:
 
-| Selection detail | What Lens keeps                                                                                                                             |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Label and note   | The `S<n>` label stays stable and is never reused.                                                                                          |
-| Target           | Notebook outputs reconnect by cell ID. DOM targets reconnect by document path and an exact DOM selector.                                  |
+| Selection detail | What Lens keeps                                                                                                                            |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Label and note   | The `S<n>` label stays stable and is never reused.                                                                                         |
+| Target           | An opaque document ID separates same-path documents. The path and cell ID or exact DOM selector reconnect the target within that document. |
 | Producing cells  | A DOM target includes producer IDs inferred from nested `data-runtime-cell-id` metadata.                                                   |
-| Annotated image  | Moving or resizing starts a fresh PNG capture. The previous image remains available and is marked outdated until the new capture succeeds.  |
+| Annotated image  | Moving or resizing starts a fresh PNG capture. The previous image remains available and is marked outdated until the new capture succeeds. |
 
 Cross-origin images and external iframes can block image capture. The selection,
 target reference, producing cells, and note remain available.

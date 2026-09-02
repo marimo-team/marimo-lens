@@ -3,9 +3,9 @@
 `marimo-lens` turns a gesture on a rendered target into a durable selection.
 Notebook targets resolve one output cell. Configured DOM targets keep an exact
 document-scoped selector and zero or more producing cells inferred from nested
-`data-runtime-cell-id` metadata. Point and region geometry narrow attention
-within the target, and an optional marked PNG preserves capture-time visual
-evidence.
+`data-runtime-cell-id` metadata. Both target variants keep their owning document
+ID and path. Point and region geometry narrow attention within the target, and
+an optional marked PNG preserves capture-time visual evidence.
 
 The [package README](../packages/marimo-lens/README.md) owns the public Python
 contract. This document owns package direction, state authority, private
@@ -72,7 +72,7 @@ no notebook graph work.
 | Shared snapshot preview read                   | Browser `SelectionSnapshotLoader` | While a preview holds a lease                       |
 | Agent output-capture slot                      | Python `OutputCaptureSlot`        | Until byte read, timeout, supersession, or teardown |
 | Active output raster                           | Browser output-capture transport  | Until reply, timeout, replacement, or teardown      |
-| Cell activity, reveal, and receipt display     | Browser transient effects         | Until replacement, presentation end, or teardown    |
+| Target activity, reveal, and receipt display   | Browser transient effects         | Until replacement, presentation end, or teardown    |
 | Request interpretation and notebook edits      | Agent client                      | Agent task                                          |
 
 The synchronized `_state` trait projects open selections, addressed History,
@@ -106,9 +106,10 @@ image outdated and starts replacement capture. A failed replacement retains the
 outdated image.
 
 A detached target keeps its target reference, note, anchor, image, and actions.
-Notebook targets reconnect by cell ID. DOM targets reconnect through their
-document path and exact selector. Removing the current selection promotes the
-most recently active remaining selection.
+Notebook targets reconnect within the same document by path and cell ID. DOM
+targets reconnect within the same document through their path and exact
+selector. Removing the current selection promotes the most recently active
+remaining selection.
 
 Resolve validates one or more selection IDs against one expected revision,
 then releases their marked PNGs and appends their addressed receipts in one
@@ -201,20 +202,32 @@ when its image reader requires a path.
 
 ## Agent feedback
 
-`Lens.start_activity()` and `Lens.reveal()` validate exact graph membership,
-preserve selection state, and send best-effort events. `Lens.stop_activity()`
-targets the activity cell even after that cell leaves the graph.
+`Lens.start_activity()` and `Lens.reveal()` accept an explicit cell ID or a
+stored `SelectionReference`. Cell addresses validate exact graph membership.
+Selection addresses validate the stored selection and captured revision, then
+send its selection ID and revision. The browser resolves the trusted
+`SelectionTarget` from synchronized state.
 
 Activity keeps the current scroll position for a visible target and frames an
 offscreen or near-top target. Target growth can trigger a corrective reframe.
 A framing attempt that leaves the target offscreen settles to a quiet dock
 notice. Activity remains until a matching stop, later activity, reveal, or
-teardown replaces it. A short
-caller-supplied label describes the current task or result. Reveal replaces the
-active presentation, scrolls once, and exits after the caller-supplied hold.
-Python validates and sends the label and duration with every reveal event, and
-the browser uses them for presentation. Both use one cell-attention controller
-and position their label above the target cell at its top-right edge.
+teardown replaces it. Each start returns a JSON-safe `ActivityHandle` with one
+opaque owner ID. Stop carries that owner ID, so a delayed stop from an older
+operation cannot clear newer activity. A short caller-supplied label describes
+the current task or result.
+
+Selection attention resolves through `NotebookDomAdapter.getTarget()` on every
+layout change. A temporarily unavailable target produces a bounded notice in
+its owning document and reattaches when the surface returns. A document that
+does not own the target ignores its presentation. Cell attention retains the
+canonical notebook walkthrough path.
+
+Reveal replaces the active presentation, scrolls once, and exits after the
+caller-supplied hold. Python validates and sends the label and duration with
+every reveal event, and the browser uses them for presentation. Both use one
+target-attention controller and position their label above the target at its
+top-right edge.
 
 Resolution commits one durable state transition before sending its best-effort
 browser receipt. One receipt event can represent every selection in an atomic
@@ -225,14 +238,14 @@ failure never rolls back the committed selections.
 
 `NotebookDomAdapter` derives its document and window from the widget element's
 `ownerDocument`. It owns output lookup, portals, focus restoration, viewport
-work, cell attention, and layout observation.
+work, target attention, and layout observation.
 
 `output-root-rules.ts` maps notebook hosts to exact cell IDs.
 `selection-target.ts` composes notebook outputs with one configured DOM
 selector. Configured roots outrank nested notebook renderer roots. Selection,
 marked capture, availability, and layout observation consume the same resolved
-target element. Agent-requested full-cell capture and cell attention continue
-to use canonical notebook outputs.
+target element. Agent-requested full-cell capture and cell-addressed attention
+continue to use canonical notebook outputs.
 
 Gesture targeting attaches to the active document, same-origin iframe
 documents, and open shadow roots. One shared layout subscription coordinates
@@ -247,12 +260,14 @@ after teardown. Another document has an independent owner registry.
 
 Python and the browser exchange Lens messages through the AnyWidget custom
 message channel. Commands, responses, and events carry a protocol
-discriminator, version 3, a type, and a bounded payload. Correlated requests
+discriminator, version 4, a type, and a bounded payload. Correlated requests
 also carry a request ID.
 
 Selection and History mutations carry `expectedRevision`. A selection target is
-`notebook` or `dom` and carries its bounded producing cell IDs. DOM targets also
-carry a document path and exact DOM selector. Python validates
+`notebook` or `dom` and carries its owning document ID, document path, and
+bounded producing cell IDs. DOM targets also carry an exact DOM selector. Attention events use a
+tagged address with either a cell ID or a stored selection ID and revision.
+Activity start and stop events share one opaque activity ID. Python validates
 buffer cardinality before accepting image bytes. Selection image replacement
 commands, snapshot responses, and successful full-cell captures carry one PNG
 buffer. Other Lens messages carry none. Python and TypeScript schemas must
@@ -266,13 +281,13 @@ discriminator. The Lens parser ignores them.
 Lens keeps host-specific behavior behind narrow seams that can be replaced by
 native marimo or anywidget contracts.
 
-| Capability                   | Lens seam                                                                                             |
-| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Widget-aware disposal        | `Lens._bind_comm_close()`                                                                             |
-| Native control state         | `_marimo_control_state.py`                                                                            |
-| Exact-cell navigation        | `packages/widget/src/notebook/notebook-dom.tsx` and `packages/widget/src/transient/cell-attention.ts` |
-| Canonical output capture     | `packages/widget/src/notebook/output-root.ts`, `NotebookDomAdapter`, and `@marimo-lens/image-capture` |
-| Browser-to-Python invocation | `packages/widget/src/anywidget/request-client.ts`                                                     |
+| Capability                   | Lens seam                                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| Widget-aware disposal        | `Lens._bind_comm_close()`                                                                               |
+| Native control state         | `_marimo_control_state.py`                                                                              |
+| Target navigation            | `packages/widget/src/notebook/notebook-dom.tsx` and `packages/widget/src/transient/target-attention.ts` |
+| Canonical output capture     | `packages/widget/src/notebook/output-root.ts`, `NotebookDomAdapter`, and `@marimo-lens/image-capture`   |
+| Browser-to-Python invocation | `packages/widget/src/anywidget/request-client.ts`                                                       |
 
 Native adoption should replace one seam at a time while preserving the public
 Python API and the remaining transport contracts.

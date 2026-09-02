@@ -86,8 +86,8 @@ Unqualified Python filenames in this table live in
 
 - A configured target is the semantic unit. Notebook targets resolve one output
   cell. DOM targets keep a document-scoped selector and producer IDs inferred
-  from generic runtime metadata. A point or region narrows attention inside the
-  target.
+  from generic runtime metadata. Both variants keep the owning document ID and
+  path. A point or region narrows attention inside the target.
 - Human selections are durable. Activity and reveal are transient. Resolve
   moves one or more completed selections into bounded metadata-only History,
   and reopen restores the original attention with fresh marked PNG capture.
@@ -96,7 +96,7 @@ Unqualified Python filenames in this table live in
 - PNG bytes stay outside trait state, JSON references, local storage, and text
   prompts. Full-cell capture is a one-use agent transfer.
 - Selection mutations are revision checked. Python and TypeScript transport
-  schemas remain aligned at protocol version 3.
+  schemas remain aligned at protocol version 4.
 
 ## Validation
 

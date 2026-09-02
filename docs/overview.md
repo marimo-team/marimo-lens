@@ -41,6 +41,7 @@ from marimo_lens import Lens
 
 get_overview_revision, set_overview_revision = mo.state(0)
 get_overview_action, set_overview_action = mo.state(None)
+get_overview_activity, set_overview_activity = mo.state(None)
 
 _overview_api_icons = {
     "context": (
@@ -98,7 +99,7 @@ overview_start_button = mo.ui.run_button(
     label=_overview_api_label(
         _overview_api_icons["start"],
         "start_activity()",
-        "Mark the current work cell.",
+        "Mark the selected target.",
     ),
     tooltip="Call start_activity()",
     full_width=True,
@@ -277,14 +278,6 @@ _overview_method = next(
 if _overview_method is not None:
     _overview_method_context = overview_lens.context()
     _overview_method_current = _overview_method_context.current
-    _overview_method_cell = next(
-        (
-            str(_cell["id"])
-            for _cell in (_overview_method_current or {}).get("cells", [])
-            if _cell.get("status") == "available"
-        ),
-        "",
-    )
     if _overview_method == "context":
         set_overview_action(
             {
@@ -292,7 +285,26 @@ if _overview_method is not None:
                 "revision": _overview_method_context.revision,
             }
         )
-    elif _overview_method_current is None or not _overview_method_cell:
+    elif _overview_method == "stop_activity":
+        _overview_activity = get_overview_activity()
+        if _overview_activity is None:
+            set_overview_action(
+                {
+                    "kind": "missing",
+                    "method": _overview_method,
+                    "revision": _overview_method_context.revision,
+                }
+            )
+        else:
+            overview_lens.stop_activity(_overview_activity)
+            set_overview_activity(None)
+            set_overview_action(
+                {
+                    "kind": "stop_activity",
+                    "revision": _overview_method_context.revision,
+                }
+            )
+    elif _overview_method_current is None:
         set_overview_action(
             {
                 "kind": "missing",
@@ -301,28 +313,23 @@ if _overview_method is not None:
             }
         )
     elif _overview_method == "start_activity":
-        overview_lens.start_activity(
-            _overview_method_cell,
+        _overview_activity = overview_lens.start_activity(
+            _overview_method_current,
+            expected_revision=_overview_method_context.revision,
             label="Reviewing selected chart",
             message="Checking the selected result",
         )
+        set_overview_activity(_overview_activity)
         set_overview_action(
             {
                 "kind": "start_activity",
                 "revision": _overview_method_context.revision,
             }
         )
-    elif _overview_method == "stop_activity":
-        overview_lens.stop_activity(_overview_method_cell)
-        set_overview_action(
-            {
-                "kind": "stop_activity",
-                "revision": _overview_method_context.revision,
-            }
-        )
     elif _overview_method == "reveal":
         overview_lens.reveal(
-            _overview_method_cell,
+            _overview_method_current,
+            expected_revision=_overview_method_context.revision,
             duration_ms=8_000,
             label="Selected result",
             message="Returned the selected result for review.",
@@ -421,7 +428,7 @@ elif _overview_kind == "context":
             f"{_overview_details}"
         )
 elif _overview_kind == "start_activity":
-    _overview_title = "Activity is visible on the work cell"
+    _overview_title = "Activity is visible on the selected target"
     _overview_body = (
         "<code>start_activity()</code> marks where the agent is working."
         f"{_overview_details}"
@@ -464,9 +471,8 @@ mo.Html(
 
 </div>
 
-Each card calls the method printed on it. A real agent uses code mode between
-`start_activity()` and `stop_activity()` to inspect, edit, run, and verify
-notebook cells.
+Each card calls the method printed on it. A real agent keeps the activity handle
+while code mode inspects, edits, runs, and verifies the producing cells.
 
 ## What the agent receives
 
