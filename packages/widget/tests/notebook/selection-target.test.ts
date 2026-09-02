@@ -184,6 +184,9 @@ describe("selection targets", () => {
   });
 
   test("requires both the originating document ID and path", () => {
+    const section = visible(document.createElement("section"));
+    section.id = "forecast-summary";
+    document.body.appendChild(section);
     const current = {
       kind: "dom" as const,
       cellIds: [],
@@ -191,6 +194,7 @@ describe("selection targets", () => {
       documentPath: document.location.pathname || "/",
       domSelector: "#forecast-summary",
     };
+    expect(getTargetSurface(document, current, "*")?.element).toBe(section);
 
     for (const target of [
       { ...current, documentId: "another-document" },
@@ -199,6 +203,25 @@ describe("selection targets", () => {
       expect(targetBelongsToDocument(target, document)).toBe(false);
       expect(getTargetSurface(document, target, "*")).toBeNull();
     }
+  });
+
+  test("creates a stable document identity when randomUUID is unavailable", () => {
+    const frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+    const ownerDocument = frame.contentDocument!;
+    const ownerWindow = frame.contentWindow!;
+    Object.defineProperty(ownerWindow.crypto, "randomUUID", {
+      configurable: true,
+      value: undefined,
+    });
+    const section = visible(ownerDocument.createElement("section"));
+    section.dataset.feedbackTarget = "";
+    ownerDocument.body.appendChild(section);
+
+    const surface = targetFromElement(section, "[data-feedback-target]");
+
+    expect(surface?.element).toBe(section);
+    expect(documentIdentity(ownerDocument)).toBe(surface?.target.documentId);
   });
 
   test("skips roots whose exact selector cannot fit the protocol", () => {

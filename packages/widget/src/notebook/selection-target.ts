@@ -271,7 +271,10 @@ export function documentIdentity(ownerDocument: Document): string {
   if (existing) return existing;
   const ownerWindow = ownerDocument.defaultView;
   if (!ownerWindow) throw new Error("Lens requires a browser window");
-  const created = `document:${ownerWindow.crypto.randomUUID()}`;
+  const id =
+    ownerWindow.crypto.randomUUID?.() ??
+    `${ownerWindow.Date.now().toString(36)}-${ownerWindow.Math.random().toString(36).slice(2, 10)}`;
+  const created = `document:${id}`;
   DOCUMENT_IDS.set(ownerDocument, created);
   return created;
 }
