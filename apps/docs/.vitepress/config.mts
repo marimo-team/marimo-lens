@@ -82,6 +82,8 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     footer: {
+      message:
+        'marimo-lens is a collaboration of <a href="https://marimo.io/" target="_blank" rel="noopener noreferrer">Marimo Team</a>, <a href="https://ivia.ethz.ch/" target="_blank" rel="noopener noreferrer">ETH Zurich IVIA Lab</a>, and <a href="https://dig.cmu.edu/team" target="_blank" rel="noopener noreferrer">CMU Data Interaction Group</a>.',
       copyright:
         "Released under the Apache 2.0 License. Copyright © 2026-Present marimo-lens maintainers.",
     },
