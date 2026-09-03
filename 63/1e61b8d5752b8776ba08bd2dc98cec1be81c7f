@@ -1,0 +1,20 @@
+README.md
+  s_1e9dc2d1bdf5ac::t_7b8510240b4925 12-13
+  s_1e9dc2d1bdf5ac::t_8e31c626c845cb 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "631e61b8d5752b8776ba08bd2dc98cec1be81c7f",
+  "prompts": {},
+  "sessions": {
+    "s_1e9dc2d1bdf5ac": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a066a6-a029-7be1-b403-e0a7d4b961a7",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
