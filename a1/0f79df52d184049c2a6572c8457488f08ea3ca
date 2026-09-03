@@ -1,0 +1,21 @@
+docs/why-lens.md
+  s_858a29c052572a::t_b64d85dd570164 16-17
+  s_858a29c052572a::t_281f49cdaa086c 9-11,13
+  s_858a29c052572a::t_3ef8b93ecaaf05 8,12,14-15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a10f79df52d184049c2a6572c8457488f08ea3ca",
+  "prompts": {},
+  "sessions": {
+    "s_858a29c052572a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a066ba-2041-7531-a76b-ebb93dc77f60",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
