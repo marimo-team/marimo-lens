@@ -438,10 +438,16 @@ if _overview_kind == "empty":
     _overview_body = "Press <strong>Select</strong>, mark one bar, and add a note."
 elif _overview_kind == "missing":
     _overview_missing_method = escape(str(_overview_action["method"]))
-    _overview_title = "Mark the chart first"
-    _overview_body = (
-        f"<code>{_overview_missing_method}()</code> needs an available selection."
-    )
+    if _overview_missing_method == "stop_activity":
+        _overview_title = "No activity to stop"
+        _overview_body = (
+            "Call <code>start_activity()</code> before <code>stop_activity()</code>."
+        )
+    else:
+        _overview_title = "Mark the chart first"
+        _overview_body = (
+            f"<code>{_overview_missing_method}()</code> needs an available selection."
+        )
 elif _overview_kind == "context":
     if _overview_current is None:
         _overview_title = "No selection yet"
