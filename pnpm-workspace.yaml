@@ -21,6 +21,7 @@ catalog:
   lucide-react: 1.24.0
   oxlint: 1.76.0
   oxlint-tsgolint: 7.0.2001
+  portless: 0.15.5
   react: ^19.2.7
   react-dom: ^19.2.7
   typescript: ^6.0.3

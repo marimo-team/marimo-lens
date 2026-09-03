@@ -155,9 +155,12 @@ Serve with live reload:
 make docs-serve
 ```
 
-This target serves `http://127.0.0.1:55173/` and removes `BASE_PATH` from the
-process so local development uses `/`. It exits when port `55173` is already in
-use.
+[Portless](https://portless.sh/) assigns the server port and prints a stable
+`.localhost` URL. With the default HTTPS proxy, the main checkout uses
+`https://docs.marimo-lens.localhost/`, while linked worktrees add the branch
+name as a subdomain. Portless may request administrator access on first use to
+trust its local certificate and bind port `443`. The target removes `BASE_PATH`
+from the process so local development uses `/`.
 
 Build the default site:
 

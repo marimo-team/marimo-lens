@@ -13,6 +13,7 @@ const basePath = baseName ? `/${baseName}` : "";
 const publicDir = fileURLToPath(new URL("../public", import.meta.url));
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const publicPath = (path: string): string => `${basePath}${path}`;
+const devPort = process.env.PORT ? Number(process.env.PORT) : undefined;
 // The plugin appends VitePress's base path when it builds Markdown URLs.
 const llmsDomain = basePath ? new URL(siteUrl).origin : siteUrl.replace(/\/$/, "");
 // SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
@@ -204,6 +205,11 @@ export default defineConfig({
       }),
     ],
     publicDir,
+    server: {
+      host: "127.0.0.1",
+      port: devPort,
+      strictPort: devPort !== undefined,
+    },
   },
   vue: {
     template: {
