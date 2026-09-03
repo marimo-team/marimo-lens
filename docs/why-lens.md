@@ -24,9 +24,14 @@ region that drew attention, and the analyst's note as one selection.
 
 ## The agent needs to know how it was made
 
-A marked output tells the agent where the analyst looked. It does not identify
-the cell that produced the chart or the upstream data that shaped the result.
-The agent needs that lineage to investigate the question in the live notebook.
+A marked output tells the agent where the analyst looked, but not which data
+and transformations produced what they see. To answer from the notebook's data
+and computation, the agent needs a route to the producing cell, its relevant
+upstream cells, and the data flowing through them.
+
+That lineage also helps the agent find the right place to change. Feedback
+attached to a chart may belong in the backing dataset or an earlier analytical
+step, while the chart code remains unchanged.
 
 marimo represents relationships between cells as a
 [dataflow graph](https://docs.marimo.io/guides/editor_features/dataflow/), which
@@ -40,7 +45,7 @@ Lens calls this **computational grounding**. It gives the agent a focused place
 to inspect the live notebook, test the analyst's question, and revise the
 analysis.
 
-## One question, two forms of grounding
+## Connecting attention to computation
 
 Visual grounding answers, “What does the person mean?” Computational grounding
 answers, “Where did this result come from?” Lens keeps both with the same
