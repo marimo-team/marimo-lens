@@ -154,7 +154,9 @@ Serve with live reload:
 make docs-serve
 ```
 
-This target removes `BASE_PATH` from the process so local development uses `/`.
+This target serves `http://127.0.0.1:55173/` and removes `BASE_PATH` from the
+process so local development uses `/`. It exits when port `55173` is already in
+use.
 
 Build the default site:
 

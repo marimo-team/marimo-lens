@@ -14,6 +14,9 @@ Serve with hot reload from the repository root:
 make docs-serve
 ```
 
+The development server listens at `http://127.0.0.1:55173/` and exits when that
+port is already in use.
+
 Build the static site:
 
 ```sh
