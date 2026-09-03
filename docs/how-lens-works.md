@@ -27,14 +27,9 @@ dependencies = [
 
 ```python marimo output=false
 from html import escape
-import inspect
 
 import marimo as mo
 from marimo_lens import Lens
-
-supports_overview_selection_feedback = (
-    "expected_revision" in inspect.signature(Lens.start_activity).parameters
-)
 
 get_overview_revision, set_overview_revision = mo.state(0)
 get_overview_action, set_overview_action = mo.state(None)
@@ -323,21 +318,12 @@ if _overview_method is not None:
             }
         )
     elif _overview_method == "start_activity":
-        if supports_overview_selection_feedback:
-            _overview_activity = overview_lens.start_activity(
-                _overview_method_current,
-                expected_revision=_overview_method_context.revision,
-                label="Reviewing selected chart",
-                message="Checking the selected result",
-            )
-        else:
-            _overview_cell_id = str(_overview_method_current["cells"][0]["id"])
-            overview_lens.start_activity(
-                _overview_cell_id,
-                label="Reviewing selected chart",
-                message="Checking the selected result",
-            )
-            _overview_activity = _overview_cell_id
+        _overview_activity = overview_lens.start_activity(
+            _overview_method_current,
+            expected_revision=_overview_method_context.revision,
+            label="Reviewing selected chart",
+            message="Checking the selected result",
+        )
         set_overview_activity(_overview_activity)
         set_overview_action(
             {
@@ -346,21 +332,13 @@ if _overview_method is not None:
             }
         )
     elif _overview_method == "reveal":
-        if supports_overview_selection_feedback:
-            overview_lens.reveal(
-                _overview_method_current,
-                expected_revision=_overview_method_context.revision,
-                duration_ms=8_000,
-                label="Selected result",
-                message="Returned the selected result for review.",
-            )
-        else:
-            overview_lens.reveal(
-                str(_overview_method_current["cells"][0]["id"]),
-                duration_ms=8_000,
-                label="Selected result",
-                message="Returned the selected result for review.",
-            )
+        overview_lens.reveal(
+            _overview_method_current,
+            expected_revision=_overview_method_context.revision,
+            duration_ms=8_000,
+            label="Selected result",
+            message="Returned the selected result for review.",
+        )
         set_overview_action(
             {
                 "kind": "reveal",
@@ -369,7 +347,7 @@ if _overview_method is not None:
         )
     else:
         _overview_resolved_revision = overview_lens.resolve(
-            str(_overview_method_current["id"]),
+            _overview_method_current["id"],
             expected_revision=_overview_method_context.revision,
             summary="Addressed the selected request.",
         )
