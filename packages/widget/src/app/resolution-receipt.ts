@@ -7,6 +7,7 @@ import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import type { UiAction } from "@/selection/state";
 import type { TargetAttentionKind } from "@/transient/target-attention";
 
+import { targetBelongsToDocument } from "@/notebook/selection-target";
 import { focusSelectionOrDock } from "@/ui/focus";
 
 type ResolutionReceiptOptions = {
@@ -84,36 +85,47 @@ export function useResolutionReceipt(options: ResolutionReceiptOptions): Resolut
     );
   }, []);
 
-  const reconciled =
-    queued &&
-    state.revision >= queued.revision &&
-    queued.payload.selections.every(
-      (resolved) =>
-        !state.selections.some(({ id }) => id === resolved.selectionId) &&
-        state.history.some(
-          (candidate) =>
-            candidate.selectionId === resolved.selectionId &&
-            candidate.resolutionRevision === resolved.resolutionRevision,
-        ),
-    )
-      ? queued
-      : null;
-
   useEffect(() => {
-    if (!reconciled) return;
-    setReceipt(reconciled);
-    setQueued((current) => (current === reconciled ? null : current));
+    if (!queued || state.revision < queued.revision) return;
+    const receipts = queued.payload.selections.map((resolved) =>
+      state.history.find(
+        (candidate) =>
+          candidate.selectionId === resolved.selectionId &&
+          candidate.resolutionRevision === resolved.resolutionRevision,
+      ),
+    );
+    if (
+      receipts.some((candidate) => candidate === undefined) ||
+      queued.payload.selections.some((resolved) =>
+        state.selections.some(({ id }) => id === resolved.selectionId),
+      )
+    ) {
+      return;
+    }
+    setQueued((current) => (current === queued ? null : current));
+    const ownedSelections = queued.payload.selections.filter((_, index) => {
+      const receipt = receipts[index];
+      return receipt !== undefined && targetBelongsToDocument(receipt.target, dom.document);
+    });
+    const documentReceipt =
+      ownedSelections.length === 0
+        ? null
+        : {
+            ...queued,
+            payload: { ...queued.payload, selections: ownedSelections },
+          };
+    if (documentReceipt) setReceipt(documentReceipt);
     const pendingFocus = focus.current;
     if (
-      pendingFocus?.revision === reconciled.revision &&
+      pendingFocus?.revision === queued.revision &&
       pendingFocus.element &&
       (dom.document.activeElement === pendingFocus.element ||
         (!pendingFocus.element.isConnected && dom.document.activeElement === dom.document.body))
     ) {
       focusSelectionOrDock(dom, state.currentSelectionId ?? pendingFocus.selectionId);
     }
-    if (pendingFocus?.revision === reconciled.revision) focus.current = null;
-  }, [dom, reconciled, state.currentSelectionId]);
+    if (pendingFocus?.revision === queued.revision) focus.current = null;
+  }, [dom, queued, state]);
 
   useEffect(() => {
     if (!receipt || suspended || presentedRevision.current === receipt.revision) return;
