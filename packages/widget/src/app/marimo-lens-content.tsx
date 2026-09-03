@@ -96,7 +96,7 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
   });
   const { invalidateSnapshotCapture, settleUnavailableSnapshot } = actions;
   useOutputCapture(model.protocol, dom, dependencies.captureOutputSnapshot);
-  const targetAttention = useTargetAttention(model.protocol, dom, stateRef, model.selector);
+  const targetAttention = useTargetAttention(model.protocol, dom, model.state, model.selector);
   const [targetAttentionLabel, setTargetAttentionLabel] = useState<{
     sequence: number;
     height: number;
