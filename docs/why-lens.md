@@ -1,116 +1,59 @@
 ---
 title: Why Lens?
-description: How Lens connects a visible notebook question to computation an agent can change and evidence a person can review.
+description: How Lens connects what a person notices in a notebook output to the computation an agent can inspect and change.
 ---
 
 # Why Lens?
 
-A person looking at a chart can point to one spike and ask, “What happened
-here?” The point makes “here” obvious to the person. A notebook agent works
-through cells, dependencies, values, and execution, so it also needs a route
-from that visible spike to the computation that produced it.
+A notebook result has two relevant views. A person sees the rendered result and
+points to what matters. An agent works through the cells, dependencies, and
+values that produced it. Lens keeps the visible question and its producing
+computation connected.
 
-Lens keeps both views connected. The selection preserves what drew the person's
-attention. The notebook graph gives the agent a place to inspect and act. Lens
-then brings the result back into view so the person can judge what happened and
-decide what to ask next.
+## A person starts from what they see
 
-::: details A name for “this” and “here”
+An analyst is exploring annual counts of public-domain drawings. The 1937 bar
+stands out, so they select it and ask whether the spike comes from a few
+prolific creators or is distributed across many.
 
-Words such as “this” and “here” depend on the situation in which someone uses
-them. This kind of reference is called
-[deixis](https://doi.org/10.1109/TVCG.2024.3456351). A point or region gives the
-words a visible referent. A note explains what the person wants to know or
-change.
+![An analyst selects the tallest bar in a chart of annual drawing counts and asks whether a few prolific creators or many creators caused the spike.](./assets/why-lens/visual-grounding.png)
 
-Lens stores the mark and note together as a selection, so the reference remains
-inspectable after the pointer gesture ends.
+The chart, selected bar, and question preserve what the analyst means. Lens
+calls this **visual grounding**. It records the rendered target, the point or
+region that drew attention, and the analyst's note as one selection.
 
-:::
+## An agent starts from how it was made
 
-## One notebook question has two views
+The agent needs a route from the selected output back to the notebook code and
+data that produced it. marimo represents relationships between cells as a
+[dataflow graph](https://docs.marimo.io/guides/editor_features/dataflow/), which
+records how variables flow from one cell to another. Lens uses this graph to
+identify the producing cell and a bounded set of relevant upstream cells.
 
-For a notebook output, the person and agent need different information about
-the same question:
+![A bounded lineage connects source data to a derived view and the selected output while leaving another output outside the path.](./assets/why-lens/computational-grounding.png)
 
-| Human view                              | Agent view                                                    |
-| --------------------------------------- | ------------------------------------------------------------- |
-| The rendered target                     | The producing cell                                            |
-| The point or region that drew attention | Relevant upstream cells in the dependency graph               |
-| The person's note                       | Bounded notebook code and eligible control values             |
-| A selection image when capture succeeds | A current cell-output image when visual verification needs it |
+Lens calls this **computational grounding**. It gives the agent a focused place
+to inspect the live notebook, test the analyst's question, and revise the
+analysis.
 
-The human view answers, “What do you mean?” Lens calls this **visual
-grounding**. The agent view answers, “Where did this result come from?” Lens
-calls this **computational grounding**.
+## One question, two forms of grounding
 
-These terms describe a relationship, not additional API objects. A
-`SelectionReference` carries the target, point or region, note, and producing
-cell IDs when the target has them. `LensContext.text` adds bounded source and
-runtime context from those cells and their relevant upstream dependencies.
-Available image evidence keeps the marked view beside that computation.
+Visual grounding answers, “What does the person mean?” Computational grounding
+answers, “Where did this result come from?” Lens keeps both with the same
+selection, turning a phrase such as “this bar” into a request tied to visible
+evidence and notebook computation.
 
-Consider the spike again. Its location distinguishes one part of the chart. Its
-producing cell identifies the code that created the chart. Upstream cells show
-how the relevant data reached that code. The note tells the agent whether to
-explain the spike, test a hypothesis, or change the result.
+The two forms stay connected through a short collaboration loop:
 
-## Point, revise, review
+1. **Point and ask.** The person marks visible evidence and states the question.
+2. **Inspect and revise.** The agent follows the relevant notebook context,
+   verifies its interpretation, and changes the live notebook when needed.
+3. **Review and continue.** Lens brings the result back into view. The person
+   judges the evidence and directs the next question.
 
-<div class="lens-mental-model" role="img" aria-label="A person points and asks. Lens connects the selection to notebook computation. An agent revises the notebook. Lens returns evidence. The person reviews the result and can ask again.">
-  <div><strong>Point and ask</strong><span>The person marks visible evidence and states the question.</span></div>
-  <span aria-hidden="true">→</span>
-  <div><strong>Connect</strong><span>Lens links the selection to its producing computation.</span></div>
-  <span aria-hidden="true">→</span>
-  <div><strong>Revise</strong><span>The agent changes cells, and marimo reruns affected results.</span></div>
-  <span aria-hidden="true">→</span>
-  <div><strong>Return evidence</strong><span>Lens brings the relevant result into view.</span></div>
-  <span aria-hidden="true">→</span>
-  <div><strong>Review and continue</strong><span>The person judges the evidence and directs the next step.</span></div>
-</div>
-
-<llm-only>
-
-1. The person marks visible evidence and states the question.
-2. Lens connects the selection to its producing computation.
-3. The agent changes cells, and marimo reruns affected results.
-4. Lens brings the relevant result into view.
-5. The person judges the evidence and directs the next step.
-
-</llm-only>
-
-The person owns analytical direction and judgment. The agent extends the
-person's computational reach by inspecting and revising the live notebook. Lens
-carries the visible reference into that work and returns the resulting evidence
-to the notebook.
-
-This division of roles keeps the interaction inspectable. Activity shows where
-the agent is working. Reveal brings a verified result into view. Resolution
-records which selections the agent addressed. History gives the person a review
-point that can be reopened when the result needs another pass.
-
-## Review is part of the analysis
-
-`resolve()` records that the agent addressed an Open selection. The person
-still decides whether the returned evidence answers the question. Reopening
-restores the mark and note when the target is available, which lets the person
-inspect the result again, refine the question, or redirect the work.
-
-Each returned notebook result can also become the target of another selection.
-The person can review and redirect the analysis between questions while keeping
-each question linked to visible evidence and notebook computation.
-
-## Grounding sets a starting point
-
-Lens preserves the target, mark, note, producing-cell identity, and bounded
-graph context. The agent still interprets what the person means within the
-selected region, and it may need to inspect more of the notebook when relevant
-information falls outside the context bounds.
-
-A notebook can also change before a selection is reopened. Check that the mark
-still refers to the intended visual feature before continuing the analysis.
-Grounding makes the request and handoff inspectable. Analytical correctness
-still depends on agent verification and human review.
+Grounding gives the agent a starting point. The agent still has to interpret
+the selected region and verify its work. The person still decides whether the
+result answers the question.
 
 ## Continue
 
