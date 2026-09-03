@@ -6,9 +6,9 @@ description: How Lens connects what a person notices in a notebook output to the
 # Why Lens?
 
 A notebook result has two relevant views. A person sees the rendered result and
-points to what matters. An agent works through the cells, dependencies, and
-values that produced it. Lens keeps the visible question and its producing
-computation connected.
+points to what matters. An agent needs the cells, dependencies, and values that
+produced it. Lens connects the visible question to that structured notebook
+context.
 
 ## A person starts from what they see
 
@@ -22,13 +22,17 @@ The chart, selected bar, and question preserve what the analyst means. Lens
 calls this **visual grounding**. It records the rendered target, the point or
 region that drew attention, and the analyst's note as one selection.
 
-## An agent starts from how it was made
+## The agent needs to know how it was made
 
-The agent needs a route from the selected output back to the notebook code and
-data that produced it. marimo represents relationships between cells as a
+A marked output tells the agent where the analyst looked. It does not identify
+the cell that produced the chart or the upstream data that shaped the result.
+The agent needs that lineage to investigate the question in the live notebook.
+
+marimo represents relationships between cells as a
 [dataflow graph](https://docs.marimo.io/guides/editor_features/dataflow/), which
-records how variables flow from one cell to another. Lens uses this graph to
-identify the producing cell and a bounded set of relevant upstream cells.
+records how variables flow from one cell to another. Lens connects the
+selection to this graph, identifying the producing cell and a bounded set of
+relevant upstream cells.
 
 ![A bounded lineage connects source data to a derived view and the selected output while leaving another output outside the path.](./assets/why-lens/computational-grounding.png)
 
