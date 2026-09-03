@@ -1,0 +1,29 @@
+pnpm-workspace.yaml
+  s_c3c15cac71ab98::t_08f2ed877b71a9 24
+development_docs/documentation.md
+  s_c3c15cac71ab98::t_b8baa7a3623830 158,160
+  s_c3c15cac71ab98::t_8d8f2d3cc1b674 159,161-163
+Makefile
+  s_c3c15cac71ab98::t_b8baa7a3623830 21
+apps/docs/.vitepress/config.mts
+  s_c3c15cac71ab98::t_b8baa7a3623830 16,208-212
+apps/docs/package.json
+  s_c3c15cac71ab98::t_08f2ed877b71a9 16
+  s_c3c15cac71ab98::t_b8baa7a3623830 8-9,22-25
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b7927749078afb902d633861f5c8619dabbba57f",
+  "prompts": {},
+  "sessions": {
+    "s_c3c15cac71ab98": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06772-967a-7f00-b6e5-8d1cec126696",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
