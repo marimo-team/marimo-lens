@@ -1,20 +1,30 @@
 ---
 title: Getting started
-description: Mount Lens in a marimo notebook and create a visual request for an agent.
+description: Mount Lens in a marimo notebook and create the first selection.
 ---
 
 # Getting started
 
-Mount Lens in a marimo notebook, create one visual request, and inspect the
-context available to a code-mode agent.
+Mount Lens in a [marimo](https://marimo.io/) notebook, create one selection,
+and inspect the context available to a code-mode agent.
+
+## Prerequisites
+
+Use Python 3.10 through 3.14 and [uv](https://docs.astral.sh/uv/). The first
+`uvx` run downloads marimo and Lens. See [Compatibility](./compatibility) when
+adding Lens to an existing environment.
+
+<llm-exclude>
 
 ```marimo-config
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 dependencies = [
     "marimo",
     "marimo-lens",
 ]
 ```
+
+</llm-exclude>
 
 ## Start a notebook
 
@@ -24,7 +34,8 @@ Open a local notebook with Lens installed:
 uvx --with marimo-lens marimo edit notebook.py
 ```
 
-This command creates an isolated environment for marimo and Lens.
+This command creates an isolated environment for marimo and Lens, then opens
+the notebook editor.
 
 ::: details Use an existing uv project
 
@@ -70,6 +81,12 @@ Keep this cell mounted. Lens adds its dock to the bottom of the notebook and
 makes rendered output cells selectable.
 
 ## Create a selection
+
+Press **Select**, click one rendered location, and add a note such as “Make
+these values easier to compare.” The new `S<n>` selection appears in **Open**
+with its notebook target and producing cell.
+
+<llm-exclude>
 
 <div class="lens-doc-demo">
 
@@ -165,7 +182,7 @@ else:
       <dl class="lens-doc-demo-context">
         <div><dt>Requested change</dt><dd>{_starter_note}</dd></div>
         <div><dt>Producing cell</dt><dd><code>{_starter_cell}</code></dd></div>
-        <div><dt>Annotated image</dt><dd>{_starter_image_status}</dd></div>
+        <div><dt>Selection image</dt><dd>{_starter_image_status}</dd></div>
         <div><dt>Open selections</dt><dd>{_starter_open_count}</dd></div>
       </dl>
     """
@@ -189,38 +206,22 @@ mo.Html(
 
 </div>
 
+</llm-exclude>
+
 Press **Select** again when the request refers to another point or region. An
 agent can resolve those selections together after one verified change.
 
-## Connect an agent
+## Inspect the result
 
-The Python package carries its matching Lens Agent Skill. An agent that already
-executes code in the live notebook kernel can continue directly with Lens.
+Open **Selections** from the Lens dock. The new selection appears in **Open**
+with a stable `S<n>` label, its note, target, point or region kind, and image
+status. Select the image action when capture succeeded to inspect the marked
+selection image.
 
-To give the agent live kernel execution, install
-[marimo Pair](https://github.com/marimo-team/marimo-pair/tree/main/skills/marimo-pair):
+## Next: connect an agent
 
-```console
-npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
-```
-
-Use `$marimo-pair` to connect to or start the notebook, then resume
-`$marimo-lens`. Inside code mode, inspect the installed Lens instructions from
-the notebook environment:
-
-```python
-import marimo_lens.agent as lens_agent
-
-print(lens_agent.agent_skill() / "SKILL.md")
-```
-
-Then ask the agent to resolve the current request:
-
-```text
-Resolve my Lens request.
-```
-
-The [Agent workflow](./agents) covers direct code-mode use and the Pair setup
-path, then shows how the agent edits and verifies cells and returns the result
-for review. The [Overview](./overview) explains the collaboration loop. The
-[Python API reference](./api) defines each handoff method.
+[Connect an agent](./agents) gives a notebook agent live code-mode access,
+reads the current Lens context, verifies a change, reveals the result, and
+resolves the selection. Read [How Lens works](./how-lens-works) first when you
+want the complete collaboration model. The [Selections guide](./selections)
+covers gestures, notes, image status, deletion, History, and reopening.

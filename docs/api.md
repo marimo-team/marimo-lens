@@ -1,157 +1,61 @@
 ---
-title: Python API reference
-description: Python API contracts for reading Lens requests and returning agent work for review.
+title: Python API
+description: Public Python contracts for mounting Lens and connecting a code-mode agent.
 ---
 
-# Python API reference
+# Python API
 
-The Python API lets code-mode agents read the current selection, show their work
-in the notebook, reveal a result, and complete a request.
+marimo-lens exposes two Python surfaces:
 
-The package exports `ActivityHandle`, `CellReference`, `Lens`, `LensContext`, `LensError`,
-`LensReferences`, `NotebookReference`, `SelectionReference`,
-`SelectionTargetReference`, and `__version__`. The version string comes from the
-installed `marimo-lens` distribution metadata.
+- Notebook authors construct `Lens` and keep it mounted with the notebook.
+- Code-mode agents call `marimo_lens.agent.connect()` and work through a
+  `MountedLens` handle.
 
-```marimo-config
-requires-python = ">=3.10"
-dependencies = [
-    "marimo",
-    "marimo-lens",
-]
-```
+The two surfaces share context, activity, reveal, and resolution behavior. The
+agent handle adds stable reconnection identity and current cell-output capture.
 
-## Agent handoff adapter
+::: info Source version
 
-`marimo_lens.agent` is the handoff interface for code-mode agents.
-The package registers this module as the `lens` capability in the
-`marimo.agent.capability` entry-point group. Its module help locates the Agent
-Skill installed with the current package version.
+This reference follows the repository's `main` branch. PyPI follows tagged
+releases. Read [Compatibility](./compatibility) when the installed signatures
+differ.
 
-Notebook cells mount Lens through the [public `Lens` API](#lens). Agent
-integrations call the adapter from a live code-mode kernel call:
+:::
+
+## Notebook-author API
+
+The top-level package exports:
 
 ```python
-import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
-
-ctx = cm.get_context()
-mounted = lens_agent.connect(ctx)
-snapshot = mounted.context()
+from marimo_lens import (
+    ActivityHandle,
+    CellReference,
+    Lens,
+    LensContext,
+    LensError,
+    LensReferences,
+    NotebookReference,
+    SelectionReference,
+    SelectionTargetReference,
+    __version__,
+)
 ```
 
-### `agent_plugin() -> agent_plugins.Plugin`
+`__version__` comes from the installed `marimo-lens` distribution metadata.
 
-Returns the Agent Plugin installed by the `marimo-lens` distribution. The
-plugin contains the manifest, Lens skill, and every packaged skill resource.
+### `Lens`
 
-### `agent_skill() -> agent_plugins.Skill`
+`Lens(*, dom_selector=None) -> Lens`
 
-Returns the packaged `marimo-lens` skill. Use `skill / "SKILL.md"` for its
-instructions, `skill.body` for the Markdown body, and `skill.files` for its
-resource inventory.
+Creates the Python widget and browser UI that own one Lens instance.
 
-### `add_lens_cell(ctx) -> str`
-
-Returns the notebook's agent-created Lens cell ID. With an existing generated
-cell, the method returns that ID and queues no mutation. Otherwise, it queues a
-collapsed cell that constructs and appends a Lens, then queues that cell to run.
-The code-mode context applies a new cell when its async context manager exits.
-The cell uses private bindings and introduces no public notebook definitions.
-
-```python
-import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
-
-async with cm.get_context() as ctx:
-    cell_id = lens_agent.add_lens_cell(ctx)
-```
-
-End the kernel call after adding the cell. Call `connect(ctx)` in a later call
-after the browser renders Lens. `ctx` must expose `create_cell()` and
-`run_cell()` as well as `cells.find()`. Other objects raise `TypeError`.
-Several agent-created Lens cells raise `LensError(code="lens_ambiguous")`.
-
-### `connect(context=None, *, identity=None) -> MountedLens`
-
-Returns a Lens from the active marimo runtime. Pass a code-mode `context` to
-include existing Lens objects from its kernel globals, including objects
-created by authored notebook cells before browser-ready registration. When
-`context` is omitted, discovery uses browser-ready Lens registrations. Pass an
-earlier handle's `identity` to reconnect to that exact Lens in a later kernel
-call.
-
-`connect()` raises `LensError(code="lens_unavailable")` when the requested Lens
-cannot be found. It raises `LensError(code="lens_ambiguous")` when several Lens
-instances are available and no identity selects one. Reconnect with an identity,
-or close or remove extra Lens instances.
-
-A context without a globals mapping or a non-string identity raises `TypeError`.
-An empty identity raises `ValueError`.
-
-### `MountedLens`
-
-The handle's `identity` property is an opaque, read-only string. Pass it to
-`connect()` to reconnect to the same Lens in another kernel call. The
-identity and Lens target remain fixed for the handle's lifetime.
-
-| Member                                                                                          | Behavior                                                     |
-| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `identity`                                                                                      | Reconnects to this Lens across kernel calls                  |
-| `context()`                                                                                     | Returns the current detached `LensContext`                   |
-| `cell_image(cell_id, *, expected_revision)`                                                     | Returns fresh cell PNG bytes after browser capture completes |
-| `start_activity(target, *, expected_revision=None, duration_ms=None, label=None, message=None)` | Shows the current agent work target and returns its owner    |
-| `stop_activity(activity)`                                                                       | Stops activity owned by that handle                          |
-| `reveal(target, *, expected_revision=None, duration_ms, label=None, message=None)`              | Brings the addressed target into view                        |
-| `resolve(selection_ids, *, expected_revision, summary=None)`                                    | Moves verified selections to History                         |
-
-`context.images` maps selection IDs to annotated capture-time PNG bytes. The
-matching selection reports `selection["snapshot"]["status"] == "outdated"`
-when its marker changed after those bytes were captured. `cell_image()`
-captures the current rendered output without Lens markers.
-
-### `mounted.cell_image(cell_id, *, expected_revision) -> bytes | None`
-
-Returns a fresh, unannotated PNG of `cell_id`. The first call starts browser
-capture and returns `None`. End that kernel execution so marimo can deliver the
-browser response, then repeat the call with the same cell and revision. The
-completed call returns and consumes the PNG bytes.
-
-```python
-png = mounted.cell_image("BYtC", expected_revision=revision)
-```
-
-A call for another cell during capture raises `LensError(code="capture_busy")`.
-Poll the first cell until it returns bytes or a terminal error, then request the
-next cell. Other failures use `revision_conflict`, `runtime_unavailable`,
-`cell_not_found`, `browser_unavailable`, `capture_timeout`,
-`output_unavailable`, `capture_failed`, or `lens_closed`.
-
-Write returned PNG bytes to a private temporary path when the agent image reader
-requires one. The kernel and image reader must share a filesystem. Remove the
-path after the final read.
-
-The [Agent workflow](./agents) covers the complete handoff. The
-[Overview demo](./overview#try-the-collaboration-loop) lets you call each
-handoff method on a selectable chart.
-
-## `Lens`
-
-### `Lens(*, dom_selector=None)`
-
-Creates a Lens for notebook outputs and optional DOM roots.
-
-- `dom_selector`: A CSS selector for additional authored page roots. Each DOM
-  selection records an opaque document ID, the current document path, an exact
-  selector for the chosen element, and producer cell IDs inferred from nested
-  `data-runtime-cell-id` metadata. Matching roots live in the widget owner's
-  light DOM. Interactions inside their open shadow trees remain attached to the selected root.
-  The selector accepts at most 1,024 UTF-16 code units.
-
-An empty selector raises `ValueError`. A selector with another type raises
-`TypeError`. The browser reports invalid CSS syntax when Lens mounts.
-
-Mount one `Lens` through marimo:
+- `dom_selector: str | None` adds configured DOM targets to the default
+  notebook output targets. The string is stripped and accepts at most 1,024
+  UTF-16 code units.
+- Returns a renderable `Lens` instance.
+- Raises `TypeError` for a non-string selector.
+- Raises `ValueError` for an empty or oversized selector.
+- The browser reports invalid CSS syntax when the view mounts.
 
 ```python
 from marimo_lens import Lens
@@ -160,42 +64,35 @@ lens = Lens()
 lens
 ```
 
-Keep the mounted value available while calling its methods from other cells.
+Keep the value mounted while people create selections and agents call its
+methods. Read [Targets](./concepts/targets) before configuring host DOM targets.
 
-### `lens.context() -> LensContext`
+### `Lens.context`
 
-Captures the current selection revision and one bounded snapshot of the marimo
-runtime, then returns a detached `LensContext`.
+`lens.context() -> LensContext`
+
+Returns detached selection references, lazy graph-context text, available
+selection-image bytes, and the captured selection-state revision.
 
 ```python
 context = lens.context()
 selection = context.current
-
-if selection is not None:
-    available_cells = [
-        cell["id"] for cell in selection["cells"] if cell["status"] == "available"
-    ]
 ```
 
-A `LensContext` does not update. Call `lens.context()` again after the notebook
-or its selections change.
+The object does not update. Call `context()` again after notebook or Lens state
+changes. Existing contexts remain readable after `lens.close()`.
 
-Compact references and annotated images are ready when `context()` returns.
-Standalone text renders and caches when `context.text` is first read from the
-captured runtime snapshot.
+Raises `LensError(code="lens_closed")` after the Lens closes.
 
-`context()` raises `LensError(code="lens_closed")` after Lens closes. Contexts
-created before closing remain readable.
+Read the [`LensContext` reference](./reference/context) for every field and
+degradation rule.
 
-### `lens.start_activity(target, *, expected_revision=None, duration_ms=None, label=None, message=None) -> ActivityHandle`
+### `Lens.start_activity`
 
-Marks `target` as the current work surface and returns the opaque owner accepted
-by `stop_activity()`.
+`lens.start_activity(target, *, expected_revision=None, duration_ms=None, label=None, message=None) -> ActivityHandle`
 
-Pass a `SelectionReference` and its captured revision to address the selected
-surface. Lens validates that the selection still exists at that revision. The
-browser resolves its stored `SelectionTarget`, so DOM selections can have zero
-or several producing cells and repeated projections remain distinct.
+Marks one selection or cell as the current work location and returns the
+opaque owner accepted by `stop_activity()`.
 
 ```python
 context = lens.context()
@@ -205,49 +102,43 @@ if selection is not None:
     activity = lens.start_activity(
         selection,
         expected_revision=context.revision,
-        label="Updating aggregation",
-        message="Updating the selected result.",
+        label="Updating selected result",
+        message="Inspecting the target and its producing cells.",
     )
 ```
 
-Pass a cell ID string for notebook walkthrough activity that has no selection.
-Lens validates cell IDs against the current marimo graph. `expected_revision`
-is required for selection targets and optional for cell targets.
+Pass a `SelectionReference` and its captured `expected_revision` to address the
+selected target. Pass a cell ID string for a notebook walkthrough. A cell
+address can omit `expected_revision` and must identify a current graph member.
 
-Activity preserves selection state. It keeps the current scroll position for a
-visible target, frames an offscreen target, and re-resolves the surface after
-document or layout changes. An unavailable selection target shows a bounded
-notice in its owning document until the target returns. Other documents ignore
-the event.
+`duration_ms=None` keeps activity visible until a matching stop, later
+attention, or teardown. A duration from 1 through 300,000 milliseconds clears
+it after that hold. `label` defaults to **Working** in the browser. Selection
+state does not change.
 
-Each call creates a new activity owner and replaces the visible presentation.
-A delayed stop for an earlier handle leaves newer activity intact.
-`duration_ms=None` keeps activity visible until a matching stop, replacement,
-or teardown. A positive integer up to 300,000 expires the activity after that
-hold. `label` defaults to **Working** and accepts at most 40 UTF-16 code units.
+Raises `LensError` for a closed Lens, stale selection revision, missing
+selection, unavailable runtime, or missing cell. Invalid inputs raise
+`TypeError` or `ValueError`.
 
-Selection targets can raise `LensError` codes `revision_conflict`,
-`selection_not_found`, or `lens_closed`. Cell targets can raise
-`runtime_unavailable`, `cell_not_found`, `revision_conflict`, or `lens_closed`.
-Browser delivery is best effort after validation succeeds.
+### `Lens.stop_activity`
 
-### `lens.stop_activity(activity) -> None`
+`lens.stop_activity(activity) -> None`
 
-Sends a best-effort stop for one `ActivityHandle`. The browser clears activity
-when the handle still owns the current presentation.
+Stops activity when `activity` still owns the current presentation.
 
 ```python
 lens.stop_activity(activity)
 ```
 
-Pass the handle returned by `start_activity()`. Handles remain strings across a
-JSON round trip. A non-current handle has no effect. A non-string value raises
-`TypeError`, and an empty or oversized value raises `ValueError`. Closing Lens
-before the stop raises `LensError(code="lens_closed")`.
+`ActivityHandle` is a string-backed, JSON-safe opaque value. A stale handle has
+no effect. A non-string value raises `TypeError`. An empty or oversized value
+raises `ValueError`. A closed Lens raises `LensError(code="lens_closed")`.
 
-### `lens.reveal(target, *, expected_revision=None, duration_ms, label=None, message=None) -> None`
+### `Lens.reveal`
 
-Brings one stored selection or notebook cell into view for `duration_ms`.
+`lens.reveal(target, *, expected_revision=None, duration_ms, label=None, message=None) -> None`
+
+Brings one selection or cell into view for a required hold.
 
 ```python
 context = lens.context()
@@ -257,181 +148,178 @@ if selection is not None:
     lens.reveal(
         selection,
         expected_revision=context.revision,
-        duration_ms=10_000,
-        label="Updated chart",
-        message="Updated the aggregation and verified the selected result.",
+        duration_ms=8_000,
+        label="Updated result",
+        message="Verified the change and brought the selected target into view.",
     )
 ```
 
-Selection reveal resolves the same stored `SelectionTarget` used for capture,
-availability, and reattachment. Cell reveal accepts a cell ID string for
-walkthroughs. `expected_revision` follows the same rules as
-`start_activity()`.
+Target and revision rules match `start_activity()`. Reveal preserves selection
+state and keyboard focus. A later attention event replaces it. Wait for the
+hold before resolving when the resolution receipt should follow the revealed
+result.
 
-`duration_ms` accepts a positive integer up to 300,000 milliseconds. Reveal
-messages accept up to 1,000 UTF-16 code units. `label` accepts up to 40 UTF-16
-code units. Reveal preserves keyboard focus and selection state. A later
-attention event replaces the current presentation.
+`duration_ms` accepts 1 through 300,000 milliseconds. Labels accept 40 UTF-16
+code units. Reveal messages accept 1,000. See [Errors and
+limits](./reference/errors) for the complete validation contract.
 
-Wait for `duration_ms` before resolving the addressed selection. The browser
-queues the resolution receipt until reveal exits. Selection and cell targets
-raise the same validation errors listed for `start_activity()`.
+### `Lens.resolve`
 
-### `lens.resolve(selection_ids, *, expected_revision, summary=None) -> int`
+`lens.resolve(selection_ids, *, expected_revision, summary=None) -> int`
 
-Moves one or more selections into addressed History against the revision
-captured by `context()`, releases their annotated PNGs, and returns the resulting
-revision.
+Moves one or more Open selections into History and returns the next
+selection-state revision.
 
 ```python
 context = lens.context()
-selection_ids = [
-    str(selection["id"])
-    for selection in context.references["selections"]
-    if any(cell["id"] == "BYtC" for cell in selection["cells"])
-]
+selection_ids = [item["id"] for item in context.references["selections"]]
 
 if selection_ids:
     revision = lens.resolve(
         selection_ids,
         expected_revision=context.revision,
-        summary="Updated the aggregation and verified the chart.",
+        summary="Updated the result and verified the affected cells.",
     )
 ```
 
-Pass one selection ID as a string or several unique IDs as a sequence. Lens
-validates every ID before changing state. The batch receives one resulting
-revision and one shared summary. A missing ID leaves the full batch open.
+Pass one ID string or a sequence of up to 64 unique strings. Lens validates the
+entire batch before changing state. The resolved selections share one resulting
+revision and optional summary. Their selection-image bytes are released.
 
-The expected revision prevents an integration from completing a selection
-after the user has changed the selection state. Call `lens.context()` again
-after `LensError(code="revision_conflict")`.
+The state transition commits before Lens sends its best-effort resolution
+receipt. A receipt delivery failure does not roll back History. Expected errors are
+`lens_closed`, `revision_conflict`, `selection_not_found`, and
+`selection_context_limit`.
 
-The state change commits before Lens sends the best-effort **Addressed**
-presentation event. A browser delivery failure does not roll back the completed
-selection. When a reveal is active, the browser holds the receipt until
-the reveal exits so the two presentations remain sequential.
+### `Lens.close`
 
-Expected `LensError.code` values are `lens_closed`, `revision_conflict`, and
-`selection_not_found`.
+`lens.close() -> None`
 
-### `lens.close() -> None`
+Closes the Lens instance, cancels pending cell-output capture, and releases
+Open selections, History entries, and Lens-owned selection images. Repeated
+calls have no effect.
 
-Closes Lens, cancels pending full-cell capture, and releases Lens-owned
-annotated images. Calling `close()` more than once has no effect.
+Later public operations raise `LensError(code="lens_closed")`.
 
-Later calls to `context()`, `start_activity()`, `stop_activity()`, `reveal()`, and
-`resolve()` raise `LensError(code="lens_closed")`.
+## Agent adapter
 
-## `LensContext`
-
-`LensContext` is a detached snapshot with five main properties:
-
-| Property     | Value                                                             |
-| ------------ | ----------------------------------------------------------------- |
-| `revision`   | Selection revision for a guarded `resolve()` call                 |
-| `current`    | Current compact selection reference, or `None`                    |
-| `references` | JSON-safe selection references for a live notebook integration    |
-| `text`       | Bounded text for selected cells and their relevant upstream cells |
-| `images`     | Read-only mapping from selection IDs to captured PNG bytes        |
-
-Each compact selection reference includes its stable ID and label, note,
-`target`, producing `cells`, point or region, and annotated image status.
-
-`target.kind` is `notebook` or `dom`. Both variants carry the originating
-document ID and path. Notebook targets carry one cell ID. DOM targets also
-carry an exact DOM selector and zero or more inferred producing cell IDs.
-Producer IDs are sorted and their order has no semantic meaning.
-
-Each `CellReference` in `cells` contains `id` and `status`. Status is
-`available` when the current graph contains the cell, `missing` when the runtime
-is available and the ID is absent, and `unavailable` when Lens cannot inspect
-the current marimo runtime.
-
-## Typed context references
-
-`LensContext.references` returns a `LensReferences` dictionary.
-`LensContext.current` returns its current `SelectionReference`, or `None` when
-no selection is current. These `TypedDict` contracts are exported from
-`marimo_lens` for type checking and editor completion.
-
-`LensReferences` contains:
-
-| Key                  | Value                               |
-| -------------------- | ----------------------------------- |
-| `revision`           | Captured selection revision         |
-| `generatedAt`        | Context generation timestamp        |
-| `notebook`           | `NotebookReference` metadata        |
-| `currentSelectionId` | Current selection ID, or `None`     |
-| `selections`         | List of `SelectionReference` values |
-
-`SelectionReference` contains `id`, `label`, `note`, a
-`SelectionTargetReference` in `target`, `cells`, `anchor`, and `snapshot`.
-`domHint` and `previousResolution` appear when that evidence is available for
-the selection.
-
-`CellReference` contains a producing cell `id` and its current runtime `status`.
-
-`NotebookReference` contains `path` and `available`. It includes `reason` when
-the active marimo runtime is unavailable.
-
-Standalone text includes selected cell source, relevant upstream cell source,
-definitions, references, direct parent IDs, notes, and safely displayable native
-marimo control values. Passwords, file payloads, custom controls, AnyWidgets,
-and opaque state render as `[redacted]` or `[unavailable]`.
-
-## Selection PNG bytes
-
-`context.images` contains successful capture-time PNGs indexed by selection ID.
-The corresponding selection reference reports
-`selection["snapshot"]["status"] == "outdated"` when the marker changed after
-capture.
-
-Render one captured image as a marimo output:
+Import the adapter inside the live notebook kernel:
 
 ```python
-import marimo as mo
-
-context = lens.context()
-png = context.images.get("selection-1")
-mo.image(png, width=640, alt="Selected chart region") if png is not None else None
+import marimo_lens.agent as lens_agent
 ```
+
+### `agent_plugin`
+
+`agent_plugin() -> agent_plugins.Plugin`
+
+Returns the Agent Plugin resource bundle installed with the current
+`marimo-lens` distribution.
+
+Raises `agent_plugins.AgentPluginError` when distribution metadata or the
+packaged plugin is unavailable. Reinstall the same `marimo-lens` version before
+retrying.
+
+### `agent_skill`
+
+`agent_skill() -> agent_plugins.Skill`
+
+Returns the packaged `marimo-lens` Agent Skill.
+
+- `skill / "SKILL.md"` gives the instruction path.
+- `skill.body` gives the Markdown instruction body.
+- `skill.files` gives the packaged resource inventory.
+
+Raises `agent_plugins.AgentPluginError` when the plugin contains no Lens skill.
+
+### `add_lens_cell`
+
+`add_lens_cell(ctx) -> str`
+
+Returns the existing agent-managed Lens cell ID or queues one collapsed Lens
+cell and returns its new ID.
+
+```python
+import marimo._code_mode as cm
+import marimo_lens.agent as lens_agent
+
+async with cm.get_context() as context:
+    cell_id = lens_agent.add_lens_cell(context)
+```
+
+The code-mode context creates and runs a queued cell when its async context
+manager exits. Connect in a later kernel call after the browser renders Lens.
+
+`ctx` must expose `create_cell()`, `run_cell()`, and `cells.find()`. Other
+objects raise `TypeError`. Several agent-managed Lens cells raise
+`LensError(code="lens_ambiguous")`.
+
+### `connect`
+
+`connect(context=None, *, identity=None) -> MountedLens`
+
+Finds one live Lens and returns its agent-facing handle.
+
+```python
+import marimo._code_mode as cm
+import marimo_lens.agent as lens_agent
+
+mounted = lens_agent.connect(cm.get_context())
+```
+
+`context` adds Lens objects found in code-mode globals to browser-ready Lens
+registrations. `identity` selects the same Lens in a later kernel call.
+
+Raises `LensError(code="lens_unavailable")` when no matching Lens exists.
+Raises `LensError(code="lens_ambiguous")` when several candidates exist and no
+identity selects one. A context without a globals mapping or a non-string
+identity raises `TypeError`. An empty identity raises `ValueError`.
+
+### `MountedLens`
+
+`MountedLens` remains attached to one live `Lens` instance. It can address any
+selection owned by that instance.
+
+| Member                                      | Contract                                            |
+| ------------------------------------------- | --------------------------------------------------- |
+| `identity`                                  | Opaque string for reconnecting across kernel calls. |
+| `context()`                                 | Delegates to `Lens.context()`.                      |
+| `cell_image(cell_id, *, expected_revision)` | Requests a fresh, unmarked cell-output PNG.         |
+| `start_activity(...)`                       | Delegates to `Lens.start_activity()`.               |
+| `stop_activity(activity)`                   | Delegates to `Lens.stop_activity()`.                |
+| `reveal(...)`                               | Delegates to `Lens.reveal()`.                       |
+| `resolve(...)`                              | Delegates to `Lens.resolve()`.                      |
+
+#### `mounted.cell_image(cell_id, *, expected_revision) -> bytes | None`
+
+The first call starts browser capture and returns `None`. End that kernel call,
+reconnect to the same Lens, and repeat the same cell ID and revision. The
+completed call returns and consumes the PNG bytes.
+
+```python
+context = mounted.context()
+selection = context.current
+
+if selection is not None and selection["cells"]:
+    cell_id = selection["cells"][0]["id"]
+    png = mounted.cell_image(
+        cell_id,
+        expected_revision=context.revision,
+    )
+```
+
+Only one capture can be pending per Lens. Finish it before requesting another
+cell. The operation requires a current graph member and a browser-ready Lens
+view. Read [Context and evidence](./concepts/evidence) for the difference
+between a selection image and a cell-output image.
 
 ## `LensError`
 
-Expected Lens operation failures raise `LensError`.
+`LensError` extends `RuntimeError` and exposes:
 
-- `code` is the stable machine-readable failure code.
-- `revision` is the current Lens selection revision, or `None` when connection
-  failed before a Lens instance was available.
+- `code: str`, a stable machine-readable failure code.
+- `revision: int | None`, the current selection-state revision when available.
 
-Invalid argument types and values raise `TypeError` or `ValueError` before a
-Lens operation begins.
-
-## Limits
-
-| Resource                             | Limit                                      |
-| ------------------------------------ | ------------------------------------------ |
-| Open selections                      | 64                                         |
-| Selection note                       | 4,000 UTF-16 code units                    |
-| Cell ID or selection ID              | 128 UTF-16 code units                      |
-| Configured or exact DOM selector     | 1,024 UTF-16 code units                    |
-| Producing cell IDs per DOM target    | 64                                         |
-| Activity or reveal label             | 40 UTF-16 code units                       |
-| Activity message or resolve summary  | 240 UTF-16 code units                      |
-| Reveal message                       | 1,000 UTF-16 code units                    |
-| Reveal duration                      | 1 to 300,000 milliseconds                  |
-| Selections per resolution            | 64 unique IDs                              |
-| Active synchronized state            | 48,000 UTF-8 bytes                         |
-| Addressed History                    | 64 items and 64,000 UTF-8 bytes            |
-| Compact references                   | 60,000 UTF-8 bytes                         |
-| Standalone text                      | 64,000 characters                          |
-| Relevant runtime cells               | 64                                         |
-| Reported omitted cell IDs            | 16 plus the exact omitted count            |
-| Controls included in standalone text | 16                                         |
-| One annotated PNG                    | 8 MiB, 2,048 pixels per edge, 4 megapixels |
-| Stored annotated PNG bytes per Lens  | 64 MiB                                     |
-
-A mutation that cannot fit the synchronized selection state or required
-reference fields raises `LensError(code="selection_context_limit")` before the
-state changes.
+Read [Errors and limits](./reference/errors) for every code, recovery action,
+argument rule, and bound. Read [Connect an agent](./agents) for the complete
+workflow.

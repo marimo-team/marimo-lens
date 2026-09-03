@@ -2,7 +2,7 @@
 
 Guidance for coding agents working in this uv, pnpm, and Vite+ monorepo.
 `marimo-lens` records point and region attention on notebook outputs or
-configured DOM roots and exposes bounded target and producer context to agents.
+configured DOM roots and exposes bounded selection and graph context to agents.
 
 ## Build, test, and lint commands
 
@@ -27,15 +27,15 @@ Build the browser assets before Python tests. `Lens` loads the generated
 
 ## Architecture in five rules
 
-- Python owns durable selections, addressed history, marked PNG bytes, runtime
+- Python owns Lens-instance selections, History entries, selection-image bytes, runtime
   context, revision checks, and the public API. `widget.py` is the composition
   root.
-- The browser owns gestures, marked PNG composition, notebook DOM access, the
-  dock, and transient activity, reveal, and receipt presentation.
+- The browser owns gestures, selection-image composition, notebook DOM access,
+  the dock, and transient activity, reveal, and resolution-receipt presentation.
 - `@marimo-lens/protocol` is the innermost TypeScript package.
   `@marimo-lens/image-capture` depends on it, and `@marimo-lens/widget`
   composes both packages.
-- Marimo runtime access stays in `_marimo_runtime.py` and
+- marimo runtime access stays in `_marimo_runtime.py` and
   `_marimo_control_state.py`. Notebook DOM access stays in
   `packages/widget/src/notebook/`.
 - esbuild bundles the widget into one ESM file and one stylesheet. Hatch
@@ -62,7 +62,7 @@ Unqualified Python filenames in this table live in
 | ------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------- |
 | Public Python API               | `widget.py`, `context.py`, `errors.py`                                         | Package README, API docs, and Python boundary tests      |
 | Selection lifecycle or History  | `_selection_state.py`, `_protocol*.py`, `packages/protocol/`, widget selection | Python and browser contract tests, context, built assets |
-| Runtime context                 | `_runtime.py`, `_marimo_*.py`, `_provenance.py`, `_context.py`                 | Context tests and package README                         |
+| Runtime context                 | `_runtime.py`, `_marimo_*.py`, `_provenance.py`, `_context.py`                 | Context tests and public context reference               |
 | Agent capture or feedback       | `_output_capture.py`, `_protocol*.py`, widget anywidget and transient modules  | Transport tests, image tests, and built assets           |
 | Browser interaction             | Widget `app/`, `notebook/`, `selection/`, `transient/`, `ui/`, and `styles/`   | Owning package checks, tests, and build                  |
 | PNG composition                 | `packages/image-capture/`                                                      | Image-capture checks and tests                           |
@@ -84,17 +84,17 @@ Unqualified Python filenames in this table live in
 
 ## Key invariants
 
-- A configured target is the semantic unit. Notebook targets resolve one output
-  cell. DOM targets keep a document-scoped selector and producer IDs inferred
+- A target is the selectable unit. Notebook targets identify one output cell.
+  DOM targets keep a document-scoped selector and producing cell IDs inferred
   from generic runtime metadata. Both variants keep the owning document ID and
   path. A point or region narrows attention inside the target.
-- Human selections are durable. Activity and reveal are transient. Resolve
-  moves one or more completed selections into bounded metadata-only History,
-  and reopen restores the original attention with fresh marked PNG capture.
-- The marimo dataflow graph supplies cell lineage. Compact references and lazy
+- Open selections live in the Lens instance. Activity and reveal are transient.
+  Resolve moves one or more Open selections into bounded metadata-only History,
+  and reopen restores the original attention with fresh selection-image capture.
+- The marimo dataflow graph supplies graph context. Compact references and lazy
   standalone text have independent bounds.
-- PNG bytes stay outside trait state, JSON references, local storage, and text
-  prompts. Full-cell capture is a one-use agent transfer.
+- PNG bytes stay outside trait state, JSON references, local storage, and
+  standalone text. Cell-output capture is a one-use agent transfer.
 - Selection mutations are revision checked. Python and TypeScript transport
   schemas remain aligned at protocol version 4.
 
@@ -107,8 +107,8 @@ Unqualified Python filenames in this table live in
 
 ## Reference
 
-- [Python package README](packages/marimo-lens/README.md) owns the public API.
+- [Python API](docs/api.md) owns the public API. The package README is the PyPI entry point.
 - [Architecture](development_docs/architecture.md) owns state, package,
   transport, and host boundaries.
-- [Development](development_docs/development.md) owns setup, checks, packaging,
-  and release.
+- [Maintainer documentation](development_docs/README.md) routes setup, checks,
+  packaging, dependencies, documentation, and release.

@@ -14,26 +14,18 @@
 
 **Let your notebook agent see what you see.**
 
-Point to a notebook result and say what should change. Lens gives your agent
-the producing cell, related notebook context, and an annotated image to ground
-its work in the result you marked.
-
-While the agent works, Lens can mark the selected result, bring that same
-surface into view for review, and keep completed requests in **History** for
-another pass. Cell-addressed feedback remains available for notebook
-walkthroughs.
-
-[Read the user guide](https://marimo-team.github.io/marimo-lens/) for the
-agent workflow.
+Point to part of a rendered [marimo](https://marimo.io/) result and say what should change. Lens
+connects that selection to the cells and notebook context behind the result, so
+an agent can inspect the right code and return its work for review.
 
 ## Demo
 
-Mark a chart region, tell the agent what to inspect, and review the result it
+Mark a chart region, hand it to a notebook agent, and review the result it
 brings back into view.
 
 <p align="center">
   <a href="https://marimo-team.github.io/marimo-lens/#see-lens-in-action">
-    <img alt="Watch the marimo-lens demo: select a chart region, add a request, and review the agent's work" src="apps/docs/public/lens-demo-poster.jpg" width="900">
+    <img alt="Watch the marimo-lens demo: select a chart region, add a note, and review the agent's work" src="apps/docs/public/lens-demo-poster.jpg" width="900">
   </a>
 </p>
 
@@ -43,7 +35,7 @@ brings back into view.
 
 ## Quick start
 
-Open a local marimo notebook with Lens available:
+Open a local notebook with Lens available:
 
 ```sh
 uvx --with marimo-lens marimo edit notebook.py
@@ -58,96 +50,40 @@ lens = Lens()
 lens
 ```
 
-Keep the cell mounted. Press **Select**, then click a point or drag a region
-inside a rendered output. Add a note with what you want the agent to inspect or
-change.
+Keep that cell mounted. Press **Select**, click a point or drag a region inside
+a rendered output, then add an optional note for the agent.
 
-### Select additional page regions
-
-Pass one CSS selector for page regions that should also receive feedback:
-
-```python
-lens = Lens(
-    dom_selector="#app-shell :is(header, section, article)",
-)
-```
-
-Notebook outputs remain selectable. Each additional selection keeps an opaque
-document ID, the document path, an exact DOM locator, producer IDs inferred
-from generic runtime metadata, and the marked PNG. Host integrations own the
-selector they pass to Lens.
+Lens supports Python 3.10 through 3.14 and marimo 0.24.0 or newer.
 
 ## Connect an agent
 
-The `marimo-lens` package carries the Agent Skill that matches its Python API.
-An agent that already executes code in the live notebook kernel can continue
-directly with Lens.
+Lens works with agents that can execute code in the live marimo kernel. The
+Python package carries the matching Agent Skill and registers its code-mode
+capability with marimo.
 
-To give the agent live kernel execution, install
-[marimo Pair](https://github.com/marimo-team/marimo-pair/tree/main/skills/marimo-pair):
+The [agent guide](https://marimo-team.github.io/marimo-lens/agents) covers
+compatible agent environments, the optional marimo Pair connection, selection
+context, verification, reveal, and resolution.
 
-```console
-npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
-```
+## Documentation
 
-Use `$marimo-pair` to connect to or start the notebook, then resume
-`$marimo-lens`. Inside code mode, Marimo advertises `marimo_lens.agent` as the
-`lens` capability, and the module exposes the installed skill path:
-
-```python
-import marimo_lens.agent as lens_agent
-
-print(lens_agent.agent_skill() / "SKILL.md")
-```
-
-After selecting an output and adding a note, ask the agent:
-
-```text
-Resolve my Lens request.
-```
-
-See [Agent workflow](https://marimo-team.github.io/marimo-lens/agents) to
-start with existing code-mode access or enter code mode through Pair.
-
-## Python API
-
-The package exports `ActivityHandle`, `CellReference`, `Lens`, `LensContext`, `LensError`,
-`LensReferences`, `NotebookReference`, `SelectionReference`,
-`SelectionTargetReference`, and `__version__`. The version string comes from the
-installed `marimo-lens` distribution metadata.
-
-Agent integrations use five methods:
-
-| Method                                                                                               | Behavior                                                         |
-| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `lens.context()`                                                                                     | Returns detached selection context with lazy notebook text       |
-| `lens.start_activity(target, *, expected_revision=None, duration_ms=None, label=None, message=None)` | Marks one selection or cell and returns its activity owner       |
-| `lens.stop_activity(activity)`                                                                       | Stops activity when the handle still owns the presentation       |
-| `lens.reveal(target, *, expected_revision=None, duration_ms, label=None, message=None)`              | Brings one selected surface or notebook cell into view           |
-| `lens.resolve(selection_ids, *, expected_revision, summary=None)`                                    | Moves one or more selections to History in one guarded operation |
-
-Pass a `SelectionReference` from `LensContext` with its captured revision to
-address the selected surface. Pass a cell ID string for a notebook walkthrough
-that has no selection.
-
-The [Python API reference](https://marimo-team.github.io/marimo-lens/api)
-documents return values, errors, limits, and lifecycle behavior.
+- [Getting started](https://marimo-team.github.io/marimo-lens/getting-started) creates the first selection.
+- [What is Lens?](https://marimo-team.github.io/marimo-lens/overview) introduces the product model and routes to deeper concepts.
+- [Selections](https://marimo-team.github.io/marimo-lens/selections) and [Connect an agent](https://marimo-team.github.io/marimo-lens/agents) cover the two sides of the workflow.
+- [Python API](https://marimo-team.github.io/marimo-lens/api) and [Troubleshooting](https://marimo-team.github.io/marimo-lens/troubleshooting) provide exact lookup and recovery.
 
 ## Development
 
-The [example notebook](examples/lens.py) provides a small workflow for local
-testing. Read the [user documentation](https://marimo-team.github.io/marimo-lens/),
-[Development](development_docs/development.md) for setup, checks, packaging,
-and release, and
-[Architecture](development_docs/architecture.md) for package ownership and
-internal boundaries.
+The [example notebook](examples/lens.py) provides a local product smoke test.
+Read [Contributing](CONTRIBUTING.md) for setup, verification, and pull request
+guidance. The [development documentation](development_docs/README.md) covers
+architecture, browser validation, packaging, and release.
 
-Report bugs through
-[GitHub Issues](https://github.com/marimo-team/marimo-lens/issues). Report
-security vulnerabilities through the [security policy](SECURITY.md).
-`marimo-lens` is available under the [Apache License 2.0](LICENSE).
+Report bugs through [GitHub Issues](https://github.com/marimo-team/marimo-lens/issues).
+Report security vulnerabilities through the [security policy](SECURITY.md).
+marimo-lens is available under the [Apache License 2.0](LICENSE).
 
 ## Acknowledgements
 
-`marimo-lens` was inspired by
+marimo-lens was inspired by
 [Agentation](https://github.com/benjitaylor/agentation).

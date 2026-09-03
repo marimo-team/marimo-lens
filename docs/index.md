@@ -5,7 +5,7 @@ titleTemplate: false
 
 hero:
   text: 'Let your notebook agent see <span class="lens-hero-focus">what you see<span class="lens-hero-selection-box" aria-hidden="true"></span></span>.'
-  tagline: Point to a notebook result and say what should change. Lens gives your agent the producing cell, related notebook context, and an annotated image to ground its work in the result you marked.
+  tagline: Point to a notebook result and say what should change. Lens connects that selection to the cells and notebook context behind the result.
   image:
     light: /brand/marimo-lens-lockup-stacked-light.svg
     dark: /brand/marimo-lens-lockup-stacked-dark.svg
@@ -15,34 +15,54 @@ hero:
       text: Try Lens
       link: "#try-lens"
     - theme: alt
-      text: Get started
-      link: ./getting-started
+      text: Understand Lens
+      link: ./overview
 
 features:
   - icon: 🎯
     title: Mark what you mean
-    details: Point to a value or drag across a region. Add a note with what you noticed or want changed.
+    details: Click a location or drag across a region. Add a note with what you noticed or want changed.
 
   - icon: 🔗
     title: Ground the agent's work
-    details: Lens links your selection to the producing cell, relevant controls, upstream code, and an annotated image.
+    details: Lens links your selection to the code, controls, and visual context behind the result.
 
   - icon: 🔍
     title: Review the result
-    details: See where your agent is working, review the result it brings into view, and reopen the request for another pass.
+    details: See where your agent is working, review the result it brings into view, and reopen the selection for another pass.
 
   - icon: 🔌
     title: Connect your notebook agent
     details: Use Lens with a code-mode agent that can inspect, edit, run, and verify cells in the live marimo kernel.
 ---
 
+<llm-exclude>
+
 ```marimo-config
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.15"
 dependencies = [
     "marimo",
     "marimo-lens",
 ]
 ```
+
+</llm-exclude>
+
+<llm-only>
+
+# marimo-lens
+
+marimo-lens connects a point or region on rendered notebook output to the cells
+and context behind it. A live notebook agent can inspect that selection, show
+where it is working, and return the result for review.
+
+Start with [Getting started](./getting-started), then read [What is
+Lens?](./overview), [Why Lens?](./why-lens), and [How Lens
+works](./how-lens-works).
+
+</llm-only>
+
+<llm-exclude>
 
 <section id="demo" class="lens-video-demo" aria-labelledby="see-lens-in-action">
 
@@ -55,6 +75,10 @@ Mark a chart region, hand the request to a notebook agent, and review the result
 </div>
 
 </section>
+
+</llm-exclude>
+
+<llm-exclude>
 
 <section id="try-lens" class="lens-demo">
 
@@ -71,10 +95,15 @@ Select part of the chart, add a note, and see what your notebook agent receives.
 
 ```python marimo output=false
 import asyncio
+import inspect
 from html import escape
 
 import marimo as mo
 from marimo_lens import Lens
+
+supports_selection_feedback = (
+    "expected_revision" in inspect.signature(Lens.start_activity).parameters
+)
 
 get_lens_revision, set_lens_revision = mo.state(0)
 get_response_request, set_response_request = mo.state(None)
@@ -299,7 +328,7 @@ else:
               </span>
               <span style="color:var(--marimo-island-muted-foreground,#64748b);font-size:0.75rem">
                 Cell <code data-demo-cell>{_item_cell}</code>
-                · Annotated image
+                · Selection image
                 <span data-demo-image-status>{_item_image_status}</span>
               </span>
             </li>
@@ -423,12 +452,20 @@ if handoff_to_agent.value:
             else f"Working through {_selection_count} selections"
         )
         set_response_completion(None)
-        _activity_handle = lens.start_activity(
-            _activity_selection,
-            expected_revision=_handoff_context.revision,
-            label="Reviewing chart request",
-            message=_activity_message,
-        )
+        if supports_selection_feedback:
+            _activity_handle = lens.start_activity(
+                _activity_selection,
+                expected_revision=_handoff_context.revision,
+                label="Reviewing chart request",
+                message=_activity_message,
+            )
+        else:
+            lens.start_activity(
+                _handoff_cell_id,
+                label="Reviewing chart request",
+                message=_activity_message,
+            )
+            _activity_handle = _handoff_cell_id
         await asyncio.sleep(5)
         if _color_supported:
             set_bar_color(_color_candidate)
@@ -501,22 +538,38 @@ if _verified_request is not None:
             if _verified_request["colorSupported"]
             else "Checking what this demo can change."
         )
-        _verification_activity = lens.start_activity(
-            _verified_selection,
-            expected_revision=_verified_context.revision,
-            label="Checking updated chart",
-            message=_verification_message,
-        )
+        if supports_selection_feedback:
+            _verification_activity = lens.start_activity(
+                _verified_selection,
+                expected_revision=_verified_context.revision,
+                label="Checking updated chart",
+                message=_verification_message,
+            )
+        else:
+            lens.start_activity(
+                _verified_cell_id,
+                label="Checking updated chart",
+                message=_verification_message,
+            )
+            _verification_activity = _verified_cell_id
         await asyncio.sleep(5)
         lens.stop_activity(_verification_activity)
         _reveal_hold_ms = 10_000
-        lens.reveal(
-            _verified_selection,
-            expected_revision=_verified_context.revision,
-            duration_ms=_reveal_hold_ms,
-            label="Updated chart",
-            message=_verified_summary,
-        )
+        if supports_selection_feedback:
+            lens.reveal(
+                _verified_selection,
+                expected_revision=_verified_context.revision,
+                duration_ms=_reveal_hold_ms,
+                label="Updated chart",
+                message=_verified_summary,
+            )
+        else:
+            lens.reveal(
+                _verified_cell_id,
+                duration_ms=_reveal_hold_ms,
+                label="Updated chart",
+                message=_verified_summary,
+            )
         await asyncio.sleep(_reveal_hold_ms / 1_000)
         lens.resolve(
             _verified_selection_ids,
@@ -533,3 +586,11 @@ if _verified_request is not None:
 ```
 
 </section>
+
+</llm-exclude>
+
+## Continue
+
+- [Get started](./getting-started) with one notebook and one selection.
+- [Understand Lens](./overview) through its targets, selections, context, and review loop.
+- [Connect an agent](./agents) to inspect, change, verify, and return notebook work.

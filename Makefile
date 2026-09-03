@@ -18,7 +18,7 @@ docs:
 
 docs-serve:
 	pnpm --filter @marimo-lens/python build
-	env -u BASE_PATH pnpm --filter @marimo-lens/docs dev --host 127.0.0.1
+	env -u BASE_PATH pnpm --filter @marimo-lens/docs dev --host 127.0.0.1 --port 55173 --strictPort
 
 package:
 	rm -rf dist

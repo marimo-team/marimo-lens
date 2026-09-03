@@ -14,27 +14,19 @@
 
 **Let your notebook agent see what you see.**
 
-Point to a notebook result and say what should change. Lens gives your agent
-the producing cell, related notebook context, and an annotated image to ground
-its work in the result you marked.
+marimo-lens connects a point or region on rendered notebook output to the cells
+and context behind it. A live notebook agent can inspect that selection, show
+where it is working, and return the result for review.
 
-While the agent works, Lens can mark the selected result, bring that same
-surface into view for review, and keep completed requests in **History** for
-another pass. Cell-addressed feedback remains available for notebook
-walkthroughs.
+## Install and mount
 
-[Read the user guide](https://marimo-team.github.io/marimo-lens/) for the
-agent workflow.
-
-## Quick start
-
-Open a local marimo notebook with Lens available:
+marimo-lens supports Python 3.10 through 3.14 and marimo 0.24.0 or newer.
 
 ```sh
-uvx --with marimo-lens marimo edit notebook.py
+uv add marimo-lens
 ```
 
-Mount Lens in one notebook cell:
+Mount one Lens in the notebook:
 
 ```python
 from marimo_lens import Lens
@@ -43,86 +35,36 @@ lens = Lens()
 lens
 ```
 
-Keep the cell mounted. Press **Select**, then click a point or drag a region
-inside a rendered output. Add a note with what you want the agent to inspect or
-change.
+Press **Select**, click a point or drag a region, then add an optional note.
 
-### Select additional page regions
+## Agent adapter
 
-Pass one CSS selector for page regions that should also receive feedback:
-
-```python
-lens = Lens(
-    dom_selector="#app-shell :is(header, section, article)",
-)
-```
-
-Notebook outputs remain selectable. Each additional selection keeps an opaque
-document ID, the document path, an exact DOM locator, producer IDs inferred
-from generic runtime metadata, and the marked PNG. Host integrations own the
-selector they pass to Lens.
-
-## Connect an agent
-
-The `marimo-lens` package carries the Agent Skill that matches its Python API.
-An agent that already executes code in the live notebook kernel can continue
-directly with Lens.
-
-To give the agent live kernel execution, install
-[marimo Pair](https://github.com/marimo-team/marimo-pair/tree/main/skills/marimo-pair):
-
-```console
-npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
-```
-
-Use `$marimo-pair` to connect to or start the notebook, then resume
-`$marimo-lens`. Inside code mode, Marimo advertises `marimo_lens.agent` as the
-`lens` capability, and the module exposes the installed skill path:
+Code-mode agents connect through `marimo_lens.agent`:
 
 ```python
 import marimo_lens.agent as lens_agent
 
-print(lens_agent.agent_skill() / "SKILL.md")
+mounted = lens_agent.connect()
+context = mounted.context()
 ```
 
-After selecting an output and adding a note, ask the agent:
+`connect()` runs inside the live marimo kernel. It returns a `MountedLens` with
+stable reconnection identity, context access, current cell-output capture,
+activity, reveal, and resolution methods.
 
-```text
-Resolve my Lens request.
-```
+The distribution also installs the matching Agent Plugin and Agent Skill. Use
+`lens_agent.agent_skill()` to locate its instructions from the notebook
+environment.
 
-See [Agent workflow](https://marimo-team.github.io/marimo-lens/agents) to
-start with existing code-mode access or enter code mode through Pair.
+## Documentation
 
-## Python API
+- [Getting started](https://marimo-team.github.io/marimo-lens/getting-started)
+- [Product model](https://marimo-team.github.io/marimo-lens/overview)
+- [Agent workflow](https://marimo-team.github.io/marimo-lens/agents)
+- [Targets](https://marimo-team.github.io/marimo-lens/concepts/targets)
+- [Python API](https://marimo-team.github.io/marimo-lens/api)
+- [Compatibility](https://marimo-team.github.io/marimo-lens/compatibility)
+- [Data and trust](https://marimo-team.github.io/marimo-lens/data-and-trust)
 
-The package exports `ActivityHandle`, `CellReference`, `Lens`, `LensContext`, `LensError`,
-`LensReferences`, `NotebookReference`, `SelectionReference`,
-`SelectionTargetReference`, and `__version__`. The version string comes from the
-installed `marimo-lens` distribution metadata.
-
-Agent integrations use five methods:
-
-| Method                                                                                               | Behavior                                                         |
-| ---------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `lens.context()`                                                                                     | Returns detached selection context with lazy notebook text       |
-| `lens.start_activity(target, *, expected_revision=None, duration_ms=None, label=None, message=None)` | Marks one selection or cell and returns its activity owner       |
-| `lens.stop_activity(activity)`                                                                       | Stops activity when the handle still owns the presentation       |
-| `lens.reveal(target, *, expected_revision=None, duration_ms, label=None, message=None)`              | Brings one selected surface or notebook cell into view           |
-| `lens.resolve(selection_ids, *, expected_revision, summary=None)`                                    | Moves one or more selections to History in one guarded operation |
-
-Pass a `SelectionReference` from `LensContext` with its captured revision to
-address the selected surface. Pass a cell ID string for a notebook walkthrough
-that has no selection.
-
-The [Python API reference](https://marimo-team.github.io/marimo-lens/api)
-documents return values, errors, limits, and lifecycle behavior.
-
-## Project
-
-- [Documentation](https://marimo-team.github.io/marimo-lens/)
-- [Source](https://github.com/marimo-team/marimo-lens)
-- [Example notebook](https://github.com/marimo-team/marimo-lens/blob/main/examples/lens.py)
-- [Issue tracker](https://github.com/marimo-team/marimo-lens/issues)
-- [Security policy](https://github.com/marimo-team/marimo-lens/security/policy)
-- [Apache License 2.0](https://github.com/marimo-team/marimo-lens/blob/main/LICENSE)
+Source, issue tracking, and contributor documentation live in the
+[marimo-lens repository](https://github.com/marimo-team/marimo-lens).
