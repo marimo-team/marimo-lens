@@ -1,0 +1,28 @@
+development_docs/testing.md
+  s_127f5a5bfa51a9::t_9964ef98a1182c 173-190
+  s_127f5a5bfa51a9::t_7103ab6614dd9a 170-171
+.github/workflows/ci.yml
+  s_127f5a5bfa51a9::t_9964ef98a1182c 16-40,43-44,92-93,134-135,169-170,207,213,223,229
+  s_127f5a5bfa51a9::t_083ac5b3cdc5b0 219-220,224-228
+.github/filters.yml
+  s_127f5a5bfa51a9::t_9964ef98a1182c 1-59,61-90,92-118
+  s_127f5a5bfa51a9::t_7103ab6614dd9a 60,91
+.github/workflows/pages.yml
+  s_127f5a5bfa51a9::t_9964ef98a1182c 17-104,106-107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "19676f817fcad9b36b34be2b6cdcf73e5b91e362",
+  "prompts": {},
+  "sessions": {
+    "s_127f5a5bfa51a9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a066c4-cae6-7cf2-8811-ef5c393702ea",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
