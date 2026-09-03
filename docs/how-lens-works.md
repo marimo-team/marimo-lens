@@ -373,8 +373,6 @@ if _overview_method is not None:
             expected_revision=_overview_method_context.revision,
             summary="Addressed the selected request.",
         )
-        if _overview_resolved_revision is None:
-            _overview_resolved_revision = overview_lens.context().revision
         set_overview_action(
             {
                 "kind": "resolve",
