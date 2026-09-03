@@ -10,13 +10,14 @@ the repository and is not part of the VitePress navigation.
 
 ## Documentation boundaries
 
-| Surface          | Reader and job                                                                  | Owner                            |
-| ---------------- | ------------------------------------------------------------------------------- | -------------------------------- |
-| Root README      | Evaluate the product, see proof, reach setup or contribution paths.             | `README.md`                      |
-| Package README   | Install from a package registry, reach first use, inspect the public inventory. | `packages/marimo-lens/README.md` |
-| Public site      | Learn concepts, complete tasks, integrate an agent, and look up the Python API. | `docs/`                          |
-| Maintainer pages | Understand ownership, change source, test, package, and release.                | `development_docs/`              |
-| Agent Skill      | Execute the Lens-specific agent workflow.                                       | `skills/marimo-lens/`            |
+| Surface            | Reader and job                                                                  | Owner                            |
+| ------------------ | ------------------------------------------------------------------------------- | -------------------------------- |
+| Root README        | Evaluate the product, see proof, reach setup or contribution paths.             | `README.md`                      |
+| Contribution guide | Set up the repository, verify changes, and prepare a pull request.              | `CONTRIBUTING.md`                |
+| Package README     | Install from a package registry, reach first use, inspect the public inventory. | `packages/marimo-lens/README.md` |
+| Public site        | Learn concepts, complete tasks, integrate an agent, and look up the Python API. | `docs/`                          |
+| Maintainer pages   | Understand ownership, change source, test, package, and release.                | `development_docs/`              |
+| Agent Skill        | Execute the Lens-specific agent workflow.                                       | `skills/marimo-lens/`            |
 
 The public [Python API](../docs/api.md) owns method and agent-adapter contracts.
 [`LensContext` reference](../docs/reference/context.md) owns returned context

@@ -75,8 +75,9 @@ context, verification, reveal, and resolution.
 ## Development
 
 The [example notebook](examples/lens.py) provides a local product smoke test.
-Read [Development documentation](development_docs/README.md) for architecture,
-setup, checks, browser validation, packaging, and release.
+Read [Contributing](CONTRIBUTING.md) for setup, verification, and pull request
+guidance. The [development documentation](development_docs/README.md) covers
+architecture, browser validation, packaging, and release.
 
 Report bugs through [GitHub Issues](https://github.com/marimo-team/marimo-lens/issues).
 Report security vulnerabilities through the [security policy](SECURITY.md).

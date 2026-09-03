@@ -126,6 +126,14 @@ export default defineConfig({
           { text: "Errors and limits", link: "/reference/errors" },
         ],
       },
+      {
+        text: "Project",
+        items: [
+          { text: "Issues and support", link: `${repository}/issues` },
+          { text: "Security policy", link: `${repository}/blob/main/SECURITY.md` },
+          { text: "Contributing", link: `${repository}/blob/main/CONTRIBUTING.md` },
+        ],
+      },
     ],
     outline: [2, 3],
     search: { provider: "local" },
