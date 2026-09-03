@@ -5,10 +5,17 @@ description: How Lens connects what a person notices in a notebook output to the
 
 # Why Lens?
 
-A notebook result has two relevant views. A person sees the rendered result and
-points to what matters. An agent needs the cells, dependencies, and values that
-produced it. Lens connects the visible question to that structured notebook
-context.
+[marimo Pair](https://marimo.io/pair) lets people collaborate with agents on
+analytical tasks in marimo notebooks. A person can ask questions or give
+instructions in plain language while the agent inspects data, edits code, and
+runs the analysis in the live notebook.
+
+When a request concerns a rendered cell output, language alone makes it
+difficult to identify the cell and the part of its output the person means. The
+person sees the result and points to what matters. The agent needs the producing
+cell, its dependencies, and the values that created it. Lens connects what the
+person sees and points to with the notebook context the agent needs to
+understand and act on that intent.
 
 ## A person starts from what they see
 
