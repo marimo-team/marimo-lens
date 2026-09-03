@@ -29,6 +29,8 @@ The current site routes readers through:
 
 - `docs/index.md`: landing page and interactive product proof.
 - `docs/overview.md`: product model and rationale.
+- `docs/why-lens.md`: visual grounding, computational grounding, role
+  allocation, and the human review loop.
 - `docs/getting-started.md`: installation and first working selection.
 - `docs/how-lens-works.md`: end-to-end collaboration loop and interactive API proof.
 - `docs/concepts/`: targets, context and evidence, feedback, and History.

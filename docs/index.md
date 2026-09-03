@@ -57,7 +57,8 @@ and context behind it. A live notebook agent can inspect that selection, show
 where it is working, and return the result for review.
 
 Start with [Getting started](./getting-started), then read [What is
-Lens?](./overview) and [How Lens works](./how-lens-works).
+Lens?](./overview), [Why Lens?](./why-lens), and [How Lens
+works](./how-lens-works).
 
 </llm-only>
 

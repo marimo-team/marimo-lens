@@ -48,25 +48,19 @@ status. The **current selection** is the likely referent when a person says
 `lens.context()`. It keeps the selection, its producing cells, relevant notebook
 context, and visual evidence together for the agent.
 
-## Why connect the mark to the notebook graph?
+## Why connect both views?
 
-A text prompt such as “fix this peak” carries intent but loses the location the
-person pointed to. A screenshot preserves pixels but does not identify the cell
-that produced them. A cell ID identifies code but does not preserve the point
-or region that drew attention.
+A person refers through the rendered result: “explain this spike.” An agent acts
+through notebook cells, dependencies, and runtime values. Lens connects the
+visible reference to the computation that produced it, then returns the agent's
+work to the notebook for human review.
 
-Lens keeps these forms together. The target and mark preserve where the person
-looked. Producing-cell IDs connect the target to marimo's live dependency graph.
-The optional note records local intent. A selection image preserves the marked
-view.
-
-The result is bounded context for an agent, followed by visible feedback for
-the person. **Activity** marks where the agent is working. **Reveal** brings a
-verified cell or selection into view. **Resolve** moves Open selections
-into **History**, where they can be reopened for another pass.
+[Why Lens?](./why-lens) explains this visual grounding, computational
+grounding, and review loop in plain language.
 
 ## Choose the next page
 
+- [Why Lens?](./why-lens) explains the ideas behind the interaction.
 - [Getting started](./getting-started) mounts Lens and creates the first selection.
 - [How Lens works](./how-lens-works) runs the complete collaboration loop.
 - [Connect an agent](./agents) covers the live code-mode handoff.

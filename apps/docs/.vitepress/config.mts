@@ -95,6 +95,7 @@ export default defineConfig({
         text: "Start",
         items: [
           { text: "What is Lens?", link: "/overview" },
+          { text: "Why Lens?", link: "/why-lens" },
           { text: "Getting started", link: "/getting-started" },
           { text: "How Lens works", link: "/how-lens-works" },
         ],
@@ -133,6 +134,7 @@ export default defineConfig({
         text: "Start",
         items: [
           { text: "What is Lens?", link: "/overview" },
+          { text: "Why Lens?", link: "/why-lens" },
           { text: "Getting started", link: "/getting-started" },
           { text: "How Lens works", link: "/how-lens-works" },
         ],

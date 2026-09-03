@@ -17,8 +17,9 @@ form answers a different question about the request. A Document Object Model
 | Selection image     | What did the target look like when the selection was captured? |
 | Cell-output image   | What does the producing cell output look like now?             |
 
-The [Overview](/overview) shows these forms in the human-agent workflow. The
-[context reference](/reference/context) defines their complete Python shapes.
+[Why Lens?](/why-lens) explains why visual and computational evidence stay
+connected. The [context reference](/reference/context) defines their complete
+Python shapes.
 
 ## Selection references
 
