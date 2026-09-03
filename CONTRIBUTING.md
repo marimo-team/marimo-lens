@@ -13,10 +13,9 @@ are the easiest to review.
 
 ## Set up
 
-Use Python 3.12 from `.python-version`, Node.js 22.18 or newer from
-`.node-version`, and the pnpm version declared in `package.json`. Install Python
-packages with [uv](https://docs.astral.sh/uv/) and JavaScript packages with
-[pnpm](https://pnpm.io/).
+Use Python 3.12 from `.python-version`. The root `package.json` requires Node.js
+24 or newer and declares the pnpm version. Install Python packages with
+[uv](https://docs.astral.sh/uv/) and JavaScript packages with [pnpm](https://pnpm.io/).
 
 ```sh
 corepack enable
