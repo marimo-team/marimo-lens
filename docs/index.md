@@ -95,15 +95,10 @@ Select part of the chart, add a note, and see what your notebook agent receives.
 
 ```python marimo output=false
 import asyncio
-import inspect
 from html import escape
 
 import marimo as mo
 from marimo_lens import Lens
-
-supports_selection_feedback = (
-    "expected_revision" in inspect.signature(Lens.start_activity).parameters
-)
 
 get_lens_revision, set_lens_revision = mo.state(0)
 get_response_request, set_response_request = mo.state(None)
@@ -205,17 +200,17 @@ mo.Html(
 ```python marimo output=false
 _lens_revision = get_lens_revision()
 _agent_context = lens.context()
-_agent_selections = list(_agent_context.references.get("selections", []))
+_agent_selections = _agent_context.references["selections"]
 _agent_items = []
-for _index, _selection in enumerate(_agent_selections, start=1):
-    _selection_id = str(_selection.get("id", ""))
-    _snapshot = _selection.get("snapshot", {})
+for _selection in _agent_selections:
+    _selection_id = _selection["id"]
+    _snapshot = _selection["snapshot"]
     _agent_items.append(
         {
             "id": _selection_id,
-            "label": str(_selection.get("label", f"S{_index}")),
-            "note": str(_selection.get("note", "")).strip(),
-            "cellId": str((_selection.get("cells") or [{}])[0].get("id", "")),
+            "label": _selection["label"],
+            "note": _selection["note"].strip(),
+            "cellId": _selection["cells"][0]["id"],
             "imageStatus": (
                 "Ready"
                 if _selection_id in _agent_context.images
@@ -234,7 +229,6 @@ if not _agent_items:
     agent_handoff = (
         {
             "state": "complete",
-            "cellId": str(_response_completion["cellId"]),
             "summary": str(_response_completion["summary"]),
             "count": int(_response_completion["count"]),
         }
@@ -399,26 +393,18 @@ _handoff_output
 ```python marimo output=false
 if handoff_to_agent.value:
     _handoff_context = lens.context()
-    _handoff_selections = list(_handoff_context.references.get("selections", []))
-    _handoff_current_id = str(_handoff_context.references.get("currentSelectionId", ""))
+    _handoff_selections = _handoff_context.references["selections"]
+    _handoff_current = _handoff_context.current
     _noted_selections = [
         _selection
         for _selection in _handoff_selections
-        if str(_selection.get("note", "")).strip()
+        if _selection["note"].strip()
     ]
-    if _handoff_selections and _noted_selections:
-        _activity_selection = next(
-            (
-                _selection
-                for _selection in _handoff_selections
-                if str(_selection.get("id", "")) == _handoff_current_id
-            ),
-            _handoff_selections[0],
-        )
-        _handoff_cell_id = str(_activity_selection["cells"][0]["id"])
+    if _handoff_current is not None and _noted_selections:
+        _handoff_current_id = _handoff_current["id"]
         _ordered_notes = sorted(
             _noted_selections,
-            key=lambda _selection: str(_selection.get("id", "")) != _handoff_current_id,
+            key=lambda _selection: _selection["id"] != _handoff_current_id,
         )
         _color_candidate = ""
         _color_supported = False
@@ -447,25 +433,17 @@ if handoff_to_agent.value:
 
         _selection_count = len(_handoff_selections)
         _activity_message = (
-            str(_noted_selections[0]["note"])[:120]
+            _ordered_notes[0]["note"][:120]
             if _selection_count == 1
             else f"Working through {_selection_count} selections"
         )
         set_response_completion(None)
-        if supports_selection_feedback:
-            _activity_handle = lens.start_activity(
-                _activity_selection,
-                expected_revision=_handoff_context.revision,
-                label="Reviewing chart request",
-                message=_activity_message,
-            )
-        else:
-            lens.start_activity(
-                _handoff_cell_id,
-                label="Reviewing chart request",
-                message=_activity_message,
-            )
-            _activity_handle = _handoff_cell_id
+        _activity_handle = lens.start_activity(
+            _handoff_current,
+            expected_revision=_handoff_context.revision,
+            label="Reviewing chart request",
+            message=_activity_message,
+        )
         await asyncio.sleep(5)
         if _color_supported:
             set_bar_color(_color_candidate)
@@ -473,9 +451,8 @@ if handoff_to_agent.value:
         set_response_request(
             {
                 "selectionIds": [
-                    str(_selection["id"]) for _selection in _handoff_selections
+                    _selection["id"] for _selection in _handoff_selections
                 ],
-                "cellId": _handoff_cell_id,
                 "revision": _handoff_context.revision,
                 "color": _color_candidate,
                 "colorSupported": _color_supported,
@@ -488,29 +465,23 @@ if handoff_to_agent.value:
 _verified_request = chart_result["request"]
 if _verified_request is not None:
     _verified_context = lens.context()
-    _verified_selection_ids = [
-        str(_selection_id) for _selection_id in _verified_request["selectionIds"]
-    ]
+    _verified_selection_ids = _verified_request["selectionIds"]
+    _verified_current = _verified_context.current
     _open_selection_ids = {
-        str(_selection.get("id", ""))
-        for _selection in _verified_context.references.get("selections", [])
+        _selection["id"]
+        for _selection in _verified_context.references["selections"]
     }
     if (
-        _verified_selection_ids
-        and _verified_context.revision == int(_verified_request["revision"])
+        _verified_current is not None
+        and _verified_selection_ids
+        and _verified_context.revision == _verified_request["revision"]
         and all(
             _selection_id in _open_selection_ids
             for _selection_id in _verified_selection_ids
         )
     ):
-        _verified_selection = next(
-            _selection
-            for _selection in _verified_context.references["selections"]
-            if str(_selection["id"]) == _verified_selection_ids[0]
-        )
-        _verified_cell_id = str(_verified_request["cellId"])
-        _verified_color = str(_verified_request["color"])
-        _verified_count = int(_verified_request["count"])
+        _verified_color = _verified_request["color"]
+        _verified_count = _verified_request["count"]
         if _verified_request["colorSupported"]:
             if _verified_count == 1:
                 _verified_summary = (
@@ -538,47 +509,30 @@ if _verified_request is not None:
             if _verified_request["colorSupported"]
             else "Checking what this demo can change."
         )
-        if supports_selection_feedback:
-            _verification_activity = lens.start_activity(
-                _verified_selection,
-                expected_revision=_verified_context.revision,
-                label="Checking updated chart",
-                message=_verification_message,
-            )
-        else:
-            lens.start_activity(
-                _verified_cell_id,
-                label="Checking updated chart",
-                message=_verification_message,
-            )
-            _verification_activity = _verified_cell_id
+        _verification_activity = lens.start_activity(
+            _verified_current,
+            expected_revision=_verified_context.revision,
+            label="Checking updated chart",
+            message=_verification_message,
+        )
         await asyncio.sleep(5)
         lens.stop_activity(_verification_activity)
         _reveal_hold_ms = 10_000
-        if supports_selection_feedback:
-            lens.reveal(
-                _verified_selection,
-                expected_revision=_verified_context.revision,
-                duration_ms=_reveal_hold_ms,
-                label="Updated chart",
-                message=_verified_summary,
-            )
-        else:
-            lens.reveal(
-                _verified_cell_id,
-                duration_ms=_reveal_hold_ms,
-                label="Updated chart",
-                message=_verified_summary,
-            )
+        lens.reveal(
+            _verified_current,
+            expected_revision=_verified_context.revision,
+            duration_ms=_reveal_hold_ms,
+            label="Updated chart",
+            message=_verified_summary,
+        )
         await asyncio.sleep(_reveal_hold_ms / 1_000)
         lens.resolve(
             _verified_selection_ids,
-            expected_revision=int(_verified_request["revision"]),
+            expected_revision=_verified_context.revision,
             summary=_verified_summary,
         )
         set_response_completion(
             {
-                "cellId": _verified_cell_id,
                 "summary": _verified_summary,
                 "count": _verified_count,
             }
