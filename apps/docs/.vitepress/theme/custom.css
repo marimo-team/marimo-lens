@@ -23,10 +23,8 @@
 }
 
 :root {
-  --vp-font-family-base:
-    "PT Sans", "Avenir Next", "Segoe UI", ui-sans-serif, sans-serif;
-  --vp-font-family-mono:
-    "Fira Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --vp-font-family-base: "PT Sans", "Avenir Next", "Segoe UI", ui-sans-serif, sans-serif;
+  --vp-font-family-mono: "Fira Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
   --lens-font-family-heading:
     "Rubik", "PT Sans", "Avenir Next", "Segoe UI", ui-sans-serif, sans-serif;
   --vp-c-bg: #ffffff;
@@ -99,6 +97,14 @@ body {
   letter-spacing: 0;
 }
 
+llm-exclude {
+  display: contents;
+}
+
+llm-only {
+  display: none;
+}
+
 .VPNav {
   border-bottom: 1px solid var(--vp-c-divider);
 }
@@ -163,8 +169,7 @@ body {
   );
   clip-path: inset(0 100% 0 0);
   content: "";
-  animation: lens-hero-selection 1200ms cubic-bezier(0.22, 1, 0.36, 1) 350ms
-    forwards;
+  animation: lens-hero-selection 1200ms cubic-bezier(0.22, 1, 0.36, 1) 350ms forwards;
   transition: opacity 140ms ease;
 }
 
@@ -173,38 +178,18 @@ body {
   z-index: 1;
   inset: 0.15em -0.08em -0.08em -0.14em;
   background:
-    linear-gradient(var(--lens-selection-color) 0 0) top left / 8px 8px
-      no-repeat,
-    linear-gradient(var(--lens-selection-color) 0 0) top right / 8px 8px
-      no-repeat,
-    linear-gradient(var(--lens-selection-color) 0 0) bottom right / 8px 8px
-      no-repeat,
-    linear-gradient(var(--lens-selection-color) 0 0) bottom left / 8px 8px
-      no-repeat,
-    repeating-linear-gradient(
-        90deg,
-        var(--lens-selection-color) 0 14px,
-        transparent 14px 24px
-      )
-      top left / 100% 2px no-repeat,
-    repeating-linear-gradient(
-        90deg,
-        var(--lens-selection-color) 0 14px,
-        transparent 14px 24px
-      )
+    linear-gradient(var(--lens-selection-color) 0 0) top left / 8px 8px no-repeat,
+    linear-gradient(var(--lens-selection-color) 0 0) top right / 8px 8px no-repeat,
+    linear-gradient(var(--lens-selection-color) 0 0) bottom right / 8px 8px no-repeat,
+    linear-gradient(var(--lens-selection-color) 0 0) bottom left / 8px 8px no-repeat,
+    repeating-linear-gradient(90deg, var(--lens-selection-color) 0 14px, transparent 14px 24px) top
+      left / 100% 2px no-repeat,
+    repeating-linear-gradient(90deg, var(--lens-selection-color) 0 14px, transparent 14px 24px)
       bottom left / 100% 2px no-repeat,
-    repeating-linear-gradient(
-        180deg,
-        var(--lens-selection-color) 0 14px,
-        transparent 14px 24px
-      )
-      top left / 2px 100% no-repeat,
-    repeating-linear-gradient(
-        180deg,
-        var(--lens-selection-color) 0 14px,
-        transparent 14px 24px
-      )
-      top right / 2px 100% no-repeat;
+    repeating-linear-gradient(180deg, var(--lens-selection-color) 0 14px, transparent 14px 24px) top
+      left / 2px 100% no-repeat,
+    repeating-linear-gradient(180deg, var(--lens-selection-color) 0 14px, transparent 14px 24px) top
+      right / 2px 100% no-repeat;
   opacity: 0;
   pointer-events: none;
   transform: scale(0.96);
@@ -366,6 +351,39 @@ body {
   margin: 28px 0 32px !important;
   padding: 0 !important;
   list-style: none !important;
+}
+
+.lens-mental-model {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 10px;
+  margin: 24px 0 32px;
+}
+
+.lens-mental-model > div {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 6px;
+  padding: 14px;
+  background: var(--vp-c-bg-elv);
+}
+
+.lens-mental-model > span {
+  display: none;
+}
+
+.lens-mental-model strong {
+  font-size: 14px;
+}
+
+.lens-mental-model div span {
+  color: var(--vp-c-text-2);
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .lens-context-flow li {
@@ -574,11 +592,7 @@ body {
 }
 
 .lens-selection-demo-progress > span[data-complete="true"] {
-  border-color: color-mix(
-    in srgb,
-    var(--lens-selection-color) 55%,
-    var(--vp-c-divider)
-  );
+  border-color: color-mix(in srgb, var(--lens-selection-color) 55%, var(--vp-c-divider));
 }
 
 .lens-agent-api-controls {
@@ -810,6 +824,10 @@ body {
 }
 
 @media (max-width: 959px) {
+  .lens-mental-model {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .lens-context-flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -839,6 +857,10 @@ body {
 }
 
 @media (max-width: 639px) {
+  .lens-mental-model {
+    grid-template-columns: 1fr;
+  }
+
   .lens-context-flow {
     grid-template-columns: 1fr;
   }

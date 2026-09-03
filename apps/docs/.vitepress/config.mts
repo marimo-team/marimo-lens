@@ -6,8 +6,7 @@ import llmstxt from "vitepress-plugin-llms";
 const repository = "https://github.com/marimo-team/marimo-lens";
 const siteUrl = "https://marimo-team.github.io/marimo-lens/";
 const description =
-  "Point to a marimo notebook result and say what should change. Lens grounds your agent's work in the producing cell, related context, and an annotated image.";
-const socialDescription = "Mark a result. Lens grounds your agent in the cells behind it.";
+  "Point to a marimo notebook result and say what should change. Lens connects that selection to the cells and notebook context behind the result.";
 const socialImage = `${siteUrl}brand/marimo-lens-og.png`;
 const baseName = process.env.BASE_PATH?.trim().replace(/^\/+|\/+$/g, "");
 const basePath = baseName ? `/${baseName}` : "";
@@ -19,6 +18,10 @@ const llmsDomain = basePath ? new URL(siteUrl).origin : siteUrl.replace(/\/$/, "
 // SAFETY: vitepress-plugin-llms returns two Vite plugins whose standard hooks
 // are loaded and executed by this VitePress version during every docs build.
 const llmsPlugins = llmstxt({
+  customTemplateVariables: {
+    description:
+      "marimo-lens connects a visual selection to the cells and notebook context behind it.",
+  },
   domain: llmsDomain,
   excludeIndexPage: false,
 }) as [Plugin, Plugin];
@@ -48,15 +51,6 @@ export default defineConfig({
     ],
     ["meta", { property: "og:type", content: "website" }],
     ["meta", { property: "og:site_name", content: "marimo-lens" }],
-    [
-      "meta",
-      {
-        property: "og:title",
-        content: "Visual grounding for your notebook agent",
-      },
-    ],
-    ["meta", { property: "og:description", content: socialDescription }],
-    ["meta", { property: "og:url", content: siteUrl }],
     ["meta", { property: "og:image", content: socialImage }],
     ["meta", { property: "og:image:type", content: "image/png" }],
     ["meta", { property: "og:image:width", content: "2400" }],
@@ -78,6 +72,9 @@ export default defineConfig({
       "marimo-config": "toml",
     },
   },
+  sitemap: {
+    hostname: siteUrl,
+  },
   srcDir: "../../docs",
   themeConfig: {
     editLink: {
@@ -94,41 +91,98 @@ export default defineConfig({
       light: "/brand/marimo-lens-lockup-horizontal-light.svg",
     },
     nav: [
-      { text: "Overview", link: "/overview" },
       {
-        text: "Guide",
+        text: "Start",
         items: [
+          { text: "What is Lens?", link: "/overview" },
           { text: "Getting started", link: "/getting-started" },
-          { text: "Agent workflow", link: "/agents" },
-          { text: "Selections", link: "/selections" },
+          { text: "How Lens works", link: "/how-lens-works" },
         ],
       },
-      { text: "Reference", link: "/api" },
+      {
+        text: "Core concepts",
+        items: [
+          { text: "Targets", link: "/concepts/targets" },
+          { text: "Selections", link: "/selections" },
+          { text: "Context and evidence", link: "/concepts/evidence" },
+          { text: "Feedback and History", link: "/concepts/feedback" },
+        ],
+      },
+      {
+        text: "Guides",
+        items: [
+          { text: "Connect an agent", link: "/agents" },
+          { text: "Data and trust", link: "/data-and-trust" },
+          { text: "Compatibility", link: "/compatibility" },
+          { text: "Troubleshooting", link: "/troubleshooting" },
+        ],
+      },
+      {
+        text: "Reference",
+        items: [
+          { text: "Python API", link: "/api" },
+          { text: "LensContext", link: "/reference/context" },
+          { text: "Errors and limits", link: "/reference/errors" },
+        ],
+      },
     ],
     outline: [2, 3],
     search: { provider: "local" },
     sidebar: [
       {
-        text: "Overview",
-        link: "/overview",
+        text: "Start",
+        items: [
+          { text: "What is Lens?", link: "/overview" },
+          { text: "Getting started", link: "/getting-started" },
+          { text: "How Lens works", link: "/how-lens-works" },
+        ],
       },
       {
-        text: "Guide",
+        text: "Core concepts",
         items: [
-          { text: "Getting started", link: "/getting-started" },
-          { text: "Agent workflow", link: "/agents" },
+          { text: "Targets", link: "/concepts/targets" },
           { text: "Selections", link: "/selections" },
+          { text: "Context and evidence", link: "/concepts/evidence" },
+          { text: "Feedback and History", link: "/concepts/feedback" },
+        ],
+      },
+      {
+        text: "Guides",
+        items: [
+          { text: "Connect an agent", link: "/agents" },
+          { text: "Data and trust", link: "/data-and-trust" },
+          { text: "Compatibility", link: "/compatibility" },
+          { text: "Troubleshooting", link: "/troubleshooting" },
         ],
       },
       {
         text: "Reference",
-        link: "/api",
+        items: [
+          { text: "Python API", link: "/api" },
+          { text: "LensContext", link: "/reference/context" },
+          { text: "Errors and limits", link: "/reference/errors" },
+        ],
       },
     ],
     siteTitle: false,
     socialLinks: [{ icon: "github", link: repository }],
   },
   title: "marimo-lens",
+  transformPageData(pageData) {
+    const pageTitle = String(pageData.frontmatter.title ?? pageData.title ?? "marimo-lens");
+    const pageDescription = String(pageData.frontmatter.description ?? description);
+    const pagePath =
+      pageData.relativePath === "index.md" ? "" : pageData.relativePath.replace(/\.md$/, "");
+    const pageUrl = new URL(pagePath, siteUrl).toString();
+    pageData.frontmatter.head = [
+      ...(pageData.frontmatter.head ?? []),
+      ["meta", { property: "og:title", content: pageTitle }],
+      ["meta", { property: "og:description", content: pageDescription }],
+      ["meta", { property: "og:url", content: pageUrl }],
+      ["meta", { name: "twitter:title", content: pageTitle }],
+      ["meta", { name: "twitter:description", content: pageDescription }],
+    ];
+  },
   vite: {
     plugins: [
       ...llmsPlugins,
