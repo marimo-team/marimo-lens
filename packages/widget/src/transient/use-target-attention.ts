@@ -89,7 +89,9 @@ function resolveTarget(
       resolve: () => cellAddressTarget(dom, address.cellId),
     };
   }
-  if (state.revision !== address.revision) return null;
+  // Open selection identity and target are immutable, so a later canonical
+  // revision can safely resolve an event whose model update was coalesced.
+  if (state.revision < address.revision) return null;
   const selection = state.selections.find((candidate) => candidate.id === address.selectionId);
   if (!selection || !targetBelongsToDocument(selection.target, dom.document)) return null;
   return {

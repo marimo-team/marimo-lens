@@ -604,6 +604,74 @@ describe("marimo-lens content", () => {
     expect(indicator?.dataset.targetLabel).toBe("newer");
   });
 
+  test("presents queued selection attention after a skipped model revision", () => {
+    let listener: ((event: AttentionEvent) => void) | undefined;
+    const target = document.createElement("section");
+    target.id = "authored-summary";
+    target.className = "lens-target";
+    target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
+    document.body.appendChild(target);
+    const selection = selectionFixture({
+      target: {
+        kind: "dom",
+        cellIds: [],
+        documentId: documentIdentity(document),
+        documentPath: "/",
+        domSelector: "#authored-summary",
+      },
+    });
+    let model = {
+      state: lensState({
+        revision: 2,
+        nextLabel: "S1",
+        currentSelectionId: null,
+        selections: [],
+        history: [],
+      }),
+      css: "",
+      selector: ".lens-target",
+      protocol: protocolClient({
+        onAttention: vi.fn((next: (event: AttentionEvent) => void) => {
+          listener = next;
+          return vi.fn();
+        }),
+      }),
+    };
+    currentModelFor = () => model;
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root?.render(<MarimoLensContent />));
+
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 4,
+        type: "attention.activity.start",
+        payload: {
+          activityId: "activity-authored",
+          address: { kind: "selection", selectionId: selection.id, revision: 3 },
+        },
+      }),
+    );
+
+    model = {
+      ...model,
+      state: lensState({
+        revision: 4,
+        nextLabel: "S2",
+        currentSelectionId: selection.id,
+        selections: [selection],
+        history: [],
+      }),
+    };
+    act(() => root?.render(<MarimoLensContent />));
+
+    const indicator = document.querySelector<HTMLElement>("[data-marimo-lens-target-attention]");
+    expect(indicator?.dataset.targetKind).toBe("selection");
+    expect(indicator?.dataset.targetLabel).toBe("S1");
+  });
+
   test("presents activity against a stored notebook selection", () => {
     let listener: ((event: AttentionEvent) => void) | undefined;
     const selection = selectionFixture();
