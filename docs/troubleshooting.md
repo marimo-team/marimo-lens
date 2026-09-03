@@ -163,10 +163,10 @@ Lens registers `marimo_lens.agent` in marimo's `marimo.agent.capability`
 entry-point group. Restart the notebook runtime after installing the package so
 marimo can discover the new capability.
 
-If the package is installed and no Lens exists, follow [Add Lens when none is
-mounted](/agents#add-lens-when-none-is-mounted). End the kernel call after
-`add_lens_cell(ctx)` so the browser can render and register the new Lens before
-calling `connect()` again.
+If the package is installed and no Lens exists, follow [Add Lens when the
+notebook has none](/agents#add-lens-when-the-notebook-has-none). End the kernel
+call after `add_lens_cell(ctx)` so the browser can render and register the new
+Lens before calling `connect()` again.
 
 **Result:** `lens_agent.connect(ctx)` returns a `MountedLens` and
 `mounted.context()` returns the current detached context.

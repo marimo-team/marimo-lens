@@ -155,7 +155,7 @@ generated browser source handles a Lens message.
 | `packages/image-capture/dist/`                 | Image-capture package build | Ignored                                |
 | `packages/widget/dist/`                        | Widget package build        | Ignored                                |
 | `packages/marimo-lens/src/marimo_lens/static/` | Python browser build        | Ignored                                |
-| `apps/docs/.vitepress/dist/`                   | Documentation build         | Ignored by the docs app                |
+| `apps/docs/.vitepress/dist/`                   | Documentation build         | Ignored by the root `.gitignore`       |
 | `dist/`                                        | Python package target       | Ignored and replaced by `make package` |
 
 Generated artifacts are evidence, not editing surfaces. Rebuild them through
