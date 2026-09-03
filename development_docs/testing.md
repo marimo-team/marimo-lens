@@ -167,21 +167,27 @@ changes.
 
 ## CI matrix
 
-The CI workflow separates four required jobs:
+The CI workflow classifies changed paths before starting the contract jobs.
+`.github/filters.yml` owns the classification and shared dependency sets:
 
-- Quality checks JavaScript, Python, shell scripts, lock state, and whitespace.
-- Python tests build the browser resources and run the suite on Python 3.10,
-  3.11, 3.12, 3.13, and 3.14.
-- JavaScript tests run package suites and build packages and documentation.
-- Package builds and verifies the distribution, then checks for tracked-file
-  drift.
+- Quality checks non-documentation source and configuration with the JavaScript,
+  Python, shell, lock, and whitespace checks.
+- Python runs for Python contracts and browser-bundle inputs. It builds the
+  browser resources and tests Python 3.10, 3.11, 3.12, 3.13, and 3.14.
+- JavaScript runs for browser package source, tests, manifests, and workspace
+  configuration. It tests and builds the JavaScript packages and documentation.
+- Package runs when Python distribution content, browser-bundle inputs, package
+  metadata, or distribution verification changes.
 
-The final required job fails when any required job did not succeed.
+The final required job accepts contract jobs that succeeded or were skipped by
+the path classifier. A classifier failure still fails the required job.
 
-The Pages workflow builds the public site on pull requests and main. It verifies
-selected routes and base-path asset links. Rendered browser behavior, complete
-links, every heading fragment, and visual presentation still require the docs
-checks in [Documentation](documentation.md#validate-the-site).
+The Pages workflow checks documentation formatting and the docs application.
+Root README changes also run the executable README example test. Public site and
+runtime inputs build the site on pull requests and `main`, then verify selected
+routes and base-path asset links. Rendered browser behavior, complete links,
+every heading fragment, and visual presentation still require the docs checks in
+[Documentation](documentation.md#validate-the-site).
 
 ## Package gate
 

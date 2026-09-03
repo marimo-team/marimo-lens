@@ -13,8 +13,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      distribution: ${{ steps.filter.outputs.distribution }}
+      frontend_contracts: ${{ steps.filter.outputs.frontend_contracts }}
+      python_contracts: ${{ steps.filter.outputs.python_contracts }}
+      quality: ${{ steps.filter.outputs.quality }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify changed files
+        id: filter
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        with:
+          filters: .github/filters.yml
+          predicate-quantifier: some-with-excludes
+
   quality:
     name: Quality
+    needs: changes
+    if: needs.changes.outputs.quality == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -62,6 +89,8 @@ jobs:
 
   test-python:
     name: Python ${{ matrix.python-version }}
+    needs: changes
+    if: needs.changes.outputs.python_contracts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -102,6 +131,8 @@ jobs:
 
   test-js:
     name: JavaScript
+    needs: changes
+    if: needs.changes.outputs.frontend_contracts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -135,6 +166,8 @@ jobs:
 
   package:
     name: Package
+    needs: changes
+    if: needs.changes.outputs.distribution == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -171,22 +204,26 @@ jobs:
 
   required:
     if: always()
-    needs: [quality, test-python, test-js, package]
+    needs: [changes, quality, test-python, test-js, package]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify required jobs
         env:
+          CHANGES: ${{ needs.changes.result }}
           PACKAGE: ${{ needs.package.result }}
           QUALITY: ${{ needs.quality.result }}
           TEST_JS: ${{ needs.test-js.result }}
           TEST_PYTHON: ${{ needs.test-python.result }}
         run: |
-          if [ "$QUALITY" != success ] || \
-             [ "$TEST_PYTHON" != success ] || \
-             [ "$TEST_JS" != success ] || \
-             [ "$PACKAGE" != success ]; then
-            printf 'Required jobs: quality=%s test-python=%s test-js=%s package=%s\n' \
-              "$QUALITY" "$TEST_PYTHON" "$TEST_JS" "$PACKAGE" >&2
+          if [ "$CHANGES" != success ]; then
+            printf 'Change classification failed: %s\n' "$CHANGES" >&2
             exit 1
           fi
+          for result in "$QUALITY" "$TEST_PYTHON" "$TEST_JS" "$PACKAGE"; do
+            if [ "$result" != success ] && [ "$result" != skipped ]; then
+              printf 'Required jobs: quality=%s test-python=%s test-js=%s package=%s\n' \
+                "$QUALITY" "$TEST_PYTHON" "$TEST_JS" "$PACKAGE" >&2
+              exit 1
+            fi
+          done
