@@ -1025,7 +1025,7 @@ recommended = [
 
 [[package]]
 name = "marimo-lens"
-version = "0.0.7"
+version = "0.0.8"
 source = { editable = "packages/marimo-lens" }
 dependencies = [
     { name = "agent-plugins" },
