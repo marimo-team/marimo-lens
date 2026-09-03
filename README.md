@@ -9,6 +9,8 @@
 
 <p align="center">
   <a href="https://pypi.org/project/marimo-lens/"><img alt="PyPI" src="https://img.shields.io/pypi/v/marimo-lens.svg"></a>
+  <a href="https://github.com/marimo-team/marimo-lens/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/marimo-team/marimo-lens/actions/workflows/ci.yml/badge.svg?branch=main"></a>
+  <a href="https://pypi.org/project/marimo-lens/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/marimo-lens.svg"></a>
   <a href="https://spdx.org/licenses/Apache-2.0.html"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
 </p>
 
@@ -23,15 +25,7 @@ an agent can inspect the right code and return its work for review.
 Mark a chart region, hand it to a notebook agent, and review the result it
 brings back into view.
 
-<p align="center">
-  <a href="https://marimo-team.github.io/marimo-lens/#see-lens-in-action">
-    <img alt="Watch the marimo-lens demo: select a chart region, add a note, and review the agent's work" src="apps/docs/public/lens-demo-poster.jpg" width="900">
-  </a>
-</p>
-
-<p align="center">
-  <a href="https://marimo-team.github.io/marimo-lens/#see-lens-in-action"><strong>Watch the 25-second demo</strong></a>
-</p>
+https://github.com/user-attachments/assets/e1975ba6-3087-485e-9360-43a99adc8795
 
 ## Quick start
 
