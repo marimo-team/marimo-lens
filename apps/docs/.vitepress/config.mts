@@ -92,7 +92,7 @@ export default defineConfig({
     },
     nav: [
       {
-        text: "Start",
+        text: "Overview",
         items: [
           { text: "What is Lens?", link: "/overview" },
           { text: "Why Lens?", link: "/why-lens" },
@@ -131,7 +131,7 @@ export default defineConfig({
     search: { provider: "local" },
     sidebar: [
       {
-        text: "Start",
+        text: "Overview",
         items: [
           { text: "What is Lens?", link: "/overview" },
           { text: "Why Lens?", link: "/why-lens" },
