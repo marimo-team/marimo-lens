@@ -9,6 +9,11 @@ Lens is a widget for [marimo](https://marimo.io/), a reactive Python notebook.
 It lets a person mark part of a rendered result and lets a code-mode agent trace
 that mark back to the notebook cells that produced it.
 
+[marimo Pair](https://marimo.io/pair) lets people collaborate with agents on
+analytical tasks in live marimo notebooks. Lens grounds those questions and
+instructions in the rendered cell output and the cells, dependencies, and
+values behind it.
+
 Mount one `Lens` in a notebook:
 
 ```python
