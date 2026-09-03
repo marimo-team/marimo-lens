@@ -1,312 +1,197 @@
 # Architecture
 
-`marimo-lens` turns a gesture on a rendered target into a durable selection.
-Notebook targets resolve one output cell. Configured DOM targets keep an exact
-document-scoped selector and zero or more producing cells inferred from nested
-`data-runtime-cell-id` metadata. Both target variants keep their owning document
-ID and path. Point and region geometry narrow attention within the target, and
-an optional marked PNG preserves capture-time visual evidence.
+`marimo-lens` turns a point or region in a
+[marimo notebook](https://docs.marimo.io/) into a selection that
+an agent can connect to its producing notebook cells. The person supplies the
+visual referent and an optional note. Lens supplies the target identity,
+bounded notebook context, and an optional selection image. The agent edits through the
+active notebook integration, verifies the result, reveals it, and resolves the
+selection into History.
 
-The [package README](../packages/marimo-lens/README.md) owns the public Python
-contract. This document owns package direction, state authority, private
-transport, and host integration.
+The public [Overview](../docs/overview.md) explains this workflow as a product.
+This page defines the implementation model and routes maintainers to each
+internal contract.
 
-## Product boundary
+## One selection from gesture to History
 
-Lens resolves canonical notebook output roots by default. `dom_selector` adds
-page roots through one CSS selector. The host integration owns that selector
-and any `data-runtime-cell-id` metadata within its roots. Lens stores the
-current document path so a selection cannot attach to a matching selector in
-another rendered document.
+1. The browser locates a selectable target under the pointer or keyboard
+   focus.
+2. A point or rectangle becomes the selection anchor inside that target.
+3. Python admits the selection into one revisioned `SelectionState` aggregate.
+4. The browser attempts selection-image capture and sends its PNG bytes to
+   Python when capture succeeds.
+5. `Lens.context()` reads one private runtime snapshot and returns a detached
+   `LensContext` with compact references, lazy standalone text, and available
+   selection-image bytes.
+6. A code-mode agent uses a `MountedLens` handle to show activity, inspect or
+   edit the notebook, verify the result, and reveal the selected target.
+7. `resolve()` removes the open selection, releases its image bytes, and appends
+   a History entry in one revisioned commit.
 
-Each selection records a bounded DOM hint and keeps renderer interpretation
-with the agent. Chart marks and application-specific DOM semantics remain
-outside the Lens model.
+Each step has one owner. Cross-boundary data is bounded and validated before it
+becomes authoritative.
 
-Human selections and their optional notes are durable attention. Marked
-selection images are durable evidence. Agent-requested output capture,
-activity, reveal, and resolution presentation are bounded transfers or
-transient effects.
+## Core vocabulary
 
-## Package graph
+| Term               | Meaning                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Document           | One browser `Document` that displays Lens and selectable content. Each document has an opaque identity and a pathname.            |
+| Target             | The rendered unit a person can select. A target is one notebook output or one configured DOM root.                                |
+| Surface            | The current browser element found for a stored target. A target can remain stored while its surface is temporarily unavailable.   |
+| Selection          | A target plus an anchor, optional note, DOM hint, stable ID and label, creation time, and selection image state.                  |
+| Anchor             | Normalized point or rectangle geometry inside a target.                                                                           |
+| DOM hint           | Bounded descriptive evidence about the element under the anchor, including labels, text, path, and bounds when available.         |
+| Selection image    | Annotated PNG evidence captured for an open selection. Its wire field is named `snapshot`.                                        |
+| Current selection  | The most recently activated open selection. It is the likely referent for requests such as “change this.”                         |
+| Revision           | The monotonic number that guards a selection-state mutation against stale context.                                                |
+| History entry      | Metadata recorded when an agent resolves an open selection. History entries contain no PNG bytes.                                 |
+| Runtime snapshot   | Private detached records read from the active marimo graph, cells, and relevant controls.                                         |
+| `LensContext`      | A detached, revisioned agent handoff derived from selection state and one runtime snapshot. It does not update after creation.    |
+| Attention address  | The tagged cell ID, or selection ID and revision, used by activity and reveal events.                                             |
+| Resolution receipt | Transient browser acknowledgement for one atomic `resolve()` call. It can represent several History entries.                      |
+| Browser view       | One rendered [AnyWidget](https://anywidget.dev/) view of a Python `Lens` model. A document grants one view interaction ownership. |
+| `MountedLens`      | The agent-facing handle returned by `marimo_lens.agent.connect()`.                                                                |
+
+Use `context` for a `LensContext` variable. Reserve `runtime snapshot` for the
+private `RuntimeSnapshot` type. In prose, call `selection["snapshot"]` the
+selection image status or image metadata.
+
+## Five ownership rules
+
+1. Python owns Lens-instance state. This includes open selections, History,
+   selection-image bytes, revision checks, runtime context, and the public API.
+   `packages/marimo-lens/src/marimo_lens/widget.py` is the Python composition
+   root.
+2. The browser owns gestures, DOM access, selection-image composition, the
+   dock, and transient activity, reveal, and resolution-receipt presentation.
+3. Dependencies point from composition toward primitives. The Python build
+   consumes the widget. The widget consumes image capture and protocol. Image
+   capture consumes protocol.
+4. Host access stays behind adapters. marimo runtime access belongs in
+   `_marimo_runtime.py` and `_marimo_control_state.py`. Notebook DOM access
+   belongs in `packages/widget/src/notebook/`.
+5. Generated resources cross the language boundary through the build. esbuild
+   produces one ESM file and one stylesheet. Hatch packages both resources and
+   the Agent Plugin into the wheel and source distribution.
+
+## Dependency graph
+
+Arrows mean “depends on” or “builds from.”
 
 ```text
-@marimo-lens/protocol
-├── @marimo-lens/image-capture
-└── @marimo-lens/widget
-    └── @marimo-lens/python
+@marimo-lens/python
+  -> @marimo-lens/widget
+       -> @marimo-lens/image-capture
+            -> @marimo-lens/protocol
+       -> @marimo-lens/protocol
 ```
 
-The widget also depends on image capture. The Python package bundles the widget
-and publishes as `marimo-lens`.
-
-- `@marimo-lens/protocol` owns shared state contracts, private browser
-  transport schemas, and bounded text primitives.
-- `@marimo-lens/image-capture` owns renderer-neutral evidence acquisition,
-  rasterization, and PNG composition.
+- `@marimo-lens/protocol` owns shared state contracts, private transport
+  schemas, and bounded text primitives.
+- `@marimo-lens/image-capture` owns document-aware DOM rasterization and PNG
+  composition. It has no notebook graph or AnyWidget transport policy.
 - `@marimo-lens/widget` owns AnyWidget transport, notebook host integration,
-  selection interaction, the document-scoped dock, and transient effects.
-- `@marimo-lens/python` owns the public API, durable state, runtime context,
-  output-capture mailbox, runtime-scoped mounted-Lens registration, and packaged
-  browser and agent resources.
-- `marimo_lens.agent` owns explicit code-mode Lens cell creation, Lens
-  connection, existing-Lens discovery from code-mode globals, stable instance
-  identity, detached context access, and full-cell capture adaptation. It also
-  resolves the Agent Plugin and Lens skill installed with the current Python
-  distribution.
-- `examples/lens.py` is the product example.
+  selection interaction, the document-scoped dock, and transient presentation.
+- `@marimo-lens/python` owns the public API, Lens-instance state, marimo runtime
+  adaptation, agent connection, and packaged resources.
+- `@marimo-lens/docs` consumes the built Python widget through interactive
+  marimo examples. It is a delivery consumer, not part of the runtime package
+  graph.
 
-Dependencies point toward the protocol package. Cross-package TypeScript
-imports use package names. Python performs no DOM work, and the browser performs
-no notebook graph work.
+Cross-package TypeScript imports use package names. Python performs no DOM
+queries. The browser performs no marimo graph reads.
 
-## State ownership
+## State and data flow
 
-| State                                          | Authority                         | Lifetime                                            |
-| ---------------------------------------------- | --------------------------------- | --------------------------------------------------- |
-| Open selections, targets, and marked PNG bytes | Python `SelectionStore`           | Until delete, clear, resolve, or teardown           |
-| Current selection and activation order         | Python `SelectionStore`           | Until activation or current-selection fallback      |
-| Addressed selection receipts                   | Python `SelectionStore`           | Until History clear, bounded eviction, or teardown  |
-| Selection gesture and sheet workflow           | Browser reducer                   | Current mounted owner view                          |
-| Marked PNG capture job                         | Browser `SelectionCapture`        | Until commit, supersession, removal, or teardown    |
-| Shared snapshot preview read                   | Browser `SelectionSnapshotLoader` | While a preview holds a lease                       |
-| Agent output-capture slot                      | Python `OutputCaptureSlot`        | Until byte read, timeout, supersession, or teardown |
-| Active output raster                           | Browser output-capture transport  | Until reply, timeout, replacement, or teardown      |
-| Target activity, reveal, and receipt display   | Browser transient effects         | Until replacement, presentation end, or teardown    |
-| Request interpretation and notebook edits      | Agent client                      | Agent task                                          |
+```text
+browser gesture
+  -> validated command and optional PNG buffer
+  -> Python SelectionStore commit
+  -> synchronized _state trait
+  -> browser views
 
-The synchronized `_state` trait projects open selections, addressed History,
-the current selection, the next stable label, and the revision. Activation
-order and PNG bytes remain in Python.
+Python selection state + marimo runtime snapshot
+  -> LensContext references
+  -> lazy standalone text
+  -> read-only selection PNG mapping
+  -> agent integration
 
-## Selection lifecycle
+agent feedback
+  -> validated Python API call
+  -> browser attention event
+  -> transient activity or reveal
+  -> revisioned resolve
+  -> History entry
+```
 
-`SelectionState` is an immutable aggregate. Pure transitions validate a
-revision and return the next aggregate. `SelectionStore.commit()` publishes one
-trait value and restores the previous aggregate if publication fails. Each
-successful selection mutation advances the revision once.
+The synchronized trait is a projection of Python authority. A browser view can
+request a transition, but it cannot replace `_state` or `_selector` directly.
+PNG bytes travel through binary buffers and remain outside trait state,
+standalone text, compact references, and local storage.
 
-A new selection follows this sequence:
+## Design decisions
 
-1. The user arms a one-shot selection session.
-2. Pointer or keyboard input resolves the target and normalized point or
-   region.
-3. Pointer release sends `selection.put` with an empty note and pending snapshot
-   state.
-4. Python validates the expected revision and selection admission bounds.
-5. Python commits the aggregate and publishes `_state`.
-6. The browser returns to rest and starts marked PNG capture.
-7. Successful capture replaces the pending snapshot with one validated PNG
-   buffer. Failure records image status while preserving the target selection.
+### Python owns selection state
 
-Each capture owns an `AbortController` and a commit fence. Replacement,
-selection removal, output disappearance, and teardown abort affected work.
-Note edits preserve the image. Moving or resizing the anchor marks the current
-image outdated and starts replacement capture. A failed replacement retains the
-outdated image.
+One Python aggregate gives browser views and agent calls the same revision,
+selection order, History, and image lifetime. A successful mutation advances
+the aggregate exactly once. Publication failure restores the prior aggregate.
 
-A detached target keeps its target reference, note, anchor, image, and actions.
-Notebook targets reconnect within the same document by path and cell ID. DOM
-targets reconnect within the same document through their path and exact
-selector. Removing the current selection promotes the most recently active
-remaining selection.
+See [Selection state](selection-state.md).
 
-Resolve validates one or more selection IDs against one expected revision,
-then releases their marked PNGs and appends their addressed receipts in one
-commit. Every receipt in a batch shares the resulting revision and summary.
-Reopen validates the selection ID and resolution revision, restores the
-original attention as current, and starts fresh marked PNG capture. The History
-receipt remains available. Clearing History preserves open selections and
-their images.
+### Targets identify rendered ownership
 
-## Runtime context
+A notebook target identifies one canonical output cell. A configured DOM target
+keeps a document-scoped selector and zero or more producing cells inferred from
+nested `data-runtime-cell-id` metadata. Both retain the owning document identity
+and pathname. The anchor narrows attention inside the target.
 
-`Lens.context()` reads one bounded runtime snapshot for the union of producing
-cell closures across selected targets. The marimo dataflow graph supplies
-current cells, source, direct edges, and relevant native controls. A DOM target
-with no producing cell still returns its document locator, DOM hint, note, and
-captured image.
+Lens records bounded DOM evidence. Renderer-specific chart marks and
+application semantics remain with the agent or host integration.
 
-Compact references build immediately. Standalone text builds when
-`LensContext.text` is first read. Each projection has an independent budget.
-Bounds apply before expensive source and control reads when the host exposes
-enough metadata. The [public API reference](../packages/marimo-lens/README.md#limits)
-owns exact user-visible limits.
+See [Browser and host](browser-and-host.md).
 
-Target kind, document locator, producing cell IDs, selection identity, and
-geometry are admission data and remain intact. Compact-reference fitting drops
-optional DOM hints before shortening notes. Computed styles and nearby-element
-inventories stay outside durable state and are inspected fresh when needed.
-Producing cell IDs are a canonical sorted set, so DOM child order does not
-change target identity.
+### Context is detached and bounded
 
-Context contains open selections. Addressed History stays outside references
-and standalone text. A reopened current selection may include its prior
-addressed timestamp and summary so an agent can understand the previous
-attempt.
+`Lens.context()` combines current selection state with one runtime snapshot.
+Compact references build immediately. Standalone text builds on first access.
+Each representation has its own limit and reports truncation where the contract
+allows it.
 
-`LensContext.images` maps selection IDs directly to marked PNG bytes. PNG bytes
-never enter synchronized trait state, compact references, standalone text, or
-local storage.
+See [Context and evidence](context-and-evidence.md).
 
-## Image paths
+### Presentation is transient
 
-### Marked selection evidence
+Activity, reveal, and the resolution receipt communicate agent progress without
+becoming selection state. Resolve commits state before it sends the best-effort
+resolution event. Each browser document projects a receipt for the resolved
+targets it owns. A reveal can therefore finish before that document presents
+the receipt.
 
-Selection capture resolves the canonical target, excludes
-`[data-marimo-lens-ui]`, composes the point or region annotation, and sends one
-validated PNG buffer to Python. The image shares the selection lifecycle.
+See [Agent integration](agent-integration.md).
 
-Raster work uses the output document. Visible documents wait for the next
-animation frame with a bounded fallback. Hidden documents continue from the
-current browser callback because background tabs can suspend animation frames.
-Iframe accessibility is checked before and after rasterization.
+### Host dependencies stay replaceable
 
-### Agent output capture
+Private marimo and browser behavior is concentrated in narrow adapters. An
+upstream replacement should change an adapter, its composition root, and its
+contract tests while preserving the remaining state and protocol contracts.
 
-Full-cell capture is a transient agent transfer keyed by cell ID and selection
-revision. `OutputCaptureSlot` stores one capture per Lens. The first
-`MountedLens.cell_image()` call starts capture and returns `None`. A later call
-with the same cell and revision returns the PNG bytes when available and keeps
-the slot pending otherwise. A different cell receives `capture_busy` while the
-slot is pending. Reading terminal bytes or an error releases the slot for the
-next cell. A kernel deadline marks a stalled request as `capture_timeout`. A
-new cell can replace that terminal record, and a fresh revision supersedes an
-obsolete pending record. The browser captures the rendered cell without Lens
-markers.
+See [Browser and host](browser-and-host.md), [Agent integration](agent-integration.md),
+and [Protocol](protocol.md).
 
-The browser transport resolves the displayed Lens handler, enforces its raster
-deadline, and replies with a validated PNG buffer or bounded failure. Request
-IDs remain inside this private transport. The consuming integration owns any
-temporary file it creates from the returned bytes.
+## Architecture pages
 
-## Agent adapter
+- [Selection state](selection-state.md) owns the authoritative aggregate and
+  lifecycle transitions.
+- [Context and evidence](context-and-evidence.md) owns runtime projection,
+  provenance, controls, and image data.
+- [Browser and host](browser-and-host.md) owns rendered targets, documents,
+  capture, and presentation.
+- [Agent integration](agent-integration.md) owns discovery, connection, and
+  feedback boundaries.
+- [Protocol](protocol.md) owns private messages and revision synchronization.
+- [Build and distribution](build-and-distribution.md) owns generated and
+  packaged artifacts.
 
-Agents import `marimo_lens.agent` inside the active notebook kernel.
-`add_lens_cell()` queues a collapsed Lens cell through a live marimo code-mode
-context. The context creates and runs that cell when it exits. `connect(ctx)`
-combines existing Lens objects from `ctx.globals` with browser-ready Lens
-instances from the active runtime's mounted registry, deduplicates them by
-object identity, and returns one handle. The handle carries a stable opaque
-identity, returns the current detached context, guards cell images and mutations
-by revision, delegates public feedback methods, and returns selection and
-full-cell images as PNG bytes.
-
-The top-level `skills/marimo-lens` directory owns Lens workflow policy. Agents
-outside a live code-mode environment can install marimo Pair to enter one.
-Notebook discovery, connection, scratchpad execution, and general notebook
-inspection and mutation belong to the active code-mode integration, such as
-Pair. Lens owns selection grounding, evidence, activity, reveal, and resolution.
-The live-kernel executor writes validated PNG bytes to private temporary files
-when its image reader requires a path.
-
-## Agent feedback
-
-`Lens.start_activity()` and `Lens.reveal()` accept an explicit cell ID or a
-stored `SelectionReference`. Cell addresses validate exact graph membership.
-Selection addresses validate the stored selection and captured revision, then
-send its selection ID and revision. The browser resolves the trusted
-`SelectionTarget` from synchronized state.
-
-Activity keeps the current scroll position for a visible target and frames an
-offscreen or near-top target. Target growth can trigger a corrective reframe.
-A framing attempt that leaves the target offscreen settles to a quiet dock
-notice. Activity remains until a matching stop, later activity, reveal, or
-teardown replaces it. Each start returns a JSON-safe `ActivityHandle` with one
-opaque owner ID. Stop carries that owner ID, so a delayed stop from an older
-operation cannot clear newer activity. A short caller-supplied label describes
-the current task or result.
-
-Selection attention resolves through `NotebookDomAdapter.getTarget()` on every
-layout change. A temporarily unavailable target produces a bounded notice in
-its owning document and reattaches when the surface returns. A document that
-does not own the target ignores its presentation. Cell attention retains the
-canonical notebook walkthrough path.
-
-Reveal replaces the active presentation, scrolls once, and exits after the
-caller-supplied hold. Python validates and sends the label and duration with
-every reveal event, and the browser uses them for presentation. Both use one
-target-attention controller and position their label above the target at its
-top-right edge.
-
-Resolution commits one durable state transition before sending its best-effort
-browser receipt. One receipt event can represent every selection in an atomic
-batch. The browser queues the receipt behind an active reveal. Event delivery
-failure never rolls back the committed selections.
-
-## Notebook host integration
-
-`NotebookDomAdapter` derives its document and window from the widget element's
-`ownerDocument`. It owns output lookup, portals, focus restoration, viewport
-work, target attention, and layout observation.
-
-`output-root-rules.ts` maps notebook hosts to exact cell IDs.
-`selection-target.ts` composes notebook outputs with one configured DOM
-selector. Configured roots outrank nested notebook renderer roots. Selection,
-marked capture, availability, and layout observation consume the same resolved
-target element. Agent-requested full-cell capture and cell-addressed attention
-follow separate notebook paths. Full-cell capture uses the canonical output.
-Cell-addressed attention targets the rendered cell when available and falls
-back to its canonical output.
-
-Gesture targeting attaches to the active document, same-origin iframe
-documents, and open shadow roots. One shared layout subscription coordinates
-scroll, resize, output resize, and output-tree changes. Anchored surfaces use
-that subscription for positioning and viewport clamping.
-
-The first Lens view registered in a document owns interaction and portal
-effects. Later views render the same conflict surface until ownership passes
-after teardown. Another document has an independent owner registry.
-
-## Private widget transport
-
-Python and the browser exchange Lens messages through the AnyWidget custom
-message channel. Commands, responses, and events carry a protocol
-discriminator, version 4, a type, and a bounded payload. Correlated requests
-also carry a request ID.
-
-Selection and History mutations carry `expectedRevision`. A selection target is
-`notebook` or `dom` and carries its owning document ID, document path, and
-bounded producing cell IDs. DOM targets also carry an exact DOM selector.
-Activity-start and reveal events carry a tagged address with either a cell ID
-or a stored selection ID and revision. Activity-start and activity-stop events
-share one opaque activity ID. The activity-stop payload contains only that ID.
-Python validates
-buffer cardinality before accepting image bytes. Selection image replacement
-commands, snapshot responses, and successful full-cell captures carry one PNG
-buffer. Other Lens messages carry none. Python and TypeScript schemas must
-change together.
-
-AnyWidget resource messages share the custom-message channel and use their own
-discriminator. The Lens parser ignores them.
-
-## Host adapter seams
-
-Lens keeps host-specific behavior behind narrow seams that can be replaced by
-native marimo or anywidget contracts.
-
-| Capability                   | Lens seam                                                                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
-| Widget-aware disposal        | `Lens._bind_comm_close()`                                                                               |
-| Native control state         | `_marimo_control_state.py`                                                                              |
-| Target navigation            | `packages/widget/src/notebook/notebook-dom.tsx` and `packages/widget/src/transient/target-attention.ts` |
-| Canonical output capture     | `packages/widget/src/notebook/output-root.ts`, `NotebookDomAdapter`, and `@marimo-lens/image-capture`   |
-| Browser-to-Python invocation | `packages/widget/src/anywidget/request-client.ts`                                                       |
-
-Native adoption should replace one seam at a time while preserving the public
-Python API and the remaining transport contracts.
-
-## Artifact boundary
-
-`packages/marimo-lens/src/marimo_lens/static/widget.js` and `widget.css` are the
-packaged browser resource contract. esbuild bundles the widget and its
-dependencies into the ESM file. Hatch validates and packages both files into
-the wheel and source distribution.
-
-The repository-root `plugin.json` and `skills/marimo-lens` tree are the authored
-Agent Plugin contract. The `agent-plugins` build backend packages that tree into
-the wheel and source distribution and records its installed location in the
-distribution metadata.
-
-A wheel built from the source distribution must load the browser resources
-and Agent Skill carried by that archive.
+Read [Testing](testing.md) before changing a boundary shared by more than one
+package or runtime.
