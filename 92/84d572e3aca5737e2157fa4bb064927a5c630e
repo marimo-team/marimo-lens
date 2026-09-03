@@ -1,0 +1,34 @@
+packages/widget/tests/app/marimo-lens-content.test.tsx
+  s_a3963c304e6a07::t_d6e3cd096b2459 799-800,837-838,849-850
+  s_a3963c304e6a07::t_734e545f6a8330 741,748-771,781,783-786,798,802,808,811,817,820-835,843,847-848
+  s_a3963c304e6a07::t_087e1031443752 1259-1260,1273-1274,1280-1281
+  s_a3963c304e6a07::t_24f2e239679778 524,530-533,577-587,603-604
+  s_a3963c304e6a07::t_8f88905ba47e04 525-529,534-576,588-602,605-606,1219-1258,1261-1272,1275-1279
+  s_a3963c304e6a07::t_5c227c8d35d7e6 52-70
+packages/widget/src/app/resolution-receipt.ts
+  s_a3963c304e6a07::t_1b7e2811cfee60 106-109
+  s_a3963c304e6a07::t_cb408d2320ed13 10,89-105,110-117,120,127-128
+packages/widget/src/transient/use-target-attention.ts
+  s_a3963c304e6a07::t_dd822c9dd550be 3,24-25,29,32-35,41-47,73
+  s_a3963c304e6a07::t_d5e06e9a08f1be 1,20,36,48-49,72,77
+  s_a3963c304e6a07::t_15ccb8d00b0c92 38,50-52,54,56
+  s_a3963c304e6a07::t_aa5172628fc0d7 53,55,57-59
+packages/widget/src/app/marimo-lens-content.tsx
+  s_a3963c304e6a07::t_d5e06e9a08f1be 99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "9284d572e3aca5737e2157fa4bb064927a5c630e",
+  "prompts": {},
+  "sessions": {
+    "s_a3963c304e6a07": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06244-23de-7671-80ee-e9c3699abd72",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
