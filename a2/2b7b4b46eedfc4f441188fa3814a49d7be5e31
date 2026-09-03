@@ -1,0 +1,23 @@
+docs/overview.md
+  s_858a29c052572a::t_07edd68868aad1 12-16
+docs/why-lens.md
+  s_858a29c052572a::t_d99a0542b7f50f 13-18
+  s_858a29c052572a::t_281f49cdaa086c 9-11
+  s_858a29c052572a::t_3ef8b93ecaaf05 8,12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a22b7b4b46eedfc4f441188fa3814a49d7be5e31",
+  "prompts": {},
+  "sessions": {
+    "s_858a29c052572a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a066ba-2041-7531-a76b-ebb93dc77f60",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": null
+    }
+  }
+}
