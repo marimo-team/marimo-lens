@@ -261,6 +261,18 @@ llm-only {
   padding-bottom: 96px;
 }
 
+.VPFooter .message a {
+  color: inherit;
+  text-decoration: underline dotted var(--vp-c-text-3);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+.VPFooter .message a:hover {
+  color: var(--vp-c-brand-1);
+  text-decoration-color: currentcolor;
+}
+
 .VPFeatures .VPFeature {
   border: 1px solid var(--vp-c-divider);
   border-radius: 8px;
