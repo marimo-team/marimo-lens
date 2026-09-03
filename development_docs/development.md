@@ -12,7 +12,7 @@ Read [Architecture](architecture.md) for the ownership model. Use
 | ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | [Python](https://www.python.org/)                    | `.python-version` selects Python 3.12 for local development. The package supports Python 3.10 through 3.14. |
 | [uv](https://docs.astral.sh/uv/)                     | Resolves the Python workspace, runs Python tools, and builds distributions.                                 |
-| [Node.js](https://nodejs.org/)                       | Use `.node-version`. The root manifest requires Node.js 22.18 or newer.                                     |
+| [Node.js](https://nodejs.org/)                       | The root manifest requires Node.js 24 or newer.                                                             |
 | [pnpm](https://pnpm.io/)                             | Use the Corepack-managed version declared in the root `package.json`.                                       |
 | [ShellCheck](https://www.shellcheck.net/)            | Required after changing `scripts/*.sh`. CI runs it for every change.                                        |
 | Git and [GitHub CLI](https://cli.github.com/manual/) | Required for the release workflow. Release commands require authenticated repository access.                |

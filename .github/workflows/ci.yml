@@ -35,7 +35,7 @@ jobs:
       - name: Set up Vite+
         uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
         with:
-          node-version-file: .node-version
+          node-version-file: package.json
           cache: true
           run-install: |
             - args: ["--frozen-lockfile"]
@@ -84,7 +84,7 @@ jobs:
       - name: Set up Vite+
         uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
         with:
-          node-version-file: .node-version
+          node-version-file: package.json
           cache: true
           run-install: |
             - args: ["--frozen-lockfile"]
@@ -119,7 +119,7 @@ jobs:
       - name: Set up Vite+
         uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
         with:
-          node-version-file: .node-version
+          node-version-file: package.json
           cache: true
           run-install: |
             - args: ["--frozen-lockfile"]
@@ -155,7 +155,7 @@ jobs:
       - name: Set up Vite+
         uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
         with:
-          node-version-file: .node-version
+          node-version-file: package.json
           cache: true
           run-install: |
             - args: ["--frozen-lockfile"]

@@ -6,8 +6,7 @@ configured DOM roots and exposes bounded selection and graph context to agents.
 
 ## Build, test, and lint commands
 
-Use the Node version in `.node-version` and the pnpm version declared in
-`package.json`.
+Use the Node and pnpm versions declared in `package.json`.
 
 | Purpose                | Command                          | Expected result                 |
 | ---------------------- | -------------------------------- | ------------------------------- |
