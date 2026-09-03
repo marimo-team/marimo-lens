@@ -1,0 +1,22 @@
+apps/docs/.vitepress/theme/custom.css
+  s_d5e6ed691d291e::t_75f38c97c83a75 264-275
+apps/docs/.vitepress/config.mts
+  s_d5e6ed691d291e::t_e1846b90204293 86
+  s_d5e6ed691d291e::t_75f38c97c83a75 85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "ffd76904fb8059a57fd727930386c731936929be",
+  "prompts": {},
+  "sessions": {
+    "s_d5e6ed691d291e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0675a-a27c-77e2-bfd8-ada269eae92c",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
