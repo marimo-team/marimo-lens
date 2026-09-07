@@ -1,18 +1,17 @@
 name: GitHub Pages
-
 on:
   pull_request:
-  push:
-    branches: [main]
-  workflow_dispatch:
 
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 permissions:
   contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   changes:
     name: Changes
@@ -30,7 +29,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-
       - name: Classify changed files
         id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -41,10 +39,7 @@ jobs:
   documentation:
     name: Documentation contracts
     needs: changes
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      needs.changes.outputs.documentation == 'true' ||
-      needs.changes.outputs.pages == 'true'
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.documentation == 'true' || needs.changes.outputs.pages == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -52,40 +47,14 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable
-
+      - name: Set up JavaScript
+        uses: ./.github/actions/setup-js
       - name: Check documentation formatting
-        run: >-
-          pnpm exec vp fmt --check
-          README.md
-          AGENTS.md
-          CLAUDE.md
-          CONTRIBUTING.md
-          LICENSE
-          SECURITY.md
-          apps/docs
-          development_docs
-          docs
-          examples
-          packages/marimo-lens/README.md
-          skills/marimo-lens
-
+        run: pnpm exec vp fmt --check README.md AGENTS.md CLAUDE.md CONTRIBUTING.md LICENSE SECURITY.md apps/docs development_docs docs examples packages/marimo-lens/README.md skills/marimo-lens
       - name: Lint documentation sources
         run: pnpm exec vp lint apps/docs
-
       - name: Type-check documentation sources
         run: pnpm --filter @marimo-lens/docs typecheck
-
       - name: Set up uv and Python
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.readme == 'true'
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
@@ -93,17 +62,17 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
           python-version: "3.12"
-
       - name: Build browser assets for README examples
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.readme == 'true'
         run: pnpm --filter @marimo-lens/python build
-
       - name: Test README examples
         if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.readme == 'true'
         run: uv run pytest -q packages/marimo-lens/tests/test_readme.py
 
   docs:
-    needs: [changes, documentation]
+    needs:
+      - changes
+      - documentation
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.pages == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -116,34 +85,21 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-
       - name: Set up uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable
-
+      - name: Set up JavaScript
+        uses: ./.github/actions/setup-js
       - name: Configure GitHub Pages
         if: github.event_name != 'pull_request'
         id: pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-
       - name: Build docs
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
         run: make docs
-
       - name: Verify docs base path
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
@@ -155,7 +111,6 @@ jobs:
           grep -q "src=\"${BASE_PATH}/assets/" "$index"
           grep -q "href=\"${BASE_PATH}/getting-started\"" "$index"
           grep -q 'href="./getting-started"' "$index"
-
       - name: Upload GitHub Pages artifact
         if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

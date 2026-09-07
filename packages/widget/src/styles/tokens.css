@@ -6,7 +6,7 @@
   --ml-border: var(--border, #e2e8f0);
   --ml-primary: #0880ea;
   --ml-primary-hover: #0b68cb;
-  --ml-accent-foreground: #0b68cb;
+  --ml-accent-foreground: #095eb8;
   --ml-on-primary: #f8fafc;
   --ml-destructive: var(--destructive, #ea5d5d);
   --ml-destructive-soft: #fef2f2;
@@ -38,10 +38,7 @@
   --ml-surface-subtle: #181c1a;
   --ml-foreground: var(--foreground, #f1f5f3);
   --ml-muted-foreground: #aab2af;
-  --ml-primary: #28879f;
-  --ml-primary-hover: #1d5b6a;
-  --ml-accent-foreground: #b6ecf7;
-  --ml-on-primary: #b6ecf7;
+  --ml-accent-foreground: #8cc6ff;
   --ml-destructive-soft: #451f22;
   --ml-shadow: 0 2px 8px rgb(0 0 0 / 24%);
 }

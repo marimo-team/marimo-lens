@@ -218,7 +218,10 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
     case "noteSaveSucceeded":
       return {
         ...state,
-        workflow: { mode: "idle" },
+        workflow:
+          state.workflow.mode === "editingNote" && state.workflow.selectionId === action.selectionId
+            ? { mode: "idle" }
+            : state.workflow,
         busySelectionIds: removeValue(state.busySelectionIds, action.selectionId),
         optimisticCurrentSelectionId:
           state.optimisticCurrentSelectionId === action.selectionId
@@ -229,12 +232,10 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
     case "noteSaveFailed":
       return {
         ...state,
-        workflow: {
-          mode: "editingNote",
-          selectionId: action.selectionId,
-          motion: "instant",
-          error: action.message,
-        },
+        workflow:
+          state.workflow.mode === "editingNote" && state.workflow.selectionId === action.selectionId
+            ? { ...state.workflow, error: action.message }
+            : state.workflow,
         busySelectionIds: removeValue(state.busySelectionIds, action.selectionId),
         announcement: action.message,
       };

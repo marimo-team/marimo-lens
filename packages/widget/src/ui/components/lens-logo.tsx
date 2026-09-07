@@ -1,5 +1,5 @@
-import darkLogo from "../../../../../apps/docs/public/brand/marimo-logo-dark.svg";
-import lightLogo from "../../../../../apps/docs/public/brand/marimo-logo-light.svg";
+import darkLogo from "../assets/marimo-logo-dark.svg";
+import lightLogo from "../assets/marimo-logo-light.svg";
 
 type LensLogoProps = {
   className?: string;

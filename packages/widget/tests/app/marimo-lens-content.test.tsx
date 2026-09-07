@@ -1,4 +1,3 @@
-import type { OutputCaptureHandler } from "@marimo-lens/image-capture";
 import type {
   AddressedSelection,
   AttentionEvent,
@@ -13,8 +12,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import type { LensWidgetModel } from "@/anywidget/client";
 import type { LensModel } from "@/anywidget/model";
+import type { LensWidgetModel, OutputCaptureHandler } from "@/anywidget/transport";
 import type { UiAction } from "@/selection/state";
 
 import { LensProtocolClient } from "@/anywidget/client";

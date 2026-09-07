@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { registerLensHostOutput } from "@/notebook/output-root";
 import {
@@ -13,6 +13,21 @@ import {
 afterEach(() => document.body.replaceChildren());
 
 describe("selection targets", () => {
+  test("resolves selections across separately loaded widget modules in one document", async () => {
+    const output = visible(document.createElement("div"));
+    output.id = "output-shared-cell";
+    document.body.appendChild(output);
+    const target = targetFromElement(output, null)!.target;
+
+    vi.resetModules();
+    const nextModule = await import("@/notebook/selection-target");
+
+    expect(nextModule.getTargetSurface(document, target, null)?.element).toBe(output);
+    const frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+    expect(nextModule.targetBelongsToDocument(target, frame.contentDocument!)).toBe(false);
+  });
+
   test("keeps notebook targeting on canonical output roots by default", () => {
     const output = visible(document.createElement("div"));
     output.id = "output-cell-1";

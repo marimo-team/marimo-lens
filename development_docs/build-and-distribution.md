@@ -37,6 +37,11 @@ is the `marimo-lens` Python distribution.
 | `@marimo-lens/python`        | Runs esbuild against the widget entry and writes Python package resources. |
 | `@marimo-lens/docs`          | Builds the VitePress site and interactive examples.                        |
 
+The docs app declares `@marimo-lens/python` as a workspace build dependency.
+Its Vite+ build task in `apps/docs/vite.config.ts` depends on
+`@marimo-lens/python#build`. Both `pnpm docs:build` and recursive workspace
+builds therefore produce browser resources before compiling interactive cells.
+
 The root Vite+ configuration owns workspace formatting, linting, type-aware
 checks, and recursive build orchestration. Package manifests own the
 dependencies and scripts used by that package.

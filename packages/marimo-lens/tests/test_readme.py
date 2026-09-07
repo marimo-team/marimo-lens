@@ -4,11 +4,13 @@ import re
 import runpy
 from pathlib import Path
 
+import pytest
 from marimo_lens import Lens
 
 
-def test_root_readme_python_examples_execute(tmp_path: Path) -> None:
-    readme = Path(__file__).resolve().parents[3] / "README.md"
+@pytest.mark.parametrize("path", ["README.md", "packages/marimo-lens/README.md"])
+def test_readme_python_examples_execute(tmp_path: Path, path: str) -> None:
+    readme = Path(__file__).resolve().parents[3] / path
     examples = re.findall(
         r"```python\n(.*?)\n```",
         readme.read_text(encoding="utf-8"),

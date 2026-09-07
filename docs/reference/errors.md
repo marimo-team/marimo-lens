@@ -68,6 +68,7 @@ presentation.
 | History                                | 64 entries and 64,000 UTF-8 bytes              |
 | Compact references                     | 60,000 UTF-8 bytes                             |
 | Standalone text                        | 64,000 characters                              |
+| Retained cell source                   | 24,000 characters shared across relevant cells |
 | Relevant runtime cells                 | 64                                             |
 | Reported omitted cell IDs              | 16 plus the exact omitted count                |
 | Controls in standalone text            | 16                                             |

@@ -139,6 +139,34 @@ describe("selection workflow", () => {
     ).toBeNull();
   });
 
+  test("preserves another note draft when an earlier save completes", () => {
+    const saving = uiReducer(INITIAL_UI_STATE, {
+      type: "noteSaveStarted",
+      selectionId: "selection-1",
+    });
+    const editing = uiReducer(saving, {
+      type: "editNote",
+      selectionId: "selection-2",
+    });
+
+    const succeeded = uiReducer(editing, {
+      type: "noteSaveSucceeded",
+      selectionId: "selection-1",
+      label: "S1",
+    });
+    expect(succeeded.workflow).toEqual(editing.workflow);
+    expect(succeeded.busySelectionIds).toEqual([]);
+
+    const failed = uiReducer(editing, {
+      type: "noteSaveFailed",
+      selectionId: "selection-1",
+      message: "Connection lost",
+    });
+    expect(failed.workflow).toEqual(editing.workflow);
+    expect(failed.busySelectionIds).toEqual([]);
+    expect(failed.announcement).toBe("Connection lost");
+  });
+
   test("treats a one-axis gesture as a point and a two-axis drag as a rectangle", () => {
     const output = document.createElement("div");
     output.getBoundingClientRect = () => new DOMRect(0, 0, 200, 100);

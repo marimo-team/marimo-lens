@@ -152,8 +152,8 @@ export function anchorForDetail(anchor: SelectionAnchor, bounds?: DomHintBounds)
     kind: "rect",
     x,
     y,
-    width: clamp(anchor.width / bounds.width, 0, 1 - x),
-    height: clamp(anchor.height / bounds.height, 0, 1 - y),
+    width: clamp((anchor.x + anchor.width - bounds.x) / bounds.width, 0, 1) - x,
+    height: clamp((anchor.y + anchor.height - bounds.y) / bounds.height, 0, 1) - y,
   };
 }
 
@@ -376,16 +376,12 @@ function translateAnchorToCrop(
   cropHeight: number,
   image: HTMLImageElement,
 ): SelectionAnchor {
-  const x = clamp((anchor.x * image.naturalWidth - sourceX) / cropWidth, 0, 1);
-  const y = clamp((anchor.y * image.naturalHeight - sourceY) / cropHeight, 0, 1);
-  if (anchor.kind === "point") return { kind: "point", x, y };
-  return {
-    kind: "rect",
-    x,
-    y,
-    width: clamp((anchor.width * image.naturalWidth) / cropWidth, 0, 1 - x),
-    height: clamp((anchor.height * image.naturalHeight) / cropHeight, 0, 1 - y),
-  };
+  return anchorForDetail(anchor, {
+    x: sourceX / image.naturalWidth,
+    y: sourceY / image.naturalHeight,
+    width: cropWidth / image.naturalWidth,
+    height: cropHeight / image.naturalHeight,
+  });
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useReducer, type CSSProperties } from "react";
+import { useLayoutEffect, useReducer, useState, type CSSProperties, type RefObject } from "react";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
 
@@ -24,6 +24,7 @@ type AnchoredSurfaceOptions = {
   horizontalOffset?: number;
   edgePadding?: number;
   surfaceHeight?: number;
+  surfaceRef?: RefObject<HTMLElement | null>;
   fallback?: AnchoredSurfacePosition;
 };
 
@@ -37,10 +38,12 @@ export function useAnchoredSurface({
   horizontalOffset = 0,
   edgePadding = 12,
   surfaceHeight,
+  surfaceRef,
   fallback = { style: {}, placement: preferredPlacement },
 }: AnchoredSurfaceOptions): AnchoredSurfacePosition {
   const dom = useNotebookDom();
   const [, refresh] = useReducer((revision: number) => revision + 1, 0);
+  const [measuredHeight, setMeasuredHeight] = useState(0);
   const ownerWindow = anchor?.element.ownerDocument.defaultView ?? dom.window;
   const hasAnchor = anchor !== null;
 
@@ -49,6 +52,16 @@ export function useAnchoredSurface({
     if (!hasAnchor) refresh();
     return dom.subscribeLayout(refresh);
   }, [dom, hasAnchor, open]);
+
+  useLayoutEffect(() => {
+    const surface = surfaceRef?.current;
+    if (!open || !surface) return undefined;
+    const measure = () => setMeasuredHeight(surface.getBoundingClientRect().height);
+    measure();
+    const observer = ownerWindow.ResizeObserver ? new ownerWindow.ResizeObserver(measure) : null;
+    observer?.observe(surface);
+    return () => observer?.disconnect();
+  }, [open, ownerWindow, surfaceRef]);
 
   if (!anchor) return fallback;
 
@@ -64,17 +77,27 @@ export function useAnchoredSurface({
     Math.max(edgePadding, viewportWidth - width - edgePadding),
   );
 
-  if (preferredPlacement === "below") {
-    const top = anchor.rect.bottom + gap;
+  const height = measuredHeight || surfaceHeight;
+  const spaceAbove = anchor.rect.top - gap - edgePadding;
+  const spaceBelow = viewportHeight - anchor.rect.bottom - gap - edgePadding;
+  let placement = preferredPlacement;
+  if (height) {
+    if (placement === "above" && height > spaceAbove && spaceBelow > spaceAbove) {
+      placement = "below";
+    } else if (placement === "below" && height > spaceBelow && spaceAbove > spaceBelow) {
+      placement = "above";
+    }
+  }
+  const maximumTop = Math.max(edgePadding, viewportHeight - (height ?? 0) - edgePadding);
+
+  if (placement === "below") {
     return {
       style: {
         left,
-        top: surfaceHeight
-          ? clamp(top, edgePadding, Math.max(edgePadding, viewportHeight - surfaceHeight))
-          : top,
+        top: clamp(anchor.rect.bottom + gap, edgePadding, maximumTop),
         width,
       },
-      placement: "below",
+      placement,
     };
   }
 
@@ -82,10 +105,12 @@ export function useAnchoredSurface({
   return {
     style: {
       left,
-      bottom: surfaceHeight ? Math.max(edgePadding, bottom) : bottom,
+      bottom: height
+        ? clamp(bottom, edgePadding, Math.max(edgePadding, viewportHeight - height - edgePadding))
+        : bottom,
       width,
     },
-    placement: "above",
+    placement,
   };
 }
 

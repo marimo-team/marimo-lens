@@ -1,0 +1,15 @@
+name: Set up JavaScript
+description: Install the declared Node and pnpm workspace with its frozen lockfile.
+runs:
+  using: composite
+  steps:
+    - name: Install the JavaScript workspace
+      uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+      with:
+        node-version-file: package.json
+        cache: true
+        run-install: |
+          - args: ["--frozen-lockfile"]
+    - name: Enable pnpm
+      shell: bash
+      run: corepack enable

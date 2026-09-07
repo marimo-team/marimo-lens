@@ -6,6 +6,7 @@ import json
 import threading
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from typing import Any, cast
 
 import marimo_lens
@@ -22,8 +23,10 @@ from marimo_lens import (
 )
 
 from tests.support.factories import (
+    cell,
     png,
     selection,
+    snapshot,
     snapshot_metadata,
 )
 
@@ -723,6 +726,53 @@ def test_stop_activity_rejects_a_closed_lens(
         lens.stop_activity(activity)
 
     assert raised.value.code == "lens_closed"
+
+
+def test_context_preserves_each_diagnostic_when_cell_lists_exceed_text_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+
+    producer_ids = [f"cell-{index:02d}-" + "x" * 110 for index in range(64)]
+    runtime = replace(
+        snapshot(*(cell(cell_id, code="x" * 500) for cell_id in producer_ids)),
+        omitted_cell_ids=tuple(f"omitted-{index}-" + "y" * 110 for index in range(16)),
+        omitted_cell_count=16,
+        cell_truncated_output_ids=frozenset(producer_ids),
+        control_truncated_output_ids=frozenset(producer_ids),
+        control_incomplete_output_ids=frozenset(producer_ids),
+    )
+    monkeypatch.setattr(
+        MarimoRuntimeAdapter,
+        "snapshot",
+        lambda _self, _output_cell_ids: runtime,
+    )
+    lens = RecordingLens()
+    try:
+        response = _put(
+            lens,
+            revision=0,
+            selection_value=selection(
+                target={
+                    "kind": "dom",
+                    "cellIds": producer_ids,
+                    "documentId": "document-1",
+                    "documentPath": "/",
+                    "domSelector": "#results",
+                }
+            ),
+        )
+        assert response["ok"] is True
+
+        text = lens.context().text
+
+        assert "16 relevant cells were omitted" in text
+        assert "Source was truncated" in text
+        assert "Control sampling reached its per-output limit" in text
+        assert "Control sampling could not read runtime values" in text
+        assert len(text) <= 64_000
+    finally:
+        lens.close()
 
 
 def test_pointer_release_selection_exists_before_image_capture() -> None:

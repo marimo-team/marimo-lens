@@ -338,7 +338,7 @@ def test_context_reports_source_and_control_state_budgets() -> None:
 
     assert "Source was truncated" in text
     assert "2 relevant controls were omitted" in text
-    assert "Current control state was truncated" in text
+    assert "Some current control values or metadata are redacted, unavailable" in text
     assert "source_sentinel" not in json.dumps(references)
 
 

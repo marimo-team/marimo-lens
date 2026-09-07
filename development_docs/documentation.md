@@ -44,7 +44,8 @@ The current site routes readers through:
 - `docs/reference/context.md`: exact `LensContext` and reference shapes.
 - `docs/reference/errors.md`: errors, recovery actions, and resource limits.
 
-`apps/docs/.vitepress/config.mts` owns top navigation, sidebar navigation,
+`apps/docs/.vitepress/config.mts` shares one page inventory between top
+navigation and the sidebar. It also owns
 search, metadata, base path, edit links, theme registration, and build plugins.
 Add every public guide or reference page to intentional navigation. The landing
 page remains reachable at the site root.
@@ -131,8 +132,10 @@ Use one page-level graph for related steps. Avoid hidden dependencies on cells
 from another page or an unstated local file. Keep demonstration variables
 private when they should not become public notebook definitions.
 
-The docs examples consume the locally built Python browser resources. `make
-docs` and `make docs-serve` build `@marimo-lens/python` before VitePress.
+The docs examples consume the locally built Python browser resources. The
+Vite+ build task in `apps/docs/vite.config.ts` declares that dependency, so
+`make docs`, `pnpm docs:build`, and recursive builds run it before VitePress.
+`make docs-serve` builds the same resources before starting the dev server.
 
 ## Assets and theme
 
@@ -179,6 +182,9 @@ Preview an existing build with:
 ```sh
 pnpm docs:preview
 ```
+
+Use `BASE_PATH=marimo-lens pnpm docs:preview` when previewing a build made with
+that base path. The preview server reads the same configuration as the build.
 
 The VitePress output directory is `apps/docs/.vitepress/dist/`.
 

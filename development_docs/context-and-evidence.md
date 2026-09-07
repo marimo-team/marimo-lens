@@ -137,10 +137,10 @@ identity, value visibility, sensitive values, incomplete metadata, failing
 descriptors, and budget behavior.
 
 `RuntimeSnapshot` records `control_truncated_output_ids` and
-`control_incomplete_output_ids`, but `build_context_lazy()` does not currently
-project those collection-stage signals into `LensContext.text`. A failed or
-truncated control lookup can therefore be absent from the final limit notice.
-Preserve these fields until the context builder can report them end to end.
+`control_incomplete_output_ids`. Standalone text reports affected producing
+cell IDs alongside source and control-budget notices. This preserves the
+distinction between an absent control and a control lookup that was incomplete
+or truncated during runtime collection.
 
 ## Selection images
 

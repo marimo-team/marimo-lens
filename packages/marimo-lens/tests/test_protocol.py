@@ -865,7 +865,11 @@ def test_error_responses_bound_untrusted_text() -> None:
     assert len(error["error"]["message"].encode("utf-16-le")) // 2 == 500
 
 
-@pytest.mark.parametrize("request_id", ["r" * 1_000_000, "broken\ud800id"])
+@pytest.mark.parametrize(
+    "request_id",
+    ["r" * 1_000_000, "broken\ud800id"],
+    ids=["oversized", "unpaired-surrogate"],
+)
 def test_invalid_request_id_is_not_echoed(request_id: str) -> None:
     assert request_id_from({"requestId": request_id}) == ""
 

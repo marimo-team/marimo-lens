@@ -12,7 +12,9 @@ import type {
 
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { LensProtocolClient, LensProtocolError, type OutputCaptureAsset } from "@/anywidget/client";
+import type { OutputCaptureAsset } from "@/anywidget/transport";
+
+import { LensProtocolClient, LensProtocolError } from "@/anywidget/client";
 
 import { selectionFixture } from "../support/fixtures";
 

@@ -24,8 +24,8 @@ connection. Install its Agent Skill:
 npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
 ```
 
-An **Agent Skill** is a set of workflow instructions an agent host can load by
-name. The command requires Node.js, `npx`, network access, and an agent host
+An [Agent Skill](https://agentskills.io/home) is a set of workflow instructions
+an agent host can load by name. The command requires Node.js, `npx`, network access, and an agent host
 that supports Agent Skills. Use `$marimo-pair` to connect to or start the
 notebook, then resume `$marimo-lens`.
 
@@ -86,16 +86,20 @@ result from fresh runtime and browser evidence.
 
 ## Return verified work
 
-Read a fresh context after verification and find the same selection ID. Stop
-the owned activity, reveal the selected target, wait for the reveal hold, then
-resolve the selection in a later kernel call.
+Save the Lens identity, selection ID, and activity handle in the agent's working
+state before ending a kernel call. After verification, reconnect and find the
+same selection ID in a fresh context. Reassess a changed note or mark before
+returning the result. Stop the owned activity, reveal the selected target, wait
+for the reveal hold, then resolve in a later kernel call.
 
 ```python
+identity = mounted.identity
+selection_id = selection["id"]
 fresh_context = mounted.context()
 fresh_selection = next(
     item
     for item in fresh_context.references["selections"]
-    if item["id"] == selection["id"]
+    if item["id"] == selection_id
 )
 
 mounted.stop_activity(activity)
@@ -124,7 +128,7 @@ revision = mounted.resolve(
 print(revision)
 ```
 
-The second example receives `identity` and `selection_id` from the agent's
+The resolution call receives `identity` and `selection_id` from the agent's
 working state. Each code-mode kernel call has a fresh scratch namespace.
 
 Resolution moves the selection to **History** and shows a resolution receipt

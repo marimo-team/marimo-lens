@@ -25,6 +25,12 @@ uv sync --locked
 pnpm install --frozen-lockfile
 ```
 
+Install the Chromium browser used by the end-to-end suite:
+
+```sh
+pnpm --filter @marimo-lens/e2e install-browser
+```
+
 The installs can access package indexes. Dependency age gates and the patched
 image dependency are documented in [Dependencies](dependencies.md).
 
@@ -127,8 +133,8 @@ make check
 
 `make check` validates the lockfile, checks and tests the TypeScript workspace,
 builds packages and documentation, checks Python formatting and types, runs
-Python tests, and checks whitespace. It does not run `shellcheck` or
-`make package`.
+Python tests, runs the Chromium end-to-end suite and ShellCheck, and checks
+whitespace. Run `make package` separately for distribution changes.
 
 Run the shell check after changing release scripts:
 

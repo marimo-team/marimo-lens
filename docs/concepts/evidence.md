@@ -127,7 +127,11 @@ cells.
 
 `context.references` builds immediately as dictionaries that can be serialized
 to [JavaScript Object Notation (JSON)](https://www.rfc-editor.org/rfc/rfc8259).
-`context.text` builds and caches when first read. The text can include:
+`context.text` builds and caches when first read. Lens prioritizes producing
+cells and their nearest upstream dependencies, retains at most 64 cells, and
+shares a 24,000-character source budget across them. It presents retained cells
+with dependencies before consumers and reports omitted cells or truncated
+source. The text can include:
 
 - Producing and relevant upstream cell source.
 - Direct parent IDs, definitions, and references.

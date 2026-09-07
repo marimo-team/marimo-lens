@@ -13,10 +13,12 @@ from typing import Protocol, cast
 
 import agent_plugins
 
+from ._marimo_runtime import current_runtime_scope
+from ._registry import mounted_lenses
 from .activity import ActivityHandle
 from .context import LensContext, SelectionReference
 from .errors import LensError
-from .widget import Lens, _mounted_lenses
+from .widget import Lens
 
 _DISTRIBUTION_NAME = "marimo-lens"
 _SKILL_NAME = "marimo-lens"
@@ -332,7 +334,7 @@ def connect(
         if not identity:
             raise ValueError("identity must not be empty")
 
-    candidates = {id(lens): lens for lens in _mounted_lenses()}
+    candidates = {id(lens): lens for lens in mounted_lenses(current_runtime_scope())}
     if namespace is not None:
         for value in namespace.values():
             lens = _as_lens(value)

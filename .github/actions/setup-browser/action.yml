@@ -1,0 +1,38 @@
+name: Set up browser
+description: Restore the pinned Chromium headless shell and prepare its runtime dependencies.
+runs:
+  using: composite
+  steps:
+    - name: Locate Playwright browser cache
+      id: browser
+      shell: bash
+      working-directory: apps/e2e
+      run: |
+        node <<'JS'
+        const fs = require("node:fs");
+        const path = require("node:path");
+        const directory = path.join(process.env.RUNNER_TEMP, "playwright-browsers");
+        const version = require("@playwright/test/package.json").version;
+        fs.appendFileSync(process.env.GITHUB_ENV, `PLAYWRIGHT_BROWSERS_PATH=${directory}\n`);
+        fs.appendFileSync(process.env.GITHUB_OUTPUT, `path=${directory}\nversion=${version}\n`);
+        JS
+    - name: Restore Chromium
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.browser.outputs.path }}
+        key: chromium-shell-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.browser.outputs.version }}
+    - name: Install Linux browser dependencies
+      if: runner.os == 'Linux'
+      shell: bash
+      run: pnpm --filter @marimo-lens/e2e exec playwright install-deps chromium
+    - name: Install Chromium headless shell
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: pnpm --filter @marimo-lens/e2e exec playwright install --only-shell chromium
+    - name: Save Chromium
+      if: steps.cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.browser.outputs.path }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}

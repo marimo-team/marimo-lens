@@ -5,7 +5,19 @@ description: Public Python contracts for mounting Lens and connecting a code-mod
 
 # Python API
 
-marimo-lens exposes two Python surfaces:
+Mount `Lens` in a notebook cell. Connect to that instance from a live agent
+kernel call with `marimo_lens.agent.connect()`.
+
+| Task                                       | API                                                                                                              |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Add the notebook interface                 | [`Lens`](#lens)                                                                                                  |
+| Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                          |
+| Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal) |
+| Move addressed requests to History         | [`resolve()`](#lens-resolve)                                                                                     |
+| Connect an agent or capture current output | [`connect()`](#connect), [`MountedLens`](#mountedlens)                                                           |
+| Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
+
+The two caller roles are:
 
 - Notebook authors construct `Lens` and keep it mounted with the notebook.
 - Code-mode agents call `marimo_lens.agent.connect()` and work through a
@@ -45,7 +57,9 @@ from marimo_lens import (
 
 ### `Lens`
 
-`Lens(*, dom_selector=None) -> Lens`
+```python
+Lens(*, dom_selector: str | None = None) -> Lens
+```
 
 Creates the Python widget and browser UI that own one Lens instance.
 
@@ -89,7 +103,16 @@ degradation rule.
 
 ### `Lens.start_activity`
 
-`lens.start_activity(target, *, expected_revision=None, duration_ms=None, label=None, message=None) -> ActivityHandle`
+```python
+lens.start_activity(
+    target: str | SelectionReference,
+    *,
+    expected_revision: int | None = None,
+    duration_ms: int | None = None,
+    label: str | None = None,
+    message: str | None = None,
+) -> ActivityHandle
+```
 
 Marks one selection or cell as the current work location and returns the
 opaque owner accepted by `stop_activity()`.
@@ -113,8 +136,9 @@ address can omit `expected_revision` and must identify a current graph member.
 
 `duration_ms=None` keeps activity visible until a matching stop, later
 attention, or teardown. A duration from 1 through 300,000 milliseconds clears
-it after that hold. `label` defaults to **Working** in the browser. Selection
-state does not change.
+it after that hold. `label` defaults to **Working** in the browser. Labels
+accept 40 UTF-16 code units and activity messages accept 240. Selection state
+does not change.
 
 Raises `LensError` for a closed Lens, stale selection revision, missing
 selection, unavailable runtime, or missing cell. Invalid inputs raise
@@ -136,7 +160,16 @@ raises `ValueError`. A closed Lens raises `LensError(code="lens_closed")`.
 
 ### `Lens.reveal`
 
-`lens.reveal(target, *, expected_revision=None, duration_ms, label=None, message=None) -> None`
+```python
+lens.reveal(
+    target: str | SelectionReference,
+    *,
+    expected_revision: int | None = None,
+    duration_ms: int,
+    label: str | None = None,
+    message: str | None = None,
+) -> None
+```
 
 Brings one selection or cell into view for a required hold.
 
@@ -165,7 +198,14 @@ limits](./reference/errors) for the complete validation contract.
 
 ### `Lens.resolve`
 
-`lens.resolve(selection_ids, *, expected_revision, summary=None) -> int`
+```python
+lens.resolve(
+    selection_ids: str | Sequence[str],
+    *,
+    expected_revision: int,
+    summary: str | None = None,
+) -> int
+```
 
 Moves one or more Open selections into History and returns the next
 selection-state revision.
@@ -184,7 +224,8 @@ if selection_ids:
 
 Pass one ID string or a sequence of up to 64 unique strings. Lens validates the
 entire batch before changing state. The resolved selections share one resulting
-revision and optional summary. Their selection-image bytes are released.
+revision and optional summary of up to 240 UTF-16 code units. Their
+selection-image bytes are released.
 
 The state transition commits before Lens sends its best-effort resolution
 receipt. A receipt delivery failure does not roll back History. Expected errors are
@@ -308,8 +349,11 @@ if selection is not None and selection["cells"]:
     )
 ```
 
-Only one capture can be pending per Lens. Finish it before requesting another
-cell. The operation requires a current graph member and a browser-ready Lens
+One capture can be pending per Lens. Finish it before requesting another
+cell. A stale revision raises `revision_conflict`. A different cell while
+capture is pending raises `capture_busy`. A terminal result consumes the
+capture slot, so another call starts a new capture. Browser capture has a
+15-second deadline and the Python request expires after 20 seconds. The operation requires a current graph member and a browser-ready Lens
 view. Read [Context and evidence](./concepts/evidence) for the difference
 between a selection image and a cell-output image.
 

@@ -125,6 +125,16 @@ export function useDocumentInteractions(options: {
 
       const onKeyDown = (event: KeyboardEvent) => {
         const workflow = uiRef.current.workflow;
+        const target = eventTargetElement(event, surface.document);
+        // A focused image preview handles Escape before its containing selection sheet.
+        if (
+          event.key === "Escape" &&
+          target?.closest(
+            '[data-marimo-lens-snapshot-preview], [aria-haspopup="dialog"][aria-expanded="true"]',
+          )
+        ) {
+          return;
+        }
         handleLensEscape(event, {
           state: uiRef.current,
           dispatch,
@@ -142,7 +152,6 @@ export function useDocumentInteractions(options: {
           dispatch({ type: "disarm" });
           return;
         }
-        const target = eventTargetElement(event, surface.document);
         const lensUi = target?.closest("[data-marimo-lens-ui]");
         if (lensUi && !target?.closest("[data-ml-select]")) return;
         navigateTargets(dom, selector, event, workflow, beginSelection, dispatch);

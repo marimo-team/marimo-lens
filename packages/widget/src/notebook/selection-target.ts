@@ -11,7 +11,13 @@ import {
 } from "@/notebook/output-root";
 
 const DOCUMENT_POSITION_FOLLOWING = 4;
-const DOCUMENT_IDS = new WeakMap<Document, string>();
+const DOCUMENT_ID: unique symbol = Symbol.for("marimo-lens.document-id.v1");
+
+declare global {
+  interface Document {
+    [DOCUMENT_ID]?: string;
+  }
+}
 
 export type TargetSurface = {
   key: string;
@@ -267,7 +273,7 @@ function documentPath(ownerDocument: Document): string {
 }
 
 export function documentIdentity(ownerDocument: Document): string {
-  const existing = DOCUMENT_IDS.get(ownerDocument);
+  const existing = ownerDocument[DOCUMENT_ID];
   if (existing) return existing;
   const ownerWindow = ownerDocument.defaultView;
   if (!ownerWindow) throw new Error("Lens requires a browser window");
@@ -275,7 +281,8 @@ export function documentIdentity(ownerDocument: Document): string {
     ownerWindow.crypto.randomUUID?.() ??
     `${ownerWindow.Date.now().toString(36)}-${ownerWindow.Math.random().toString(36).slice(2, 10)}`;
   const created = `document:${id}`;
-  DOCUMENT_IDS.set(ownerDocument, created);
+  // AnyWidget module instances share target identity for the lifetime of the document.
+  Object.defineProperty(ownerDocument, DOCUMENT_ID, { value: created });
   return created;
 }
 

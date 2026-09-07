@@ -4,7 +4,7 @@ title: "marimo-lens: Visual grounding for your notebook agent"
 titleTemplate: false
 
 hero:
-  text: 'Let your notebook agent see <span class="lens-hero-focus">what you see<span class="lens-hero-selection-box" aria-hidden="true"></span></span>.'
+  text: 'Let your agent see <span class="lens-hero-focus">what you see<span class="lens-hero-selection-box" aria-hidden="true"></span></span>.'
   tagline: Point to a notebook result and say what should change. Lens connects that selection to the cells and notebook context behind the result.
   image:
     light: /brand/marimo-lens-lockup-stacked-light.svg
@@ -280,9 +280,9 @@ elif _state == "complete":
     <aside
       aria-labelledby="lens-demo-complete-title"
       data-demo-handoff-state="complete"
-      style="border:1px solid color-mix(in srgb,#1d7363 45%,var(--marimo-island-border,#e2e8f0));border-left:3px solid #1d7363;border-radius:6px;padding:1rem 1.125rem;background:var(--marimo-island-surface,#fff);color:var(--marimo-island-foreground,#0f172a);font-family:'PT Sans',sans-serif"
+      style="border:1px solid color-mix(in srgb,light-dark(#1d7363,#cad996) 45%,var(--marimo-island-border,#e2e8f0));border-left:3px solid light-dark(#1d7363,#cad996);border-radius:6px;padding:1rem 1.125rem;background:var(--marimo-island-surface,#fff);color:var(--marimo-island-foreground,#0f172a);font-family:'PT Sans',sans-serif"
     >
-      <span id="lens-demo-complete-title" style="display:block;color:#1d7363;font-family:'Fira Mono',monospace;font-size:0.6875rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">
+      <span id="lens-demo-complete-title" style="display:block;color:light-dark(#1d7363,#cad996);font-family:'Fira Mono',monospace;font-size:0.6875rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">
         Ready for review
       </span>
       <strong style="display:block;margin-top:0.625rem;font-size:0.9375rem">{_completed_summary}</strong>
@@ -296,7 +296,7 @@ elif _state == "complete":
 else:
     _reopened_notice = (
         """
-        <p data-demo-reopened="true" style="margin:0 0 0.75rem;border-left:2px solid #1d7363;padding-left:0.625rem;color:#1d7363;font-size:0.8125rem;font-weight:600">
+        <p data-demo-reopened="true" style="margin:0 0 0.75rem;border-left:2px solid light-dark(#1d7363,#cad996);padding-left:0.625rem;color:light-dark(#1d7363,#cad996);font-size:0.8125rem;font-weight:600">
           Reopened from History. Update the note or hand it off again.
         </p>
         """
@@ -396,9 +396,7 @@ if handoff_to_agent.value:
     _handoff_selections = _handoff_context.references["selections"]
     _handoff_current = _handoff_context.current
     _noted_selections = [
-        _selection
-        for _selection in _handoff_selections
-        if _selection["note"].strip()
+        _selection for _selection in _handoff_selections if _selection["note"].strip()
     ]
     if _handoff_current is not None and _noted_selections:
         _handoff_current_id = _handoff_current["id"]
@@ -468,8 +466,7 @@ if _verified_request is not None:
     _verified_selection_ids = _verified_request["selectionIds"]
     _verified_current = _verified_context.current
     _open_selection_ids = {
-        _selection["id"]
-        for _selection in _verified_context.references["selections"]
+        _selection["id"] for _selection in _verified_context.references["selections"]
     }
     if (
         _verified_current is not None
@@ -512,31 +509,44 @@ if _verified_request is not None:
         _verification_activity = lens.start_activity(
             _verified_current,
             expected_revision=_verified_context.revision,
-            label="Checking updated chart",
+            label=(
+                "Checking updated chart"
+                if _verified_request["colorSupported"]
+                else "Checking request"
+            ),
             message=_verification_message,
         )
         await asyncio.sleep(5)
         lens.stop_activity(_verification_activity)
-        _reveal_hold_ms = 10_000
-        lens.reveal(
-            _verified_current,
-            expected_revision=_verified_context.revision,
-            duration_ms=_reveal_hold_ms,
-            label="Updated chart",
-            message=_verified_summary,
-        )
-        await asyncio.sleep(_reveal_hold_ms / 1_000)
-        lens.resolve(
-            _verified_selection_ids,
-            expected_revision=_verified_context.revision,
-            summary=_verified_summary,
-        )
-        set_response_completion(
-            {
-                "summary": _verified_summary,
-                "count": _verified_count,
-            }
-        )
+        if lens.context().revision == _verified_context.revision:
+            _reveal_hold_ms = 10_000
+            lens.reveal(
+                _verified_current,
+                expected_revision=_verified_context.revision,
+                duration_ms=_reveal_hold_ms,
+                label=(
+                    "Updated chart"
+                    if _verified_request["colorSupported"]
+                    else "Try a color"
+                ),
+                message=_verified_summary,
+            )
+            await asyncio.sleep(_reveal_hold_ms / 1_000)
+            if (
+                _verified_request["colorSupported"]
+                and lens.context().revision == _verified_context.revision
+            ):
+                lens.resolve(
+                    _verified_selection_ids,
+                    expected_revision=_verified_context.revision,
+                    summary=_verified_summary,
+                )
+                set_response_completion(
+                    {
+                        "summary": _verified_summary,
+                        "count": _verified_count,
+                    }
+                )
 ```
 
 </section>

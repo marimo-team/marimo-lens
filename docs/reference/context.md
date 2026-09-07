@@ -16,8 +16,28 @@ print(context.revision)
 print(context.current)
 print(context.references)
 print(context.text)
-print(context.images)
+print({selection_id: len(png) for selection_id, png in context.images.items()})
 ```
+
+## Construction
+
+Read a live context with `lens.context()` or `mounted.context()`. To reconstruct
+an application-owned context from saved values:
+
+```python
+from marimo_lens import LensContext
+
+copy = LensContext(
+    references=context.references,
+    text=context.text,
+    images=context.images,
+)
+```
+
+`LensContext(references: Mapping[str, object], text: str, images: Mapping[str, bytes])`
+copies the references and image mapping and stores the supplied text. It does
+not read the notebook or validate the full reference schema. Reading `revision`
+raises `ValueError` when the supplied references contain an invalid revision.
 
 ## Properties
 
@@ -30,7 +50,8 @@ print(context.images)
 | `images`     | `Mapping[str, bytes]`        | Read-only mapping from selection ID to available selection-image PNG bytes. |
 
 The `references` dictionary is a detached copy. Mutating the copy cannot change
-Lens state. `images` is a read-only mapping. Reading `text` for the first time
+Lens state. Changes to this dictionary do affect `current` and `revision` on
+that context, so treat it as captured evidence. `images` is a read-only mapping. Reading `text` for the first time
 renders and caches it from the runtime snapshot captured by `context()`.
 
 With no Open selections, `text` is:
@@ -183,7 +204,8 @@ When selections exist, `context.text` can contain these sections:
 2. Selections with target, note, anchor, DOM hint, and producing-cell status.
 3. Relevant current native-control values.
 4. Producing and relevant upstream cells in topological order.
-5. Context-limit notices.
+5. Context-limit notices, including producing cells whose control collection
+   was incomplete or truncated.
 
 Password controls, custom controls, file payloads, AnyWidget state, composite
 controls, and opaque values appear as `[redacted]` or `[unavailable]`. Read

@@ -5,14 +5,12 @@ description: Lens connects a point or region on rendered notebook output to the 
 
 # What is Lens?
 
-Lens is a widget for [marimo](https://marimo.io/), a reactive Python notebook.
-It lets a person mark part of a rendered result and lets a code-mode agent trace
-that mark back to the notebook cells that produced it.
+**Let your agent see what you see.**
 
-[marimo Pair](https://marimo.io/pair) lets people collaborate with agents on
-analytical tasks in live marimo notebooks. Lens grounds those questions and
-instructions in the rendered cell output and the cells, dependencies, and
-values behind it.
+Lens is a widget for [marimo](https://marimo.io/), a reactive Python notebook.
+Mark part of a result, ask a question, and give a live notebook agent the
+selection and its producing cells. Lens shows the agent's activity and returns
+results to the notebook for your review.
 
 Mount one `Lens` in a notebook:
 
@@ -26,7 +24,7 @@ lens
 Press **Select**, click a point or drag a region, then add an optional note.
 Lens stores that attention as a **selection**.
 
-## One model for the product
+## From a mark to a request
 
 <div class="lens-mental-model" role="img" aria-label="A rendered target and point or region become a selection. Lens combines the selection with notebook context and an optional selection image. An agent shows activity, verifies work, reveals the result, and resolves the selection into History.">
   <div><strong>Target</strong><span>Rendered notebook output or configured page region</span></div>
@@ -53,21 +51,38 @@ status. The **current selection** is the likely referent when a person says
 `lens.context()`. It keeps the selection, its producing cells, relevant notebook
 context, and visual evidence together for the agent.
 
-## Why connect both views?
+## Point, revise, review
 
-A person refers through the rendered result: “explain this spike.” An agent acts
-through notebook cells, dependencies, and runtime values. Lens connects the
-visible reference to the computation that produced it, then returns the agent's
-work to the notebook for human review.
+1. **Point and ask.** Select a point or region and add a note such as “Explain
+   this spike.” Lens connects the marked output to its producing cells and
+   relevant upstream computation.
+2. **Revise and verify.** Your agent reads that context, inspects the live
+   notebook, and runs the changes. Lens marks where it is working and brings
+   returned results into view.
+3. **Review and continue.** The agent resolves the selection into **History**
+   after addressing it. You judge the evidence and can reopen the request for
+   another pass.
 
-[Why Lens?](./why-lens) explains this visual grounding, computational
-grounding, and review loop in plain language.
+**Addressed** records the agent's handoff. Your review determines whether the
+result answers the question. Reopening restores the mark and note on the
+current output, which may have changed since the original selection.
 
-## Choose the next page
+## Connect your notebook agent
 
-- [Why Lens?](./why-lens) explains the ideas behind the interaction.
-- [Getting started](./getting-started) mounts Lens and creates the first selection.
-- [How Lens works](./how-lens-works) runs the complete collaboration loop.
-- [Connect an agent](./agents) covers the live code-mode handoff.
+A **code-mode agent** can execute Python in the live notebook kernel to
+inspect, edit, and run cells. [marimo Pair](https://marimo.io/pair) provides one
+such connection. Lens supplies selection context and visible feedback through
+that connection. The agent integration performs notebook edits and execution.
 
-Use the sidebar for detailed concepts, troubleshooting, and API reference.
+[Connect an agent](./agents) covers setup and the complete workflow.
+
+## Choose your next step
+
+| I want to…                                    | Start here                                  |
+| --------------------------------------------- | ------------------------------------------- |
+| Make my first selection                       | [Getting started](./getting-started)        |
+| Understand visual and computational grounding | [Why Lens?](./why-lens)                     |
+| Try the agent feedback loop                   | [How Lens works](./how-lens-works)          |
+| Select a dashboard or application region      | [Targets](./concepts/targets)               |
+| Inspect what an agent receives                | [Context and evidence](./concepts/evidence) |
+| Look up a method or returned value            | [Python API](./api)                         |

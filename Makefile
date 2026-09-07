@@ -10,11 +10,12 @@ check:
 	uv run ty check
 	uv run pyrefly check --min-severity warn
 	uv run pytest -q
+	pnpm test:e2e
+	shellcheck scripts/*.sh
 	git diff --check
 
 docs:
-	pnpm --filter @marimo-lens/python build
-	pnpm --filter @marimo-lens/docs build
+	pnpm docs:build
 
 docs-serve:
 	pnpm --filter @marimo-lens/python build
