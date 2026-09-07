@@ -1,0 +1,27 @@
+development_docs/testing.md
+  s_dbeb33d68f4a71::t_9cec72b7bebf38 223-228
+.github/filters.yml
+  s_dbeb33d68f4a71::t_9cec72b7bebf38 120
+.github/workflows/publish.yml
+  s_dbeb33d68f4a71::t_9cec72b7bebf38 50-51
+.github/workflows/ci.yml
+  s_dbeb33d68f4a71::t_9cec72b7bebf38 216-217
+.github/actions/setup-browser/action.yml
+  s_dbeb33d68f4a71::t_dd8d692786163a 1-38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "31f4cc973076155ae29aefce73fe9d30938768e8",
+  "prompts": {},
+  "sessions": {
+    "s_dbeb33d68f4a71": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c87-0daf-7060-bdeb-a03b92989225",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
