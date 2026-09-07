@@ -220,6 +220,12 @@ flowchart LR
   `notebook-e2e-<runner OS>`.
 - **Package** builds and validates distribution artifacts through `make package`.
 
+`.github/actions/setup-browser/action.yml` restores Chromium's headless shell
+from a cache keyed by operating system, architecture, and installed Playwright
+version. A cache miss installs and saves the browser before tests run. Linux
+system libraries are installed separately on each runner. Windows uses the
+runner's system libraries. The release workflow uses the same browser setup.
+
 The `required` job requires success from every job selected by the path
 classifier. A skipped job passes the gate when its classification did not
 require it. Classification failure fails the gate.

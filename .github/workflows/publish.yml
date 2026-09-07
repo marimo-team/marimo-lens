@@ -47,8 +47,8 @@ jobs:
             exit 1
           fi
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
-      - name: Install Chromium
-        run: pnpm --filter @marimo-lens/e2e exec playwright install --with-deps chromium
+      - name: Set up browser
+        uses: ./.github/actions/setup-browser
       - name: Run release checks
         run: make check
       - name: Build and check package artifacts

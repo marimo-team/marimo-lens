@@ -117,4 +117,5 @@ e2e:
   - *python_inputs
   - *browser_bundle
   - apps/e2e/**
+  - .github/actions/setup-browser/**
   - .github/workflows/publish.yml

@@ -213,8 +213,8 @@ jobs:
         with:
           name: browser-assets
           path: packages/marimo-lens/src/marimo_lens/static/
-      - name: Install Chromium
-        run: pnpm --filter @marimo-lens/e2e exec playwright install --with-deps chromium
+      - name: Set up browser
+        uses: ./.github/actions/setup-browser
       - name: Test notebook interactions
         run: pnpm test:e2e
       - name: Upload browser evidence
