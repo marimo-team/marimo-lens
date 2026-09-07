@@ -316,6 +316,12 @@ def test_targeted_runtime_reads_only_sixteen_of_many_relevant_controls(
     assert sum(control.frontend_reads for control in controls.values()) == 16
     assert runtime.control_truncated_output_ids == frozenset({"cell-view"})
 
+    _, text = build_context(
+        runtime, [selection()], revision=1, current_selection_id="selection-1"
+    )
+
+    assert "Control sampling reached its per-output limit for `cell-view`" in text
+
 
 def test_targeted_runtime_retains_top_controls_for_each_output(
     monkeypatch: pytest.MonkeyPatch,
@@ -402,6 +408,22 @@ def test_control_lookup_failure_is_scoped_to_its_output(
 
     assert [control.name for control in runtime.controls] == ["good"]
     assert runtime.control_incomplete_output_ids == frozenset({"cell-bad"})
+
+    _, bad_text = build_context(
+        runtime,
+        [selection(output_cell_id="cell-bad")],
+        revision=1,
+        current_selection_id="selection-1",
+    )
+    _, good_text = build_context(
+        runtime,
+        [selection(output_cell_id="cell-good")],
+        revision=1,
+        current_selection_id="selection-1",
+    )
+
+    assert "Control sampling could not read runtime values for `cell-bad`" in bad_text
+    assert "Control sampling could not read runtime values" not in good_text
 
 
 def test_shared_control_lookup_failure_marks_each_output_once(

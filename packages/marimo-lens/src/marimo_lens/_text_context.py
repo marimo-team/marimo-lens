@@ -36,6 +36,11 @@ def render_text(
         return "No Lens selections were collected."
 
     live_cell_ids = snapshot.available_cell_ids
+    producer_ids = {
+        str(cell_id)
+        for selection in selections
+        for cell_id in selection["target"]["cellIds"]
+    }
     selection_items = [
         (
             {
@@ -99,6 +104,12 @@ def render_text(
             provenance,
             omitted_control_count=omitted_control_count,
             control_state_truncated=serialized_controls.state_truncated,
+            control_truncated_output_ids=sorted(
+                producer_ids.intersection(snapshot.control_truncated_output_ids)
+            ),
+            control_incomplete_output_ids=sorted(
+                producer_ids.intersection(snapshot.control_incomplete_output_ids)
+            ),
         ),
     ]
     text = "\n\n".join(section for section in sections if section)
@@ -409,16 +420,23 @@ def _render_context_limits(
     *,
     omitted_control_count: int,
     control_state_truncated: bool,
+    control_truncated_output_ids: Sequence[str],
+    control_incomplete_output_ids: Sequence[str],
 ) -> str:
     lines = _context_limit_lines(
         provenance,
         omitted_control_count=omitted_control_count,
         control_state_truncated=control_state_truncated,
+        control_truncated_output_ids=control_truncated_output_ids,
+        control_incomplete_output_ids=control_incomplete_output_ids,
     )
-    if not lines:
-        return ""
-    rendered = "\n".join(("## Context limits", *lines))
-    return _truncate_text(rendered, _TEXT_LIMIT_CHARACTERS)[0]
+    return _fair_section(
+        "## Context limits",
+        lines,
+        budget=_TEXT_LIMIT_CHARACTERS,
+        render=_truncate_text,
+        notice="Context note: Some diagnostic details were truncated.",
+    )
 
 
 def _context_limit_lines(
@@ -426,6 +444,8 @@ def _context_limit_lines(
     *,
     omitted_control_count: int,
     control_state_truncated: bool,
+    control_truncated_output_ids: Sequence[str],
+    control_incomplete_output_ids: Sequence[str],
 ) -> list[str]:
     lines: list[str] = []
     if provenance.omitted_cell_count:
@@ -451,7 +471,20 @@ def _context_limit_lines(
     if omitted_control_count:
         lines.append(f"- {omitted_control_count} relevant controls were omitted.")
     if control_state_truncated:
-        lines.append("- Current control state was truncated by its shared text budget.")
+        lines.append(
+            "- Some current control values or metadata are redacted, unavailable, "
+            "or truncated."
+        )
+    if control_truncated_output_ids:
+        output_ids, _truncated = _names_text(control_truncated_output_ids, maximum=400)
+        lines.append(
+            f"- Control sampling reached its per-output limit for {output_ids}."
+        )
+    if control_incomplete_output_ids:
+        output_ids, _truncated = _names_text(control_incomplete_output_ids, maximum=400)
+        lines.append(
+            f"- Control sampling could not read runtime values for {output_ids}."
+        )
     return lines
 
 
