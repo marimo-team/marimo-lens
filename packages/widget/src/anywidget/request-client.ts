@@ -21,7 +21,7 @@ import {
   parseLensResponse,
 } from "@marimo-lens/protocol";
 
-import type { LensWidgetModel } from "@/anywidget/client";
+import type { LensWidgetModel } from "@/anywidget/transport";
 
 import { LensProtocolError } from "@/anywidget/error";
 

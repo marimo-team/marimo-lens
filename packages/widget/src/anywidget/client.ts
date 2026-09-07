@@ -1,52 +1,27 @@
-import type { OutputCaptureHandler } from "@marimo-lens/image-capture";
 import type {
   AttentionEvent,
-  ClientCommand,
   ImageAction,
-  LensState,
   LensResponse,
   Selection,
   SelectionResolvedEvent,
   StoredSnapshot,
   TransportInput,
-  WIDGET_TRANSPORT_VERSION,
 } from "@marimo-lens/protocol";
 
 import { parseTransportEnvelope } from "@marimo-lens/protocol";
+
+import type { LensWidgetModel, OutputCaptureHandler } from "@/anywidget/transport";
 
 import { LensProtocolError } from "@/anywidget/error";
 import { EventRouter } from "@/anywidget/event-router";
 import { OutputCaptureTransport } from "@/anywidget/output-capture-transport";
 import { RequestClient } from "@/anywidget/request-client";
 
-export type { OutputCaptureAsset } from "@marimo-lens/image-capture";
 export { LensProtocolError };
 
 export type SnapshotAsset = {
   snapshot: StoredSnapshot;
   bytes: Uint8Array;
-};
-
-type OutputCaptureReadinessEvent = {
-  protocol: "marimo-lens.event";
-  version: typeof WIDGET_TRANSPORT_VERSION;
-  type: "output.capture.ready" | "output.capture.unready";
-  payload: Readonly<Record<string, never>>;
-};
-
-type WidgetOutboundMessage = ClientCommand | LensResponse | OutputCaptureReadinessEvent;
-
-type WidgetMessageHandler = (message: TransportInput, buffers: DataView[]) => void;
-
-export type LensWidgetModel = {
-  get(key: "_state"): LensState;
-  on(eventName: "msg:custom", handler: WidgetMessageHandler): void;
-  off(eventName: "msg:custom", handler: WidgetMessageHandler): void;
-  send(
-    message: WidgetOutboundMessage,
-    callbacks?: undefined,
-    buffers?: ArrayBuffer[] | ArrayBufferView[],
-  ): void;
 };
 
 export class LensProtocolClient {

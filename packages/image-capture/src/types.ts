@@ -1,9 +1,4 @@
-import type {
-  AvailableSnapshot,
-  OutputCaptureCommand,
-  OutputCaptureImage,
-  SelectionSnapshot,
-} from "@marimo-lens/protocol";
+import type { AvailableSnapshot, SelectionSnapshot } from "@marimo-lens/protocol";
 
 export type CapturedSnapshot = {
   metadata: AvailableSnapshot;
@@ -16,13 +11,3 @@ export type CaptureResult =
       status: "failed";
       snapshot: Extract<SelectionSnapshot, { status: "failed" }>;
     };
-
-export type OutputCaptureAsset = Readonly<{
-  image: OutputCaptureImage;
-  bytes: Uint8Array;
-}>;
-
-export type OutputCaptureHandler = (
-  command: OutputCaptureCommand,
-  signal: AbortSignal,
-) => Promise<OutputCaptureAsset>;

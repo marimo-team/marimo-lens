@@ -1,4 +1,3 @@
-import type { OutputCaptureAsset, OutputCaptureHandler } from "@marimo-lens/image-capture";
 import type { OutputCaptureCommand, TransportEnvelope } from "@marimo-lens/protocol";
 
 import {
@@ -13,7 +12,11 @@ import {
   parseOutputCaptureCommand,
 } from "@marimo-lens/protocol";
 
-import type { LensWidgetModel } from "@/anywidget/client";
+import type {
+  LensWidgetModel,
+  OutputCaptureAsset,
+  OutputCaptureHandler,
+} from "@/anywidget/transport";
 
 import { LensProtocolError } from "@/anywidget/error";
 
