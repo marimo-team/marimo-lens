@@ -14,22 +14,25 @@
   <a href="https://spdx.org/licenses/Apache-2.0.html"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
 </p>
 
-**Let your notebook agent see what you see.**
+**Let your agent see what you see.**
 
-Point to part of a rendered [marimo](https://marimo.io/) result and say what should change. Lens
-connects that selection to the cells and notebook context behind the result, so
-an agent can inspect the right code and return its work for review.
-
-## Demo
-
-Mark a chart region, hand it to a notebook agent, and review the result it
-brings back into view.
+Point to a chart, table, or other result in [marimo](https://marimo.io/), a
+reactive Python notebook. Lens gives your agent the selection, your note, and
+the code behind it, then brings the agent's work back into view for your review.
 
 https://github.com/user-attachments/assets/e1975ba6-3087-485e-9360-43a99adc8795
 
-## Quick start
+- **Point and ask.** Mark a point or region on a chart, table, or other output.
+  Lens keeps the mark, note, image, and relevant notebook context together.
+- **Follow the work.** See where the agent is working and the result it brings
+  into view.
+- **Review and continue.** Reopen an addressed selection from History to refine
+  the request against the current output.
 
-Open a local notebook with Lens available:
+## Try it
+
+Open a notebook with [uv](https://docs.astral.sh/uv/), a Python environment and
+package manager:
 
 ```sh
 uvx --with marimo-lens marimo edit notebook.py
@@ -44,40 +47,24 @@ lens = Lens()
 lens
 ```
 
-Keep that cell mounted. Press **Select**, click a point or drag a region inside
-a rendered output, then add an optional note for the agent.
+Press **Select**, click a point or drag a region, and add a note. Keep the Lens
+cell mounted. Requires Python 3.10–3.14 and marimo 0.24.0 or newer.
 
-Lens supports Python 3.10 through 3.14 and marimo 0.24.0 or newer.
-
-## Connect an agent
-
-Lens works with agents that can execute code in the live marimo kernel. The
-Python package carries the matching Agent Skill and registers its code-mode
-capability with marimo.
-
-The [agent guide](https://marimo-team.github.io/marimo-lens/agents) covers
-compatible agent environments, the optional marimo Pair connection, selection
-context, verification, reveal, and resolution.
+Lens works with agents that can run code in the live notebook kernel, including
+[marimo Pair](https://marimo.io/pair). Follow the
+[agent guide](https://marimo-team.github.io/marimo-lens/agents) to connect one.
 
 ## Documentation
 
-- [Getting started](https://marimo-team.github.io/marimo-lens/getting-started) creates the first selection.
-- [What is Lens?](https://marimo-team.github.io/marimo-lens/overview) introduces the product model and routes to deeper concepts.
-- [Selections](https://marimo-team.github.io/marimo-lens/selections) and [Connect an agent](https://marimo-team.github.io/marimo-lens/agents) cover the two sides of the workflow.
-- [Python API](https://marimo-team.github.io/marimo-lens/api) and [Troubleshooting](https://marimo-team.github.io/marimo-lens/troubleshooting) provide exact lookup and recovery.
+[Getting started](https://marimo-team.github.io/marimo-lens/getting-started) ·
+[Concepts](https://marimo-team.github.io/marimo-lens/overview) ·
+[Selections](https://marimo-team.github.io/marimo-lens/selections) ·
+[Python API](https://marimo-team.github.io/marimo-lens/api) ·
+[Troubleshooting](https://marimo-team.github.io/marimo-lens/troubleshooting)
 
-## Development
+For development, start with [Contributing](CONTRIBUTING.md) and the
+[architecture guide](development_docs/architecture.md).
+[Report a bug](https://github.com/marimo-team/marimo-lens/issues) or follow the
+[security policy](SECURITY.md) for a vulnerability.
 
-The [example notebook](examples/lens.py) provides a local product smoke test.
-Read [Contributing](CONTRIBUTING.md) for setup, verification, and pull request
-guidance. The [development documentation](development_docs/README.md) covers
-architecture, browser validation, packaging, and release.
-
-Report bugs through [GitHub Issues](https://github.com/marimo-team/marimo-lens/issues).
-Report security vulnerabilities through the [security policy](SECURITY.md).
-marimo-lens is available under the [Apache License 2.0](LICENSE).
-
-## Acknowledgements
-
-marimo-lens was inspired by
-[Agentation](https://github.com/benjitaylor/agentation).
+[Apache 2.0](LICENSE). Inspired by [Agentation](https://github.com/benjitaylor/agentation).

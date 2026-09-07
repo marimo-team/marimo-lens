@@ -14,8 +14,10 @@ Serve with hot reload from the repository root:
 make docs-serve
 ```
 
-The development server listens at `http://127.0.0.1:55173/` and exits when that
-port is already in use.
+[Portless](https://portless.sh/) assigns a port and prints the local URL.
+Follow the printed address. Linked worktrees receive their own subdomain.
+See [Build channels](../../development_docs/documentation.md#build-channels)
+for local HTTPS setup.
 
 Build the static site:
 

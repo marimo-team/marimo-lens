@@ -27,6 +27,44 @@ const llmsPlugins = llmstxt({
   excludeIndexPage: false,
 }) as [Plugin, Plugin];
 
+const navigation = [
+  {
+    text: "Start here",
+    items: [
+      { text: "What is Lens?", link: "/overview" },
+      { text: "Why Lens?", link: "/why-lens" },
+      { text: "Getting started", link: "/getting-started" },
+      { text: "How Lens works", link: "/how-lens-works" },
+    ],
+  },
+  {
+    text: "Concepts",
+    items: [
+      { text: "Targets", link: "/concepts/targets" },
+      { text: "Selections", link: "/selections" },
+      { text: "Context and evidence", link: "/concepts/evidence" },
+      { text: "Feedback and History", link: "/concepts/feedback" },
+    ],
+  },
+  {
+    text: "Guides",
+    items: [
+      { text: "Connect an agent", link: "/agents" },
+      { text: "Data and trust", link: "/data-and-trust" },
+      { text: "Compatibility", link: "/compatibility" },
+      { text: "Troubleshooting", link: "/troubleshooting" },
+    ],
+  },
+  {
+    text: "Reference",
+    items: [
+      { text: "Python API", link: "/api" },
+      { text: "LensContext", link: "/reference/context" },
+      { text: "Errors and limits", link: "/reference/errors" },
+    ],
+  },
+];
+
 export default defineConfig({
   base: basePath ? `${basePath}/` : "/",
   cleanUrls: true,
@@ -94,41 +132,7 @@ export default defineConfig({
       light: "/brand/marimo-lens-lockup-horizontal-light.svg",
     },
     nav: [
-      {
-        text: "Overview",
-        items: [
-          { text: "What is Lens?", link: "/overview" },
-          { text: "Why Lens?", link: "/why-lens" },
-          { text: "Getting started", link: "/getting-started" },
-          { text: "How Lens works", link: "/how-lens-works" },
-        ],
-      },
-      {
-        text: "Core concepts",
-        items: [
-          { text: "Targets", link: "/concepts/targets" },
-          { text: "Selections", link: "/selections" },
-          { text: "Context and evidence", link: "/concepts/evidence" },
-          { text: "Feedback and History", link: "/concepts/feedback" },
-        ],
-      },
-      {
-        text: "Guides",
-        items: [
-          { text: "Connect an agent", link: "/agents" },
-          { text: "Data and trust", link: "/data-and-trust" },
-          { text: "Compatibility", link: "/compatibility" },
-          { text: "Troubleshooting", link: "/troubleshooting" },
-        ],
-      },
-      {
-        text: "Reference",
-        items: [
-          { text: "Python API", link: "/api" },
-          { text: "LensContext", link: "/reference/context" },
-          { text: "Errors and limits", link: "/reference/errors" },
-        ],
-      },
+      ...navigation,
       {
         text: "Project",
         items: [
@@ -140,43 +144,7 @@ export default defineConfig({
     ],
     outline: [2, 3],
     search: { provider: "local" },
-    sidebar: [
-      {
-        text: "Overview",
-        items: [
-          { text: "What is Lens?", link: "/overview" },
-          { text: "Why Lens?", link: "/why-lens" },
-          { text: "Getting started", link: "/getting-started" },
-          { text: "How Lens works", link: "/how-lens-works" },
-        ],
-      },
-      {
-        text: "Core concepts",
-        items: [
-          { text: "Targets", link: "/concepts/targets" },
-          { text: "Selections", link: "/selections" },
-          { text: "Context and evidence", link: "/concepts/evidence" },
-          { text: "Feedback and History", link: "/concepts/feedback" },
-        ],
-      },
-      {
-        text: "Guides",
-        items: [
-          { text: "Connect an agent", link: "/agents" },
-          { text: "Data and trust", link: "/data-and-trust" },
-          { text: "Compatibility", link: "/compatibility" },
-          { text: "Troubleshooting", link: "/troubleshooting" },
-        ],
-      },
-      {
-        text: "Reference",
-        items: [
-          { text: "Python API", link: "/api" },
-          { text: "LensContext", link: "/reference/context" },
-          { text: "Errors and limits", link: "/reference/errors" },
-        ],
-      },
-    ],
+    sidebar: navigation,
     siteTitle: false,
     socialLinks: [{ icon: "github", link: repository }],
   },

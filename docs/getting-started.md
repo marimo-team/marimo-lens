@@ -5,7 +5,7 @@ description: Mount Lens in a marimo notebook and create the first selection.
 
 # Getting started
 
-Mount Lens in a [marimo](https://marimo.io/) notebook, create one selection,
+Mount Lens in [marimo](https://marimo.io/), a reactive Python notebook, create one selection,
 and inspect the context available to a code-mode agent.
 
 ## Prerequisites

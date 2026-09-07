@@ -12,21 +12,25 @@
   <a href="https://spdx.org/licenses/Apache-2.0.html"><img alt="License: Apache 2.0" src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"></a>
 </p>
 
-**Let your notebook agent see what you see.**
+**Let your agent see what you see.**
 
-marimo-lens connects a point or region on rendered notebook output to the cells
-and context behind it. A live notebook agent can inspect that selection, show
-where it is working, and return the result for review.
+marimo-lens connects a point or region on a rendered
+[marimo](https://marimo.io/) notebook output to its producing cells, relevant
+notebook context, and an annotated image when capture succeeds. A live notebook
+agent can inspect the request, show its activity, and return results for review.
+Reopen an addressed selection from History to continue the analysis.
 
 ## Install and mount
 
-marimo-lens supports Python 3.10 through 3.14 and marimo 0.24.0 or newer.
+In a project managed by [uv](https://docs.astral.sh/uv/):
 
 ```sh
 uv add marimo-lens
+uv run marimo edit notebook.py
 ```
 
-Mount one Lens in the notebook:
+Requires Python 3.10–3.14 and marimo 0.24.0 or newer. Mount Lens in one notebook
+cell and keep it displayed:
 
 ```python
 from marimo_lens import Lens
@@ -35,36 +39,23 @@ lens = Lens()
 lens
 ```
 
-Press **Select**, click a point or drag a region, then add an optional note.
+Press **Select**, click a point or drag a region, then add a note.
 
-## Agent adapter
+## Connect an agent
 
-Code-mode agents connect through `marimo_lens.agent`:
-
-```python
-import marimo_lens.agent as lens_agent
-
-mounted = lens_agent.connect()
-context = mounted.context()
-```
-
-`connect()` runs inside the live marimo kernel. It returns a `MountedLens` with
-stable reconnection identity, context access, current cell-output capture,
-activity, reveal, and resolution methods.
-
-The distribution also installs the matching Agent Plugin and Agent Skill. Use
-`lens_agent.agent_skill()` to locate its instructions from the notebook
-environment.
+Lens works with agents that can execute Python in the live notebook kernel,
+including [marimo Pair](https://marimo.io/pair). The package includes the matching
+agent instructions and registers its Lens capability with marimo. Follow
+[Connect an agent](https://marimo-team.github.io/marimo-lens/agents) for setup
+and the inspection, verification, and review workflow.
 
 ## Documentation
 
-- [Getting started](https://marimo-team.github.io/marimo-lens/getting-started)
-- [Product model](https://marimo-team.github.io/marimo-lens/overview)
-- [Agent workflow](https://marimo-team.github.io/marimo-lens/agents)
-- [Targets](https://marimo-team.github.io/marimo-lens/concepts/targets)
-- [Python API](https://marimo-team.github.io/marimo-lens/api)
-- [Compatibility](https://marimo-team.github.io/marimo-lens/compatibility)
-- [Data and trust](https://marimo-team.github.io/marimo-lens/data-and-trust)
+[Getting started](https://marimo-team.github.io/marimo-lens/getting-started) ·
+[Concepts](https://marimo-team.github.io/marimo-lens/overview) ·
+[Python API](https://marimo-team.github.io/marimo-lens/api) ·
+[Compatibility](https://marimo-team.github.io/marimo-lens/compatibility) ·
+[Data and trust](https://marimo-team.github.io/marimo-lens/data-and-trust)
 
 Source, issue tracking, and contributor documentation live in the
 [marimo-lens repository](https://github.com/marimo-team/marimo-lens).

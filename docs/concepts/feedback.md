@@ -64,6 +64,10 @@ Selections resolved in one call share the resulting revision and optional
 resolution summary. One missing selection or a stale expected revision leaves
 the whole batch Open.
 
+**Addressed** records that the agent has returned the request for review.
+The person judges whether the evidence answers it and can reopen the selection
+to correct or continue the analysis.
+
 The state change commits before the browser notification is sent. A delivery
 failure can suppress the temporary receipt, while the History entries remain
 committed.
