@@ -62,6 +62,7 @@ export default defineConfig({
     {
       command:
         "uv run --locked marimo edit apps/e2e/fixtures/notebook.py --host 127.0.0.1 --port 4820 --headless --no-token",
+      env: { _MARIMO_CONFIG_OVERLOAD_RUNTIME_AUTO_INSTANTIATE: "true" },
       cwd: "../..",
       url: "http://127.0.0.1:4820",
       reuseExistingServer: false,
