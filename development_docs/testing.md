@@ -210,10 +210,14 @@ flowchart LR
 - **Browser assets** builds the Python widget resources once and uploads them
   as the `browser-assets` artifact. The Python matrix and Notebook E2E jobs
   consume that artifact.
-- **Python** tests the public package on Python 3.10 through 3.14.
-- **JavaScript** tests and builds the protocol, image-capture, and widget packages.
-- **Notebook E2E** installs Chromium, starts the fixture notebook, and runs
-  `pnpm test:e2e`. Reports and failure evidence are uploaded as `notebook-e2e`.
+- **Python** tests the public package on Python 3.10 through 3.14 on Linux and
+  Python 3.12 on Windows.
+- **JavaScript** tests and builds the protocol, image-capture, and widget packages
+  on Linux and Windows.
+- **Notebook E2E** installs Chromium and runs `pnpm test:e2e` on Linux and
+  Windows. The editor fixture runs its cells independently of personal marimo
+  startup settings. Reports and failure evidence are uploaded as
+  `notebook-e2e-<runner OS>`.
 - **Package** builds and validates distribution artifacts through `make package`.
 
 The `required` job requires success from every job selected by the path

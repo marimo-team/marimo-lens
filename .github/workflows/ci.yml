@@ -93,22 +93,26 @@ jobs:
           if-no-files-found: error
 
   test-python:
-    name: Python ${{ matrix.python-version }}
+    name: Python ${{ matrix.python-version }} (${{ matrix.os }})
     needs:
       - changes
       - build-browser
     if: needs.changes.outputs.python_contracts == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest]
         python-version:
           - "3.10"
           - "3.11"
           - "3.12"
           - "3.13"
           - "3.14"
+        include:
+          - os: windows-latest
+            python-version: "3.12"
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -131,11 +135,15 @@ jobs:
         run: uv run pytest -q
 
   test-js:
-    name: JavaScript
+    name: JavaScript (${{ matrix.os }})
     needs: changes
     if: needs.changes.outputs.frontend_contracts == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -174,13 +182,17 @@ jobs:
         run: git diff --exit-code
 
   e2e:
-    name: Notebook E2E
+    name: Notebook E2E (${{ matrix.os }})
     needs:
       - changes
       - build-browser
     if: needs.changes.outputs.e2e == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -209,7 +221,7 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: notebook-e2e
+          name: notebook-e2e-${{ matrix.os }}
           path: |-
             apps/e2e/playwright-report/
             apps/e2e/test-results/
