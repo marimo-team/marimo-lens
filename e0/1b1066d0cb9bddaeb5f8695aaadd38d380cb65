@@ -1,0 +1,21 @@
+uv.lock
+  ai_agent 1028
+packages/marimo-lens/pyproject.toml
+  s_dbeb33d68f4a71::t_9bc2e6be705c36 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e01b1066d0cb9bddaeb5f8695aaadd38d380cb65",
+  "prompts": {},
+  "sessions": {
+    "s_dbeb33d68f4a71": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c87-0daf-7060-bdeb-a03b92989225",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
