@@ -101,13 +101,15 @@ identifier.
 
 ## Mounted registry
 
-A Python Lens registers in `_MOUNTED_LENSES` when a browser view reports output
-capture ready in the active marimo runtime scope. It unregisters when every
+A Python Lens registers through `_registry.py` when a browser view reports
+output capture ready in the active marimo runtime scope. It unregisters when every
 browser view becomes unready or the Lens closes.
 
 The registry is scoped by the active marimo UI registry object. It prevents a
 code-mode call from discovering a displayed Lens in another live runtime. Weak
-references avoid extending either runtime or Lens lifetime.
+references avoid extending either runtime or Lens lifetime. The widget and agent
+adapter supply the active scope. The registry stores membership and performs
+identity matching, while runtime access remains in `_marimo_runtime.py`.
 
 `context.globals` remains a separate discovery path. It lets an integration
 connect to an existing Lens object before browser-ready registration is the
@@ -237,7 +239,7 @@ History entry and releases the selection image.
 | Concern                                  | Source                                                    |
 | ---------------------------------------- | --------------------------------------------------------- |
 | Agent adapter, identity, and connection  | `packages/marimo-lens/src/marimo_lens/agent.py`           |
-| Mounted runtime registry                 | `packages/marimo-lens/src/marimo_lens/widget.py`          |
+| Mounted runtime registry                 | `packages/marimo-lens/src/marimo_lens/_registry.py`       |
 | Runtime scope                            | `packages/marimo-lens/src/marimo_lens/_marimo_runtime.py` |
 | Public activity owner type               | `packages/marimo-lens/src/marimo_lens/activity.py`        |
 | Public errors                            | `packages/marimo-lens/src/marimo_lens/errors.py`          |
