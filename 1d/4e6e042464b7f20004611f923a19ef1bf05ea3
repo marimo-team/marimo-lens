@@ -1,0 +1,23 @@
+packages/widget/src/anywidget/transport.ts
+  ai_agent 1-40
+packages/widget/tests/anywidget/client.test.ts
+  ai_agent 15-17
+packages/widget/src/anywidget/request-client.ts
+  ai_agent 24
+packages/image-capture/src/index.ts
+  ai_agent 1
+packages/image-capture/src/types.ts
+  ai_agent 1
+packages/widget/src/anywidget/output-capture-transport.ts
+  ai_agent 15-19
+packages/widget/tests/app/marimo-lens-content.test.tsx
+  ai_agent 16
+packages/widget/src/anywidget/client.ts
+  ai_agent 13-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1d4e6e042464b7f20004611f923a19ef1bf05ea3",
+  "prompts": {}
+}
