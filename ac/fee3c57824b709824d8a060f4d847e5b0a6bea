@@ -1,0 +1,27 @@
+packages/marimo-lens/src/marimo_lens/_registry.py
+  s_dbeb33d68f4a71::t_eb3ef3fb344606 1-12,14-21,25-39
+  s_dbeb33d68f4a71::t_e6c5e593bd7f73 13,22-24
+packages/marimo-lens/src/marimo_lens/agent.py
+  s_dbeb33d68f4a71::t_eb3ef3fb344606 16-17,21,337
+development_docs/agent-integration.md
+  s_dbeb33d68f4a71::t_5f522d028f6d3c 104-105,110-112
+  s_dbeb33d68f4a71::t_b615416efdef8b 242
+packages/marimo-lens/src/marimo_lens/widget.py
+  s_dbeb33d68f4a71::t_eb3ef3fb344606 54,314,418,420
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "acfee3c57824b709824d8a060f4d847e5b0a6bea",
+  "prompts": {},
+  "sessions": {
+    "s_dbeb33d68f4a71": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a07c87-0daf-7060-bdeb-a03b92989225",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
