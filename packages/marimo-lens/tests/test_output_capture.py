@@ -218,6 +218,27 @@ def test_unrelated_response_does_not_change_the_pending_capture(
     assert len(_capture_commands(lens)) == 1
 
 
+def test_malformed_readiness_event_keeps_pending_capture_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_runtime(monkeypatch)
+    lens = RecordingLens()
+    try:
+        assert lens._cell_image("cell-view", expected_revision=0) is None
+        command = _capture_commands(lens)[0]
+        lens._handle_lens_message(
+            lens,
+            {"protocol": "marimo-lens.event", "version": 4, "type": {}, "payload": {}},
+            (),
+        )
+        data = png()
+        _reply(lens, command, data=data)
+
+        assert lens._cell_image("cell-view", expected_revision=0) == data
+    finally:
+        lens.close()
+
+
 def test_stalled_capture_reports_timeout_and_ignores_late_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -103,7 +103,10 @@ def parse_capture_browser_event(
     if not isinstance(content, Mapping) or content.get("protocol") != EVENT_PROTOCOL:
         return None
     event_type = content.get("type")
-    if event_type not in {"output.capture.ready", "output.capture.unready"}:
+    if not isinstance(event_type, str) or event_type not in {
+        "output.capture.ready",
+        "output.capture.unready",
+    }:
         return None
     _require_no_buffers(buffers)
     event = _validate_model(
