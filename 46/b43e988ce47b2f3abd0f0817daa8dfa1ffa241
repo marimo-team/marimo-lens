@@ -1,0 +1,11 @@
+packages/widget/src/notebook/selection-target.ts
+  ai_agent 14-20,276,284-285
+packages/widget/tests/notebook/selection-target.test.ts
+  ai_agent 1,16-30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "46b43e988ce47b2f3abd0f0817daa8dfa1ffa241",
+  "prompts": {}
+}
