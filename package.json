@@ -10,7 +10,7 @@
     "docs:build": "vp run @marimo-lens/docs#build",
     "docs:dev": "vp run @marimo-lens/docs#dev",
     "docs:preview": "vp run @marimo-lens/docs#preview",
-    "test": "vp run --filter '!marimo-lens-workspace' test",
+    "test": "vp run --filter \"!marimo-lens-workspace\" test",
     "test:e2e": "pnpm --filter @marimo-lens/e2e test:e2e"
   },
   "devDependencies": {
