@@ -136,6 +136,8 @@ The docs examples consume the locally built Python browser resources. The
 Vite+ build task in `apps/docs/vite.config.ts` declares that dependency, so
 `make docs`, `pnpm docs:build`, and recursive builds run it before VitePress.
 `make docs-serve` builds the same resources before starting the dev server.
+The build task forwards `BASE_PATH` and includes it in its cache key. Pull
+requests build under `/marimo-lens` to exercise repository-path deployment.
 
 ## Assets and theme
 

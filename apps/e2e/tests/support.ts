@@ -35,8 +35,11 @@ export const test = base.extend<{ browserErrors: string[] }>({
 test.beforeEach(async ({ page, colorScheme }) => {
   await page.goto("/?theme=system");
   await expect(page.locator("body")).toHaveAttribute("data-theme", colorScheme ?? "light");
+  // A fresh kernel can still be importing notebook packages after the page loads.
+  await expect(page.getByRole("region", { name: "Revenue by month" })).toBeVisible({
+    timeout: 30_000,
+  });
   await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Revenue by month" })).toBeVisible();
 });
 
 export async function screenshot(page: Page, testInfo: TestInfo, name: string) {
