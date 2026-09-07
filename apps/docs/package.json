@@ -4,13 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vitepress build",
     "dev": "portless",
     "dev:app": "vitepress dev",
     "preview": "vitepress preview",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
+    "@marimo-lens/python": "workspace:*",
     "@marimo-team/mdx-marimo": "catalog:",
     "@types/node": "catalog:",
     "portless": "catalog:",

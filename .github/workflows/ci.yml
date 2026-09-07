@@ -1,17 +1,14 @@
 name: CI
-
 on:
   pull_request:
   push:
-    branches: [main]
-
+    branches:
+      - main
 permissions:
   contents: read
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
   changes:
     name: Changes
@@ -24,13 +21,13 @@ jobs:
       frontend_contracts: ${{ steps.filter.outputs.frontend_contracts }}
       python_contracts: ${{ steps.filter.outputs.python_contracts }}
       quality: ${{ steps.filter.outputs.quality }}
+      e2e: ${{ steps.filter.outputs.e2e }}
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
           persist-credentials: false
-
       - name: Classify changed files
         id: filter
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -49,30 +46,17 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-
       - name: Set up uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-
       - name: Install Python
         run: uv python install "$(cat .python-version)"
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable
-
+      - name: Set up JavaScript
+        uses: ./.github/actions/setup-js
       - name: Check JavaScript formatting, linting, and types
         run: pnpm check
-
       - name: Check Python formatting, linting, and types
         run: |
           uv lock --check
@@ -80,50 +64,67 @@ jobs:
           uv run ruff check
           uv run ty check
           uv run pyrefly check --min-severity warn
-
       - name: Check shell scripts
         run: shellcheck scripts/*.sh
-
       - name: Check whitespace
         run: git diff --check
 
+  build-browser:
+    name: Browser assets
+    needs: changes
+    if: needs.changes.outputs.python_contracts == 'true' || needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Set up JavaScript
+        uses: ./.github/actions/setup-js
+      - name: Build browser assets
+        run: pnpm --filter @marimo-lens/python build
+      - name: Share browser assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: browser-assets
+          path: packages/marimo-lens/src/marimo_lens/static/
+          retention-days: 1
+          if-no-files-found: error
+
   test-python:
     name: Python ${{ matrix.python-version }}
-    needs: changes
+    needs:
+      - changes
+      - build-browser
     if: needs.changes.outputs.python_contracts == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version:
+          - "3.10"
+          - "3.11"
+          - "3.12"
+          - "3.13"
+          - "3.14"
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-
       - name: Set up uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           python-version: ${{ matrix.python-version }}
           enable-cache: true
           cache-dependency-glob: uv.lock
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+      - name: Restore browser assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable
-
-      - name: Build browser assets
-        run: pnpm --filter @marimo-lens/python build
-
+          name: browser-assets
+          path: packages/marimo-lens/src/marimo_lens/static/
       - name: Run Python tests
         env:
           UV_PYTHON: ${{ matrix.python-version }}
@@ -140,29 +141,12 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
-        with:
-          enable-cache: true
-          cache-dependency-glob: uv.lock
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable
-
+      - name: Set up JavaScript
+        uses: ./.github/actions/setup-js
       - name: Run JavaScript tests
         run: pnpm test
-
-      - name: Build JavaScript packages and docs
-        run: pnpm build
+      - name: Build JavaScript packages
+        run: pnpm exec vp run --filter @marimo-lens/protocol --filter @marimo-lens/image-capture --filter @marimo-lens/widget build
 
   package:
     name: Package
@@ -175,55 +159,104 @@ jobs:
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-
       - name: Set up uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-
       - name: Install Python
         run: uv python install "$(cat .python-version)"
-
-      - name: Set up Vite+
-        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: |
-            - args: ["--frozen-lockfile"]
-
-      - name: Enable pnpm
-        run: corepack enable
-
+      - name: Set up JavaScript
+        uses: ./.github/actions/setup-js
       - name: Build and check package artifacts
         run: make package
-
       - name: Check generated files
         run: git diff --exit-code
 
+  e2e:
+    name: Notebook E2E
+    needs:
+      - changes
+      - build-browser
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+          python-version: "3.12"
+      - name: Install Python workspace
+        run: uv sync --locked
+      - name: Set up JavaScript
+        uses: ./.github/actions/setup-js
+      - name: Restore browser assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: browser-assets
+          path: packages/marimo-lens/src/marimo_lens/static/
+      - name: Install Chromium
+        run: pnpm --filter @marimo-lens/e2e exec playwright install --with-deps chromium
+      - name: Test notebook interactions
+        run: pnpm test:e2e
+      - name: Upload browser evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: notebook-e2e
+          path: |-
+            apps/e2e/playwright-report/
+            apps/e2e/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   required:
     if: always()
-    needs: [changes, quality, test-python, test-js, package]
+    needs:
+      - changes
+      - quality
+      - build-browser
+      - test-python
+      - test-js
+      - package
+      - e2e
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify required jobs
         env:
           CHANGES: ${{ needs.changes.result }}
-          PACKAGE: ${{ needs.package.result }}
           QUALITY: ${{ needs.quality.result }}
-          TEST_JS: ${{ needs.test-js.result }}
-          TEST_PYTHON: ${{ needs.test-python.result }}
+          QUALITY_REQUIRED: ${{ needs.changes.outputs.quality == 'true' }}
+          BROWSER: ${{ needs.build-browser.result }}
+          BROWSER_REQUIRED: ${{ needs.changes.outputs.python_contracts == 'true' || needs.changes.outputs.e2e == 'true' }}
+          PYTHON: ${{ needs.test-python.result }}
+          PYTHON_REQUIRED: ${{ needs.changes.outputs.python_contracts == 'true' }}
+          JS: ${{ needs.test-js.result }}
+          JS_REQUIRED: ${{ needs.changes.outputs.frontend_contracts == 'true' }}
+          PACKAGE: ${{ needs.package.result }}
+          PACKAGE_REQUIRED: ${{ needs.changes.outputs.distribution == 'true' }}
+          E2E: ${{ needs.e2e.result }}
+          E2E_REQUIRED: ${{ needs.changes.outputs.e2e == 'true' }}
         run: |
           if [ "$CHANGES" != success ]; then
             printf 'Change classification failed: %s\n' "$CHANGES" >&2
             exit 1
           fi
-          for result in "$QUALITY" "$TEST_PYTHON" "$TEST_JS" "$PACKAGE"; do
-            if [ "$result" != success ] && [ "$result" != skipped ]; then
-              printf 'Required jobs: quality=%s test-python=%s test-js=%s package=%s\n' \
-                "$QUALITY" "$TEST_PYTHON" "$TEST_JS" "$PACKAGE" >&2
-              exit 1
+          for job in QUALITY BROWSER PYTHON JS PACKAGE E2E; do
+            required="${job}_REQUIRED"
+            result="${!job}"
+            if [ "${!required}" = true ]; then
+              [ "$result" = success ] && continue
+            elif [ "$result" = success ] || [ "$result" = skipped ]; then
+              continue
             fi
+            printf '%s: required=%s result=%s\n' "$job" "${!required}" "$result" >&2
+            exit 1
           done

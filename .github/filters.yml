@@ -1,82 +1,80 @@
 ci_control: &ci_control
-  - ".github/filters.yml"
-  - ".github/workflows/ci.yml"
-  - "Makefile"
-
+  - .github/filters.yml
+  - .github/workflows/ci.yml
+  - Makefile
+  - .github/actions/setup-js/**
 pages_control: &pages_control
-  - ".github/filters.yml"
-  - ".github/workflows/pages.yml"
-  - "Makefile"
-
+  - .github/filters.yml
+  - .github/workflows/pages.yml
+  - Makefile
+  - .github/actions/setup-js/**
 browser_bundle: &browser_bundle
-  - "package.json"
-  - "pnpm-lock.yaml"
-  - "pnpm-workspace.yaml"
-  - "packages/marimo-lens/build.mjs"
-  - "packages/marimo-lens/package.json"
-  - "packages/image-capture/package.json"
-  - "packages/image-capture/src/**"
-  - "packages/protocol/package.json"
-  - "packages/protocol/src/**"
-  - "packages/widget/package.json"
-  - "packages/widget/src/**"
-  - "patches/**"
-
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - tsconfig.json
+  - packages/*/tsconfig.json
+  - packages/marimo-lens/build.mjs
+  - packages/marimo-lens/package.json
+  - packages/image-capture/package.json
+  - packages/image-capture/src/**
+  - packages/protocol/package.json
+  - packages/protocol/src/**
+  - packages/widget/package.json
+  - packages/widget/src/**
+  - patches/**
 python_inputs: &python_inputs
   - *ci_control
-  - ".python-version"
-  - "pyproject.toml"
-  - "uv.lock"
-  - "examples/**"
-  - "packages/marimo-lens/pyproject.toml"
-  - "packages/marimo-lens/src/**"
-  - "packages/marimo-lens/tests/**"
-
+  - .python-version
+  - pyproject.toml
+  - uv.lock
+  - examples/**
+  - packages/marimo-lens/pyproject.toml
+  - packages/marimo-lens/src/**
+  - packages/marimo-lens/tests/**
+  - skills/marimo-lens/**
 frontend_inputs: &frontend_inputs
   - *ci_control
-  - "package.json"
-  - "pnpm-lock.yaml"
-  - "pnpm-workspace.yaml"
-  - "tsconfig.json"
-  - "vite.config.ts"
-  - "packages/image-capture/**"
-  - "packages/marimo-lens/build.mjs"
-  - "packages/marimo-lens/package.json"
-  - "packages/protocol/**"
-  - "packages/widget/**"
-  - "patches/**"
-
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - tsconfig.json
+  - vite.config.ts
+  - packages/image-capture/**
+  - packages/marimo-lens/build.mjs
+  - packages/marimo-lens/package.json
+  - packages/protocol/**
+  - packages/widget/**
+  - patches/**
 documentation:
-  - "README.md"
-  - "AGENTS.md"
-  - "CLAUDE.md"
-  - "CONTRIBUTING.md"
-  - "LICENSE"
-  - "SECURITY.md"
-  - "apps/docs/**"
-  - "development_docs/**"
-  - "docs/**"
-  - "examples/**"
-  - "packages/marimo-lens/LICENSE"
-  - "packages/marimo-lens/README.md"
-  - "skills/marimo-lens/**"
-
+  - README.md
+  - AGENTS.md
+  - CLAUDE.md
+  - CONTRIBUTING.md
+  - LICENSE
+  - SECURITY.md
+  - apps/docs/**
+  - development_docs/**
+  - docs/**
+  - examples/**
+  - packages/marimo-lens/LICENSE
+  - packages/marimo-lens/README.md
+  - skills/marimo-lens/**
 readme:
-  - "README.md"
-
+  - README.md
+  - packages/marimo-lens/README.md
 pages:
   - *pages_control
-  - ".python-version"
-  - "apps/docs/**"
-  - "docs/**"
-  - "pyproject.toml"
-  - "tsconfig.json"
-  - "uv.lock"
-  - "vite.config.ts"
-  - "packages/marimo-lens/pyproject.toml"
-  - "packages/marimo-lens/src/**"
+  - .python-version
+  - apps/docs/**
+  - docs/**
+  - pyproject.toml
+  - tsconfig.json
+  - uv.lock
+  - vite.config.ts
+  - packages/marimo-lens/pyproject.toml
+  - packages/marimo-lens/src/**
   - *browser_bundle
-
 quality:
   - "**"
   - "!README.md"
@@ -91,28 +89,32 @@ quality:
   - "!packages/marimo-lens/LICENSE"
   - "!packages/marimo-lens/README.md"
   - "!skills/marimo-lens/**"
-
 python_contracts:
   - *python_inputs
   - *browser_bundle
-
 frontend_contracts:
   - *frontend_inputs
-
 distribution:
   - *ci_control
-  - ".python-version"
-  - "package.json"
-  - "plugin.json"
-  - "pnpm-lock.yaml"
-  - "pnpm-workspace.yaml"
-  - "pyproject.toml"
-  - "uv.lock"
-  - "packages/marimo-lens/LICENSE"
-  - "packages/marimo-lens/README.md"
-  - "packages/marimo-lens/hatch_build.py"
-  - "packages/marimo-lens/pyproject.toml"
-  - "packages/marimo-lens/src/**"
-  - "scripts/verify_release.py"
-  - "skills/marimo-lens/**"
+  - .python-version
+  - package.json
+  - plugin.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - pyproject.toml
+  - uv.lock
+  - packages/marimo-lens/LICENSE
+  - packages/marimo-lens/README.md
+  - packages/marimo-lens/hatch_build.py
+  - packages/marimo-lens/pyproject.toml
+  - packages/marimo-lens/src/**
+  - scripts/verify_release.py
+  - scripts/release.sh
+  - .github/workflows/publish.yml
+  - skills/marimo-lens/**
   - *browser_bundle
+e2e:
+  - *python_inputs
+  - *browser_bundle
+  - apps/e2e/**
+  - .github/workflows/publish.yml

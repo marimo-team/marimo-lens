@@ -7,18 +7,18 @@ verification.
 
 ## Evidence layers
 
-| Layer              | Proves                                                                                                          | Primary command or suite                               |
-| ------------------ | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Protocol           | Python and TypeScript accept the same bounded messages and reject malformed data.                               | Protocol package tests and `test_protocol.py`          |
-| Selection state    | Revisions, atomic transitions, images, History, limits, and failure behavior.                                   | `test_selection_state.py`                              |
-| Context            | Runtime projection, provenance, controls, references, text, and context types.                                  | Context, runtime, control, and provenance Python tests |
-| Image capture      | DOM raster geometry, composition, PNG bounds, owner realms, iframe behavior, and patch obligations.             | Image-capture package tests                            |
-| Widget             | Gestures, reducers, commands, target resolution, attention, focus, and view ownership.                          | Widget package tests                                   |
-| Public Python      | `Lens`, `MountedLens`, errors, argument validation, close, and agent connection.                                | Widget and agent Python tests                          |
-| Bundle integration | Generated browser resources load through AnyWidget and agent-created output.                                    | `test_bundle_integration.py`                           |
-| Documentation      | Interactive cells compile, routes and assets build, and base paths remain valid.                                | `make docs` and Pages workflow checks                  |
-| Distribution       | Wheel, source distribution, rebuilt wheel, metadata, resources, entry point, and installed API.                 | `make package`                                         |
-| Real browser       | Actual layout, pointer and keyboard behavior, scrolling, pixels, iframes, responsive UI, and docs presentation. | Manual or agent-driven browser inspection              |
+| Layer              | Proves                                                                                              | Primary command or suite                               |
+| ------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Protocol           | Python and TypeScript accept the same bounded messages and reject malformed data.                   | Protocol package tests and `test_protocol.py`          |
+| Selection state    | Revisions, atomic transitions, images, History, limits, and failure behavior.                       | `test_selection_state.py`                              |
+| Context            | Runtime projection, provenance, controls, references, text, and context types.                      | Context, runtime, control, and provenance Python tests |
+| Image capture      | DOM raster geometry, composition, PNG bounds, owner realms, iframe behavior, and patch obligations. | Image-capture package tests                            |
+| Widget             | Gestures, reducers, commands, target resolution, attention, focus, and view ownership.              | Widget package tests                                   |
+| Public Python      | `Lens`, `MountedLens`, errors, argument validation, close, and agent connection.                    | Widget and agent Python tests                          |
+| Bundle integration | Generated browser resources load through AnyWidget and agent-created output.                        | `test_bundle_integration.py`                           |
+| Documentation      | Interactive cells compile, routes and assets build, and base paths remain valid.                    | `make docs` and Pages workflow checks                  |
+| Distribution       | Wheel, source distribution, rebuilt wheel, metadata, resources, entry point, and installed API.     | `make package`                                         |
+| Real browser       | Notebook gestures, image capture, feedback, History, theme, and narrow layouts in Chromium.         | `pnpm test:e2e` and browser inspection                 |
 
 One passing layer does not substitute for another. jsdom can prove a DOM
 algorithm while still missing a browser raster or layout failure.
@@ -119,8 +119,25 @@ observable result in a browser.
 
 ## Real-browser evidence
 
-Run real-browser checks after changing browser interaction, capture, attention,
-styles, host integration, or interactive documentation.
+Run the [Playwright](https://playwright.dev/) end-to-end suite against a live
+marimo notebook after changing interaction, capture, attention, styles, or host
+integration:
+
+```sh
+pnpm --filter @marimo-lens/e2e install-browser
+pnpm --filter @marimo-lens/python build
+pnpm test:e2e
+```
+
+`apps/e2e/` owns the test runner and fixture notebook. The runner starts local
+marimo run and edit servers. Four Chromium projects test desktop and narrow
+layouts in light and dark themes. An editor project verifies selection, notes,
+producing cells, and PNG capture through `marimo edit`.
+It retains traces and screenshots for failures in
+`apps/e2e/test-results/` and an HTML report in `apps/e2e/playwright-report/`.
+Run `pnpm --filter @marimo-lens/e2e test:e2e:ui` for interactive debugging.
+
+Inspect documentation and browser behavior beyond those scenarios separately.
 
 Use at least these scenarios for the affected surface:
 
@@ -159,34 +176,55 @@ The gate runs, in order:
 6. ty
 7. Pyrefly
 8. Python tests
-9. `git diff --check`
+9. `pnpm test:e2e`
+10. `shellcheck scripts/*.sh`
+11. `git diff --check`
 
-Run `shellcheck scripts/*.sh` separately after shell changes. Run
+Install the Playwright Chromium browser before the first gate run. Run
 `make package` after bundling, packaging, manifest, Agent Plugin, or release
 changes.
 
 ## CI matrix
 
-The CI workflow classifies changed paths before starting the contract jobs.
-`.github/filters.yml` owns the classification and shared dependency sets:
+The CI workflow classifies changed paths before starting contract jobs.
+`.github/filters.yml` owns the classification. JavaScript jobs share the pinned
+Node.js and frozen pnpm setup in `.github/actions/setup-js/action.yml`.
 
-- Quality checks non-documentation source and configuration with the JavaScript,
-  Python, shell, lock, and whitespace checks.
-- Python runs for Python contracts and browser-bundle inputs. It builds the
-  browser resources and tests Python 3.10, 3.11, 3.12, 3.13, and 3.14.
-- JavaScript runs for browser package source, tests, manifests, and workspace
-  configuration. It tests and builds the JavaScript packages and documentation.
-- Package runs when Python distribution content, browser-bundle inputs, package
-  metadata, or distribution verification changes.
+```mermaid
+flowchart LR
+    changes[Changes] --> quality[Quality]
+    changes --> browser[Browser assets]
+    changes --> javascript[JavaScript]
+    changes --> package[Package]
+    browser --> python[Python 3.10–3.14]
+    browser --> e2e[Notebook E2E]
+    quality --> required
+    python --> required
+    e2e --> required
+    javascript --> required
+    package --> required
+```
 
-The final required job accepts contract jobs that succeeded or were skipped by
-the path classifier. A classifier failure still fails the required job.
+- **Quality** checks JavaScript and Python formatting, linting, types, shell
+  scripts, lock consistency, and whitespace.
+- **Browser assets** builds the Python widget resources once and uploads them
+  as the `browser-assets` artifact. The Python matrix and Notebook E2E jobs
+  consume that artifact.
+- **Python** tests the public package on Python 3.10 through 3.14.
+- **JavaScript** tests and builds the protocol, image-capture, and widget packages.
+- **Notebook E2E** installs Chromium, starts the fixture notebook, and runs
+  `pnpm test:e2e`. Reports and failure evidence are uploaded as `notebook-e2e`.
+- **Package** builds and validates distribution artifacts through `make package`.
 
-The Pages workflow checks documentation formatting and the docs application.
-Root README changes also run the executable README example test. Public site and
-runtime inputs build the site on pull requests and `main`, then verify selected
-routes and base-path asset links. Rendered browser behavior, complete links,
-every heading fragment, and visual presentation still require the docs checks in
+The `required` job requires success from every job selected by the path
+classifier. A skipped job passes the gate when its classification did not
+require it. Classification failure fails the gate.
+
+The **Pages** workflow owns documentation formatting, app checks, site build,
+base-path checks, and deployment. Root and package README changes run the
+executable README examples. Public site and runtime inputs build the site on
+pull requests and `main`. Browser behavior, complete links, heading fragments,
+and visual presentation follow the checks in
 [Documentation](documentation.md#validate-the-site).
 
 ## Package gate

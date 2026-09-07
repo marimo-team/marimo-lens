@@ -112,6 +112,9 @@ importers:
 
   apps/docs:
     devDependencies:
+      '@marimo-lens/python':
+        specifier: workspace:*
+        version: link:../../packages/marimo-lens
       '@marimo-team/mdx-marimo':
         specifier: 'catalog:'
         version: 0.0.4
