@@ -46,6 +46,7 @@ export function SnapshotPreviewButton({
 }: SnapshotPreviewButtonProps) {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const surfaceRef = useRef<HTMLDialogElement>(null);
   const openTimer = useRef<number | null>(null);
   const closeTimer = useRef<number | null>(null);
   const timerWindow = useRef<Window | null>(null);
@@ -72,6 +73,7 @@ export function SnapshotPreviewButton({
     preferredPlacement: anchor && anchor.rect.top < 300 ? "below" : "above",
     gap: 8,
     width: 336,
+    surfaceRef,
     fallback: { style: { left: 12, bottom: 64 }, placement: "above" },
   });
 
@@ -252,6 +254,7 @@ export function SnapshotPreviewButton({
 
       {open ? (
         <SnapshotPreviewDialog
+          surfaceRef={surfaceRef}
           selectionLabel={selection.label}
           snapshot={snapshot}
           position={position}
@@ -269,6 +272,7 @@ export function SnapshotPreviewButton({
 }
 
 function SnapshotPreviewDialog({
+  surfaceRef,
   selectionLabel,
   snapshot,
   position,
@@ -280,6 +284,7 @@ function SnapshotPreviewDialog({
   onPointerLeave,
   onClose,
 }: {
+  surfaceRef: RefObject<HTMLDialogElement | null>;
   selectionLabel: string;
   snapshot: StoredSnapshot;
   position: AnchoredSurfacePosition;
@@ -293,6 +298,7 @@ function SnapshotPreviewDialog({
 }) {
   return (
     <dialog
+      ref={surfaceRef}
       open
       className="ml-snapshot-preview"
       style={position.style}

@@ -51,6 +51,7 @@ export function SelectionNoteEditor({
     gap: 8,
     width: 320,
     surfaceHeight: 190,
+    surfaceRef,
     fallback: { style: { right: 16, bottom: 72 }, placement: "above" },
   });
 

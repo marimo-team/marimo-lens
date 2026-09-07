@@ -1,0 +1,101 @@
+import { expect, test as base, type Locator, type Page, type TestInfo } from "@playwright/test";
+
+type Selection = {
+  id: string;
+  label: string;
+  note: string;
+  target: { kind: string; cellIds: string[]; domSelector?: string };
+  cells: { id: string; status: string }[];
+  anchor: { kind: string; x: number; y: number; width?: number; height?: number };
+  snapshot: { status: string };
+};
+
+type Report = {
+  action: string;
+  references: { revision: number; selections: Selection[] };
+  images: Record<string, { bytes: number; signature: string }>;
+  text: string;
+};
+
+export const test = base.extend<{ browserErrors: string[] }>({
+  browserErrors: [
+    async ({ page }, use) => {
+      const errors: string[] = [];
+      page.on("pageerror", (error) => errors.push(error.message));
+      page.on("console", (message) => {
+        if (message.type() === "error") errors.push(message.text());
+      });
+      await use(errors);
+      expect(errors, "browser errors").toEqual([]);
+    },
+    { auto: true },
+  ],
+});
+
+test.beforeEach(async ({ page, colorScheme }) => {
+  await page.goto("/?theme=system");
+  await expect(page.locator("body")).toHaveAttribute("data-theme", colorScheme ?? "light");
+  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Revenue by month" })).toBeVisible();
+});
+
+export async function screenshot(page: Page, testInfo: TestInfo, name: string) {
+  const path = testInfo.outputPath(`${name}.png`);
+  await page.screenshot({ path });
+  await testInfo.attach(name, { path, contentType: "image/png" });
+}
+
+export async function runAction(page: Page, action = "Inspect context"): Promise<Report> {
+  const output = page.locator('[aria-label="Agent result"]');
+  const previous = (await output.count()) > 0 ? await output.textContent() : null;
+  await page.getByRole("combobox", { name: "Agent action" }).selectOption({ label: action });
+  await page.getByRole("button", { name: "Run agent action", exact: true }).click();
+  await expect(output).toBeVisible();
+  await expect(output).not.toHaveText(previous ?? "");
+  const report: Report = JSON.parse((await output.textContent()) ?? "");
+  expect(report.action).toBe(action);
+  return report;
+}
+
+export async function selectOutput(
+  page: Page,
+  kind: "point" | "region",
+  label: string,
+  note: string,
+) {
+  const target = page.getByRole("region", { name: "Revenue by month" });
+  await target.scrollIntoViewIfNeeded();
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  const bounds = await target.boundingBox();
+  if (!bounds) throw new Error("Revenue output is not rendered");
+  const x = bounds.x + bounds.width * 0.3;
+  const y = bounds.y + bounds.height * 0.35;
+  if (kind === "point") {
+    await page.mouse.click(x, y);
+  } else {
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x + bounds.width * 0.35, y + bounds.height * 0.45, { steps: 8 });
+    await page.mouse.up();
+  }
+  const editor = page.getByRole("dialog", { name: new RegExp(`Add note for ${label}`) });
+  await expect(editor).toBeVisible();
+  await expect(page.getByRole("textbox", { name: `Note for selection ${label}` })).toBeFocused();
+  await page.getByRole("textbox", { name: `Note for selection ${label}` }).fill(note);
+  await editor.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(editor).toBeHidden();
+  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeEnabled();
+}
+
+export async function expectInsideViewport(page: Page, surface: Locator) {
+  await expect(surface).toBeVisible();
+  await expect(async () => {
+    const bounds = await surface.boundingBox();
+    const viewport = page.viewportSize();
+    if (!bounds || !viewport) throw new Error("Surface or viewport is unavailable");
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(viewport.height);
+  }).toPass({ timeout: 10_000 });
+}
