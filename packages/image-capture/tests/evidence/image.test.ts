@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { composeSelectionEvidence, evidenceLayout } from "../../src/evidence/evidence-layout";
+import {
+  anchorForDetail,
+  composeSelectionEvidence,
+  evidenceLayout,
+} from "../../src/evidence/evidence-layout";
 import { captureSelectionEvidence, detailCaptureElement } from "../../src/evidence/evidence-source";
 import { relativeOutputBounds } from "../../src/evidence/geometry";
 import { createSnapshotCapture } from "../../src/evidence/image";
@@ -26,6 +30,15 @@ afterEach(() => {
 });
 
 describe("image capture", () => {
+  test("clips a region to the portion visible in its detail image", () => {
+    expect(
+      anchorForDetail(
+        { kind: "rect", x: 0.125, y: 0.125, width: 0.5, height: 0.5 },
+        { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+      ),
+    ).toEqual({ kind: "rect", x: 0, y: 0, width: 0.75, height: 0.75 });
+  });
+
   test("captures one unmarked raster for the full output root", async () => {
     class LoadedImage extends EventTarget {
       naturalWidth = 640;
