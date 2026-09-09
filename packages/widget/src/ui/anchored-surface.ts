@@ -2,7 +2,7 @@ import { useLayoutEffect, useReducer, useState, type CSSProperties, type RefObje
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
 
-export type AnchoredSurfacePlacement = "above" | "below";
+type AnchoredSurfacePlacement = "above" | "below";
 
 export type AnchoredSurfaceAnchor = {
   element: Element;

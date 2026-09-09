@@ -77,7 +77,7 @@ function unwrapPropertyKey(key: ESTree.PropertyKey): ESTree.PropertyKey {
   return current;
 }
 
-export function staticPropertyName(key: ESTree.PropertyKey, computed: boolean): string | null {
+function staticPropertyName(key: ESTree.PropertyKey, computed: boolean): string | null {
   const unwrapped = unwrapPropertyKey(key);
   if (!computed && (unwrapped.type === "Identifier" || unwrapped.type === "PrivateIdentifier")) {
     return unwrapped.name;

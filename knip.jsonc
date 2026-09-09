@@ -1,0 +1,18 @@
+{
+  "$schema": "https://unpkg.com/knip@6.32.2/schema.json",
+  "workspaces": {
+    ".": {
+      // VitePress compiles docs/*.md into Vue modules at the repository root.
+      "ignoreDependencies": ["vue"],
+    },
+    "apps/docs": {
+      // Vite+ schedules the Python bundle through run.tasks.build.dependsOn.
+      // VitePress generates Vue imports while compiling Markdown pages.
+      "ignoreDependencies": ["@marimo-lens/python", "vue"],
+    },
+    "packages/marimo-lens": {
+      // build.mjs bundles the widget source by file path through esbuild.
+      "ignoreDependencies": ["@marimo-lens/widget"],
+    },
+  },
+}

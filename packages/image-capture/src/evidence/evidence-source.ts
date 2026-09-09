@@ -14,7 +14,7 @@ export type SelectionCaptureOptions = {
   signal?: AbortSignal;
 };
 
-export type DetailEvidence = {
+type DetailEvidence = {
   image: HTMLImageElement;
   bounds: DomHintBounds;
 };

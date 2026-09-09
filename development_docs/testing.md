@@ -44,6 +44,26 @@ pnpm --filter @marimo-lens/widget build
 Protocol changes usually require all three packages because image capture and
 the widget consume its source contracts.
 
+## Unused code and dependencies
+
+Run [Knip](https://knip.dev/), the JavaScript and TypeScript unused-code checker,
+across the workspace:
+
+```sh
+pnpm knip
+```
+
+The check reports unused files, exports, types, dependencies, and catalog entries,
+plus unlisted dependencies and unresolved imports. Findings and stale configuration
+hints fail the command. `pnpm check` runs it as part of the local and CI gates.
+Manifest-declared package entry exports remain API contracts. Knip checks internal
+module exports for consumers across the workspace.
+
+`knip.jsonc` records dependencies consumed through the Python bundle task and
+generated VitePress pages. Knip discovers package exports, tests, build scripts,
+and the lint plugin from manifests and tool configuration. Keep exceptions beside
+the workspace that needs them and document the consuming boundary.
+
 ## Focused Python checks
 
 Build the bundled browser resources before Python tests:
@@ -205,8 +225,9 @@ flowchart LR
     package --> required
 ```
 
-- **Quality** checks JavaScript and Python formatting, linting, types, shell
-  scripts, lock consistency, and whitespace.
+- **Quality** checks JavaScript and Python formatting, linting, types, unused
+  JavaScript and TypeScript code and dependencies, shell scripts, lock consistency,
+  and whitespace.
 - **Browser assets** builds the Python widget resources once and uploads them
   as the `browser-assets` artifact. The Python matrix and Notebook E2E jobs
   consume that artifact.

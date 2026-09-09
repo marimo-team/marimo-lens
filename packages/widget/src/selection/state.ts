@@ -8,7 +8,7 @@ import type { ViewportPoint } from "@/notebook/types";
 export type SelectionMotion = "animate" | "instant";
 export type SelectionSheetTab = "open" | "history";
 
-export type PendingSelection = {
+type PendingSelection = {
   selection: Selection;
 };
 
