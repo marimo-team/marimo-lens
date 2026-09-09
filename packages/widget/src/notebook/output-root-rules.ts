@@ -1,4 +1,4 @@
-export const CONFIGURED_OUTPUT_CELL_ATTRIBUTE = "data-marimo-lens-output-cell-id";
+const CONFIGURED_OUTPUT_CELL_ATTRIBUTE = "data-marimo-lens-output-cell-id";
 export const OUTPUT_ROOT_SELECTOR = [
   `[${CONFIGURED_OUTPUT_CELL_ATTRIBUTE}]`,
   '[id^="output-"]',

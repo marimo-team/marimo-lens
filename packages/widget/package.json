@@ -30,7 +30,7 @@
     "@types/react-dom": "catalog:",
     "jsdom": "catalog:",
     "typescript": "catalog:",
-    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.4",
+    "vite": "catalog:",
     "vite-plus": "catalog:"
   }
 }

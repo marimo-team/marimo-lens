@@ -83,7 +83,7 @@ export function outputCellFromRoot(element: Element): OutputCell | null {
   return { id: resolved.id, element: resolved.element };
 }
 
-export function isOutputRoot(element: Element): boolean {
+function isOutputRoot(element: Element): boolean {
   return element.matches(OUTPUT_ROOT_SELECTOR);
 }
 

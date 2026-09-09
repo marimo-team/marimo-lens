@@ -12,7 +12,7 @@ const FRAMING_SETTLE_MS = 600;
 export const TARGET_ATTENTION_TOP_GUTTER = 48;
 
 export type TargetAttentionKind = "activity" | "reveal";
-export type TargetAttentionPhase = "active" | "exiting";
+type TargetAttentionPhase = "active" | "exiting";
 
 export type TargetLocator = {
   kind: "cell" | "selection";

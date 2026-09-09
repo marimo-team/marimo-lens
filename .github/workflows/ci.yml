@@ -55,7 +55,7 @@ jobs:
         run: uv python install "$(cat .python-version)"
       - name: Set up JavaScript
         uses: ./.github/actions/setup-js
-      - name: Check JavaScript formatting, linting, and types
+      - name: Check JavaScript formatting, linting, types, and unused code
         run: pnpm check
       - name: Check Python formatting, linting, and types
         run: |
