@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { hasTextContent } from "./bounded-text";
 
-export const WIDGET_TRANSPORT_VERSION = 4;
+export const WIDGET_TRANSPORT_VERSION = 5;
 
 export type TransportPrimitive = boolean | null | number | string | undefined;
 export type TransportRecord = { readonly [key: string]: TransportValue };
@@ -119,13 +119,29 @@ export const NotebookSelectionTargetSchema = v.pipe(
   v.check((target) => target.cellIds.length === 1, "Notebook targets require one cell id"),
 );
 
-export const DomSelectionTargetSchema = v.object({
-  kind: v.literal("dom"),
-  cellIds: TargetCellIdsSchema,
-  documentId: BoundedIdentifierSchema,
-  documentPath: DomSelectorSchema,
-  domSelector: DomSelectorSchema,
+export const NotebookSourceSchema = v.strictObject({
+  cellId: BoundedIdentifierSchema,
+  selector: v.nullable(v.pipe(NonEmptyStringSchema, v.maxLength(4_096))),
 });
+
+export const NotebookSourcesSchema = v.pipe(v.array(NotebookSourceSchema), v.maxLength(64));
+
+export type NotebookSource = v.InferOutput<typeof NotebookSourceSchema>;
+
+export const DomSelectionTargetSchema = v.pipe(
+  v.object({
+    kind: v.literal("dom"),
+    cellIds: TargetCellIdsSchema,
+    sources: NotebookSourcesSchema,
+    documentId: BoundedIdentifierSchema,
+    documentPath: DomSelectorSchema,
+    domSelector: DomSelectorSchema,
+  }),
+  v.check(
+    (target) => target.sources.every((source) => target.cellIds.includes(source.cellId)),
+    "Notebook sources must belong to the target cells",
+  ),
+);
 
 export const SelectionTargetSchema = v.variant("kind", [
   NotebookSelectionTargetSchema,

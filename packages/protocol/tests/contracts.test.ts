@@ -216,7 +216,7 @@ describe("selection contracts", () => {
   test("requires an exact addressed receipt for reopen commands", () => {
     const reopen = {
       protocol: "marimo-lens.command",
-      version: 4,
+      version: 5,
       requestId: "request-1",
       type: "selection.reopen",
       payload: {
@@ -239,7 +239,7 @@ describe("selection contracts", () => {
 
     const clearHistory = {
       protocol: "marimo-lens.command",
-      version: 4,
+      version: 5,
       requestId: "request-2",
       type: "history.clear",
       payload: { expectedRevision: 4 },
@@ -269,6 +269,7 @@ describe("selection contracts", () => {
       },
       {
         kind: "dom" as const,
+        sources: [],
         cellIds: [],
         documentId: "document-1",
         documentPath: "/dashboard/",
@@ -285,6 +286,10 @@ describe("selection contracts", () => {
     const unordered = selectionFixture({
       target: {
         kind: "dom",
+        sources: [
+          { cellId: "cell-a", selector: null },
+          { cellId: "cell-b", selector: "summary.total" },
+        ],
         cellIds: ["cell-b", "cell-a"],
         documentId: "document-1",
         documentPath: "/dashboard/",
@@ -295,6 +300,19 @@ describe("selection contracts", () => {
       "cell-a",
       "cell-b",
     ]);
+    expect(() =>
+      parseContract(
+        SelectionSchema,
+        {
+          ...unordered,
+          target: {
+            ...unordered.target,
+            sources: [{ cellId: "another-cell", selector: "summary.total" }],
+          },
+        },
+        "selection",
+      ),
+    ).toThrow("Notebook sources must belong to the target cells");
   });
 
   test("matches Python text, timestamp, and safe-integer bounds", () => {
@@ -317,7 +335,7 @@ describe("selection contracts", () => {
           ActivateSelectionCommandSchema,
           {
             protocol: "marimo-lens.command",
-            version: 4,
+            version: 5,
             requestId: "request-1",
             type: "selection.activate",
             payload: { selectionId: blank, expectedRevision: 0 },
@@ -339,7 +357,7 @@ describe("selection contracts", () => {
 
     const failed = {
       protocol: "marimo-lens.response",
-      version: 4,
+      version: 5,
       requestId: "request-1",
       ok: false,
       revision: 1,
@@ -358,7 +376,7 @@ describe("selection contracts", () => {
         PutSelectionCommandSchema,
         {
           protocol: "marimo-lens.command",
-          version: 4,
+          version: 5,
           requestId: "request-1",
           type: "selection.put",
           payload: { selection: selectionFixture(), imageAction: "replace" },
@@ -371,7 +389,7 @@ describe("selection contracts", () => {
         ActivateSelectionCommandSchema,
         {
           protocol: "marimo-lens.command",
-          version: 4,
+          version: 5,
           requestId: "request-1",
           type: "selection.activate",
           payload: { selectionId: "selection-1" },
@@ -384,7 +402,7 @@ describe("selection contracts", () => {
         DeleteSelectionCommandSchema,
         {
           protocol: "marimo-lens.command",
-          version: 4,
+          version: 5,
           requestId: "request-1",
           type: "selection.delete",
           payload: { selectionId: "selection-1" },
@@ -400,7 +418,7 @@ describe("selection contracts", () => {
         GetSnapshotCommandSchema,
         {
           protocol: "marimo-lens.command",
-          version: 4,
+          version: 5,
           requestId: "request-2",
           type: "snapshot.get",
           payload: { selectionId: "selection-1" },
@@ -413,7 +431,7 @@ describe("selection contracts", () => {
   test("keeps image actions aligned with snapshot status", () => {
     const command = (selection: ReturnType<typeof selectionFixture>, imageAction: string) => ({
       protocol: "marimo-lens.command",
-      version: 4,
+      version: 5,
       requestId: "request-1",
       type: "selection.put",
       payload: { selection, imageAction, expectedRevision: 0 },
@@ -445,7 +463,7 @@ describe("selection contracts", () => {
   test("validates bounded selection resolution events", () => {
     const event = {
       protocol: "marimo-lens.event",
-      version: 4,
+      version: 5,
       type: "selection.resolved",
       revision: 4,
       payload: {
@@ -489,7 +507,7 @@ describe("selection contracts", () => {
         "event",
       ),
     ).toEqual(event);
-    for (const version of [1, 2, 3, 5]) {
+    for (const version of [4, 6]) {
       expect(() =>
         parseContract(SelectionResolvedEventSchema, { ...event, version }, "event"),
       ).toThrow();
@@ -511,7 +529,7 @@ describe("selection contracts", () => {
   test("accepts bounded target reveal events", () => {
     const reveal = {
       protocol: "marimo-lens.event",
-      version: 4,
+      version: 5,
       type: "attention.reveal",
       payload: {
         address: { kind: "cell" as const, cellId: "BYtC" },
@@ -596,7 +614,7 @@ describe("selection contracts", () => {
   test("accepts bounded target activity start events", () => {
     const activity = {
       protocol: "marimo-lens.event",
-      version: 4,
+      version: 5,
       type: "attention.activity.start",
       payload: {
         activityId: "activity-1",
@@ -663,7 +681,7 @@ describe("selection contracts", () => {
   test("accepts an owner-specific activity stop event", () => {
     const stop = {
       protocol: "marimo-lens.event",
-      version: 4,
+      version: 5,
       type: "attention.activity.stop",
       payload: { activityId: "activity-1" },
     };
@@ -680,7 +698,7 @@ describe("selection contracts", () => {
   test("correlates output capture messages by request and exact cell", () => {
     const command = {
       protocol: "marimo-lens.command",
-      version: 4,
+      version: 5,
       requestId: "capture-1",
       type: "output.capture",
       payload: {

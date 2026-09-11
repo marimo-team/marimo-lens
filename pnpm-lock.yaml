@@ -79,7 +79,7 @@ overrides:
   nanoid@<3.3.18: 3.3.18
 
 patchedDependencies:
-  html-to-image@1.11.13: ad9a46713d82f45d17e6f9ebb542a5fc095ef9988d2c84b6187bc15a5887160b
+  html-to-image@1.11.13: 521fd0e9d6a73cc73b8d8b5ba9c17942bbae6ae47debad303b8bd81648f8e434
 
 importers:
 
@@ -145,12 +145,18 @@ importers:
 
   apps/e2e:
     devDependencies:
+      '@marimo-lens/image-capture':
+        specifier: workspace:*
+        version: link:../../packages/image-capture
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.61.1
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
+      esbuild:
+        specifier: 'catalog:'
+        version: 0.28.1
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -162,7 +168,7 @@ importers:
         version: link:../protocol
       html-to-image:
         specifier: 'catalog:'
-        version: 1.11.13(patch_hash=ad9a46713d82f45d17e6f9ebb542a5fc095ef9988d2c84b6187bc15a5887160b)
+        version: 1.11.13(patch_hash=521fd0e9d6a73cc73b8d8b5ba9c17942bbae6ae47debad303b8bd81648f8e434)
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -4555,7 +4561,7 @@ snapshots:
     transitivePeerDependencies:
       - '@noble/hashes'
 
-  html-to-image@1.11.13(patch_hash=ad9a46713d82f45d17e6f9ebb542a5fc095ef9988d2c84b6187bc15a5887160b): {}
+  html-to-image@1.11.13(patch_hash=521fd0e9d6a73cc73b8d8b5ba9c17942bbae6ae47debad303b8bd81648f8e434): {}
 
   html-void-elements@3.0.0: {}
 

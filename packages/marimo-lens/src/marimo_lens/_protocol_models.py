@@ -17,6 +17,7 @@ from pydantic import (
     TypeAdapter,
     ValidationError,
     field_validator,
+    model_serializer,
     model_validator,
 )
 from pydantic.alias_generators import to_camel
@@ -26,7 +27,7 @@ from typing_extensions import Self
 COMMAND_PROTOCOL = "marimo-lens.command"
 RESPONSE_PROTOCOL = "marimo-lens.response"
 EVENT_PROTOCOL = "marimo-lens.event"
-PROTOCOL_VERSION = 4
+PROTOCOL_VERSION = 5
 
 MAX_SELECTIONS = 64
 MAX_HISTORY = 64
@@ -323,10 +324,39 @@ class NotebookSelectionTarget(SelectionTargetBase):
         return self
 
 
+class NotebookSource(TransportModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cell_id: CellId
+    selector: (
+        Annotated[
+            UnicodeText,
+            AfterValidator(_nonblank),
+            AfterValidator(partial(_bounded_utf16, maximum=4_096)),
+        ]
+        | None
+    )
+
+    @model_serializer
+    def serialize_source(self) -> dict[str, str | None]:
+        """Keep required nulls when enclosing messages omit optional fields."""
+        return {
+            "cellId": self.cell_id,
+            "selector": self.selector,
+        }
+
+
 class DomSelectionTarget(SelectionTargetBase):
     kind: Literal["dom"]
+    sources: Annotated[list[NotebookSource], Field(max_length=64)]
     document_path: DomSelectorText
     dom_selector: DomSelectorText
+
+    @model_validator(mode="after")
+    def source_cells(self) -> Self:
+        if any(source.cell_id not in self.cell_ids for source in self.sources):
+            raise ValueError("Notebook sources must belong to the target cells")
+        return self
 
 
 SelectionTarget: TypeAlias = Annotated[

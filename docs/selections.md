@@ -241,12 +241,12 @@ recently current remaining selection current.
 Lens can reattach an Open selection after its target element is replaced within
 the same browser document:
 
-| Selection detail | What Lens keeps                                                                                                                                                             |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Label and note   | The `S<n>` label stays stable and is never reused.                                                                                                                          |
-| Target           | The same document ID and path plus the cell ID or exact DOM selector identify the target. DOM targets also require the same producing-cell ID set and selector eligibility. |
-| Producing cells  | A DOM target includes producing cell IDs inferred from nested `data-runtime-cell-id` metadata.                                                                              |
-| Selection image  | Moving or resizing starts a fresh PNG capture. The previous image remains available and is marked outdated until the new capture succeeds.                                  |
+| Selection detail | What Lens keeps                                                                                                                                                                                 |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Label and note   | The `S<n>` label stays stable and is never reused.                                                                                                                                              |
+| Target           | The same document ID and path plus the cell ID or exact DOM selector identify the target. DOM targets also require the same source identities, producing-cell ID set, and selector eligibility. |
+| Producing cells  | A DOM target includes producing cells from published source records or nested runtime metadata. Unkeyed roots remain tied to their original elements.                                           |
+| Selection image  | Moving or resizing starts a fresh PNG capture. The previous image remains available and is marked outdated until the new capture succeeds.                                                      |
 
 A full document replacement creates a new opaque document identity. The old
 selection then remains Open with **Target unavailable** until it is removed or

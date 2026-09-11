@@ -428,7 +428,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.reveal",
         payload: {
           address: { kind: "cell", cellId: "BYtC" },
@@ -473,6 +473,10 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture({
       target: {
         kind: "dom",
+        sources: [
+          { cellId: "cell-detail", selector: null },
+          { cellId: "cell-shared", selector: null },
+        ],
         cellIds: ["cell-detail", "cell-shared"],
         documentId: documentIdentity(document),
         documentPath: "/",
@@ -504,7 +508,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.reveal",
         payload: {
           address: { kind: "selection", selectionId: selection.id, revision: 3 },
@@ -533,6 +537,7 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture({
       target: {
         kind: "dom",
+        sources: [],
         cellIds: [],
         documentId: documentIdentity(document),
         documentPath: "/",
@@ -565,7 +570,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-authored",
@@ -576,7 +581,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-cell",
@@ -613,6 +618,7 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture({
       target: {
         kind: "dom",
+        sources: [],
         cellIds: [],
         documentId: documentIdentity(document),
         documentPath: "/",
@@ -645,7 +651,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-authored",
@@ -704,7 +710,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-notebook",
@@ -720,7 +726,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.reveal",
         payload: {
           address: { kind: "selection", selectionId: selection.id, revision: 3 },
@@ -737,6 +743,7 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture({
       target: {
         kind: "dom",
+        sources: [],
         cellIds: [],
         documentId: documentIdentity(document),
         documentPath: "/",
@@ -773,7 +780,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-authored",
@@ -827,6 +834,7 @@ describe("marimo-lens content", () => {
       label: "S1",
       target: {
         kind: "dom",
+        sources: [],
         cellIds: [],
         documentId: documentIdentity(primaryDocument),
         documentPath: primaryDocument.location.pathname || "/",
@@ -838,6 +846,7 @@ describe("marimo-lens content", () => {
       label: "S2",
       target: {
         kind: "dom",
+        sources: [],
         cellIds: [],
         documentId: documentIdentity(secondaryDocument),
         documentPath: secondaryDocument.location.pathname || "/",
@@ -868,7 +877,7 @@ describe("marimo-lens content", () => {
 
     const primaryEvent: AttentionEvent = {
       protocol: "marimo-lens.event",
-      version: 4,
+      version: 5,
       type: "attention.activity.start",
       payload: {
         activityId: "activity-primary",
@@ -877,7 +886,7 @@ describe("marimo-lens content", () => {
     };
     const secondaryEvent: AttentionEvent = {
       protocol: "marimo-lens.event",
-      version: 4,
+      version: 5,
       type: "attention.activity.start",
       payload: {
         activityId: "activity-secondary",
@@ -984,6 +993,7 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture({
       target: {
         kind: "dom",
+        sources: [],
         cellIds: [],
         documentId: "other-document",
         documentPath: "/another-view/",
@@ -1025,6 +1035,7 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture({
       target: {
         kind: "dom",
+        sources: [],
         cellIds: [],
         documentId: documentIdentity(document),
         documentPath: "/",
@@ -1196,7 +1207,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.reveal",
         payload: {
           address: { kind: "selection", selectionId: selection.id, revision: 3 },
@@ -1232,7 +1243,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.reveal",
         payload: {
           address: { kind: "cell", cellId: selection.target.cellIds[0]! },
@@ -1254,7 +1265,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-3",
@@ -1270,7 +1281,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.reveal",
         payload: {
           address: { kind: "cell", cellId: selection.target.cellIds[0]! },
@@ -1297,6 +1308,7 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture({
       target: {
         kind: "dom",
+        sources: [],
         cellIds: [],
         documentId: documentIdentity(secondaryDocument),
         documentPath: secondaryDocument.location.pathname || "/",
@@ -1389,7 +1401,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-4",
@@ -1687,7 +1699,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 4,
+        version: 5,
         type: "attention.reveal",
         payload: {
           address: { kind: "cell", cellId: selection.target.cellIds[0]! },
@@ -1883,7 +1895,7 @@ function resolvedEvent(overrides: ResolvedEventOptions = {}): SelectionResolvedE
   if (summary) payload.summary = summary;
   return {
     protocol: "marimo-lens.event",
-    version: 4,
+    version: 5,
     type: "selection.resolved",
     revision,
     payload,
@@ -1964,7 +1976,7 @@ function requireCaptureHandler(handler: OutputCaptureHandler | undefined): Outpu
 function outputCaptureCommand(): OutputCaptureCommand {
   return {
     protocol: "marimo-lens.command",
-    version: 4,
+    version: 5,
     requestId: "capture-1",
     type: "output.capture",
     payload: { outputCellId: "cell-1" },

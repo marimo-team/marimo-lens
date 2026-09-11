@@ -81,20 +81,20 @@ describe("document selection interactions", () => {
 
     pressSelectKey("ArrowDown");
     expect(first.scrollIntoView).toHaveBeenCalledOnce();
-    expect(announcement()).toBe("Target 1 of 3, Regional revenue.");
+    expect(announcement()).toBe("Target 1 of 3, Regional revenue, Cell cell-1.");
     expect(document.activeElement).toBe(select);
 
     pressSelectKey("ArrowDown");
     expect(second.scrollIntoView).toHaveBeenCalledOnce();
-    expect(announcement()).toBe("Target 2 of 3, Region.");
+    expect(announcement()).toBe("Target 2 of 3, Region, Cell cell-2.");
 
     pressSelectKey("ArrowUp");
     expect(first.scrollIntoView).toHaveBeenCalledTimes(2);
-    expect(announcement()).toBe("Target 1 of 3, Regional revenue.");
+    expect(announcement()).toBe("Target 1 of 3, Regional revenue, Cell cell-1.");
 
     pressSelectKey("ArrowUp");
     expect(third.scrollIntoView).toHaveBeenCalledOnce();
-    expect(announcement()).toBe("Target 3 of 3, All revenue.");
+    expect(announcement()).toBe("Target 3 of 3, All revenue, Cell cell-3.");
   });
 
   test("disarms Select on Tab and leaves native focus movement available", () => {

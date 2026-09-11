@@ -16,6 +16,7 @@ import {
   type ResizeHandle,
 } from "@/selection/anchor";
 import { previewAnchor } from "@/selection/state";
+import { TargetInfoLabel } from "@/ui/components/target-info";
 
 type SelectionOverlayProps = {
   selections: Selection[];
@@ -54,18 +55,25 @@ export function SelectionOverlay({
     selections.length > 0 || interactionActive,
     selector,
   );
-  const activeTarget =
+  const candidateTarget =
     workflow.mode === "armed"
       ? workflow.activeTarget
       : workflow.mode === "dragging"
         ? workflow.target
         : null;
+  const currentTarget = candidateTarget
+    ? dom.targetFromElement(candidateTarget.element, selector)
+    : null;
+  const activeTarget = currentTarget?.element === candidateTarget?.element ? currentTarget : null;
   const activeOutput = activeTarget?.element ?? null;
   const activeBounds = activeOutput?.getBoundingClientRect();
   const draftAnchor = previewAnchor(workflow);
 
   return (
     <div className="ml-overlay" data-marimo-lens-ui data-armed={interactionActive}>
+      {workflow.mode === "armed" && activeTarget && activeBounds && (
+        <TargetInfoLabel target={activeTarget} bounds={activeBounds} />
+      )}
       {activeBounds ? (
         <div
           className="ml-output-highlight"

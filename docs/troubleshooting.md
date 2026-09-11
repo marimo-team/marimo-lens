@@ -20,9 +20,9 @@ activity appears as a dock notice while no ring surrounds the target.
 **Action:** Check the target kind in the current selection reference.
 
 - For a notebook target, run the same cell and make sure its output is visible.
-- For a configured DOM target, restore the same element ID or exact structural
-  location. Confirm that it still matches `dom_selector` and carries the same
-  `data-runtime-cell-id` producing-cell ID set.
+- For a configured DOM target, restore its stable element ID. Confirm that it
+  still matches `dom_selector` and carries the same producing cells and notebook
+  source identities. Reselect an unkeyed element after replacing it.
 - After a page reload, remove the older selection and make a new one in the new
   document.
 

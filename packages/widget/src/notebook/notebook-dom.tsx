@@ -1,5 +1,9 @@
-import type { SelectionTarget, TargetSelector } from "@marimo-lens/protocol";
-
+import {
+  TARGET_LABEL_ATTRIBUTE,
+  TARGET_DETAIL_ATTRIBUTE,
+  type SelectionTarget,
+  type TargetSelector,
+} from "@marimo-lens/protocol";
 import { createContext, useContext, type ReactNode } from "react";
 
 import type { OutputCell } from "@/notebook/types";
@@ -206,6 +210,18 @@ export class NotebookDomAdapter {
             records.length === 0 ||
             records.some((record) => {
               if (record.type !== "attributes") return true;
+              if (
+                [
+                  TARGET_LABEL_ATTRIBUTE,
+                  TARGET_DETAIL_ATTRIBUTE,
+                  "id",
+                  "data-marimo-sources",
+                  "data-runtime-cell-id",
+                  "data-marimo-projection-kind",
+                  "data-marimo-projection-target",
+                ].includes(record.attributeName ?? "")
+              )
+                return true;
               const target = record.target;
               if (!(target instanceof this.window.HTMLElement)) return false;
               if (target.closest("[data-marimo-lens-ui]")) return false;

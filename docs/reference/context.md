@@ -108,6 +108,11 @@ Every target contains:
 A notebook target contains exactly one `cellIds` entry. A configured DOM target
 also contains `domSelector`, the exact CSS selector used to locate the target
 within its owning document. It can contain zero through 64 producing cell IDs.
+DOM targets also contain `sources`: resolved notebook references with `cellId`
+and `selector`. The selector is `None` for a cell output or cell-only metadata.
+These references distinguish values defined by the same cell. They persist after
+reopening; a fresh image has its own capture time. Sources identify dependencies,
+not historical values. Inspect current values through the active notebook.
 
 ## Cell status
 

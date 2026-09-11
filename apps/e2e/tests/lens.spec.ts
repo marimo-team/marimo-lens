@@ -231,3 +231,166 @@ test("live theme changes preserve attention and readable selection labels", asyn
   expect(after.references.selections).toEqual(before.references.selections);
   expect(after.references.revision).toBe(before.references.revision);
 });
+
+test("custom regions retain symbolic sources through kernel context and reject retargeting", async ({
+  page,
+}) => {
+  await page.getByRole("combobox", { name: "Target mode" }).selectOption({ label: "DOM roots" });
+  await runAction(page);
+  const cellId = await page.getByRole("checkbox", { name: "Show revenue" }).evaluate((control) => {
+    let current: Element | null = control;
+    let id: string | undefined;
+    while (current) {
+      if (current.id.startsWith("output-")) id = current.id.slice("output-".length);
+      if (current.matches("marimo-island[data-cell-id]"))
+        id = current.getAttribute("data-cell-id") ?? undefined;
+      if (id) break;
+      const root = current.getRootNode();
+      current = current.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+    }
+    if (!id) throw new Error("The control has no producing output");
+    const host = document.createElement("span");
+    host.id = "visibility-input";
+    host.hidden = true;
+    host.dataset.runtimeCellId = id;
+    host.dataset.marimoProjectionKind = "value";
+    host.dataset.marimoProjectionTarget = "show_revenue.value";
+    host.dataset.marimoLensLabel = "show_revenue.value";
+    document.body.append(host);
+    const region = document.getElementById("revenue-chart")!;
+    region.setAttribute("data-marimo-sources", host.id);
+    region.setAttribute("data-marimo-lens-label", "Revenue visibility");
+    return id;
+  });
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await page.getByRole("region", { name: "Revenue by month" }).hover();
+  const label = page.locator("[data-marimo-lens-target-label]");
+  await expect(label).toHaveText("Revenue visibilityshow_revenue.value");
+  await page.locator("#visibility-input").evaluate((host) => {
+    host.setAttribute("data-marimo-lens-label", "Visibility control");
+  });
+  await expect(label).toHaveText("Revenue visibilityVisibility control");
+  await page.keyboard.press("Escape");
+  await selectOutput(page, "point", "S1", "Inspect the custom region input");
+  const captured = await runAction(page);
+  expect(captured.references.selections).toMatchObject([
+    {
+      target: {
+        kind: "dom",
+        cellIds: [cellId],
+        sources: [{ cellId, selector: "show_revenue.value" }],
+      },
+      cells: [{ id: cellId, status: "available" }],
+      snapshot: { status: "available" },
+    },
+  ]);
+  expect(captured.text).toContain("show_revenue.value");
+  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+  await expect(page.getByRole("button", { name: /Current selection S1,/ })).toBeVisible();
+  // The input is outside the selected region: its mutation must invalidate attention itself.
+  await page.locator("#visibility-input").evaluate((host) => {
+    host.setAttribute("data-marimo-projection-target", "target_mode.value");
+  });
+  await expect(
+    page.getByRole("button", { name: /Current selection S1,.*target unavailable/ }),
+  ).toBeVisible();
+});
+
+test("target picking shows consumer labels at the element edge without intercepting selection", async ({
+  page,
+}, testInfo) => {
+  await page.getByRole("combobox", { name: "Target mode" }).selectOption({ label: "DOM roots" });
+  await runAction(page);
+  const region = page.getByRole("region", { name: "Revenue by month" });
+  await region.evaluate((element) => {
+    element.setAttribute("data-marimo-lens-label", "Monthly revenue");
+    element.setAttribute("data-marimo-lens-detail", "Query · finance.monthly");
+  });
+  const label = page.locator("[data-marimo-lens-target-label]");
+  await region.hover();
+  await expect(label).toBeHidden();
+  await region.evaluate((element) => {
+    element.style.pointerEvents = "none";
+  });
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await region.hover();
+  await expect(label).toContainText("Monthly revenue");
+  await expect(label).toContainText("Query · finance.monthly");
+  const leaf = region.locator("strong").first();
+  await leaf.evaluate((element) => {
+    element.style.cursor = "text";
+  });
+  await leaf.hover();
+  await expect(leaf).toHaveCSS("cursor", "crosshair");
+  await leaf.evaluate((element) => {
+    element.style.cursor = "wait";
+  });
+  await expect(leaf).toHaveCSS("cursor", "crosshair");
+  await page.keyboard.press("Escape");
+  await expect(leaf).toHaveCSS("cursor", "wait");
+  await expect(region).toHaveCSS("pointer-events", "none");
+  await expect(label).toBeHidden();
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  const nativeControl = page.getByRole("checkbox", { name: "Show revenue" });
+  await nativeControl.hover();
+  await expect(nativeControl).toHaveCSS("cursor", "crosshair");
+  await page.getByRole("button", { name: "Cancel selection mode", exact: true }).hover();
+  await expect(nativeControl).not.toHaveCSS("cursor", "crosshair");
+  await region.hover();
+  await expect.poll(() => contrastRatio(label)).toBeGreaterThanOrEqual(4.5);
+
+  await expectInsideViewport(page, label);
+  const targetBounds = await region.boundingBox();
+  const labelBounds = await label.boundingBox();
+  expect(targetBounds).not.toBeNull();
+  expect(labelBounds).not.toBeNull();
+  expect(labelBounds!.y + labelBounds!.height).toBeLessThanOrEqual(targetBounds!.y);
+  await screenshot(page, testInfo, "target-label");
+
+  // A stationary pointer sees refreshed consumer text, rendered as text rather than HTML.
+  await region.evaluate((element) =>
+    element.setAttribute("data-marimo-lens-label", "Revenue <img src=x>"),
+  );
+  await expect(label).toContainText("Revenue <img src=x>");
+  await expect(label.locator("img")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(label).toBeHidden();
+
+  const select = page.getByRole("button", { name: "Select a target", exact: true });
+  await select.click();
+  for (let index = 0; index < 12; index += 1) {
+    await page.keyboard.press("ArrowDown");
+    if ((await label.textContent())?.includes("finance.monthly")) break;
+  }
+  await expect(label).toContainText("finance.monthly");
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: /Add note for/ })).toBeVisible();
+  await expect(label).toBeHidden();
+  await page
+    .getByRole("dialog", { name: /Add note for/ })
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+
+  // At the viewport edge the label sits inside the target. Clicking it still selects the content.
+  await region.evaluate((element) => {
+    element.ownerDocument.body.append(element);
+    element.style.cssText += ";position:fixed;top:0;left:8px;width:calc(100vw - 32px);z-index:10";
+  });
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await region.hover();
+  await expect(label).toBeVisible();
+  await expectInsideViewport(page, label);
+  await region.evaluate((element) => {
+    element.style.display = "none";
+  });
+  await expect(label).toBeHidden();
+  await page.locator("#revenue-chart").evaluate((element) => {
+    element.style.display = "grid";
+  });
+  await region.hover();
+  await expect(label).toBeVisible();
+  const overlap = await label.boundingBox();
+  await page.mouse.click(overlap!.x + overlap!.width / 2, overlap!.y + overlap!.height / 2);
+  await expect(page.getByRole("dialog", { name: /Add note for/ })).toBeVisible();
+  await expect(label).toBeHidden();
+});

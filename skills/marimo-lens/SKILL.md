@@ -216,6 +216,10 @@ Route work from `selection["target"]["kind"]` before planning a mutation:
 - `dom`: Use `documentPath` and `domSelector` to locate the authored view region.
   Treat `cells` as related provenance. A DOM target can have no producing cell.
 
+For a DOM target, read `target["sources"]` to distinguish exact notebook values
+defined by the same cell. Match the selectors to the producing code and inspect current
+values through the active notebook integration before changing notebook logic.
+
 `documentId` is an opaque browser-document identity. Preserve it inside the
 `SelectionReference`; do not construct, compare, or pass it separately.
 

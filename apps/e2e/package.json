@@ -10,8 +10,10 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@marimo-lens/image-capture": "workspace:*",
     "@playwright/test": "catalog:",
     "@types/node": "catalog:",
+    "esbuild": "catalog:",
     "typescript": "catalog:"
   }
 }

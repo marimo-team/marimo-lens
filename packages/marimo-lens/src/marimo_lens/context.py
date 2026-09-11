@@ -36,9 +36,17 @@ class _NotebookTargetReference(TypedDict):
     documentPath: str
 
 
+class NotebookSourceReference(TypedDict):
+    """A resolved notebook cell and optional symbolic value selector."""
+
+    cellId: str
+    selector: str | None
+
+
 class _DomTargetReference(TypedDict):
     kind: Literal["dom"]
     cellIds: list[str]
+    sources: list[NotebookSourceReference]
     documentId: str
     documentPath: str
     domSelector: str

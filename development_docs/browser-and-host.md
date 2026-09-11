@@ -37,10 +37,15 @@ A configured root:
 
 - Must be an `HTMLElement` in the document light DOM.
 - Must be visible and distinct from Lens UI or a Lens host.
-- Receives a unique exact selector generated from an ID or a light-DOM
-  `nth-of-type` path.
+- Uses a unique authored ID or a generated element-lifetime locator.
 - Infers producing cells from its own and nested `data-runtime-cell-id`
   attributes.
+- Reads resolved Studio projection kind and target metadata for exact value selectors.
+- Resolves `data-marimo-sources` as a bounded list of unique projection host IDs
+  in the same document. An explicit region owns its complete input set;
+  otherwise Lens collects contained projections, treating native output subtrees
+  as opaque. Missing, duplicate, unbound, or chained references are unavailable.
+- Skips regions with an `aria-busy="true"` ancestor or on the region itself.
 - Stores inferred IDs as a sorted unique set.
 
 Configured roots outrank nested notebook outputs. This makes the host-authored
@@ -50,6 +55,35 @@ renderers.
 The exact selector is a locator, not public host policy. Reattachment also
 checks that the element still matches the configured selector and has the same
 producing cell IDs.
+
+Reattachment requires the same producing cells and symbolic selectors. A value
+update stays attached; a different selector from the same cell makes the target
+unavailable. The target is revalidated before captured image bytes are committed.
+
+Each `target.sources` entry has `cellId` and `selector`. `selector: null` identifies
+a cell output or generic cell-only metadata. Sources are evidence, not permission
+to read or mutate the kernel. The transport preserves them in selections,
+context, and History. No runtime identities or value revisions are copied from
+Studio: document ownership scopes the target, and current notebook graph context
+is inspected separately from the captured image.
+
+Stable element IDs support remountable targets. Unkeyed elements receive an
+element-lifetime locator, so replacing or reordering an unrelated sibling cannot
+silently redirect a selection.
+
+## Target-picking indicator
+
+`@marimo-lens/protocol` defines `TargetInfo` (`label`, optional `detail`) and its
+attribute names. The notebook adapter reads consumer text, source-host references,
+and native fallbacks. The selection overlay renders a compact, non-interactive
+label attached to the active target, clamped to the viewport. This presentation
+exists only in the armed workflow; it creates no Python state or transport fields.
+
+Consumers such as Studio publish the attributes. Lens's presentation has no
+framework or Studio-specific knowledge. The existing layout observer refreshes
+labels after metadata changes, scrolling, and resize. Keyboard navigation uses
+the same label model for announcements. Selection identity is independent of
+consumer display text.
 
 ## Target resolution
 

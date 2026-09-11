@@ -133,11 +133,40 @@ def test_empty_note_and_no_images_still_produce_complete_text() -> None:
     assert "result = compute()" in text
 
 
+def test_dom_value_sources_survive_context_projection() -> None:
+    sources = [
+        {"cellId": "cell-1", "selector": name}
+        for name in ["summary.revenue", "summary.cost"]
+    ]
+    selected = selection(
+        target={
+            "kind": "dom",
+            "cellIds": ["cell-1"],
+            "sources": sources,
+            "documentId": "document-1",
+            "documentPath": "/dashboard/",
+            "domSelector": "#summary",
+        }
+    )
+    references, text = build_context(
+        snapshot(cell("cell-1")),
+        [selected],
+        revision=1,
+        current_selection_id="selection-1",
+    )
+    target = references["selections"][0]["target"]
+    assert target["kind"] == "dom"
+    assert target["sources"] == sources
+    assert "summary.revenue" in text
+    assert "summary.cost" in text
+
+
 def test_dom_target_keeps_document_grounding_without_a_producing_cell() -> None:
     selected = selection(
         note="Tighten the spacing in this card.",
         target={
             "kind": "dom",
+            "sources": [],
             "cellIds": [],
             "documentId": "document-1",
             "documentPath": "/dashboard/",
@@ -556,6 +585,7 @@ def test_context_keeps_cell_availability_separate_from_bounded_source() -> None:
             label="S1",
             target={
                 "kind": "dom",
+                "sources": [],
                 "cellIds": producer_ids[:64],
                 "documentPath": "/dashboard/",
                 "domSelector": "#all-results",
@@ -566,6 +596,7 @@ def test_context_keeps_cell_availability_separate_from_bounded_source() -> None:
             label="S2",
             target={
                 "kind": "dom",
+                "sources": [],
                 "cellIds": [producer_ids[64]],
                 "documentPath": "/dashboard/",
                 "domSelector": "#last-result",
@@ -607,6 +638,7 @@ def test_target_cell_ids_prioritize_the_current_selection() -> None:
             selection_id="selection-old",
             target={
                 "kind": "dom",
+                "sources": [],
                 "cellIds": ["cell-a", "cell-b"],
                 "documentId": "document-1",
                 "documentPath": "/dashboard/",
@@ -617,6 +649,7 @@ def test_target_cell_ids_prioritize_the_current_selection() -> None:
             selection_id="selection-current",
             target={
                 "kind": "dom",
+                "sources": [],
                 "cellIds": ["cell-current", "cell-a"],
                 "documentId": "document-1",
                 "documentPath": "/dashboard/",
@@ -641,6 +674,7 @@ def test_admitted_multi_producer_targets_always_render_bounded_text() -> None:
             note="n" * 4_000,
             target={
                 "kind": "dom",
+                "sources": [],
                 "cellIds": producer_ids,
                 "documentPath": "/dashboard/",
                 "domSelector": "#all-results",

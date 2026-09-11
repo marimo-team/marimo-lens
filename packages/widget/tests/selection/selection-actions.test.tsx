@@ -16,7 +16,7 @@ import type { SelectionSnapshotCapture } from "@/selection/selection-capture";
 
 import { LensProtocolClient } from "@/anywidget/client";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
-import { documentIdentity } from "@/notebook/selection-target";
+import { documentIdentity, targetFromElement } from "@/notebook/selection-target";
 import { useSelectionActions } from "@/selection/selection-actions";
 import { INITIAL_UI_STATE, uiReducer, type UiState } from "@/selection/state";
 
@@ -46,6 +46,24 @@ afterEach(() => {
 });
 
 describe("selection mutations", () => {
+  test("rejects a same-cell symbolic target change during capture", async () => {
+    const output = visibleOutput();
+    output.dataset.runtimeCellId = "cell-1";
+    output.dataset.marimoProjectionKind = "value";
+    output.dataset.marimoProjectionTarget = "summary.revenue";
+    const target = targetFromElement(output, "[data-runtime-cell-id]")!.target;
+    const capture = deferred<CaptureResult>();
+    captureSnapshot.mockReturnValue(capture.promise);
+    const stateRef = { current: lensState() };
+    const protocol = statefulProtocol(stateRef);
+    mount(stateRef, protocol.client);
+    act(() => actions?.beginSelection(target, output, { kind: "point", x: 0.4, y: 0.5 }, output));
+    await flush();
+    output.dataset.marimoProjectionTarget = "summary.cost";
+    capture.resolve(availableCapture());
+    await flush();
+    expect(stateRef.current.selections[0]?.snapshot.status).toBe("failed");
+  });
   test("commits on pointer release before capturing the automatic snapshot", async () => {
     const output = visibleOutput();
     const capture = deferred<CaptureResult>();
@@ -742,7 +760,7 @@ function Harness({
     stateRef,
     dispatch,
     dom,
-    selector: null,
+    selector: "[data-runtime-cell-id]",
     protocol,
     captureSnapshot,
   });
@@ -995,7 +1013,7 @@ function deferred<T>() {
 function successResponse(revision: number): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 4,
+    version: 5,
     requestId: "request-1",
     ok: true,
     revision,

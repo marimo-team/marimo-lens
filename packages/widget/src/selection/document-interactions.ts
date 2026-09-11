@@ -6,8 +6,9 @@ import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import type { TargetSurface } from "@/notebook/selection-target";
 import type { SelectionMotion, UiAction, UiState, WorkflowState } from "@/selection/state";
 
-import { parentViewportPoint } from "@/notebook/interaction-documents";
+import { createSelectionCursor, parentViewportPoint } from "@/notebook/interaction-documents";
 import { deepestElementFromEvent } from "@/notebook/output-root";
+import { targetInfo } from "@/notebook/target-info";
 import { anchorToViewport } from "@/selection/anchor";
 import { handleLensEscape } from "@/selection/escape";
 import { gestureAnchor, normalizedPoint } from "@/selection/state";
@@ -58,11 +59,29 @@ export function useDocumentInteractions(options: {
           ? dom.targetFromElement(surface.frame, selector)
           : dom.targetFromEvent(event, selector);
 
+      const setCursor = createSelectionCursor();
+      let cursorElement: Element | null = null;
+      const clearCursor = () => {
+        cursorElement = null;
+        setCursor(null);
+      };
+      const onPointerOut = (event: PointerEvent) => {
+        if (!event.relatedTarget) clearCursor();
+      };
+      const stopCursorLayout = interactionActive
+        ? dom.subscribeLayout(() => {
+            if (!cursorElement) return;
+            const target = dom.targetFromElement(surface.frame ?? cursorElement, selector);
+            setCursor(target ? cursorElement : null);
+          })
+        : () => {};
       const onPointerDown = (event: PointerEvent) => {
         const workflow = uiRef.current.workflow;
         if (workflow.mode !== "armed" || event.button !== 0) return;
         const target = targetForEvent(event);
         if (!target) return;
+        cursorElement = target.element;
+        setCursor(cursorElement);
         const point = parentViewportPoint(event, surface.frame);
         canceledPointerIds.current.delete(event.pointerId);
         event.preventDefault();
@@ -78,7 +97,16 @@ export function useDocumentInteractions(options: {
       const onPointerMove = (event: PointerEvent) => {
         const workflow = uiRef.current.workflow;
         if (workflow.mode === "armed") {
-          dispatch({ type: "focusTarget", target: targetForEvent(event) });
+          const target = targetForEvent(event);
+          const window = surface.document.defaultView;
+          cursorElement =
+            window && event.pointerType !== "touch"
+              ? (event
+                  .composedPath()
+                  .find((item): item is Element => item instanceof window.Element) ?? null)
+              : null;
+          setCursor(target ? cursorElement : null);
+          dispatch({ type: "focusTarget", target });
         } else if (workflow.mode === "dragging" && workflow.pointerId === event.pointerId) {
           event.preventDefault();
           dispatch({
@@ -157,12 +185,18 @@ export function useDocumentInteractions(options: {
         navigateTargets(dom, selector, event, workflow, beginSelection, dispatch);
       };
 
+      surface.document.addEventListener("pointerout", onPointerOut, true);
+      surface.document.defaultView?.addEventListener("blur", clearCursor);
       surface.document.addEventListener("pointerdown", onPointerDown, true);
       surface.document.addEventListener("pointermove", onPointerMove, true);
       surface.document.addEventListener("pointerup", onPointerUp, true);
       surface.document.addEventListener("pointercancel", onPointerCancel, true);
       surface.document.addEventListener("keydown", onKeyDown, true);
       return () => {
+        clearCursor();
+        stopCursorLayout();
+        surface.document.removeEventListener("pointerout", onPointerOut, true);
+        surface.document.defaultView?.removeEventListener("blur", clearCursor);
         surface.document.removeEventListener("pointerdown", onPointerDown, true);
         surface.document.removeEventListener("pointermove", onPointerMove, true);
         surface.document.removeEventListener("pointerup", onPointerUp, true);
@@ -209,7 +243,9 @@ function navigateTargets(
   if (targets.length === 0) return;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
-    const current = targets.findIndex((target) => target.key === workflow.activeTarget?.key);
+    const current = targets.findIndex(
+      (target) => target.element === workflow.activeTarget?.element,
+    );
     const backwards = event.key === "ArrowUp";
     const next =
       current < 0
@@ -228,7 +264,8 @@ function navigateTargets(
   } else if (event.key === "Enter") {
     event.preventDefault();
     const target =
-      targets.find((candidate) => candidate.key === workflow.activeTarget?.key) ?? targets[0];
+      targets.find((candidate) => candidate.element === workflow.activeTarget?.element) ??
+      targets[0];
     if (!target) return;
     const rect = target.element.getBoundingClientRect();
     const point = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
@@ -250,22 +287,8 @@ function navigateTargets(
 }
 
 function targetAnnouncement(target: TargetSurface, index: number, count: number): string {
-  const output = target.element;
-  const headingSelector = "h1, h2, h3, h4, h5, h6, [role='heading']";
-  const heading = output.matches(headingSelector)
-    ? output
-    : output.querySelector<HTMLElement>(headingSelector);
-  const labelled = output.matches("[aria-label]")
-    ? output
-    : output.querySelector<HTMLElement>("[aria-label]");
-  const label = normalizeLabel(heading?.textContent ?? labelled?.getAttribute("aria-label"));
-  return label ? `Target ${index + 1} of ${count}, ${label}.` : `Target ${index + 1} of ${count}.`;
-}
-
-function normalizeLabel(value: string | null | undefined): string {
-  const normalized = value?.replace(/\s+/g, " ").trim() ?? "";
-  if (normalized.length <= 80) return normalized;
-  return `${normalized.slice(0, 79)}…`;
+  const info = targetInfo(target);
+  return `Target ${index + 1} of ${count}, ${info.label}${info.detail ? `, ${info.detail}` : ""}.`;
 }
 
 function eventTargetElement(event: Event, ownerDocument: Document): Element | null {
