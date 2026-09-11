@@ -1,0 +1,61 @@
+development_docs/browser-and-host.md
+  s_248017edbe36ba::t_9409c677176b00 43-48,59-72
+packages/widget/src/selection/document-interactions.ts
+  s_248017edbe36ba::t_43708c8a4374bd 9,11,62-77,83-84,100-109,188-189,196-199,246-248,267-268,290-291
+docs/api.md
+  s_248017edbe36ba::t_fa701d4426ac86 9-10
+  s_248017edbe36ba::t_9409c677176b00 8,11-14
+packages/marimo-lens/src/marimo_lens/context.py
+  s_248017edbe36ba::t_6dd2683aee3599 39-45,49
+packages/protocol/src/contracts.ts
+  s_248017edbe36ba::t_6dd2683aee3599 5,122-123,126,128-130
+  s_248017edbe36ba::t_6737dc14031c44 127,131-144
+  s_248017edbe36ba::t_224c95097f8b9f 124
+development_docs/selection-state.md
+  s_248017edbe36ba::t_fa701d4426ac86 32-33
+packages/widget/tests/selection/selection-actions.test.tsx
+  s_248017edbe36ba::t_edd3d84b4124d8 19,49-66,763,1016
+skills/marimo-lens/SKILL.md
+  s_248017edbe36ba::t_5176a50b07dc13 219-222
+packages/widget/src/styles/lens.css
+  s_248017edbe36ba::t_b6d97ddf404891 465-468,476,478,481,483-484,486-489,501-507,511-521,523-526,534-541,551,556-557,646,1329,1822-1860
+packages/widget/src/notebook/target-info.ts
+  s_248017edbe36ba::t_ab879c62b76891 1-70
+packages/marimo-lens/src/marimo_lens/_text_context.py
+  s_248017edbe36ba::t_f53c6a0d2190e9 286-288
+  s_248017edbe36ba::t_d8203a7c146bc6 289-294
+packages/widget/tests/notebook/selection-target.test.ts
+  s_248017edbe36ba::t_47533cd2c1cc15 16-58,60-73,95-97,99-103
+  s_248017edbe36ba::t_5441a338245ea2 205,246-249,299,316,352-360,364-365,368,376
+  s_248017edbe36ba::t_f4b2a053e34478 59,74-94,98,361-363,377-379
+packages/widget/tests/notebook/target-info.test.ts
+  s_248017edbe36ba::t_ab879c62b76891 1-23
+packages/marimo-lens/src/marimo_lens/_protocol_models.py
+  s_248017edbe36ba::t_6dd2683aee3599 30,327,330,347-348,351
+  s_248017edbe36ba::t_2b5420068ca71e 328-329,355-359
+  s_248017edbe36ba::t_c925cfe4fea8ad 20,331-346
+packages/widget/src/notebook/selection-target.ts
+  s_248017edbe36ba::t_46ad4a3b4ed75c 12,185
+  s_248017edbe36ba::t_6dd2683aee3599 64-65,124,158-163,166-176
+  s_248017edbe36ba::t_5441a338245ea2 183-184,186
+packages/widget/src/notebook/notebook-dom.tsx
+  s_248017edbe36ba::t_43708c8a4374bd 1-6,213-224
+packages/widget/src/notebook/interaction-documents.ts
+  s_248017edbe36ba::t_43708c8a4374bd 33,111-115,151,222-240,246-251,256-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "18a4ff4e8f034c0e475ada051cc9044e61fa3e25",
+  "prompts": {},
+  "sessions": {
+    "s_248017edbe36ba": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a08d26-bafe-7b62-8490-4a1d887cfdd0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
