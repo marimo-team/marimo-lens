@@ -13,6 +13,109 @@ import {
 afterEach(() => document.body.replaceChildren());
 
 describe("selection targets", () => {
+  test("picks an individual metric field ahead of its summary row", () => {
+    const row = visible(document.createElement("section"));
+    row.dataset.marimoSources = "summary";
+    const summary = document.createElement("span");
+    summary.id = "summary";
+    summary.dataset.runtimeCellId = "producer";
+    document.body.append(summary, row);
+    const targets = ["events", "felt_reports"].map((field) => {
+      const card = visible(document.createElement("article"));
+      const value = document.createElement("strong");
+      value.textContent = "42";
+      const input = document.createElement("span");
+      input.hidden = true;
+      input.dataset.runtimeCellId = "producer";
+      input.dataset.marimoProjectionKind = "value";
+      input.dataset.marimoProjectionTarget = `summary.${field}`;
+      card.append(input, value);
+      row.append(card);
+      return targetFromElement(value, "section, article")!;
+    });
+    expect(
+      targets.map((surface) => surface.target.kind === "dom" && surface.target.sources),
+    ).toEqual([
+      [{ cellId: "producer", selector: "summary.events" }],
+      [{ cellId: "producer", selector: "summary.felt_reports" }],
+    ]);
+  });
+
+  test("withholds busy contained projections until rendering finishes", () => {
+    const region = visible(document.createElement("section"));
+    region.id = "revenue";
+    const input = document.createElement("span");
+    input.hidden = true;
+    input.setAttribute("mo-value", "summary.revenue");
+    input.dataset.runtimeCellId = "summary-cell";
+    input.dataset.marimoProjectionKind = "value";
+    input.dataset.marimoProjectionTarget = "summary.revenue";
+    region.append(input);
+    document.body.append(region);
+    const selector = ":has(> [mo-value][hidden][data-runtime-cell-id])";
+    const target = targetFromElement(region, selector)!.target;
+    expect(target).toMatchObject({
+      cellIds: ["summary-cell"],
+      sources: [{ cellId: "summary-cell", selector: "summary.revenue" }],
+    });
+    const outer = visible(document.createElement("article"));
+    region.replaceWith(outer);
+    outer.append(region);
+    region.setAttribute("aria-busy", "true");
+    expect(targetFromElement(region, `${selector}, article`)).toBeNull();
+    expect(getTargetSurface(document, target, selector)).toBeNull();
+    region.setAttribute("aria-busy", "false");
+    expect(getTargetSurface(document, target, selector)?.element).toBe(region);
+  });
+
+  test("resolves explicit shared inputs without including unrelated nested projections", () => {
+    const region = visible(document.createElement("section"));
+    region.dataset.marimoSources = "rows totals rows";
+    const input = (id: string, cell: string, target: string) => {
+      const host = document.createElement("span");
+      host.id = id;
+      host.dataset.runtimeCellId = cell;
+      host.dataset.marimoProjectionKind = "value";
+      host.dataset.marimoProjectionTarget = target;
+      return host;
+    };
+    const rows = input("rows", "data-cell", "rows");
+    const totals = input("totals", "summary-cell", "summary.total");
+    region.append(input("unrelated", "control-cell", "control"));
+    document.body.append(region, rows, totals);
+    const selector = "[data-marimo-sources]";
+    const target = targetFromElement(region, selector)!.target;
+    expect(target).toMatchObject({
+      cellIds: ["data-cell", "summary-cell"],
+      sources: [
+        { cellId: "data-cell", selector: "rows" },
+        { cellId: "summary-cell", selector: "summary.total" },
+      ],
+    });
+    // Replacing a framework-owned host with the same declared input preserves attention.
+    const replacement = input("totals", "summary-cell", "summary.total");
+    totals.replaceWith(replacement);
+    expect(getTargetSurface(document, target, selector)?.element).toBe(region);
+    replacement.dataset.marimoProjectionTarget = "summary.cost";
+    expect(getTargetSurface(document, target, selector)).toBeNull();
+    rows.remove();
+    expect(targetFromElement(region, selector)).toBeNull();
+  });
+
+  test.each(["", "missing", "duplicate", "region", "unbound"])(
+    "rejects an unresolved or ambiguous source reference: %s",
+    (reference) => {
+      const region = visible(document.createElement("section"));
+      region.id = "region";
+      region.dataset.marimoSources = reference;
+      document.body.innerHTML =
+        '<span id="duplicate" data-runtime-cell-id="a"></span>' +
+        '<span id="duplicate" data-runtime-cell-id="b"></span><span id="unbound" mo-value="rows"></span>';
+      document.body.append(region);
+      expect(targetFromElement(region, "[data-marimo-sources]")).toBeNull();
+    },
+  );
+
   test("resolves selections across separately loaded widget modules in one document", async () => {
     const output = visible(document.createElement("div"));
     output.id = "output-shared-cell";
@@ -99,6 +202,7 @@ describe("selection targets", () => {
 
     expect(target?.target).toEqual({
       kind: "dom",
+      sources: [{ cellId: "producer-cell", selector: null }],
       cellIds: ["producer-cell"],
       documentId: documentIdentity(document),
       documentPath: "/",
@@ -139,6 +243,10 @@ describe("selection targets", () => {
 
     expect(target?.target).toEqual({
       kind: "dom",
+      sources: [
+        { cellId: "chart-cell", selector: null },
+        { cellId: "report-cell", selector: null },
+      ],
       cellIds: ["chart-cell", "report-cell"],
       documentId: documentIdentity(document),
       documentPath: "/",
@@ -188,6 +296,7 @@ describe("selection targets", () => {
         document,
         {
           kind: "dom",
+          sources: [],
           cellIds: [],
           documentId: documentIdentity(document),
           documentPath: "/",
@@ -204,6 +313,7 @@ describe("selection targets", () => {
     document.body.appendChild(section);
     const current = {
       kind: "dom" as const,
+      sources: [],
       cellIds: [],
       documentId: documentIdentity(document),
       documentPath: document.location.pathname || "/",
@@ -239,20 +349,23 @@ describe("selection targets", () => {
     expect(documentIdentity(ownerDocument)).toBe(surface?.target.documentId);
   });
 
-  test("skips roots whose exact selector cannot fit the protocol", () => {
-    let parent: HTMLElement = document.body;
-    for (let index = 0; index < 260; index += 1) {
-      const child = document.createElement("div");
-      parent.appendChild(child);
-      parent = child;
-    }
-    visible(parent).dataset.feedbackTarget = "";
-
-    expect(targetFromElement(parent, "[data-feedback-target]")).toBeNull();
-    expect(listTargetSurfaces(document, "[data-feedback-target]")).toEqual([]);
+  test("preserves unkeyed attention across moves but not element replacement", () => {
+    const parent = visible(document.createElement("section"));
+    parent.dataset.feedbackTarget = "";
+    document.body.append(parent);
+    const target = targetFromElement(parent, "[data-feedback-target]")!.target;
+    const container = document.createElement("article");
+    document.body.append(container);
+    container.append(parent);
+    expect(getTargetSurface(document, target, "[data-feedback-target]")?.element).toBe(parent);
+    const replacement = visible(document.createElement("div"));
+    for (const attribute of parent.attributes)
+      replacement.setAttribute(attribute.name, attribute.value);
+    parent.replaceWith(replacement);
+    expect(getTargetSurface(document, target, "[data-feedback-target]")).toBeNull();
   });
 
-  test("falls back to a structural locator when an element ID is too long", () => {
+  test("assigns an element lifetime locator when an element ID is too long", () => {
     const section = visible(document.createElement("section"));
     section.id = "x".repeat(1_025);
     section.dataset.feedbackTarget = "";
@@ -260,10 +373,10 @@ describe("selection targets", () => {
 
     const target = targetFromElement(section, "[data-feedback-target]");
 
-    expect(target?.target).toMatchObject({
-      kind: "dom",
-      domSelector: "body > section",
-    });
+    expect(target?.target.kind).toBe("dom");
+    expect(getTargetSurface(document, target!.target, "[data-feedback-target]")?.element).toBe(
+      section,
+    );
   });
 
   test("skips roots whose producer list exceeds its bound", () => {

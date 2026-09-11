@@ -29,7 +29,8 @@ Selection
 The target carries an opaque browser-document ID and the document pathname.
 Notebook targets carry exactly one cell ID. DOM targets carry an exact selector
 and a canonical sorted set of cell IDs inferred from nested
-`data-runtime-cell-id` metadata.
+`data-runtime-cell-id` metadata or explicit notebook source records. DOM targets
+also preserve exact value selectors.
 
 The anchor and DOM hint can change. The label, target, and creation time are
 immutable after selection creation. A geometry or DOM-hint change makes the

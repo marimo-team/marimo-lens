@@ -143,7 +143,8 @@ See [Selection state](selection-state.md).
 
 A notebook target identifies one canonical output cell. A configured DOM target
 keeps a document-scoped selector and zero or more producing cells inferred from
-nested `data-runtime-cell-id` metadata. Both retain the owning document identity
+published source records or nested `data-runtime-cell-id` metadata. Value
+references distinguish selectors from the same cell. Both retain the owning document identity
 and pathname. The anchor narrows attention inside the target.
 
 Lens records bounded DOM evidence. Renderer-specific chart marks and

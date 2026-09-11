@@ -9,13 +9,16 @@ import {
   listOutputRoots,
   outputCellFromRoot,
 } from "@/notebook/output-root";
+import { notebookSources } from "@/notebook/projection-sources";
 
 const DOCUMENT_POSITION_FOLLOWING = 4;
 const DOCUMENT_ID: unique symbol = Symbol.for("marimo-lens.document-id.v1");
+const TARGET_IDS: unique symbol = Symbol.for("marimo-lens.target-ids.v1");
 
 declare global {
   interface Document {
     [DOCUMENT_ID]?: string;
+    [TARGET_IDS]?: WeakMap<HTMLElement, string>;
   }
 }
 
@@ -57,17 +60,9 @@ export function getTargetSurface(
   }
   if (!selector) return null;
   const element = queryTarget(ownerDocument, target.domSelector);
-  if (
-    !element ||
-    !matchesSelector(element, selector) ||
-    containsLensHost(element) ||
-    !isVisible(element)
-  ) {
-    return null;
-  }
-  const cellIds = inferredCellIds(element);
-  if (!sameCellIds(cellIds, target.cellIds)) return null;
-  return surface(target, element);
+  if (!element) return null;
+  const current = configuredDomTarget(element, selector);
+  return current?.key === surface(target, element)?.key ? current : null;
 }
 
 export function targetBelongsToDocument(target: SelectionTarget, ownerDocument: Document): boolean {
@@ -126,6 +121,7 @@ export function validateTargetSelector(ownerDocument: Document, selector: Target
 }
 
 function bestTarget(elements: Element[], selector: TargetSelector): TargetSurface | null {
+  if (elements.some((element) => element.getAttribute("aria-busy") === "true")) return null;
   let best: { priority: number; surface: TargetSurface } | null = null;
   for (const element of elements) {
     const candidates = [
@@ -159,70 +155,51 @@ function configuredDomTarget(element: Element, selector: string): TargetSurface 
 
 function domTarget(element: Element): TargetSurface | null {
   if (!isHTMLElement(element) || element.getRootNode() !== element.ownerDocument) return null;
-  if (isLensUi(element) || containsLensHost(element) || !isVisible(element)) {
+  if (
+    isLensUi(element) ||
+    containsLensHost(element) ||
+    !isVisible(element) ||
+    element.closest('[aria-busy="true"]') !== null
+  ) {
     return null;
   }
-  const cellIds = inferredCellIds(element);
-  for (const selector of domSelectors(element)) {
-    const candidate = surface(
-      {
-        kind: "dom",
-        cellIds,
-        documentId: documentIdentity(element.ownerDocument),
-        documentPath: documentPath(element.ownerDocument),
-        domSelector: selector,
-      },
-      element,
-    );
-    if (candidate) return candidate;
-  }
-  return null;
-}
-
-function inferredCellIds(element: HTMLElement): string[] {
-  const ids: string[] = [];
-  const add = (candidate: Element) => {
-    if (!isHTMLElement(candidate)) return;
-    const cellId = candidate.dataset.runtimeCellId?.trim();
-    if (cellId && !ids.includes(cellId)) ids.push(cellId);
-  };
-  add(element);
-  element.querySelectorAll("[data-runtime-cell-id]").forEach(add);
-  return ids.sort();
-}
-
-function domSelectors(element: HTMLElement): string[] {
-  const ownerDocument = element.ownerDocument;
-  const selectors: string[] = [];
-  const add = (selector: string) => {
-    if (!selectors.includes(selector) && queryTarget(ownerDocument, selector) === element) {
-      selectors.push(selector);
-    }
-  };
-  const parts: string[] = [];
-  let current: HTMLElement | null = element;
-  while (current) {
-    if (current.id) {
-      const byId = `#${escapeIdentifier(current.id, ownerDocument)}`;
-      add(parts.length > 0 ? `${byId} > ${parts.join(" > ")}` : byId);
-    }
-    parts.unshift(selectorPart(current));
-    if (current === ownerDocument.body) break;
-    current = current.parentElement;
-  }
-  add(parts.join(" > "));
-  return selectors;
-}
-
-function selectorPart(element: HTMLElement): string {
-  const parent = element.parentElement;
-  if (!parent) return element.localName;
-  const siblings = Array.from(parent.children).filter(
-    (candidate) => candidate.localName === element.localName,
+  const sources = notebookSources(element);
+  if (sources === null) return null;
+  return surface(
+    {
+      kind: "dom",
+      cellIds: [...new Set(sources.map((source) => source.cellId))].sort(),
+      sources,
+      documentId: documentIdentity(element.ownerDocument),
+      documentPath: documentPath(element.ownerDocument),
+      domSelector: domSelector(element),
+    },
+    element,
   );
-  return siblings.length > 1
-    ? `${element.localName}:nth-of-type(${siblings.indexOf(element) + 1})`
-    : element.localName;
+}
+
+function domSelector(element: HTMLElement): string {
+  const ownerDocument = element.ownerDocument;
+  if (element.id) {
+    const selector = `#${escapeIdentifier(element.id, ownerDocument)}`;
+    if (selector.length <= 1_024 && queryTarget(ownerDocument, selector) === element)
+      return selector;
+  }
+  let ids = ownerDocument[TARGET_IDS];
+  if (!ids) {
+    ids = new WeakMap<HTMLElement, string>();
+    Object.defineProperty(ownerDocument, TARGET_IDS, { value: ids });
+  }
+  let id = ids.get(element);
+  if (!id) {
+    id = Array.from(ownerDocument.defaultView!.crypto.getRandomValues(new Uint32Array(4))).join(
+      "-",
+    );
+    ids.set(element, id);
+  }
+  const attribute = "data-marimo-lens-target-id";
+  if (element.getAttribute(attribute) !== id) element.setAttribute(attribute, id);
+  return `[${attribute}="${id}"]`;
 }
 
 function surface(target: SelectionTarget, element: HTMLElement): TargetSurface | null {
@@ -257,10 +234,6 @@ function matchesSelector(element: Element, selector: string): boolean {
   } catch {
     return false;
   }
-}
-
-function sameCellIds(left: readonly string[], right: readonly string[]): boolean {
-  return left.length === right.length && left.every((cellId, index) => cellId === right[index]);
 }
 
 function documentOrder(left: Element, right: Element): number {

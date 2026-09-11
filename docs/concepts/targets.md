@@ -75,17 +75,83 @@ those regions independently selectable.
 
 ### Exact selectors
 
-Lens derives an exact selector from a stable element ID when possible. It can
-fall back to a structural path based on element names and sibling positions.
+Lens uses a unique authored element ID when available. Otherwise it assigns a
+locator owned by that element. A replacement needs a stable authored ID to
+represent the same target.
 The resulting selector must identify exactly one element in the document.
 
 A configured target becomes unavailable when its exact selector stops locating
-one eligible element. Common causes include changing an element ID, moving an
-element found by a structural selector, introducing a duplicate ID, or changing
+one eligible element. Common causes include changing an element ID, replacing
+an unkeyed element, introducing a duplicate ID, or changing
 which roots match `dom_selector`.
 
 Restore the original identity when the replacement represents the same target.
 Create a new selection when the page now represents a different target.
+
+## Target labels
+
+In Select mode, Lens outlines the pointed or keyboard-focused target and places
+its label at the element's edge. The indicator follows the Marimo theme and disappears when selection starts
+or Select mode ends. It does not intercept pointer input. Selectable content
+uses a crosshair cursor while Select mode is active, including native controls
+and custom-rendered descendants. Lens restores authored cursors when it leaves
+the target or exits Select mode. Declared targets that normally pass pointer
+input through to underlying content become pickable during Select mode; their
+authored pointer behavior is restored afterward.
+
+Any consumer can provide the display text. For example, configure
+`Lens(dom_selector="[data-feedback-target]")` and render:
+
+```html
+<section
+  data-feedback-target
+  data-marimo-lens-label="Revenue forecast"
+  data-marimo-lens-detail="Query · finance.monthly"
+>
+  <!-- Your application renders this region. -->
+</section>
+```
+
+`data-marimo-lens-label` is the primary name; `data-marimo-lens-detail` is optional
+secondary text. Lens defines this `TargetInfo` model and renders bounded plain
+text (256 UTF-16 units for a name, 512 for detail). Consumers choose the data;
+HTML, scripts, links, and custom presentation are not interpreted. Updates appear
+without moving the pointer. Keyboard target navigation announces the same text.
+
+Studio supplies these attributes from resolved projections. Regions linked with
+`data-marimo-sources` inherit their source hosts' labels; an explicit label on the
+region takes precedence; source labels remain as secondary information unless
+the region supplies its own detail. Without consumer text, Lens uses available value
+selectors, accessible names, headings, or cell IDs. Display labels do not grant
+notebook access, change target identity, or establish provenance.
+
+## Notebook sources
+
+Lens reads the resolved projection metadata on Studio's `mo-value`,
+`marimo-output`, and `marimo-cell` hosts. It retains producing cells and exact
+value selectors in `target.sources`, distinguishing values from the same cell.
+
+For custom JS rendering, put the existing hidden value hosts inside the selected
+region, or reference their unique IDs explicitly:
+
+```html
+<span id="revenue-data" hidden mo-value="summary.revenue"></span>
+<section data-marimo-sources="revenue-data">...</section>
+```
+
+Include `[data-marimo-sources]` in your `dom_selector`; Studio's
+`STUDIO_RESULT_SELECTOR` already includes it. The annotation is a space-separated
+list of projection host IDs in the same document and declares the complete input
+set. References cannot chain through another annotated region. Missing,
+duplicate, or unbound references make the region unavailable. Without an
+annotation, Lens collects sources inside the region. A target carries at most
+64 sources; value selectors accept up to 4,096 UTF-16 code units.
+
+Keep references current when component inputs change. Set `aria-busy="true"`
+during asynchronous rendering and clear it on completion; busy regions are
+unavailable for selection and capture. This declares notebook dependencies; it
+does not infer JS dataflow or record historical kernel values. Updating a value
+preserves attention, while changing its selector or producing cell detaches it.
 
 ## Producing cells
 
@@ -157,8 +223,8 @@ Host integrations should preserve these inputs:
 
 1. Give every configured root a stable and unique element ID when possible.
 2. Keep `dom_selector` focused on the roots that should own selections.
-3. Attach current `data-runtime-cell-id` values to configured roots or their
-   descendants.
+3. Reference existing projections with `data-marimo-sources`. Cell-only integrations
+   can attach `data-runtime-cell-id` to configured roots or their descendants.
 4. Keep a target visible with non-zero rendered dimensions while it is
    selectable.
 5. Use `data-marimo-lens-output-cell-id="<cell-id>"` when a host exposes a

@@ -283,7 +283,15 @@ def _target_text(value: object) -> str:
     if kind == "notebook":
         return "notebook output"
     if kind == "dom":
-        return "DOM element"
+        sources = value.get("sources", [])
+        if not isinstance(sources, Sequence) or isinstance(sources, (str, bytes)):
+            return "DOM element"
+        names = [
+            str(source.get("selector"))
+            for source in sources
+            if isinstance(source, Mapping) and source.get("selector")
+        ]
+        return "DOM element" + (f" from {', '.join(names)}" if names else "")
     return "unknown target"
 
 

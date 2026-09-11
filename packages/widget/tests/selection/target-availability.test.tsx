@@ -201,6 +201,7 @@ describe("target availability", () => {
     const selection = selectionFixture({
       target: {
         kind: "dom",
+        sources: [{ cellId: "cell-1", selector: null }],
         cellIds: ["cell-1"],
         documentId: documentIdentity(document),
         documentPath: "/",

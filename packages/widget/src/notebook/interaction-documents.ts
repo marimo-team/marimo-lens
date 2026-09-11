@@ -30,6 +30,7 @@ export function observeInteractionSurfaces(
   const frameLoadListeners = new Set<HTMLIFrameElement>();
   const pointerEventLocks = new Map<HTMLElement, InlineStyleValue>();
   const touchActionLocks = new Map<HTMLElement, InlineStyleValue>();
+  const hitTargetLocks = new Map<HTMLElement, InlineStyleValue>();
   const observedRoots = new Set<Node>();
   const ownerWindow = requireOwnerWindow(ownerDocument);
   let activeTargets: readonly HTMLElement[] = [];
@@ -107,6 +108,11 @@ export function observeInteractionSurfaces(
       boundaries.add(frame);
     }
     syncInlineStyleLocks(pointerEventLocks, new Set(boundaries), "pointer-events", "none");
+    // Authored inert text and marks must still be pickable during inspection.
+    const hitTargets = options.lockSelectionGestures
+      ? new Set(targets.filter((target) => !isIFrameElement(target)))
+      : new Set<HTMLElement>();
+    syncInlineStyleLocks(hitTargetLocks, hitTargets, "pointer-events", "auto");
 
     for (const frame of frameLoadListeners) {
       if (currentFrames.has(frame)) continue;
@@ -142,6 +148,7 @@ export function observeInteractionSurfaces(
     for (const detach of attached.values()) detach();
     for (const frame of boundaries) delete frame.dataset.marimoLensPointerBoundary;
     for (const frame of frameLoadListeners) frame.removeEventListener("load", scheduleRefresh);
+    syncInlineStyleLocks(hitTargetLocks, new Set(), "pointer-events", "auto");
     syncInlineStyleLocks(pointerEventLocks, new Set(), "pointer-events", "none");
     syncInlineStyleLocks(touchActionLocks, new Set(), "touch-action", "none");
   };
@@ -212,23 +219,46 @@ function isIFrameElement(element: Element): element is HTMLIFrameElement {
 
 type InlineStyleValue = { value: string; priority: string };
 
-function syncInlineStyleLocks(
-  locks: Map<HTMLElement, InlineStyleValue>,
-  current: Set<HTMLElement>,
+/** Own the hovered leaf's cursor, including native widget shadow-root content. */
+export function createSelectionCursor(): (element: Element | null) => void {
+  const locks = new Map<HTMLElement | SVGElement, InlineStyleValue>();
+  return (element) => {
+    const window = element?.ownerDocument.defaultView;
+    const current = new Set<HTMLElement | SVGElement>();
+    if (
+      window &&
+      element?.isConnected &&
+      (element instanceof window.HTMLElement || element instanceof window.SVGElement)
+    )
+      current.add(element);
+    syncInlineStyleLocks(locks, current, "cursor", "crosshair");
+  };
+}
+
+function syncInlineStyleLocks<T extends HTMLElement | SVGElement>(
+  locks: Map<T, InlineStyleValue>,
+  current: Set<T>,
   property: string,
   value: string,
 ): void {
   for (const [element, previous] of locks) {
     if (current.has(element)) continue;
-    if (previous.value) {
-      element.style.setProperty(property, previous.value, previous.priority);
-    } else {
-      element.style.removeProperty(property);
+    if (
+      element.style.getPropertyValue(property) === value &&
+      element.style.getPropertyPriority(property) === "important"
+    ) {
+      if (previous.value) element.style.setProperty(property, previous.value, previous.priority);
+      else element.style.removeProperty(property);
     }
     locks.delete(element);
   }
   for (const element of current) {
-    if (locks.has(element)) continue;
+    if (
+      locks.has(element) &&
+      element.style.getPropertyValue(property) === value &&
+      element.style.getPropertyPriority(property) === "important"
+    )
+      continue;
     locks.set(element, {
       value: element.style.getPropertyValue(property),
       priority: element.style.getPropertyPriority(property),

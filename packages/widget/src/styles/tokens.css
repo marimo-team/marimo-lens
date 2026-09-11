@@ -37,7 +37,7 @@
   --ml-border: var(--border, #3b403e);
   --ml-surface-subtle: #181c1a;
   --ml-foreground: var(--foreground, #f1f5f3);
-  --ml-muted-foreground: #aab2af;
+  --ml-muted-foreground: var(--muted-foreground, #aab2af);
   --ml-accent-foreground: #8cc6ff;
   --ml-destructive-soft: #451f22;
   --ml-shadow: 0 2px 8px rgb(0 0 0 / 24%);

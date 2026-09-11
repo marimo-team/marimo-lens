@@ -37,7 +37,7 @@ def _(mo, show_revenue):
     mo.stop(not show_revenue.value)
     mo.Html(
         """
-        <section aria-label="Revenue by month"
+        <section id="revenue-chart" aria-label="Revenue by month"
           style="display:grid;gap:16px;padding:20px;border:1px solid currentColor">
           <strong>Revenue by month</strong>
           <div style="display:flex;gap:12px;align-items:center">

@@ -228,7 +228,7 @@ def test_malformed_readiness_event_keeps_pending_capture_available(
         command = _capture_commands(lens)[0]
         lens._handle_lens_message(
             lens,
-            {"protocol": "marimo-lens.event", "version": 4, "type": {}, "payload": {}},
+            {"protocol": "marimo-lens.event", "version": 5, "type": {}, "payload": {}},
             (),
         )
         data = png()
@@ -444,7 +444,7 @@ def _put_selection(
         lens,
         {
             "protocol": "marimo-lens.command",
-            "version": 4,
+            "version": 5,
             "requestId": f"put-{revision}",
             "type": "selection.put",
             "payload": {
@@ -462,7 +462,7 @@ def _set_browser_ready(lens: RecordingLens, ready: bool) -> None:
         lens,
         {
             "protocol": "marimo-lens.event",
-            "version": 4,
+            "version": 5,
             "type": f"output.capture.{'ready' if ready else 'unready'}",
             "payload": {},
         },
@@ -485,7 +485,7 @@ def _reply(
         lens,
         {
             "protocol": "marimo-lens.response",
-            "version": 4,
+            "version": 5,
             "requestId": command["requestId"],
             "ok": True,
             "revision": 0,
@@ -519,7 +519,7 @@ def _fail_reply(
         lens,
         {
             "protocol": "marimo-lens.response",
-            "version": 4,
+            "version": 5,
             "requestId": command["requestId"],
             "ok": False,
             "revision": 0,
