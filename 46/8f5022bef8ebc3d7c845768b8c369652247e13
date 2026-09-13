@@ -1,0 +1,36 @@
+apps/e2e/playwright.config.ts
+  s_e1d497f248b7cd::t_676b21fdf0a8cd 25
+packages/widget/src/notebook/interaction-documents.ts
+  s_e1d497f248b7cd::t_cd200e93ec9241 41-44
+packages/widget/src/notebook/output-root.ts
+  s_e1d497f248b7cd::t_cd200e93ec9241 63-66,77-80,84,86-88
+  s_e1d497f248b7cd::t_2891ee430ed1a6 85
+  s_e1d497f248b7cd::t_89a20b4685ac16 57
+  s_e1d497f248b7cd::t_d0d31e7b1d5762 54-56,58
+  s_e1d497f248b7cd::t_ed62f625d8615a 59-62
+development_docs/testing.md
+  ai_agent 161-182
+apps/e2e/tests/performance.spec.ts
+  s_e1d497f248b7cd::t_ea2908df95e34c 170
+packages/widget/src/anywidget/model.ts
+  s_e1d497f248b7cd::t_da487e5a04e85c 1,4,6,25-27,39-43,45-53
+  s_e1d497f248b7cd::t_67d1a78885c404 44
+packages/widget/src/notebook/notebook-dom.tsx
+  s_e1d497f248b7cd::t_cd200e93ec9241 249-258
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "468f5022bef8ebc3d7c845768b8c369652247e13",
+  "prompts": {},
+  "sessions": {
+    "s_e1d497f248b7cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09b87-a74a-7121-8277-1508ba5b956c",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
