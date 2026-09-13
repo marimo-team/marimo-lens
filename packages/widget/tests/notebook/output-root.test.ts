@@ -6,10 +6,19 @@ import {
   listOutputCells,
   outputCellFromElement,
   outputCellFromEvent,
-  registerLensHostOutput,
+  registerLensHostOutput as registerHost,
 } from "@/notebook/output-root";
 
+const hostReleases: Array<() => void> = [];
+
+function registerLensHostOutput(host: Element) {
+  const release = registerHost(host);
+  hostReleases.push(release);
+  return release;
+}
+
 afterEach(() => {
+  for (const release of hostReleases.splice(0)) release();
   document.body.replaceChildren();
   Reflect.deleteProperty(document, "elementsFromPoint");
 });
@@ -68,6 +77,23 @@ describe("marimo output resolution", () => {
       id: "lens-cell",
       element: lensOutput,
     });
+  });
+
+  test("excludes enclosing outputs until the last nested Lens view is released", () => {
+    const outer = visibleOutput("outer");
+    const inner = visibleOutput("inner");
+    const host = document.createElement("span");
+    inner.append(host);
+    outer.append(inner);
+    const first = registerLensHostOutput(host);
+    const second = registerLensHostOutput(host);
+
+    expect(getOutputCell(document, "outer")).toBeNull();
+    first();
+    expect(getOutputCell(document, "outer")).toBeNull();
+    second();
+    expect(getOutputCell(document, "outer")?.element).toBe(outer);
+    expect(getOutputCell(document, "inner")?.element).toBe(inner);
   });
 
   test("resolves a hydrated marimo island to its rendered output surface", () => {
