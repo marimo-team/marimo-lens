@@ -12,19 +12,23 @@ you apply to source code, data, and rendered output.
 
 ## What Lens can expose
 
-| Data                               | Where it comes from               | Agent-facing form                |
-| ---------------------------------- | --------------------------------- | -------------------------------- |
-| Selection note and geometry        | Lens selection UI                 | Compact references and text      |
-| Target identity and DOM hint       | Rendered target                   | Compact references and text      |
-| Producing and upstream cell source | marimo dataflow graph             | Bounded text                     |
-| Relevant native control values     | Live marimo controls              | Bounded text                     |
-| Annotated selection pixels         | Browser capture at selection time | `LensContext.images` PNG bytes   |
-| Current cell-output pixels         | Agent-requested browser capture   | One-use `cell_image()` PNG bytes |
-| Notebook path and cell IDs         | Active marimo runtime             | Compact references and text      |
+| Data                                         | Where it comes from               | Agent-facing form                |
+| -------------------------------------------- | --------------------------------- | -------------------------------- |
+| Selection note and geometry                  | Lens selection UI                 | Compact references and text      |
+| Target identity and DOM hint                 | Rendered target                   | Compact references and text      |
+| Captured description and rendering reference | Client metadata                   | Bounded references and text      |
+| Producing and upstream cell source           | marimo dataflow graph             | Bounded text                     |
+| Relevant native control values               | Live marimo controls              | Bounded text                     |
+| Annotated selection pixels                   | Browser capture at selection time | `LensContext.images` PNG bytes   |
+| Current cell-output pixels                   | Agent-requested browser capture   | One-use `cell_image()` PNG bytes |
+| Notebook path and cell IDs                   | Active marimo runtime             | Compact references and text      |
 
 A DOM hint can contain the element tag, role, accessible label, title, rendered
 text, a short structural path, and normalized bounds. A configured DOM target
 can therefore expose authored page text outside a notebook output.
+Small DOM captures can include nearby context or a client-declared containing
+element. Rendering references describe client project files and symbols. Lens
+carries those references as evidence and does not open the referenced files.
 
 ## Control-value handling
 

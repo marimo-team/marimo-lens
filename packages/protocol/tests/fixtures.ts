@@ -5,6 +5,7 @@ export function selectionFixture(overrides: Partial<Selection> = {}): Selection 
     id: "selection-1",
     label: "S1",
     note: "Align this label",
+    description: { label: "Cell cell-1" },
     target: { kind: "notebook", cellIds: ["cell-1"], documentId: "document-1", documentPath: "/" },
     createdAt: "2026-07-14T10:00:00Z",
     anchor: { kind: "point", x: 0.25, y: 0.5 },

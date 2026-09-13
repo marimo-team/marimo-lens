@@ -118,6 +118,15 @@ One selection image is limited to 8 MiB, 2,048 pixels per edge, and four
 megapixels. Lens resizes a large raster to fit those bounds. One Lens instance
 stores up to 64 MiB of selection image bytes.
 
+### Visual context around small targets
+
+A small DOM value can need its heading, row, or card to explain the selection.
+Lens includes a nearby containing block and keeps a bounded crop around the
+selected point or region. Wide containers are cropped to keep nearby text
+legible. The marker stays aligned with the original target, and the target's
+producer context remains tied to that selected value. Image previews preserve
+natural size when the captured image is smaller than the preview.
+
 ## Graph context and text
 
 The producing cell IDs in a [target](./targets) give Lens entry points into the
@@ -164,7 +173,8 @@ cell until it returns bytes or a terminal error before requesting another cell. 
 
 ## Trust and data scope
 
-A selection image contains the visible pixels inside its target. A DOM hint can
+A selection image contains target pixels and can include nearby context for small
+DOM targets. A DOM hint can
 contain visible text and accessibility labels. Graph context can contain cell
 source and supported control values. Choose a narrow `dom_selector` and review
 notebook output before handing its evidence to an agent integration.

@@ -1,12 +1,17 @@
+/* The host is the only Lens UI element exposed to page selectors. */
+:host {
+  all: initial !important;
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483000 !important;
+  pointer-events: none !important;
+}
+
 .marimo_lens[data-marimo-lens-root] {
   position: fixed;
   z-index: 2147483000;
   inset: 0;
   pointer-events: none;
-}
-
-html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="true"] {
-  pointer-events: none !important;
 }
 
 .marimo_lens *,
@@ -586,6 +591,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   display: none;
 }
 
+:host([data-theme="dark"]) .marimo_lens .ml-dock-tab__logo > .ml-dock-tab__logo-image--light,
 :is(
     .dark,
     .dark-mode,
@@ -600,6 +606,7 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
   display: none;
 }
 
+:host([data-theme="dark"]) .marimo_lens .ml-dock-tab__logo > .ml-dock-tab__logo-image--dark,
 :is(
     .dark,
     .dark-mode,
@@ -1276,7 +1283,8 @@ html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="tr
 
 .ml-snapshot-preview__image img {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
   max-height: min(420px, calc(100dvh - 140px));
   object-fit: contain;

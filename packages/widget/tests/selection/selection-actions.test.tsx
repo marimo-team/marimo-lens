@@ -48,10 +48,9 @@ afterEach(() => {
 describe("selection mutations", () => {
   test("rejects a same-cell symbolic target change during capture", async () => {
     const output = visibleOutput();
-    output.dataset.runtimeCellId = "cell-1";
-    output.dataset.marimoProjectionKind = "value";
-    output.dataset.marimoProjectionTarget = "summary.revenue";
-    const target = targetFromElement(output, "[data-runtime-cell-id]")!.target;
+    output.dataset.marimoLensCellId = "cell-1";
+    output.dataset.marimoLensSelector = "summary.revenue";
+    const target = targetFromElement(output, "[data-marimo-lens-cell-id]")!.target;
     const capture = deferred<CaptureResult>();
     captureSnapshot.mockReturnValue(capture.promise);
     const stateRef = { current: lensState() };
@@ -59,7 +58,7 @@ describe("selection mutations", () => {
     mount(stateRef, protocol.client);
     act(() => actions?.beginSelection(target, output, { kind: "point", x: 0.4, y: 0.5 }, output));
     await flush();
-    output.dataset.marimoProjectionTarget = "summary.cost";
+    output.dataset.marimoLensSelector = "summary.cost";
     capture.resolve(availableCapture());
     await flush();
     expect(stateRef.current.selections[0]?.snapshot.status).toBe("failed");
@@ -686,6 +685,7 @@ describe("selection mutations", () => {
     expect(stateRef.current.history).toEqual([receipt]);
     expect(stateRef.current.selections[0]).toMatchObject({
       id: receipt.selectionId,
+      description: receipt.description,
       label: receipt.label,
       note: receipt.note,
       target: receipt.target,
@@ -760,7 +760,7 @@ function Harness({
     stateRef,
     dispatch,
     dom,
-    selector: "[data-runtime-cell-id]",
+    selector: "[data-marimo-lens-cell-id]",
     protocol,
     captureSnapshot,
   });
@@ -928,6 +928,7 @@ function reopenedSelection(receipt: AddressedSelection): Selection {
   if (receipt.summary) previousResolution.summary = receipt.summary;
   const selection: Selection = {
     id: receipt.selectionId,
+    description: receipt.description,
     label: receipt.label,
     note: receipt.note,
     target: receipt.target,
@@ -1013,7 +1014,7 @@ function deferred<T>() {
 function successResponse(revision: number): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 5,
+    version: 6,
     requestId: "request-1",
     ok: true,
     revision,

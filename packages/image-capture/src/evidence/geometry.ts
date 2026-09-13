@@ -27,6 +27,24 @@ export function outputContentMetrics(output: HTMLElement): OutputContentMetrics 
   };
 }
 
+/** The source content box in another output's unscaled content coordinates. */
+export function contentBoundsInOutput(source: OutputContentMetrics, target: OutputContentMetrics) {
+  const scaleX = source.scaleX / target.scaleX;
+  const scaleY = source.scaleY / target.scaleY;
+  return {
+    x:
+      (source.bounds.left - target.bounds.left) / target.scaleX +
+      target.scrollLeft -
+      source.scrollLeft * scaleX,
+    y:
+      (source.bounds.top - target.bounds.top) / target.scaleY +
+      target.scrollTop -
+      source.scrollTop * scaleY,
+    width: source.width * scaleX,
+    height: source.height * scaleY,
+  };
+}
+
 export function anchorCenter(anchor: SelectionAnchor) {
   if (anchor.kind === "point") return { x: anchor.x, y: anchor.y };
   return { x: anchor.x + anchor.width / 2, y: anchor.y + anchor.height / 2 };

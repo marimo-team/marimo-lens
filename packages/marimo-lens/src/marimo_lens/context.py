@@ -55,6 +55,23 @@ class _DomTargetReference(TypedDict):
 SelectionTargetReference: TypeAlias = _NotebookTargetReference | _DomTargetReference
 
 
+class RenderSourceReference(TypedDict):
+    """Client-supplied rendering location, separate from notebook provenance."""
+
+    path: str
+    line: NotRequired[int]
+    column: NotRequired[int]
+    symbol: NotRequired[str]
+
+
+class TargetDescription(TypedDict):
+    """Bounded presentation captured when the selection was created."""
+
+    label: str
+    detail: NotRequired[str]
+    renderSource: NotRequired[RenderSourceReference]
+
+
 class SelectionReference(TypedDict):
     """One JSON-safe reference to an open Lens selection."""
 
@@ -65,6 +82,7 @@ class SelectionReference(TypedDict):
     cells: list[CellReference]
     anchor: Mapping[str, object]
     snapshot: Mapping[str, object]
+    description: NotRequired[TargetDescription]
     domHint: NotRequired[Mapping[str, object]]
     previousResolution: NotRequired[Mapping[str, object]]
 

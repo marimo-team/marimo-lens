@@ -59,7 +59,6 @@ def render_text(
                     for cell_id in selection["target"]["cellIds"]
                 ],
             },
-            selection,
             selection.get("id") == current_selection_id,
         )
         for selection in selections
@@ -177,19 +176,15 @@ def _fair_section(
 
 
 def _render_selection_block(
-    item: tuple[
-        Mapping[str, Any],
-        Mapping[str, Any],
-        bool,
-    ],
+    item: tuple[Mapping[str, Any], bool],
     quota: int,
 ) -> tuple[str, bool]:
-    selection, source, current = item
+    selection, current = item
     label = str(selection.get("label") or "selection")
     target = selection.get("target")
-    note = str(source.get("note") or "")
+    note = str(selection.get("note") or "")
     snapshot_text, snapshot_truncated = _snapshot_text(
-        source.get("snapshot"), maximum=120
+        selection.get("snapshot"), maximum=120
     )
     current_text = " (current)" if current else ""
     anchor = f"- Attention: {_anchor_text(selection.get('anchor'))}"
@@ -223,43 +218,33 @@ def _render_selection_block(
     cells = f"{cells_prefix}{cells_text}"
     lines = [header, f"{note_prefix}{note_text}", cells, anchor]
     document_path = _target_document_path(target)
-    location_truncated = False
-    if document_path:
-        prefix = "- Document: "
-        remaining = quota - len("\n".join((*lines, snapshot))) - len(prefix) - 1
-        if remaining > 3:
-            shown, location_truncated = _truncate_text(
-                json.dumps(document_path, ensure_ascii=False), remaining
-            )
-            lines.append(f"{prefix}{shown}")
-        else:
-            location_truncated = True
     selector = _target_dom_selector(target)
-    if selector:
-        selector_prefix = "- DOM selector: "
-        remaining = (
-            quota - len("\n".join((*lines, snapshot))) - len(selector_prefix) - 1
-        )
-        if remaining > 3:
-            selector_text, selector_truncated = _truncate_text(
-                json.dumps(selector, ensure_ascii=False), remaining
-            )
-            lines.append(f"{selector_prefix}{selector_text}")
-        else:
-            selector_truncated = True
-    else:
-        selector_truncated = False
-    dom_hint = _dom_hint_text(source.get("domHint"))
-    dom_truncated = False
-    base_with_snapshot = "\n".join((*lines, snapshot))
-    if dom_hint:
-        prefix = "- DOM hint: "
-        remaining = quota - len(base_with_snapshot) - len(prefix) - 1
-        if remaining > 3:
-            shown, dom_truncated = _truncate_text(dom_hint, remaining)
-            lines.append(f"{prefix}{shown}")
-        else:
-            dom_truncated = True
+    evidence = (
+        (
+            "- Document: ",
+            json.dumps(document_path, ensure_ascii=False) if document_path else "",
+        ),
+        (
+            "- DOM selector: ",
+            json.dumps(selector, ensure_ascii=False) if selector else "",
+        ),
+        (
+            "- Captured description (client supplied): ",
+            json.dumps(dict(selection["description"]), ensure_ascii=False),
+        ),
+        ("- DOM hint: ", _dom_hint_text(selection.get("domHint"))),
+    )
+    evidence_truncated = False
+    for prefix, value in evidence:
+        if not value:
+            continue
+        remaining = quota - len("\n".join((*lines, snapshot))) - len(prefix) - 1
+        if remaining <= 3:
+            evidence_truncated = True
+            continue
+        shown, truncated = _truncate_text(value, remaining)
+        lines.append(f"{prefix}{shown}")
+        evidence_truncated = evidence_truncated or truncated
     lines.append(snapshot)
     block = "\n".join(lines)
     if len(block) > quota:
@@ -269,9 +254,7 @@ def _render_selection_block(
         target_truncated
         or cells_truncated
         or note_truncated
-        or location_truncated
-        or selector_truncated
-        or dom_truncated
+        or evidence_truncated
         or snapshot_truncated,
     )
 

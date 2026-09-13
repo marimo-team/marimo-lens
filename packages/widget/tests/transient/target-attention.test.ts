@@ -541,7 +541,7 @@ function startActivityEvent(
   if (message) payload.message = message;
   return {
     protocol: "marimo-lens.event",
-    version: 5,
+    version: 6,
     type: "attention.activity.start",
     payload,
   };
@@ -550,7 +550,7 @@ function startActivityEvent(
 function activityStopEvent(activityId: string): AttentionActivityStopEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 5,
+    version: 6,
     type: "attention.activity.stop",
     payload: { activityId },
   };
@@ -564,7 +564,7 @@ function revealEvent(cellId: string, message?: string, durationMs = 4_000): Atte
   if (message) payload.message = message;
   return {
     protocol: "marimo-lens.event",
-    version: 5,
+    version: 6,
     type: "attention.reveal",
     payload,
   };

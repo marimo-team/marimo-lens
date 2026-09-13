@@ -5,6 +5,9 @@ description: Public Python contracts for mounting Lens and connecting a code-mod
 
 # Python API
 
+Selection descriptions preserve client labels and optional rendering locations
+through History and reopen. See [Client metadata](./concepts/targets#client-metadata).
+
 DOM selection targets expose `sources` alongside `cellIds`. Each source records
 `cellId` and the exact notebook `selector`. The selector is `None` for cell
 outputs or cell-only metadata.

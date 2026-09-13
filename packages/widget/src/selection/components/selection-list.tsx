@@ -7,7 +7,7 @@ import type { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loa
 
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
 import { SnapshotPreviewButton } from "@/selection/components/selection-snapshot-preview";
-import { targetLabel, targetTitle } from "@/selection/target-label";
+import { selectionTitle } from "@/selection/selection-description";
 import { moveSelectionRowFocus } from "@/ui/focus";
 
 type SelectionListProps = {
@@ -48,7 +48,7 @@ export function SelectionList({
           const current = selection.id === currentSelectionId;
           const busy = busySelectionIds.has(selection.id);
           const targetAvailable = availableSelectionIds.has(selection.id);
-          const label = targetLabel(selection.target, selection.domHint);
+          const label = selection.description.label;
           return (
             <li
               key={selection.id}
@@ -76,7 +76,7 @@ export function SelectionList({
                   >
                     {selection.note || "No note added"}
                   </span>
-                  <small title={targetTitle(selection.target)}>
+                  <small title={selectionTitle(selection)}>
                     <span className="ml-code">{label}</span>
                     <SelectionKindMark kind={selection.anchor.kind} />
                     {!targetAvailable ? (

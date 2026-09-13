@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { hasTextContent } from "./bounded-text";
 
-export const WIDGET_TRANSPORT_VERSION = 5;
+export const WIDGET_TRANSPORT_VERSION = 6;
 
 export type TransportPrimitive = boolean | null | number | string | undefined;
 export type TransportRecord = { readonly [key: string]: TransportValue };
@@ -197,6 +197,26 @@ export const SelectionSnapshotSchema = v.variant("status", [
   FailedSnapshotSchema,
 ]);
 
+export const RenderSourceSchema = v.strictObject({
+  path: v.pipe(NonEmptyStringSchema, v.maxLength(1_024)),
+  line: v.optional(PositiveIntegerSchema),
+  column: v.optional(PositiveIntegerSchema),
+  symbol: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(256))),
+});
+
+export const TargetInfoSchema = v.strictObject({
+  label: v.pipe(NonEmptyStringSchema, v.maxLength(256)),
+  detail: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(512))),
+  renderSource: v.optional(RenderSourceSchema),
+});
+
+export type TargetInfo = v.InferOutput<typeof TargetInfoSchema>;
+export type RenderSource = v.InferOutput<typeof RenderSourceSchema>;
+
+export function parseRenderSource(value: TransportValue): RenderSource {
+  return parseContract(RenderSourceSchema, value, "Lens render source");
+}
+
 const SelectionInputObjectSchema = v.object({
   id: BoundedIdentifierSchema,
   label: SelectionLabelSchema,
@@ -205,6 +225,7 @@ const SelectionInputObjectSchema = v.object({
   createdAt: TimestampSchema,
   anchor: SelectionAnchorSchema,
   domHint: v.optional(DomHintSchema),
+  description: TargetInfoSchema,
   snapshot: SelectionSnapshotSchema,
 });
 
@@ -239,6 +260,7 @@ export const AddressedSelectionSchema = v.object({
   addressedAt: TimestampSchema,
   anchor: SelectionAnchorSchema,
   domHint: v.optional(DomHintSchema),
+  description: TargetInfoSchema,
   summary: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(240))),
   resolutionRevision: RevisionSchema,
 });

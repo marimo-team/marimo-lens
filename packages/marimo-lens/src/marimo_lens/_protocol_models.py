@@ -27,7 +27,7 @@ from typing_extensions import Self
 COMMAND_PROTOCOL = "marimo-lens.command"
 RESPONSE_PROTOCOL = "marimo-lens.response"
 EVENT_PROTOCOL = "marimo-lens.event"
-PROTOCOL_VERSION = 5
+PROTOCOL_VERSION = 6
 
 MAX_SELECTIONS = 64
 MAX_HISTORY = 64
@@ -399,6 +399,41 @@ SelectionSnapshot: TypeAlias = Annotated[
 ]
 
 
+class RenderSource(TransportModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: DomSelectorText
+    line: PositiveSafeInteger | None = None
+    column: PositiveSafeInteger | None = None
+    symbol: (
+        Annotated[
+            UnicodeText,
+            AfterValidator(_nonblank),
+            AfterValidator(partial(_bounded_utf16, maximum=256)),
+        ]
+        | None
+    ) = None
+
+
+class TargetInfo(TransportModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: Annotated[
+        UnicodeText,
+        AfterValidator(_nonblank),
+        AfterValidator(partial(_bounded_utf16, maximum=256)),
+    ]
+    detail: (
+        Annotated[
+            UnicodeText,
+            AfterValidator(_nonblank),
+            AfterValidator(partial(_bounded_utf16, maximum=512)),
+        ]
+        | None
+    ) = None
+    render_source: RenderSource | None = None
+
+
 class SelectionInput(TransportModel):
     id: Identifier
     label: SelectionLabel
@@ -407,6 +442,7 @@ class SelectionInput(TransportModel):
     created_at: TimestampText
     anchor: SelectionAnchor
     dom_hint: DomHint | None = None
+    description: TargetInfo
     snapshot: SelectionSnapshot
 
     @model_validator(mode="after")
@@ -439,6 +475,7 @@ class AddressedSelection(TransportModel):
     addressed_at: TimestampText
     anchor: SelectionAnchor
     dom_hint: DomHint | None = None
+    description: TargetInfo
     summary: AttentionText | None = None
     resolution_revision: Revision
 

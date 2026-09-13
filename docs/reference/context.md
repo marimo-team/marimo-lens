@@ -176,6 +176,17 @@ reference exceeds its shared budget, fitting drops optional DOM hints before
 shortening notes. Target identity, selection identity, and anchor geometry
 remain intact.
 
+## Captured target description
+
+A selection can include `description`, containing `label`, optional `detail`,
+and optional `renderSource`. The rendering reference contains `path` and optional
+`line`, `column`, and `symbol`. These are bounded client-supplied descriptions,
+separate from runtime-derived notebook provenance. History and reopen retain
+the creation-time description. Compact context may omit descriptions to fit its
+byte budget, and standalone text reports truncation within its own budget.
+
+See [Client metadata](../concepts/targets#client-metadata) for the DOM contract.
+
 ## Selection image status
 
 The compact `snapshot` reference contains one `status` field:

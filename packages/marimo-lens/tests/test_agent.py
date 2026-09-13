@@ -167,7 +167,7 @@ def _set_mounted(lens: Lens, *, mounted: bool = True) -> None:
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.event",
-            "version": 5,
+            "version": 6,
             "type": f"output.capture.{'ready' if mounted else 'unready'}",
             "payload": {},
         },

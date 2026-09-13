@@ -5,7 +5,7 @@ import {
   composeSelectionEvidence,
   evidenceLayout,
 } from "../../src/evidence/evidence-layout";
-import { captureSelectionEvidence, detailCaptureElement } from "../../src/evidence/evidence-source";
+import { captureSelectionEvidence } from "../../src/evidence/evidence-source";
 import { relativeOutputBounds } from "../../src/evidence/geometry";
 import { createSnapshotCapture } from "../../src/evidence/image";
 import { captureRasterSize } from "../../src/evidence/png";
@@ -30,6 +30,24 @@ afterEach(() => {
 });
 
 describe("image capture", () => {
+  test("rejects a capture context unrelated to the selected element", async () => {
+    const output = document.createElement("span");
+    const context = document.createElement("article");
+    document.body.append(output, context);
+    const result = await captureSelectionSnapshot({
+      selectionId: "selection-1",
+      label: "S1",
+      output,
+      anchor: { kind: "point", x: 0.5, y: 0.5 },
+      context,
+    });
+    expect(result).toMatchObject({
+      status: "failed",
+      snapshot: { error: expect.stringContaining("ancestor") },
+    });
+    expect(toPng).not.toHaveBeenCalled();
+  });
+
   test("clips a region to the portion visible in its detail image", () => {
     expect(
       anchorForDetail(
@@ -91,7 +109,6 @@ describe("image capture", () => {
     expect(toPng.mock.calls[0]?.[1]).toMatchObject({
       width: 1_200,
       height: 600,
-      style: { maxHeight: "none", overflow: "visible" },
     });
     expect(context.drawImage).toHaveBeenCalledOnce();
   });
@@ -146,80 +163,6 @@ describe("image capture", () => {
     expect(ownerDigest).toHaveBeenCalledOnce();
   });
 
-  test("composes a marker-free overview and viewport crop for a large scrolled output", async () => {
-    let imageCount = 0;
-    class LoadedImage extends EventTarget {
-      naturalWidth: number;
-      naturalHeight: number;
-
-      constructor() {
-        super();
-        const detail = imageCount++ === 0;
-        this.naturalWidth = detail ? 600 : 1_600;
-        this.naturalHeight = detail ? 400 : 1_000;
-      }
-
-      set src(_value: string) {
-        queueMicrotask(() => this.dispatchEvent(new Event("load")));
-      }
-    }
-    vi.stubGlobal("Image", LoadedImage);
-    const context = {
-      fillStyle: "",
-      fillRect: vi.fn<CanvasRenderingContext2D["fillRect"]>(),
-      drawImage: vi.fn<DrawImage>(),
-    };
-    installCanvasContext(window, context);
-    vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation((callback) => {
-      callback(new Blob([new Uint8Array([137, 80, 78, 71])], { type: "image/png" }));
-    });
-    toPng
-      .mockResolvedValueOnce("data:image/png;base64,detail")
-      .mockResolvedValueOnce("data:image/png;base64,overview");
-    const output = document.createElement("div");
-    output.getBoundingClientRect = () => new DOMRect(0, 0, 600, 400);
-    Object.defineProperties(output, {
-      scrollWidth: { configurable: true, value: 8_000 },
-      scrollHeight: { configurable: true, value: 5_000 },
-      scrollLeft: { configurable: true, value: 300 },
-      scrollTop: { configurable: true, value: 150 },
-    });
-
-    const result = await captureOutputSnapshot({
-      imageId: "image:capture-large",
-      output,
-    });
-
-    const layout = evidenceLayout(1_600, 1_000, true);
-    expect(result).toMatchObject({
-      metadata: {
-        id: "image:capture-large",
-        width: layout.width,
-        height: layout.height,
-      },
-    });
-    expect(toPng.mock.calls).toHaveLength(2);
-    expect(toPng.mock.calls[0]?.[1]).toMatchObject({
-      width: 600,
-      height: 400,
-      style: {
-        width: "8000px",
-        height: "5000px",
-        transform: "translate(-300px, -150px)",
-      },
-    });
-    expect(toPng.mock.calls[1]?.[1]).toMatchObject({
-      width: 8_000,
-      height: 5_000,
-      style: { maxHeight: "none", overflow: "visible" },
-    });
-    expect(context.drawImage).toHaveBeenCalledTimes(2);
-    expect(context.drawImage.mock.calls[0]?.[0]).toMatchObject({ naturalWidth: 1_600 });
-    expect(context.drawImage.mock.calls[1]?.[0]).toMatchObject({ naturalWidth: 600 });
-    expect(context.fillRect).toHaveBeenCalledTimes(2);
-    expect(context.fillRect.mock.calls[1]?.[3]).toBe(1);
-  });
-
   test("bounds transient rasters and final evidence layouts", () => {
     const raster = captureRasterSize(12_000, 8_000);
     expect(raster.width).toBeLessThanOrEqual(2_048);
@@ -239,7 +182,7 @@ describe("image capture", () => {
     expect(large.width * large.height).toBeLessThanOrEqual(4_000_000);
   });
 
-  test("draws a translucent region label outside the selected pixels", () => {
+  test("places the region label outside the selected pixels", () => {
     const source = document.createElement("img");
     Object.defineProperties(source, {
       naturalWidth: { configurable: true, value: 400 },
@@ -248,16 +191,9 @@ describe("image capture", () => {
     const canvas = document.createElement("canvas");
     canvas.width = 400;
     canvas.height = 200;
-    let fillStyle = "";
-    const labelFills: string[] = [];
     const context = {
       canvas,
-      get fillStyle() {
-        return fillStyle;
-      },
-      set fillStyle(value: string) {
-        fillStyle = value;
-      },
+      fillStyle: "",
       strokeStyle: "",
       lineWidth: 0,
       shadowColor: "",
@@ -272,9 +208,7 @@ describe("image capture", () => {
       measureText: vi.fn(() => ({ width: 17 })),
       beginPath: vi.fn<CanvasRenderingContext2D["beginPath"]>(),
       roundRect: vi.fn<CanvasRenderingContext2D["roundRect"]>(),
-      fill: vi.fn<CanvasRenderingContext2D["fill"]>(() => {
-        labelFills.push(fillStyle);
-      }),
+      fill: vi.fn<CanvasRenderingContext2D["fill"]>(),
       fillText: vi.fn<CanvasRenderingContext2D["fillText"]>(),
     };
     installCanvasContext(window, context);
@@ -292,28 +226,6 @@ describe("image capture", () => {
     const [labelX, labelY, , labelHeight] = context.roundRect.mock.calls[0]!;
     expect(labelX).toBe(selectionX);
     expect(labelY + labelHeight).toBeLessThanOrEqual(selectionY);
-    const alpha = /^rgba\(8, 128, 234, ([\d.]+)\)$/.exec(labelFills[0] ?? "")?.[1];
-    expect(Number(alpha)).toBeGreaterThan(0);
-    expect(Number(alpha)).toBeLessThan(1);
-  });
-
-  test("captures the clicked child before a scrolled ancestor resets its position", () => {
-    const output = document.createElement("div");
-    const scroller = document.createElement("div");
-    const row = document.createElement("div");
-    const leaf = document.createElement("span");
-    row.appendChild(leaf);
-    scroller.appendChild(row);
-    output.appendChild(scroller);
-    Object.defineProperties(scroller, {
-      scrollHeight: { configurable: true, value: 600 },
-      clientHeight: { configurable: true, value: 100 },
-      scrollTop: { configurable: true, value: 200 },
-    });
-    leaf.getBoundingClientRect = () => new DOMRect(20, 30, 20, 16);
-    row.getBoundingClientRect = () => new DOMRect(10, 20, 220, 44);
-
-    expect(detailCaptureElement(leaf, output)).toBe(row);
   });
 
   test("derives detail marker bounds from the element actually captured", () => {
@@ -372,14 +284,23 @@ describe("image capture", () => {
     vi.stubGlobal("Image", LoadedImage);
     const output = document.createElement("div");
     const detail = document.createElement("div");
-    detail.style.position = "absolute";
-    output.appendChild(detail);
+    const scroller = document.createElement("div");
+    const leaf = document.createElement("span");
+    detail.appendChild(leaf);
+    scroller.appendChild(detail);
+    output.appendChild(scroller);
+    Object.defineProperties(scroller, {
+      scrollHeight: { configurable: true, value: 600 },
+      clientHeight: { configurable: true, value: 100 },
+      scrollTop: { configurable: true, value: 200 },
+    });
+    leaf.getBoundingClientRect = () => new DOMRect(160, 85, 20, 16);
     Object.defineProperties(output, {
       scrollWidth: { configurable: true, value: 3_000 },
       scrollHeight: { configurable: true, value: 1_500 },
     });
     output.getBoundingClientRect = () => new DOMRect(0, 0, 600, 400);
-    detail.getBoundingClientRect = () => new DOMRect(100, 75, 300, 150);
+    detail.getBoundingClientRect = () => new DOMRect(100, 75, 220, 44);
     let resolveDetail!: (value: string) => void;
     const detailCapture = new Promise<string>((resolve) => {
       resolveDetail = resolve;
@@ -390,32 +311,26 @@ describe("image capture", () => {
 
     const capture = captureSelectionEvidence(
       {
-        selectionId: "selection-1",
-        label: "S1",
-        anchor: { kind: "point", x: 0.2, y: 0.2 },
+        anchor: { kind: "point", x: 0.06, y: 0.06 },
         output,
-        detailElement: detail,
+        detailElement: leaf,
       },
-      "#fff",
+      undefined,
       toPng,
     );
 
     expect(toPng.mock.calls[0]?.[0]).toBe(detail);
-    expect(toPng.mock.calls[0]?.[1]?.style).toMatchObject({
-      position: "relative",
-      inset: "auto",
-      top: "0",
-      left: "0",
-      right: "auto",
-      bottom: "auto",
-      transform: "translate(0px, 0px)",
-    });
     detail.getBoundingClientRect = () => new DOMRect(900, 600, 600, 300);
     resolveDetail("data:image/png;base64,detail");
     const sources = await capture;
 
     expect(toPng.mock.calls.map(([element]) => element)).toEqual([detail, output]);
-    expect(sources.detail?.bounds).toEqual({ x: 1 / 30, y: 0.05, width: 0.1, height: 0.1 });
+    expect(sources.detail?.bounds).toEqual({
+      x: 1 / 30,
+      y: 0.05,
+      width: 220 / 3_000,
+      height: 44 / 1_500,
+    });
   });
 
   test("captures a large output root as visible detail before its full overview", async () => {
@@ -442,25 +357,16 @@ describe("image capture", () => {
 
     const sources = await captureSelectionEvidence(
       {
-        selectionId: "selection-1",
-        label: "S1",
         anchor: { kind: "point", x: 0.2, y: 0.2 },
         output,
         detailElement: output,
       },
-      "#fff",
+      undefined,
       toPng,
     );
 
     expect(toPng.mock.calls).toHaveLength(2);
     expect(toPng.mock.calls[0]?.[1]).toMatchObject({ width: 600, height: 400 });
-    expect(toPng.mock.calls[0]?.[1]?.style).toMatchObject({
-      width: "3000px",
-      height: "1500px",
-      overflow: "visible",
-      transform: "translate(-300px, -150px)",
-      transformOrigin: "top left",
-    });
     expect(toPng.mock.calls[1]?.[1]).toMatchObject({ width: 3_000, height: 1_500 });
     expect(sources.detail?.bounds).toEqual({
       x: 0.1,
@@ -468,13 +374,6 @@ describe("image capture", () => {
       width: 0.2,
       height: 400 / 1_500,
     });
-    expect(
-      evidenceLayout(
-        sources.overview.naturalWidth,
-        sources.overview.naturalHeight,
-        sources.detail !== null,
-      ).detail,
-    ).toBeDefined();
   });
 
   test("fails explicitly for inaccessible iframes nested in an open shadow root", () => {

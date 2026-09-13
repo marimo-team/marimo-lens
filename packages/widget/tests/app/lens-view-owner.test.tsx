@@ -63,7 +63,7 @@ describe("Lens view ownership", () => {
     expect(secondaryDocument.querySelector("[data-marimo-lens-view-conflict]")).toBeNull();
   });
 
-  test("portals the active surface and styles into the host document", () => {
+  test("owns the portal surface and stylesheet through host-document teardown", () => {
     const secondaryDocument = iframeDocument();
     const container = secondaryDocument.createElement("div");
     secondaryDocument.body.appendChild(container);
@@ -81,10 +81,14 @@ describe("Lens view ownership", () => {
     );
 
     expect(document.querySelector("[data-secondary-lens]")).toBeNull();
-    expect(secondaryDocument.querySelector("[data-secondary-lens]")).not.toBeNull();
-    expect(secondaryDocument.getElementById("marimo-lens-global-styles")?.textContent).toBe(
-      ".secondary-lens {}",
-    );
+    const shadow = secondaryDocument.querySelector("[data-marimo-lens-portal]")!.shadowRoot!;
+    expect(shadow.querySelector("[data-secondary-lens]")?.textContent).toBe("Lens");
+    expect(shadow.ownerDocument).toBe(secondaryDocument);
+    expect(shadow.querySelector("style")?.textContent).toBe(".secondary-lens {}");
+
+    unmount(root);
+    expect(shadow.host.isConnected).toBe(false);
+    expect(secondaryDocument.getElementById("marimo-lens-global-styles")).toBeNull();
   });
 
   test("registers its owning output across an open shadow root", () => {

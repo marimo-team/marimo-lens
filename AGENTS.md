@@ -95,7 +95,7 @@ Unqualified Python filenames in this table live in
 - PNG bytes stay outside trait state, JSON references, local storage, and
   standalone text. Cell-output capture is a one-use agent transfer.
 - Selection mutations are revision checked. Python and TypeScript transport
-  schemas remain aligned at protocol version 5.
+  schemas remain aligned at protocol version 6.
 
 ## Validation
 

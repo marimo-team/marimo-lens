@@ -1,5 +1,8 @@
 import {
   boundedUtf16,
+  parseRenderSource,
+  RENDER_SOURCE_ATTRIBUTE,
+  SOURCE_INPUTS_ATTRIBUTE,
   TARGET_LABEL_ATTRIBUTE,
   TARGET_DETAIL_ATTRIBUTE,
   type TargetInfo,
@@ -7,7 +10,7 @@ import {
 
 import type { TargetSurface } from "@/notebook/selection-target";
 
-import { referencedSources, SOURCES_ATTRIBUTE } from "@/notebook/projection-sources";
+import { referencedSources } from "@/notebook/projection-sources";
 
 function readInfo(element: Element): TargetInfo | null {
   const label = element.getAttribute(TARGET_LABEL_ATTRIBUTE)?.trim();
@@ -20,9 +23,22 @@ function readInfo(element: Element): TargetInfo | null {
 
 /** Labels are presentation only; target identity and notebook authority stay separate. */
 export function targetInfo(target: TargetSurface): TargetInfo {
+  const info = targetPresentation(target);
+  const value = target.element.getAttribute(RENDER_SOURCE_ATTRIBUTE);
+  if (value && value.length <= 4_096) {
+    try {
+      info.renderSource = parseRenderSource(JSON.parse(value));
+    } catch {
+      // Malformed descriptive evidence cannot establish an editable source location.
+    }
+  }
+  return info;
+}
+
+function targetPresentation(target: TargetSurface): TargetInfo {
   const explicit = readInfo(target.element);
   if (explicit?.detail) return explicit;
-  const hosts = target.element.hasAttribute(SOURCES_ATTRIBUTE)
+  const hosts = target.element.hasAttribute(SOURCE_INPUTS_ATTRIBUTE)
     ? (referencedSources(target.element) ?? [])
     : Array.from(target.element.querySelectorAll(`[${TARGET_LABEL_ATTRIBUTE}]`));
   const labels = new Set<string>();

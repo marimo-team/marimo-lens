@@ -55,6 +55,7 @@ def selection(
         "id": selection_id,
         "label": label,
         "note": note,
+        "description": {"label": f"Cell {output_cell_id}"},
         "target": target
         or {
             "kind": "notebook",
