@@ -2,6 +2,12 @@ import { expect, type CDPSession, type Page } from "@playwright/test";
 
 import { runAction, selectOutput, test } from "./support";
 
+type AnnotationLatency = {
+  armMs: number | null;
+  selectionMs: number | null;
+  noteMs: number | null;
+};
+
 declare global {
   interface Window {
     pngUrls: { created: number; active: Set<string> };
@@ -37,6 +43,66 @@ async function streamFrames(page: Page) {
   });
 }
 
+async function observeAnnotationLatency(page: Page, label: string) {
+  return page.evaluateHandle((label) => {
+    const root = document.querySelector("[data-marimo-lens-portal]")?.shadowRoot;
+    const output = document.getElementById("revenue-chart")?.closest('[id^="output-"]');
+    if (!root || !output) throw new Error("Annotation surfaces are unavailable");
+    const started: AnnotationLatency = { armMs: null, selectionMs: null, noteMs: null };
+    const latency: AnnotationLatency = { ...started };
+    const complete = (phase: keyof AnnotationLatency) => {
+      const start = started[phase];
+      if (start !== null && latency[phase] === null) latency[phase] = performance.now() - start;
+    };
+    const noteDialog = () => root.querySelector(`dialog[aria-label^="Add note for ${label},"]`);
+    const ready = () => {
+      if (root.querySelector('button[aria-label="Cancel selection mode"]')) complete("armMs");
+      const active = root.activeElement;
+      if (
+        active instanceof HTMLTextAreaElement &&
+        noteDialog()?.contains(active) &&
+        !active.disabled
+      )
+        complete("selectionMs");
+      const select = root.querySelector('button[aria-label="Select a target"]');
+      if (!root.querySelector("dialog") && select instanceof HTMLButtonElement && !select.disabled)
+        complete("noteMs");
+    };
+    const click = (event: Event) => {
+      const button = event
+        .composedPath()
+        .find((item): item is HTMLButtonElement => item instanceof HTMLButtonElement);
+      if (button?.getAttribute("aria-label") === "Select a target") started.armMs = event.timeStamp;
+      if (button?.textContent?.trim() === "Done" && noteDialog()?.contains(button))
+        started.noteMs = event.timeStamp;
+    };
+    const release = (event: PointerEvent) => {
+      if (event.composedPath().includes(output)) started.selectionMs = event.timeStamp;
+    };
+    // Native event timestamps and DOM readiness exclude driver round trips and polling delays.
+    const observer = new MutationObserver(ready);
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["aria-label", "disabled", "open"],
+    });
+    root.addEventListener("click", click, true);
+    root.addEventListener("focusin", ready);
+    document.addEventListener("pointerup", release, true);
+    return {
+      stop: () => {
+        ready();
+        observer.disconnect();
+        root.removeEventListener("click", click, true);
+        root.removeEventListener("focusin", ready);
+        document.removeEventListener("pointerup", release, true);
+        return latency;
+      },
+    };
+  }, label);
+}
+
 test("a large streaming notebook stays responsive with multiple output annotations", async ({
   page,
   context,
@@ -56,11 +122,18 @@ test("a large streaming notebook stays responsive with multiple output annotatio
   const baselineEnd = await browserMetrics(session);
   await views.selectOption({ label: "Single" });
   await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeVisible();
-  const annotationMs: number[] = [];
+  const annotationLatency: AnnotationLatency[] = [];
   for (let index = 1; index <= 12; index += 1) {
-    const started = performance.now();
-    await selectOutput(page, index % 2 ? "point" : "region", `S${index}`, `Request ${index}`);
-    annotationMs.push(performance.now() - started);
+    const probe = await observeAnnotationLatency(page, `S${index}`);
+    try {
+      await selectOutput(page, index % 2 ? "point" : "region", `S${index}`, `Request ${index}`);
+    } finally {
+      try {
+        annotationLatency.push(await probe.evaluate((probe) => probe.stop()));
+      } finally {
+        await probe.dispose();
+      }
+    }
   }
   const report = await runAction(page);
   expect(report.references.selections).toHaveLength(12);
@@ -92,7 +165,7 @@ test("a large streaming notebook stays responsive with multiple output annotatio
       ...unavailableFrames,
       scriptMs: unavailableEnd.scriptMs - unavailableStart.scriptMs,
     },
-    annotationMs,
+    annotationLatency,
     contextMs: report.context_ms,
   };
   await testInfo.attach("streaming-performance", {
@@ -106,7 +179,13 @@ test("a large streaming notebook stays responsive with multiple output annotatio
     expect(scenario.maximum).toBeLessThan(Math.max(250, baselineFrames.maximum * 2));
   }
   expect(report.context_ms).toBeLessThan(250);
-  expect(Math.max(...annotationMs)).toBeLessThan(2500);
+  for (const latency of annotationLatency) {
+    if (latency.armMs === null || latency.selectionMs === null || latency.noteMs === null) {
+      throw new Error(`Annotation did not reach each ready state: ${JSON.stringify(latency)}`);
+    }
+    for (const duration of Object.values(latency)) expect(duration).toBeGreaterThanOrEqual(0);
+    expect(latency.armMs + latency.selectionMs + latency.noteMs).toBeLessThan(2500);
+  }
   await selectOutput(page, "point", "S13", "Still responsive after streaming");
   expect((await runAction(page)).references.selections).toHaveLength(13);
 });

@@ -174,17 +174,22 @@ while the annotated output is unavailable. A second test creates, previews, and
 deletes sixteen annotations, checking PNG URL release and browser resources after
 garbage collection.
 
-| Measurement                                     | Regression budget                                           |
-| ----------------------------------------------- | ----------------------------------------------------------- |
-| Added script time over 90 updates               | Under 750 ms relative to the same notebook with Lens hidden |
-| 95th-percentile frame gap                       | Under 50 ms or twice the baseline, whichever is greater     |
-| Largest frame gap                               | Under 250 ms or twice the baseline, whichever is greater    |
-| Point or region gesture and note submission     | Under 2.5 s                                                 |
-| Kernel context and standalone text              | Under 250 ms                                                |
-| Retained heap growth after warmup               | Under 8 MiB                                                 |
-| Retained DOM nodes and event listeners          | Fewer than 500 additional nodes and 100 listeners           |
-| Preview PNG URLs after deletion                 | Zero                                                        |
-| Average duration of the final four churn cycles | Under 1.75 times the warmup average plus 250 ms             |
+| Measurement                                                    | Regression budget                                           |
+| -------------------------------------------------------------- | ----------------------------------------------------------- |
+| Added script time over 90 updates                              | Under 750 ms relative to the same notebook with Lens hidden |
+| 95th-percentile frame gap                                      | Under 50 ms or twice the baseline, whichever is greater     |
+| Largest frame gap                                              | Under 250 ms or twice the baseline, whichever is greater    |
+| Combined browser response for arming, selection, and note save | Under 2.5 s                                                 |
+| Kernel context and standalone text                             | Under 250 ms                                                |
+| Retained heap growth after warmup                              | Under 8 MiB                                                 |
+| Retained DOM nodes and event listeners                         | Fewer than 500 additional nodes and 100 listeners           |
+| Preview PNG URLs after deletion                                | Zero                                                        |
+| Average duration of the final four churn cycles                | Under 1.75 times the warmup average plus 250 ms             |
+
+Annotation latency uses browser event timestamps: selection-mode click to armed
+controls, pointer release to the focused note field, and Done click to the saved
+note dialog closing. Their sum excludes driver round trips, mouse interpolation,
+and assertion polling. All three ready states must be observed.
 
 These budgets detect regressions in the fixture workloads. Timings depend on the
 browser, hardware, and runner load. Performance measurements are attached as JSON
