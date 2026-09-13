@@ -158,6 +158,28 @@ It retains traces and screenshots for failures in
 `apps/e2e/test-results/` and an HTML report in `apps/e2e/playwright-report/`.
 Run `pnpm --filter @marimo-lens/e2e test:e2e:ui` for interactive debugging.
 
+`performance.spec.ts` runs in desktop Chromium. A 1,000-row notebook streams 90
+updates with Lens hidden, with twelve annotations, while picking a target, and
+while the annotated output is unavailable. A second test creates, previews, and
+deletes sixteen annotations, checking PNG URL release and browser resources after
+garbage collection.
+
+| Measurement                                     | Regression budget                                           |
+| ----------------------------------------------- | ----------------------------------------------------------- |
+| Added script time over 90 updates               | Under 750 ms relative to the same notebook with Lens hidden |
+| 95th-percentile frame gap                       | Under 50 ms or twice the baseline, whichever is greater     |
+| Largest frame gap                               | Under 250 ms or twice the baseline, whichever is greater    |
+| Point or region gesture and note submission     | Under 2.5 s                                                 |
+| Kernel context and standalone text              | Under 250 ms                                                |
+| Retained heap growth after warmup               | Under 8 MiB                                                 |
+| Retained DOM nodes and event listeners          | Fewer than 500 additional nodes and 100 listeners           |
+| Preview PNG URLs after deletion                 | Zero                                                        |
+| Average duration of the final four churn cycles | Under 1.75 times the warmup average plus 250 ms             |
+
+These budgets detect regressions in the fixture workloads. Timings depend on the
+browser, hardware, and runner load. Performance measurements are attached as JSON
+to the HTML report and the machine-readable `test-results/results.json` report.
+
 Inspect documentation and browser behavior beyond those scenarios separately.
 
 Use at least these scenarios for the affected surface:

@@ -246,7 +246,16 @@ export class NotebookDomAdapter {
               currentTargets ??= this.listTargets(this.#selector).map(({ element }) => element);
               return currentTargets.some(related);
             });
-          if (affectsTargets) scheduleTopology();
+          if (!affectsTargets) return;
+          const topologyChanged =
+            records.length === 0 ||
+            records.some(
+              (record) =>
+                record.type === "attributes" ||
+                [...record.addedNodes, ...record.removedNodes].some((node) => node.nodeType === 1),
+            );
+          if (topologyChanged) scheduleTopology();
+          else schedule();
         })
       : null;
     const mutationOptions = {

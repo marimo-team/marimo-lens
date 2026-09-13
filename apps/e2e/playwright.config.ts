@@ -22,7 +22,7 @@ export default defineConfig({
   projects: [
     {
       name: "light",
-      testMatch: ["lens.spec.ts", "capture.spec.ts"],
+      testMatch: ["lens.spec.ts", "capture.spec.ts", "performance.spec.ts"],
       use: { ...devices["Desktop Chrome"], colorScheme: "light" },
     },
     {

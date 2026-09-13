@@ -51,8 +51,19 @@ export function outputCellFromEvent(event: Event): OutputCell | null {
 }
 
 export function getOutputCell(ownerDocument: Document, outputCellId: string): OutputCell | null {
-  for (const cell of listOutputRoots(ownerDocument)) {
-    if (cell.id === outputCellId && isVisible(cell.element)) return cell;
+  const canonical = ownerDocument.getElementById(`output-${outputCellId}`);
+  if (canonical) {
+    const cell = outputCellFromRoot(canonical);
+    if (cell?.id === outputCellId) return isVisible(cell.element) ? cell : null;
+  }
+  const cellContainer = ownerDocument.getElementById(`cell-${outputCellId}`);
+  const scope =
+    cellContainer?.getAttribute("data-cell-id") === outputCellId ? cellContainer : ownerDocument;
+  for (const root of outputRoots(scope)) {
+    const resolved = resolveOutputRoot(root);
+    if (resolved?.id !== outputCellId) continue;
+    const cell = outputCellFromRoot(root);
+    if (cell && isVisible(cell.element)) return cell;
   }
   return null;
 }
@@ -63,18 +74,18 @@ export function listOutputCells(ownerDocument: Document): OutputCell[] {
 
 export function listOutputRoots(ownerDocument: Document): OutputCell[] {
   const cells: OutputCell[] = [];
-  const visit = (root: ParentNode) => {
-    for (const element of root.children) {
-      if (isOutputRoot(element)) {
-        const cell = outputCellFromRoot(element);
-        if (cell) cells.push(cell);
-      }
-      if (element.shadowRoot) visit(element.shadowRoot);
-      visit(element);
-    }
-  };
-  visit(ownerDocument);
+  for (const root of outputRoots(ownerDocument)) {
+    const cell = outputCellFromRoot(root);
+    if (cell) cells.push(cell);
+  }
   return cells;
+}
+
+function* outputRoots(root: ParentNode): Generator<Element> {
+  for (const element of root.querySelectorAll("*")) {
+    if (isOutputRoot(element)) yield element;
+    if (element.shadowRoot) yield* outputRoots(element.shadowRoot);
+  }
 }
 
 export function outputCellFromRoot(element: Element): OutputCell | null {

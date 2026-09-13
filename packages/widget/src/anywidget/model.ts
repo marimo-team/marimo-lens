@@ -1,8 +1,9 @@
+import type { AnyModel } from "@anywidget/types";
 import type { LensState, TargetSelector } from "@marimo-lens/protocol";
 
-import { useModel, useModelState } from "@anywidget/react";
+import { useModel } from "@anywidget/react";
 import { parseLensState, parseTargetSelector } from "@marimo-lens/protocol";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 
 import { LensProtocolClient } from "@/anywidget/client";
 
@@ -21,9 +22,9 @@ export type LensModel = {
 
 export function useLensModel(ownerWindow: Window): LensModel {
   const model = useModel<LensModelFields>();
-  const [rawState] = useModelState<LensState>("_state");
-  const [rawSelector] = useModelState<TargetSelector>("_selector");
-  const [css] = useModelState<string | undefined>("_css");
+  const rawState = useModelValue(model, "_state");
+  const rawSelector = useModelValue(model, "_selector");
+  const css = useModelValue(model, "_css");
   const state = useMemo(() => parseLensState(rawState), [rawState]);
   const selector = useMemo(() => parseTargetSelector(rawSelector), [rawSelector]);
   const protocol = useMemo(() => new LensProtocolClient(model, ownerWindow), [model, ownerWindow]);
@@ -34,4 +35,20 @@ export function useLensModel(ownerWindow: Window): LensModel {
   }, [protocol]);
 
   return { state, css: css ?? "", protocol, selector };
+}
+
+function useModelValue<Key extends keyof LensModelFields>(
+  model: AnyModel<LensModelFields>,
+  key: Key,
+): LensModelFields[Key] {
+  // Hosts can retain subscription teardown callbacks until the view closes.
+  const subscribe = useCallback(
+    (update: () => void) => {
+      model.on(`change:${key}`, update);
+      return () => model.off(`change:${key}`, update);
+    },
+    [model, key],
+  );
+  const getSnapshot = useCallback(() => model.get(key), [model, key]);
+  return useSyncExternalStore(subscribe, getSnapshot);
 }
