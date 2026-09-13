@@ -40,7 +40,7 @@ catalogs:
       specifier: 29.1.1
       version: 29.1.1
     lucide-react:
-      specifier: 1.24.0
+      specifier: ^1.24.0
       version: 1.24.0
     oxlint:
       specifier: 1.76.0
@@ -61,7 +61,7 @@ catalogs:
       specifier: ^6.0.3
       version: 6.0.3
     valibot:
-      specifier: 1.4.2
+      specifier: ^1.4.2
       version: 1.4.2
     vite-plus:
       specifier: 0.2.4
@@ -220,9 +220,6 @@ importers:
       '@anywidget/react':
         specifier: 'catalog:'
         version: 0.2.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
-      '@anywidget/types':
-        specifier: 'catalog:'
-        version: 0.4.0
       '@marimo-lens/image-capture':
         specifier: workspace:*
         version: link:../image-capture
@@ -239,6 +236,9 @@ importers:
         specifier: 'catalog:'
         version: 19.2.8(react@19.2.8)
     devDependencies:
+      '@anywidget/types':
+        specifier: 'catalog:'
+        version: 0.4.0
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.1
