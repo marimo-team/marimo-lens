@@ -103,6 +103,26 @@ async function observeAnnotationLatency(page: Page, label: string) {
   }, label);
 }
 
+async function measureStreamingModes(page: Page, session: CDPSession) {
+  const sample = async () => {
+    const before = await browserMetrics(session);
+    const frames = await streamFrames(page);
+    const after = await browserMetrics(session);
+    return { ...frames, scriptMs: after.scriptMs - before.scriptMs };
+  };
+  const annotated = await sample();
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await page.getByRole("region", { name: "Revenue by month" }).hover();
+  const armed = await sample();
+  await page.keyboard.press("Escape");
+  await page.getByRole("checkbox", { name: "Show revenue" }).uncheck();
+  await expect(page.getByRole("region", { name: "Revenue by month" })).toBeHidden();
+  const unavailable = await sample();
+  await page.getByRole("checkbox", { name: "Show revenue" }).check();
+  await expect(page.getByRole("region", { name: "Revenue by month" })).toBeVisible();
+  return { annotated, armed, unavailable };
+}
+
 test("a large streaming notebook stays responsive with multiple output annotations", async ({
   page,
   context,
@@ -138,33 +158,20 @@ test("a large streaming notebook stays responsive with multiple output annotatio
   const report = await runAction(page);
   expect(report.references.selections).toHaveLength(12);
   expect(Object.keys(report.images)).toHaveLength(12);
-  const activeStart = await browserMetrics(session);
-  const activeFrames = await streamFrames(page);
-  const activeEnd = await browserMetrics(session);
-  await page.getByRole("button", { name: "Select a target", exact: true }).click();
-  await page.getByRole("region", { name: "Revenue by month" }).hover();
-  const armedStart = await browserMetrics(session);
-  const armedFrames = await streamFrames(page);
-  const armedEnd = await browserMetrics(session);
-  await page.keyboard.press("Escape");
-  await page.getByRole("checkbox", { name: "Show revenue" }).uncheck();
-  await expect(page.getByRole("region", { name: "Revenue by month" })).toBeHidden();
-  const unavailableStart = await browserMetrics(session);
-  const unavailableFrames = await streamFrames(page);
-  const unavailableEnd = await browserMetrics(session);
-  await page.getByRole("checkbox", { name: "Show revenue" }).check();
-  await expect(page.getByRole("region", { name: "Revenue by month" })).toBeVisible();
+  const table = page.getByRole("region", { name: "Streaming table" }).locator("tr");
+  await page.getByRole("combobox", { name: "Table rows" }).selectOption({ label: "0" });
+  await expect(table).toHaveCount(0);
+  const small = await measureStreamingModes(page, session);
+  await page.getByRole("combobox", { name: "Table rows" }).selectOption({ label: "1000" });
+  await expect(table).toHaveCount(1000);
+  const large = await measureStreamingModes(page, session);
   const measurements = {
     rows: 1000,
     selections: 12,
     frames: 90,
     baseline: { ...baselineFrames, scriptMs: baselineEnd.scriptMs - baselineStart.scriptMs },
-    annotated: { ...activeFrames, scriptMs: activeEnd.scriptMs - activeStart.scriptMs },
-    armed: { ...armedFrames, scriptMs: armedEnd.scriptMs - armedStart.scriptMs },
-    unavailable: {
-      ...unavailableFrames,
-      scriptMs: unavailableEnd.scriptMs - unavailableStart.scriptMs,
-    },
+    small,
+    large,
     annotationLatency,
     contextMs: report.context_ms,
   };
@@ -172,11 +179,13 @@ test("a large streaming notebook stays responsive with multiple output annotatio
     body: JSON.stringify(measurements, null, 2),
     contentType: "application/json",
   });
-  // Budget the added Lens work against the same notebook with its view unmounted.
-  for (const scenario of [measurements.annotated, measurements.armed, measurements.unavailable]) {
-    expect(scenario.scriptMs - measurements.baseline.scriptMs).toBeLessThan(750);
-    expect(scenario.p95).toBeLessThan(Math.max(50, baselineFrames.p95 * 2));
-    expect(scenario.maximum).toBeLessThan(Math.max(250, baselineFrames.maximum * 2));
+  // Compare matching interaction states on the same runner to isolate output-size scaling.
+  for (const mode of ["annotated", "armed", "unavailable"] as const) {
+    expect(large[mode].scriptMs - small[mode].scriptMs).toBeLessThan(750);
+    for (const scenario of [small[mode], large[mode]]) {
+      expect(scenario.p95).toBeLessThan(Math.max(50, baselineFrames.p95 * 2));
+      expect(scenario.maximum).toBeLessThan(Math.max(250, baselineFrames.maximum * 2));
+    }
   }
   expect(report.context_ms).toBeLessThan(250);
   for (const latency of annotationLatency) {

@@ -168,23 +168,25 @@ output replacement, cancelled gestures, duplicate views, remounts, and selection
 capacity. `sessions.spec.ts` checks isolation between independent run-mode kernels. Capture tests hold the browser encoder to
 control races, then release it and verify kernel selections and image bytes.
 
-`performance.spec.ts` runs in desktop Chromium. A 1,000-row notebook streams 90
-updates with Lens hidden, with twelve annotations, while picking a target, and
-while the annotated output is unavailable. A second test creates, previews, and
+`performance.spec.ts` runs in desktop Chromium. It compares 90 streaming updates
+on zero-row and 1,000-row notebooks with the same twelve annotations in the same
+browser session. Each size is measured with annotations visible, while picking
+a target, and while the annotated output is unavailable. A Lens-hidden run
+supplies the frame-cadence baseline. A second test creates, previews, and
 deletes sixteen annotations, checking PNG URL release and browser resources after
 garbage collection.
 
-| Measurement                                                    | Regression budget                                           |
-| -------------------------------------------------------------- | ----------------------------------------------------------- |
-| Added script time over 90 updates                              | Under 750 ms relative to the same notebook with Lens hidden |
-| 95th-percentile frame gap                                      | Under 50 ms or twice the baseline, whichever is greater     |
-| Largest frame gap                                              | Under 250 ms or twice the baseline, whichever is greater    |
-| Combined browser response for arming, selection, and note save | Under 2.5 s                                                 |
-| Kernel context and standalone text                             | Under 250 ms                                                |
-| Retained heap growth after warmup                              | Under 8 MiB                                                 |
-| Retained DOM nodes and event listeners                         | Fewer than 500 additional nodes and 100 listeners           |
-| Preview PNG URLs after deletion                                | Zero                                                        |
-| Average duration of the final four churn cycles                | Under 1.75 times the warmup average plus 250 ms             |
+| Measurement                                                    | Regression budget                                                          |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Script-time growth from zero to 1,000 rows                     | Under 750 ms over 90 updates relative to the matching small-notebook state |
+| 95th-percentile frame gap                                      | Under 50 ms or twice the baseline, whichever is greater                    |
+| Largest frame gap                                              | Under 250 ms or twice the baseline, whichever is greater                   |
+| Combined browser response for arming, selection, and note save | Under 2.5 s                                                                |
+| Kernel context and standalone text                             | Under 250 ms                                                               |
+| Retained heap growth after warmup                              | Under 8 MiB                                                                |
+| Retained DOM nodes and event listeners                         | Fewer than 500 additional nodes and 100 listeners                          |
+| Preview PNG URLs after deletion                                | Zero                                                                       |
+| Average duration of the final four churn cycles                | Under 1.75 times the warmup average plus 250 ms                            |
 
 Annotation latency uses browser event timestamps: selection-mode click to armed
 controls, pointer release to the focused note field, and Done click to the saved
