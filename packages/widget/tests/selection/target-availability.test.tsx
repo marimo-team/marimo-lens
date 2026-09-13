@@ -100,6 +100,37 @@ describe("target availability", () => {
     expect(disconnect).toHaveBeenCalledOnce();
   });
 
+  test("updates all selections on one output while preserving other targets", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      return window.setTimeout(() => callback(performance.now()), 0);
+    });
+    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
+    const first = selectionFixture();
+    const second = selectionFixture({ id: "second", label: "S2" });
+    const other = selectionFixture({
+      id: "other",
+      label: "S3",
+      target: { ...first.target, cellIds: ["other-cell"] },
+    });
+    const output = setupOutput(first.target.cellIds[0]!);
+    setupOutput("other-cell");
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() =>
+      root?.render(
+        <NotebookDomTestProvider>
+          <AvailabilityProbe selections={[first, second, other]} />
+        </NotebookDomTestProvider>,
+      ),
+    );
+    expect(container.textContent).toBe("3");
+    await mutateDocument(() => output.remove());
+    expect(container.textContent).toBe("1");
+    await mutateDocument(() => document.body.append(output));
+    expect(container.textContent).toBe("3");
+  });
+
   test("detaches when its exact output disappears and reattaches only to the same cell id", async () => {
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       return window.setTimeout(() => callback(performance.now()), 0);

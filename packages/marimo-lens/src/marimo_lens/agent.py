@@ -29,23 +29,14 @@ def agent_plugin() -> agent_plugins.Plugin:
     return agent_plugins.locate(_DISTRIBUTION_NAME)
 
 
-def _agent_skill(plugin: agent_plugins.Plugin) -> agent_plugins.Skill:
-    for skill in plugin.skills:
-        if skill.path.name == _SKILL_NAME:
-            return skill
-    raise agent_plugins.AgentPluginError(
-        "The marimo-lens Agent Plugin has no marimo-lens skill. Reinstall marimo-lens."
-    )
-
-
 def agent_skill() -> agent_plugins.Skill:
     """Return Lens's packaged Agent Skill."""
-    return _agent_skill(agent_plugin())
+    return agent_plugin().skill(_SKILL_NAME)
 
 
 def _module_help(summary: str) -> str:
     plugin = agent_plugin()
-    skill = _agent_skill(plugin)
+    skill = plugin.skill(_SKILL_NAME)
     tree = indent(plugin.tree(max_depth=3, max_files=50), "    ")
     return f"""{summary}
 

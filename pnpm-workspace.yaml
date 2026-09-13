@@ -19,14 +19,14 @@ catalog:
   esbuild: ^0.28.1
   html-to-image: 1.11.13
   jsdom: 29.1.1
-  lucide-react: 1.24.0
+  lucide-react: ^1.24.0
   oxlint: 1.76.0
   oxlint-tsgolint: 7.0.2001
   portless: 0.15.5
   react: ^19.2.7
   react-dom: ^19.2.7
   typescript: ^6.0.3
-  valibot: 1.4.2
+  valibot: ^1.4.2
   vite: npm:@voidzero-dev/vite-plus-core@0.2.4
   vite-plus: 0.2.4
   vitepress: ^1.6.4

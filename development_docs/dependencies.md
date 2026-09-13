@@ -32,15 +32,19 @@ their current capability and runtime contracts.
 
 The published package currently requires:
 
-- `agent-plugins`
-- `anywidget`
-- `marimo`
-- `pydantic`
-- `traitlets`
-- `typing-extensions`
+- `agent-plugins>=0.2` for packaged agent resources.
+- `anywidget>=0.9` and `traitlets>=5` for the widget model and transport.
+- `marimo>=0.24.0` for notebook runtime and agent capability integration.
+- `pydantic>=2` for transport validation.
+- `typing-extensions>=4.4` for public types on Python 3.10.
 
-The build backend requires `agent-plugins` and an exact Hatchling version. The
-package supports Python 3.10 through 3.14.
+The build backend requires `agent-plugins>=0.2` and `hatchling>=1.26.3`, which
+supports the package's license metadata. Runtime and build requirements use
+lower bounds, with resolved versions recorded in `uv.lock` for development.
+The package supports Python 3.10 through 3.14.
+
+The development environment uses plain marimo. Add dependencies for examples
+and tests individually when they need packages beyond the runtime requirements.
 
 Use `uv sync --locked` for an exact existing environment. A manifest change
 requires an intentional lockfile update and review of package names, versions,

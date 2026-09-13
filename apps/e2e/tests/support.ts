@@ -1,4 +1,7 @@
 import { expect, test as base, type Locator, type Page, type TestInfo } from "@playwright/test";
+import { copyFile, mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 type Selection = {
   id: string;
@@ -12,34 +15,72 @@ type Selection = {
 
 type Report = {
   action: string;
+  error: { code: string; revision: number | null } | null;
+  context_ms: number;
   references: { revision: number; selections: Selection[] };
   images: Record<string, { bytes: number; signature: string }>;
   text: string;
 };
 
-export const test = base.extend<{ browserErrors: string[] }>({
+export const test = base.extend<{ browserErrors: string[]; notebook: void }>({
+  notebook: [
+    async ({ page, colorScheme, browserErrors }, use, testInfo) => {
+      let url = "/?theme=system";
+      if (testInfo.project.name === "editor") {
+        // Edit mode shares a kernel per file. Each test gets its own notebook.
+        const notebook = testInfo.outputPath("notebook.py");
+        await mkdir(dirname(notebook), { recursive: true });
+        await copyFile(
+          fileURLToPath(new URL("../fixtures/notebook.py", import.meta.url)),
+          notebook,
+        );
+        url += `&file=${encodeURIComponent(notebook)}`;
+      }
+      await page.goto(url);
+      await expect(page.locator("body")).toHaveAttribute("data-theme", colorScheme ?? "light");
+      // A fresh kernel can still be importing notebook packages after the page loads.
+      await expect(page.getByRole("region", { name: "Revenue by month" })).toBeVisible({
+        timeout: 30_000,
+      });
+      await expect(
+        page.getByRole("button", { name: "Select a target", exact: true }),
+      ).toBeVisible();
+      expect(browserErrors).toEqual([]);
+      await use();
+    },
+    { auto: true },
+  ],
   browserErrors: [
-    async ({ page }, use) => {
+    async ({ page }, use, testInfo) => {
       const errors: string[] = [];
+      const copilotStartup: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
       page.on("console", (message) => {
-        if (message.type() === "error") errors.push(message.text());
+        if (message.type() !== "error") return;
+        const text = message.text();
+        // marimo 0.24 eagerly initializes its disabled Copilot client in each editor.
+        if (
+          testInfo.project.name === "editor" &&
+          text.split(/\r?\n/, 1)[0] ===
+            'Language server initialization failed RPCError: Request "initialize" timed out after 30000ms' &&
+          /\/assets\/cells-[\w-]+\.js$/.test(message.location().url)
+        ) {
+          copilotStartup.push(text);
+          return;
+        }
+        errors.push(text);
       });
       await use(errors);
+      if (copilotStartup.length > 0) {
+        await testInfo.attach("marimo-disabled-copilot-startup", {
+          body: JSON.stringify(copilotStartup, null, 2),
+          contentType: "application/json",
+        });
+      }
       expect(errors, "browser errors").toEqual([]);
     },
     { auto: true },
   ],
-});
-
-test.beforeEach(async ({ page, colorScheme }) => {
-  await page.goto("/?theme=system");
-  await expect(page.locator("body")).toHaveAttribute("data-theme", colorScheme ?? "light");
-  // A fresh kernel can still be importing notebook packages after the page loads.
-  await expect(page.getByRole("region", { name: "Revenue by month" })).toBeVisible({
-    timeout: 30_000,
-  });
-  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeVisible();
 });
 
 export async function screenshot(page: Page, testInfo: TestInfo, name: string) {

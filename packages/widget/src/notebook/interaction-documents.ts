@@ -38,7 +38,10 @@ export function observeInteractionSurfaces(
     const affectsTargets =
       records.length === 0 ||
       records.some((record) => {
-        if (record.type !== "attributes") return true;
+        if (record.type === "childList") {
+          return [...record.addedNodes, ...record.removedNodes].some((node) => node.nodeType === 1);
+        }
+        if (record.type !== "attributes") return false;
         const target = record.target;
         if (!(target instanceof ownerWindow.HTMLElement)) return false;
         const related = (root: HTMLElement) =>

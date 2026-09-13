@@ -36,8 +36,8 @@ def verify_release(expected_version: str) -> None:
         )
 
     requirements = installed_distribution.requires or ()
-    if "agent-plugins>=0.1.0" not in requirements:
-        raise SystemExit("marimo-lens must require agent-plugins>=0.1.0")
+    if "agent-plugins>=0.2" not in requirements:
+        raise SystemExit("marimo-lens must require agent-plugins>=0.2")
 
     capabilities = [
         entry_point

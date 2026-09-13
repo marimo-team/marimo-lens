@@ -150,12 +150,59 @@ pnpm test:e2e
 ```
 
 `apps/e2e/` owns the test runner and fixture notebook. The runner starts local
-marimo run and edit servers. Four Chromium projects test desktop and narrow
+marimo run and edit servers. Editor tests copy the fixture into their artifact
+directory so each test owns a separate kernel. Four Chromium projects test desktop and narrow
 layouts in light and dark themes. An editor project verifies selection, notes,
-producing cells, and PNG capture through `marimo edit`.
+producing cells, and PNG capture through `marimo edit`. The editor uses
+`apps/e2e/.marimo.toml` to disable code completion and language servers.
+The console guard records marimo 0.24's disabled-Copilot initialization timeout
+in a diagnostic attachment. All other console errors and all uncaught page errors
+fail the test.
 It retains traces and screenshots for failures in
 `apps/e2e/test-results/` and an HTML report in `apps/e2e/playwright-report/`.
 Run `pnpm --filter @marimo-lens/e2e test:e2e:ui` for interactive debugging.
+
+`robustness.spec.ts` runs in both notebook and editor mode. It covers rejected
+agent revisions, atomic invalid resolutions, failed and interrupted PNG capture,
+output replacement, cancelled gestures, duplicate views, remounts, and selection
+capacity. `sessions.spec.ts` checks isolation between independent run-mode kernels. Capture tests hold the browser encoder to
+control races, then release it and verify kernel selections and image bytes.
+
+`performance.spec.ts` runs in desktop Chromium. It compares 90 streaming updates
+on zero-row and 1,000-row notebooks with the same twelve annotations in the same
+browser session. Each size is measured with annotations visible, while picking
+a target, and while the annotated output is unavailable. A Lens-hidden run
+supplies the frame-cadence baseline. A second test creates, previews, and
+deletes sixteen annotations, checking PNG URL release and browser resources after
+garbage collection.
+
+| Measurement                                                    | Regression budget                                                          |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Script-time growth from zero to 1,000 rows                     | Under 750 ms over 90 updates relative to the matching small-notebook state |
+| 95th-percentile frame gap                                      | Under 50 ms or twice the baseline, whichever is greater                    |
+| Largest frame gap                                              | Under 250 ms or twice the baseline, whichever is greater                   |
+| Combined browser response for arming, selection, and note save | Under 2.5 s                                                                |
+| Kernel context and standalone text                             | Under 250 ms                                                               |
+| Retained heap growth after warmup                              | Under 8 MiB                                                                |
+| Retained DOM nodes and event listeners                         | Fewer than 500 additional nodes and 100 listeners                          |
+| Preview PNG URLs after deletion                                | Zero                                                                       |
+| Average duration of the final four churn cycles                | Under 1.75 times the warmup average plus 250 ms                            |
+
+Annotation latency uses browser event timestamps: selection-mode click to armed
+controls, pointer release to the focused note field, and Done click to the saved
+note dialog closing. Their sum excludes driver round trips, mouse interpolation,
+and assertion polling. All three ready states must be observed.
+
+These budgets detect regressions in the fixture workloads. Timings depend on the
+browser, hardware, and runner load. Performance measurements are attached as JSON
+to the HTML report and the machine-readable `test-results/results.json` report.
+
+Run the focused suites with:
+
+```sh
+pnpm --filter @marimo-lens/e2e test:e2e robustness.spec.ts performance.spec.ts --project=light
+pnpm --filter @marimo-lens/e2e test:e2e robustness.spec.ts --project=editor
+```
 
 Inspect documentation and browser behavior beyond those scenarios separately.
 

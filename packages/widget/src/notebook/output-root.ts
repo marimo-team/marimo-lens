@@ -1,10 +1,11 @@
 import type { OutputCell } from "@/notebook/types";
 
+import { containsOpenTree } from "@/notebook/open-tree";
 import { OUTPUT_ROOT_SELECTOR, resolveOutputRoot } from "@/notebook/output-root-rules";
 
-const LENS_OUTPUT_REGISTRY: unique symbol = Symbol.for("marimo-lens.output-registry.v1");
+const LENS_OUTPUT_REGISTRY: unique symbol = Symbol.for("marimo-lens.output-registry.v2");
 
-type LensOutputRegistry = WeakMap<HTMLElement, number>;
+type LensOutputRegistry = Map<HTMLElement, number>;
 
 declare global {
   interface Document {
@@ -16,7 +17,8 @@ export function registerLensHostOutput(host: Element): () => void {
   const root = owningOutputRoot(host);
   if (!root) return () => {};
 
-  const registry = lensOutputRegistry(root.ownerDocument);
+  const ownerDocument = root.ownerDocument;
+  const registry = lensOutputRegistry(ownerDocument);
   registry.set(root, (registry.get(root) ?? 0) + 1);
 
   let released = false;
@@ -26,6 +28,9 @@ export function registerLensHostOutput(host: Element): () => void {
     const owners = registry.get(root) ?? 0;
     if (owners <= 1) registry.delete(root);
     else registry.set(root, owners - 1);
+    if (registry.size === 0 && ownerDocument[LENS_OUTPUT_REGISTRY] === registry) {
+      delete ownerDocument[LENS_OUTPUT_REGISTRY];
+    }
   };
 }
 
@@ -51,8 +56,19 @@ export function outputCellFromEvent(event: Event): OutputCell | null {
 }
 
 export function getOutputCell(ownerDocument: Document, outputCellId: string): OutputCell | null {
-  for (const cell of listOutputRoots(ownerDocument)) {
-    if (cell.id === outputCellId && isVisible(cell.element)) return cell;
+  const canonical = ownerDocument.getElementById(`output-${outputCellId}`);
+  if (canonical) {
+    const cell = outputCellFromRoot(canonical);
+    if (cell?.id === outputCellId) return isVisible(cell.element) ? cell : null;
+  }
+  const cellContainer = ownerDocument.getElementById(`cell-${outputCellId}`);
+  const scope =
+    cellContainer?.getAttribute("data-cell-id") === outputCellId ? cellContainer : ownerDocument;
+  for (const root of outputRoots(scope)) {
+    const resolved = resolveOutputRoot(root);
+    if (resolved?.id !== outputCellId) continue;
+    const cell = outputCellFromRoot(root);
+    if (cell && isVisible(cell.element)) return cell;
   }
   return null;
 }
@@ -63,18 +79,18 @@ export function listOutputCells(ownerDocument: Document): OutputCell[] {
 
 export function listOutputRoots(ownerDocument: Document): OutputCell[] {
   const cells: OutputCell[] = [];
-  const visit = (root: ParentNode) => {
-    for (const element of root.children) {
-      if (isOutputRoot(element)) {
-        const cell = outputCellFromRoot(element);
-        if (cell) cells.push(cell);
-      }
-      if (element.shadowRoot) visit(element.shadowRoot);
-      visit(element);
-    }
-  };
-  visit(ownerDocument);
+  for (const root of outputRoots(ownerDocument)) {
+    const cell = outputCellFromRoot(root);
+    if (cell) cells.push(cell);
+  }
   return cells;
+}
+
+function* outputRoots(root: ParentNode): Generator<Element> {
+  for (const element of root.querySelectorAll("*")) {
+    if (isOutputRoot(element)) yield element;
+    if (element.shadowRoot) yield* outputRoots(element.shadowRoot);
+  }
 }
 
 export function outputCellFromRoot(element: Element): OutputCell | null {
@@ -110,26 +126,13 @@ export function deepestElementFromEvent(event: Event, output: HTMLElement): Elem
   return output;
 }
 
-function isLensHostOutput(root: HTMLElement): boolean {
-  return root.ownerDocument[LENS_OUTPUT_REGISTRY]?.has(root) ?? false;
-}
-
 export function containsLensHost(root: HTMLElement): boolean {
   const registry = root.ownerDocument[LENS_OUTPUT_REGISTRY];
   if (!registry) return false;
-  if (isLensHostOutput(root)) return true;
-  const HTMLElementClass = root.ownerDocument.defaultView?.HTMLElement;
-  const containsRegisteredOutput = (parent: ParentNode): boolean => {
-    for (const element of parent.children) {
-      if (HTMLElementClass && element instanceof HTMLElementClass && registry.has(element)) {
-        return true;
-      }
-      if (element.shadowRoot && containsRegisteredOutput(element.shadowRoot)) return true;
-      if (containsRegisteredOutput(element)) return true;
-    }
-    return false;
-  };
-  return containsRegisteredOutput(root);
+  for (const output of registry.keys()) {
+    if (containsOpenTree(root, output)) return true;
+  }
+  return false;
 }
 
 function owningOutputRoot(element: Element): HTMLElement | null {
@@ -147,7 +150,7 @@ function lensOutputRegistry(ownerDocument: Document): LensOutputRegistry {
   const existing = ownerDocument[LENS_OUTPUT_REGISTRY];
   if (existing) return existing;
 
-  const registry: LensOutputRegistry = new WeakMap();
+  const registry: LensOutputRegistry = new Map();
   Object.defineProperty(ownerDocument, LENS_OUTPUT_REGISTRY, {
     configurable: true,
     value: registry,
