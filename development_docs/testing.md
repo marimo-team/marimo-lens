@@ -153,7 +153,8 @@ pnpm test:e2e
 marimo run and edit servers. Editor tests copy the fixture into their artifact
 directory so each test owns a separate kernel. Four Chromium projects test desktop and narrow
 layouts in light and dark themes. An editor project verifies selection, notes,
-producing cells, and PNG capture through `marimo edit`.
+producing cells, and PNG capture through `marimo edit`. The fixture disables
+language servers so annotation checks are independent of code-completion startup.
 It retains traces and screenshots for failures in
 `apps/e2e/test-results/` and an HTML report in `apps/e2e/playwright-report/`.
 Run `pnpm --filter @marimo-lens/e2e test:e2e:ui` for interactive debugging.
