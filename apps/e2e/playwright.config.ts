@@ -8,9 +8,14 @@ export default defineConfig({
   retries: 0,
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  reporter: [["list"], ["html", { open: "never" }]],
+  reporter: [
+    ["list"],
+    ["html", { open: "never" }],
+    ["json", { outputFile: "test-results/results.json" }],
+  ],
   use: {
     baseURL: "http://127.0.0.1:4817",
+    actionTimeout: 10_000,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
@@ -61,7 +66,7 @@ export default defineConfig({
     },
     {
       command:
-        "uv run --locked marimo edit apps/e2e/fixtures/notebook.py --host 127.0.0.1 --port 4820 --headless --no-token",
+        "uv run --locked marimo edit apps/e2e --host 127.0.0.1 --port 4820 --headless --no-token --session-ttl 1",
       env: { _MARIMO_CONFIG_OVERLOAD_RUNTIME_AUTO_INSTANTIATE: "true" },
       cwd: "../..",
       url: "http://127.0.0.1:4820",

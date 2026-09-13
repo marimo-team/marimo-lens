@@ -150,7 +150,8 @@ pnpm test:e2e
 ```
 
 `apps/e2e/` owns the test runner and fixture notebook. The runner starts local
-marimo run and edit servers. Four Chromium projects test desktop and narrow
+marimo run and edit servers. Editor tests copy the fixture into their artifact
+directory so each test owns a separate kernel. Four Chromium projects test desktop and narrow
 layouts in light and dark themes. An editor project verifies selection, notes,
 producing cells, and PNG capture through `marimo edit`.
 It retains traces and screenshots for failures in
