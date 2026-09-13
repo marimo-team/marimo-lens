@@ -51,13 +51,32 @@ export const test = base.extend<{ browserErrors: string[]; notebook: void }>({
     { auto: true },
   ],
   browserErrors: [
-    async ({ page }, use) => {
+    async ({ page }, use, testInfo) => {
       const errors: string[] = [];
+      const copilotStartup: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
       page.on("console", (message) => {
-        if (message.type() === "error") errors.push(message.text());
+        if (message.type() !== "error") return;
+        const text = message.text();
+        // marimo 0.24 eagerly initializes its disabled Copilot client in each editor.
+        if (
+          testInfo.project.name === "editor" &&
+          text.split(/\r?\n/, 1)[0] ===
+            'Language server initialization failed RPCError: Request "initialize" timed out after 30000ms' &&
+          /\/assets\/cells-[\w-]+\.js$/.test(message.location().url)
+        ) {
+          copilotStartup.push(text);
+          return;
+        }
+        errors.push(text);
       });
       await use(errors);
+      if (copilotStartup.length > 0) {
+        await testInfo.attach("marimo-disabled-copilot-startup", {
+          body: JSON.stringify(copilotStartup, null, 2),
+          contentType: "application/json",
+        });
+      }
       expect(errors, "browser errors").toEqual([]);
     },
     { auto: true },

@@ -72,9 +72,9 @@ export default defineConfig({
     },
     {
       command:
-        "uv run --locked marimo edit apps/e2e --host 127.0.0.1 --port 4820 --headless --no-token --session-ttl 1",
+        "uv run --locked marimo edit . --host 127.0.0.1 --port 4820 --headless --no-token --session-ttl 1",
       env: { _MARIMO_CONFIG_OVERLOAD_RUNTIME_AUTO_INSTANTIATE: "true" },
-      cwd: "../..",
+      cwd: ".",
       url: "http://127.0.0.1:4820",
       reuseExistingServer: false,
       timeout: 60_000,

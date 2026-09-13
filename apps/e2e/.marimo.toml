@@ -1,0 +1,8 @@
+[completion]
+copilot = false
+
+[language_servers]
+pylsp = { enabled = false }
+basedpyright = { enabled = false }
+ty = { enabled = false }
+pyrefly = { enabled = false }

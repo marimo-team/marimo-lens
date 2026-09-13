@@ -1,11 +1,3 @@
-# /// script
-# [tool.marimo.language_servers]
-# pylsp = { enabled = false }
-# basedpyright = { enabled = false }
-# ty = { enabled = false }
-# pyrefly = { enabled = false }
-# ///
-
 import marimo
 
 __generated_with = "0.24.0"
