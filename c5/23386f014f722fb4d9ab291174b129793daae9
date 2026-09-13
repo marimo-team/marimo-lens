@@ -1,0 +1,21 @@
+development_docs/testing.md
+  s_e1d497f248b7cd::t_5f3949855c4842 156-157
+apps/e2e/fixtures/notebook.py
+  ai_agent 1-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c523386f014f722fb4d9ab291174b129793daae9",
+  "prompts": {},
+  "sessions": {
+    "s_e1d497f248b7cd": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09b87-a74a-7121-8277-1508ba5b956c",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
