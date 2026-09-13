@@ -14,10 +14,17 @@ export function useAvailableSelectionIds(
 
   return useMemo(() => {
     void layoutRevision;
-    return new Set(
-      selections
-        .filter((selection) => dom.getTarget(selection.target, selector) !== null)
-        .map(({ id }) => id),
-    );
+    const targets = new Map<string, boolean>();
+    const available = new Set<string>();
+    for (const selection of selections) {
+      const key = JSON.stringify(selection.target);
+      let present = targets.get(key);
+      if (present === undefined) {
+        present = dom.getTarget(selection.target, selector) !== null;
+        targets.set(key, present);
+      }
+      if (present) available.add(selection.id);
+    }
+    return available;
   }, [dom, layoutRevision, selections, selector]);
 }
