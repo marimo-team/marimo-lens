@@ -6,7 +6,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useNotebookDom } from "@/notebook/notebook-dom";
 import { anchorToViewport } from "@/selection/anchor";
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
-import { targetLabel, targetTitle } from "@/selection/target-label";
+import { selectionTitle } from "@/selection/selection-description";
 import { useAnchoredSurface, type AnchoredSurfaceAnchor } from "@/ui/anchored-surface";
 
 type SelectionNoteEditorProps = {
@@ -82,7 +82,7 @@ export function SelectionNoteEditor({
       data-marimo-lens-note-editor
       data-marimo-lens-selection-cluster={selection.id}
       data-marimo-lens-ui
-      aria-label={`${title} for ${selection.label}, ${targetLabel(selection.target, selection.domHint)}`}
+      aria-label={`${title} for ${selection.label}, ${selection.description.label}`}
       onCancel={(event) => {
         event.preventDefault();
         onCancel();
@@ -101,7 +101,7 @@ export function SelectionNoteEditor({
         );
         const first = controls[0];
         const last = controls.at(-1);
-        const active = event.currentTarget.ownerDocument.activeElement;
+        const active = dom.activeElement;
         if (event.shiftKey && active === first) {
           event.preventDefault();
           last?.focus({ preventScroll: true });
@@ -114,8 +114,8 @@ export function SelectionNoteEditor({
       <header className="ml-note-editor__header">
         <span className="ml-note-editor__selection ml-code">{selection.label}</span>
         <span aria-hidden="true">·</span>
-        <span className="ml-note-editor__target" title={targetTitle(selection.target)}>
-          <span className="ml-code">{targetLabel(selection.target, selection.domHint)}</span>
+        <span className="ml-note-editor__target" title={selectionTitle(selection)}>
+          <span className="ml-code">{selection.description.label}</span>
         </span>
         <SelectionKindMark kind={selection.anchor.kind} />
       </header>

@@ -3,14 +3,17 @@ import type { KeyboardEvent } from "react";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
 export function focusSelectionOrDock(dom: NotebookDomAdapter, selectionId: string): void {
-  const target = selectionFocusTarget(dom.document, selectionId) ?? dockFocusTarget(dom.document);
+  const target = selectionFocusTarget(dom.uiRoot, selectionId) ?? dockFocusTarget(dom.uiRoot);
   if (!target) return;
   dom.window.requestAnimationFrame(() => {
     if (target.isConnected) target.focus();
   });
 }
 
-function selectionFocusTarget(ownerDocument: Document, selectionId: string): HTMLElement | null {
+function selectionFocusTarget(
+  ownerDocument: Document | ShadowRoot,
+  selectionId: string,
+): HTMLElement | null {
   return (
     [
       ...ownerDocument.querySelectorAll<HTMLElement>(
@@ -51,14 +54,14 @@ export function moveSelectionRowFocus(event: KeyboardEvent<HTMLButtonElement>): 
 }
 
 function focusSelector(dom: NotebookDomAdapter, selector: string): void {
-  const target = dom.document.querySelector<HTMLElement>(selector);
+  const target = dom.uiRoot.querySelector<HTMLElement>(selector);
   if (!target) return;
   dom.window.requestAnimationFrame(() => {
     if (target.isConnected) target.focus();
   });
 }
 
-function dockFocusTarget(ownerDocument: Document): HTMLElement | null {
+function dockFocusTarget(ownerDocument: Document | ShadowRoot): HTMLElement | null {
   const dock = ownerDocument.querySelector<HTMLElement>("[data-marimo-lens-dock]");
   if (!dock) return null;
   return (

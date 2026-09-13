@@ -46,6 +46,7 @@ def _minimal_reference_size(selections: Sequence[Mapping[str, Any]]) -> int:
     for selection in projected:
         selection["note"] = ""
         selection.pop("domHint", None)
+        selection.pop("description", None)
 
     current_selection_id = max(
         (str(selection["id"]) for selection in selections),
@@ -147,11 +148,13 @@ def _fit_reference_selection_evidence(
     references: Mapping[str, Any],
     selections: Sequence[dict[str, Any]],
 ) -> None:
-    for selection in selections:
-        if selection.pop("domHint", None) is None:
-            continue
-        if _reference_size(references) <= MAX_CONTEXT_REFERENCES_BYTES:
-            return
+    for field in ("domHint", "description"):
+        for selection in selections:
+            if selection.pop(field, None) is None:
+                continue
+            if _reference_size(references) <= MAX_CONTEXT_REFERENCES_BYTES:
+                return
+
     for selection in selections:
         note = selection.get("note")
         if not isinstance(note, str) or not note:
@@ -208,6 +211,7 @@ def _project_selection(
         "id": str(selection["id"]),
         "label": str(selection["label"]),
         "note": str(selection["note"]),
+        "description": copy.deepcopy(selection["description"]),
         "target": copy.deepcopy(selection["target"]),
         "cells": [
             {

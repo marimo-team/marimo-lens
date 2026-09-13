@@ -193,7 +193,7 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
-            "version": 5,
+            "version": 6,
             "type": "attention.reveal",
             "payload": {
                 "address": {"kind": "cell", "cellId": "cell-view"},
@@ -261,7 +261,7 @@ def test_start_activity_sends_one_transient_event_without_changing_selection_sta
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
-            "version": 5,
+            "version": 6,
             "type": "attention.activity.start",
             "payload": {
                 "activityId": lens.sent[-1][0]["payload"]["activityId"],
@@ -308,7 +308,7 @@ def test_stop_activity_sends_one_matching_owner_event_without_runtime_access(
     assert lens.sent[-1] == (
         {
             "protocol": "marimo-lens.event",
-            "version": 5,
+            "version": 6,
             "type": "attention.activity.stop",
             "payload": {"activityId": start_event["payload"]["activityId"]},
         },
@@ -783,7 +783,7 @@ def test_pointer_release_selection_exists_before_image_capture() -> None:
     response = _put(lens, revision=0, selection_value=selection(note=""))
 
     assert response["ok"] is True
-    assert response["version"] == 5
+    assert response["version"] == 6
     assert response["revision"] == 1
     assert response["payload"]["selection"]["label"] == "S1"
     assert _state(lens)["nextLabel"] == "S2"
@@ -942,6 +942,7 @@ def test_identifier_heavy_selections_fit_the_supported_selection_count() -> None
             output_cell_id=prefix + "界" * (80 - len(prefix)),
         )
         selection_value.pop("domHint")
+        selection_value["description"] = {"label": "Output"}
         response = _put(
             lens,
             revision=index,
@@ -1012,6 +1013,7 @@ def test_resolve_removes_selection_and_image_and_preserves_label_allocation() ->
     assert _state(lens)["currentSelectionId"] == "selection-2"
     assert [item["id"] for item in _selections(lens)] == ["selection-2"]
     assert _state(lens)["history"][0] == {
+        "description": {"label": "Cell cell-view"},
         "selectionId": "selection-1",
         "label": "S1",
         "note": "",
@@ -1059,7 +1061,7 @@ def test_resolve_emits_one_transient_resolution_receipt() -> None:
     event, buffers = lens.sent[-1]
     assert event == {
         "protocol": "marimo-lens.event",
-        "version": 5,
+        "version": 6,
         "type": "selection.resolved",
         "revision": 2,
         "payload": {
@@ -1129,7 +1131,22 @@ def test_resolve_commits_multiple_selections_atomically() -> None:
 def test_browser_reopens_addressed_selection_and_clears_history() -> None:
     lens = RecordingLens()
     selected = selection(note="Please align this label.")
-    _put(lens, revision=0, selection_value=selected)
+    description = {
+        "label": "Athletes",
+        "detail": "Browser aggregation",
+        "renderSource": {"path": "src/report.ts", "symbol": "summarize", "line": 12},
+    }
+    selected["description"] = description
+    assert _put(lens, revision=0, selection_value=selected)["ok"] is True
+    context = lens.context()
+    assert context.current is not None
+    assert context.current["description"] == description
+    assert "src/report.ts" in context.text
+    assert "client supplied" in context.text
+    edited = copy.deepcopy(selected)
+    edited["description"]["label"] = "Different result"
+    rejected = _put(lens, revision=1, selection_value=edited)
+    assert rejected["error"]["code"] == "selection_identity_changed"
     lens.resolve(
         selected["id"],
         expected_revision=1,
@@ -1149,7 +1166,9 @@ def test_browser_reopens_addressed_selection_and_clears_history() -> None:
     assert _state(lens)["history"][0]["summary"] == (
         "Aligned the label and verified the chart."
     )
+    assert _state(lens)["history"][0]["description"] == description
     restored = _selections(lens)[0]
+    assert restored["description"] == description
     assert restored["id"] == selected["id"]
     assert restored["label"] == selected["label"]
     assert restored["note"] == selected["note"]
@@ -1613,7 +1632,7 @@ def test_snapshot_get_returns_the_exact_stored_png() -> None:
     response, buffers = lens.sent[-1]
 
     assert response["ok"] is True
-    assert response["version"] == 5
+    assert response["version"] == 6
     assert response["payload"]["selectionId"] == "selection-1"
     assert (
         response["payload"]["snapshot"]["sha256"] == snapshot_metadata(data)["sha256"]
@@ -1710,7 +1729,7 @@ def _send(
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.command",
-            "version": 5,
+            "version": 6,
             "requestId": f"request-{len(lens.sent) + 1}",
             "type": command_type,
             "payload": payload,

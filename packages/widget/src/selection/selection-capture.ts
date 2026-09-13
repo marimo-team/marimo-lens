@@ -147,6 +147,7 @@ export class SelectionCapture {
         anchor: selection.anchor,
         output,
         detailElement,
+        context: selection.target.kind === "dom" ? this.#dom.captureContext(output) : undefined,
         signal,
       });
       signal.throwIfAborted();

@@ -1,27 +1,13 @@
 import type { DomHintBounds, SelectionAnchor } from "@marimo-lens/protocol";
 
-import { outputContentMetrics, parentElementAcrossShadow, relativeOutputBounds } from "./geometry";
+import { planSelectionCapture, isLargeOutput, type SelectionCaptureTarget } from "./capture-plan";
 import { throwIfCaptureAborted } from "./owner-realm";
-import { exceedsCaptureDimensions } from "./png";
 import { captureElementRaster, type RasterizeElement, resolveCaptureBackground } from "./raster";
 
-export type SelectionCaptureOptions = {
-  selectionId: string;
-  label: string;
-  anchor: SelectionAnchor;
-  output: HTMLElement;
-  detailElement?: Element;
-  signal?: AbortSignal;
-};
-
-type DetailEvidence = {
-  image: HTMLImageElement;
-  bounds: DomHintBounds;
-};
-
 export type SelectionEvidence = {
+  anchor: SelectionAnchor;
   overview: HTMLImageElement;
-  detail: DetailEvidence | null;
+  detail: { image: HTMLImageElement; bounds: DomHintBounds } | null;
   backgroundColor: string;
 };
 
@@ -31,29 +17,35 @@ export type OutputEvidence = {
   backgroundColor: string;
 };
 
-type DetailTarget = {
-  element: HTMLElement;
-  bounds: DomHintBounds;
-};
-
 export async function captureSelectionEvidence(
-  options: SelectionCaptureOptions,
-  backgroundColor = resolveCaptureBackground(options.output),
+  options: SelectionCaptureTarget,
+  signal?: AbortSignal,
   rasterize?: RasterizeElement,
 ): Promise<SelectionEvidence> {
-  const detailTarget = selectionDetailTarget(options);
-  const detail = detailTarget
-    ? await captureDetailEvidence(detailTarget, backgroundColor, options.signal, rasterize)
+  const plan = planSelectionCapture(options);
+  const backgroundColor = resolveCaptureBackground(plan.overview.element);
+  const detail = plan.detail
+    ? {
+        image: await captureElementRaster(
+          plan.detail.element,
+          backgroundColor,
+          false,
+          signal,
+          rasterize,
+        ),
+        bounds: plan.detail.bounds,
+      }
     : null;
-  throwIfCaptureAborted(options.signal, options.output.ownerDocument);
+  throwIfCaptureAborted(signal, options.output.ownerDocument);
   const overview = await captureElementRaster(
-    options.output,
+    plan.overview.element,
     backgroundColor,
     true,
-    options.signal,
+    signal,
     rasterize,
+    plan.overview.region,
   );
-  return { overview, detail, backgroundColor };
+  return { overview, detail, backgroundColor, anchor: plan.anchor };
 }
 
 export async function captureOutputEvidence(
@@ -68,76 +60,4 @@ export async function captureOutputEvidence(
     : null;
   const overview = await captureElementRaster(output, backgroundColor, true, signal, rasterize);
   return { overview, detail, backgroundColor };
-}
-
-export function detailCaptureElement(element: Element, output: HTMLElement): HTMLElement {
-  let current: Element = element;
-  let candidate = isHTMLElement(element) ? element : output;
-  while (current !== output) {
-    if (isHTMLElement(current)) {
-      candidate = current;
-      const rect = current.getBoundingClientRect();
-      if (rect.width >= 240 && rect.height >= 120) return current;
-    }
-    const parent = parentElementAcrossShadow(current);
-    if (!parent) break;
-    if (isScrollable(parent)) return candidate;
-    current = parent;
-  }
-  return candidate;
-}
-
-function selectionDetailTarget(options: SelectionCaptureOptions): DetailTarget | null {
-  if (!options.detailElement) return null;
-  const target =
-    options.detailElement === options.output
-      ? options.output
-      : detailCaptureElement(options.detailElement, options.output);
-  const needsDetail =
-    target === options.output
-      ? isLargeOutput(options.output)
-      : hasScrolledAncestor(target, options.output) || isLargeOutput(options.output);
-  if (!needsDetail) return null;
-  return {
-    element: target,
-    bounds: relativeOutputBounds(target, options.output),
-  };
-}
-
-async function captureDetailEvidence(
-  target: DetailTarget,
-  backgroundColor: string,
-  signal?: AbortSignal,
-  rasterize?: RasterizeElement,
-): Promise<DetailEvidence> {
-  return {
-    image: await captureElementRaster(target.element, backgroundColor, false, signal, rasterize),
-    bounds: target.bounds,
-  };
-}
-
-function hasScrolledAncestor(element: Element, output: HTMLElement): boolean {
-  let current: Element | null = parentElementAcrossShadow(element);
-  while (current && current !== output) {
-    if (isScrollable(current) && (current.scrollTop !== 0 || current.scrollLeft !== 0)) return true;
-    current = parentElementAcrossShadow(current);
-  }
-  return false;
-}
-
-function isLargeOutput(output: HTMLElement): boolean {
-  const metrics = outputContentMetrics(output);
-  return exceedsCaptureDimensions(metrics.width, metrics.height);
-}
-
-function isScrollable(element: Element): element is HTMLElement {
-  return (
-    isHTMLElement(element) &&
-    (element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth)
-  );
-}
-
-function isHTMLElement(element: Element): element is HTMLElement {
-  const window = element.ownerDocument.defaultView;
-  return window !== null && element instanceof window.HTMLElement;
 }

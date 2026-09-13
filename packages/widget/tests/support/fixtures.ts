@@ -7,6 +7,7 @@ export function selectionFixture(overrides: Partial<Selection> = {}): Selection 
     id: "selection-1",
     label: "S1",
     note: "Align this label",
+    description: { label: "Cell cell-1" },
     target: {
       kind: "notebook",
       cellIds: ["cell-1"],
@@ -35,6 +36,7 @@ export function addressedSelectionFixture(
     selectionId: "selection-1",
     label: "S1",
     note: "Align this label",
+    description: { label: "Cell cell-1" },
     target: {
       kind: "notebook",
       cellIds: ["cell-1"],

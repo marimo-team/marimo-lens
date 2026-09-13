@@ -44,7 +44,7 @@ export function useResolutionReceipt(options: ResolutionReceiptOptions): Resolut
       latestRevision = event.revision;
       const selectionIds = event.payload.selections.map(({ selectionId }) => selectionId);
       for (const selectionId of selectionIds) invalidateSnapshotCapture(selectionId);
-      const active = htmlElement(dom, dom.document.activeElement);
+      const active = htmlElement(dom, dom.activeElement);
       const activeSelectionId = focusedSelectionId(active);
       const focusedSelection =
         activeSelectionId !== null && selectionIds.includes(activeSelectionId)
@@ -119,8 +119,11 @@ export function useResolutionReceipt(options: ResolutionReceiptOptions): Resolut
     if (
       pendingFocus?.revision === queued.revision &&
       pendingFocus.element &&
-      (dom.document.activeElement === pendingFocus.element ||
-        (!pendingFocus.element.isConnected && dom.document.activeElement === dom.document.body))
+      (dom.activeElement === pendingFocus.element ||
+        (!pendingFocus.element.isConnected &&
+          (dom.activeElement === null ||
+            dom.activeElement === dom.document.body ||
+            dom.activeElement.matches("[data-marimo-lens-portal]"))))
     ) {
       focusSelectionOrDock(dom, state.currentSelectionId ?? pendingFocus.selectionId);
     }

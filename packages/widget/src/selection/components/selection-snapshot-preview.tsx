@@ -10,6 +10,7 @@ import type {
   SelectionSnapshotLoader,
 } from "@/selection/selection-snapshot-loader";
 
+import { useNotebookDom } from "@/notebook/notebook-dom";
 import {
   useAnchoredSurface,
   type AnchoredSurfaceAnchor,
@@ -44,6 +45,7 @@ export function SnapshotPreviewButton({
   variant = "label",
   snapshotLoader,
 }: SnapshotPreviewButtonProps) {
+  const dom = useNotebookDom();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const surfaceRef = useRef<HTMLDialogElement>(null);
@@ -96,10 +98,10 @@ export function SnapshotPreviewButton({
   const closeAndRestoreFocus = useCallback(() => {
     close();
     const trigger = triggerRef.current;
-    if (!trigger || trigger.ownerDocument.activeElement === trigger) return;
+    if (!trigger || dom.activeElement === trigger) return;
     suppressFocusOpen.current = true;
     trigger.focus({ preventScroll: true });
-  }, [close]);
+  }, [close, dom]);
 
   const show = useCallback(
     (nextMotion: "animate" | "instant") => {
@@ -140,7 +142,7 @@ export function SnapshotPreviewButton({
     const ownerDocument = wrapperRef.current?.ownerDocument;
     if (!ownerDocument) return undefined;
     const onPointerDown = (event: PointerEvent) => {
-      if (isNode(event.target, ownerDocument) && !wrapperRef.current?.contains(event.target)) {
+      if (!event.composedPath().includes(wrapperRef.current!)) {
         closeFromOutside();
       }
     };
@@ -232,10 +234,7 @@ export function SnapshotPreviewButton({
           }
           setPinned(true);
           show("animate");
-          if (
-            event.detail === 0 &&
-            event.currentTarget.ownerDocument.activeElement === event.currentTarget
-          ) {
+          if (event.detail === 0 && dom.activeElement === event.currentTarget) {
             event.currentTarget.ownerDocument.defaultView?.queueMicrotask(() => {
               wrapperRef.current
                 ?.querySelector<HTMLButtonElement>('[aria-label="Close preview"]')

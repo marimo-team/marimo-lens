@@ -293,5 +293,8 @@ function targetAnnouncement(target: TargetSurface, index: number, count: number)
 
 function eventTargetElement(event: Event, ownerDocument: Document): Element | null {
   const ownerWindow = ownerDocument.defaultView;
-  return ownerWindow && event.target instanceof ownerWindow.Element ? event.target : null;
+  return ownerWindow
+    ? (event.composedPath().find((item): item is Element => item instanceof ownerWindow.Element) ??
+        null)
+    : null;
 }

@@ -41,6 +41,10 @@ lens
 
 Press **Select**, click a point or drag a region, then add a note.
 
+Custom pages can publish [Lens client metadata](https://marimo-team.github.io/marimo-lens/concepts/targets#client-metadata)
+for notebook inputs, labels, rendering references, and image context. Native
+Marimo outputs remain selectable through their existing output cells.
+
 ## Connect an agent
 
 Lens works with agents that can execute Python in the live notebook kernel,

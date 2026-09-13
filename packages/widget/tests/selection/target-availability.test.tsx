@@ -195,7 +195,7 @@ describe("target availability", () => {
     vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
     const target = document.createElement("section");
     target.id = "summary";
-    target.dataset.runtimeCellId = "cell-1";
+    target.dataset.marimoLensCellId = "cell-1";
     target.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
     document.body.appendChild(target);
     const selection = selectionFixture({
@@ -222,7 +222,7 @@ describe("target availability", () => {
     expect(container.textContent).toBe("1");
 
     await mutateDocument(() => {
-      target.dataset.runtimeCellId = "cell-2";
+      target.dataset.marimoLensCellId = "cell-2";
     });
     expect(container.textContent).toBe("0");
   });

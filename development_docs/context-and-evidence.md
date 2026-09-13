@@ -158,6 +158,16 @@ Selection image capture:
 6. Encodes and hashes a bounded PNG.
 7. Sends metadata and one binary buffer to Python.
 
+`planSelectionCapture()` reads geometry and produces a capture element, crop,
+optional detail target, and transformed anchor. Rasterization consumes that plan.
+A client can mark a preferred context container with `data-marimo-lens-context`.
+For small DOM targets with automatic context, capture walks to a nearby containing block, stopping at
+clipping containers, document roots, or a block larger than 2,000 × 720 CSS pixels.
+Context crops prefer 640 × 480 pixels, with at least 320 × 120 pixels of canvas.
+A selected rectangle expands that crop to retain its complete extent, then the
+normal PNG bounds govern downscaling. Anchor coordinates are translated for this image and remain
+unchanged in selection state. Notebook output capture retains its output boundary.
+
 The `capturedAt` metadata value records when capture starts. It is not a
 completion timestamp.
 
@@ -193,7 +203,8 @@ the request stalled.
 Lens handles notebook source, rendered output, DOM text, control values, and
 captured pixels. Treat all of them as notebook data.
 
-- A configured DOM root authorizes selection and capture inside that root.
+- A configured DOM root owns selection identity. Small roots can include bounded
+  surrounding pixels in their image while source context stays tied to the root.
 - Open shadow-root content can be inspected and captured with its host target.
 - Same-origin iframe documents can become interaction and capture surfaces.
 - Cross-origin iframe bodies cannot be inspected or rasterized.

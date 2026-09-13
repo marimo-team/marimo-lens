@@ -15,10 +15,10 @@ afterEach(() => document.body.replaceChildren());
 describe("selection targets", () => {
   test("picks an individual metric field ahead of its summary row", () => {
     const row = visible(document.createElement("section"));
-    row.dataset.marimoSources = "summary";
+    row.dataset.marimoLensInputs = "summary";
     const summary = document.createElement("span");
     summary.id = "summary";
-    summary.dataset.runtimeCellId = "producer";
+    summary.dataset.marimoLensCellId = "producer";
     document.body.append(summary, row);
     const targets = ["events", "felt_reports"].map((field) => {
       const card = visible(document.createElement("article"));
@@ -26,9 +26,8 @@ describe("selection targets", () => {
       value.textContent = "42";
       const input = document.createElement("span");
       input.hidden = true;
-      input.dataset.runtimeCellId = "producer";
-      input.dataset.marimoProjectionKind = "value";
-      input.dataset.marimoProjectionTarget = `summary.${field}`;
+      input.dataset.marimoLensCellId = "producer";
+      input.dataset.marimoLensSelector = `summary.${field}`;
       card.append(input, value);
       row.append(card);
       return targetFromElement(value, "section, article")!;
@@ -46,13 +45,12 @@ describe("selection targets", () => {
     region.id = "revenue";
     const input = document.createElement("span");
     input.hidden = true;
-    input.setAttribute("mo-value", "summary.revenue");
-    input.dataset.runtimeCellId = "summary-cell";
-    input.dataset.marimoProjectionKind = "value";
-    input.dataset.marimoProjectionTarget = "summary.revenue";
+
+    input.dataset.marimoLensCellId = "summary-cell";
+    input.dataset.marimoLensSelector = "summary.revenue";
     region.append(input);
     document.body.append(region);
-    const selector = ":has(> [mo-value][hidden][data-runtime-cell-id])";
+    const selector = ":has(> [hidden][data-marimo-lens-cell-id])";
     const target = targetFromElement(region, selector)!.target;
     expect(target).toMatchObject({
       cellIds: ["summary-cell"],
@@ -70,20 +68,19 @@ describe("selection targets", () => {
 
   test("resolves explicit shared inputs without including unrelated nested projections", () => {
     const region = visible(document.createElement("section"));
-    region.dataset.marimoSources = "rows totals rows";
+    region.dataset.marimoLensInputs = "rows totals rows";
     const input = (id: string, cell: string, target: string) => {
       const host = document.createElement("span");
       host.id = id;
-      host.dataset.runtimeCellId = cell;
-      host.dataset.marimoProjectionKind = "value";
-      host.dataset.marimoProjectionTarget = target;
+      host.dataset.marimoLensCellId = cell;
+      host.dataset.marimoLensSelector = target;
       return host;
     };
     const rows = input("rows", "data-cell", "rows");
     const totals = input("totals", "summary-cell", "summary.total");
     region.append(input("unrelated", "control-cell", "control"));
     document.body.append(region, rows, totals);
-    const selector = "[data-marimo-sources]";
+    const selector = "[data-marimo-lens-inputs]";
     const target = targetFromElement(region, selector)!.target;
     expect(target).toMatchObject({
       cellIds: ["data-cell", "summary-cell"],
@@ -96,7 +93,7 @@ describe("selection targets", () => {
     const replacement = input("totals", "summary-cell", "summary.total");
     totals.replaceWith(replacement);
     expect(getTargetSurface(document, target, selector)?.element).toBe(region);
-    replacement.dataset.marimoProjectionTarget = "summary.cost";
+    replacement.dataset.marimoLensSelector = "summary.cost";
     expect(getTargetSurface(document, target, selector)).toBeNull();
     rows.remove();
     expect(targetFromElement(region, selector)).toBeNull();
@@ -107,12 +104,12 @@ describe("selection targets", () => {
     (reference) => {
       const region = visible(document.createElement("section"));
       region.id = "region";
-      region.dataset.marimoSources = reference;
+      region.dataset.marimoLensInputs = reference;
       document.body.innerHTML =
-        '<span id="duplicate" data-runtime-cell-id="a"></span>' +
-        '<span id="duplicate" data-runtime-cell-id="b"></span><span id="unbound" mo-value="rows"></span>';
+        '<span id="duplicate" data-marimo-lens-cell-id="a"></span>' +
+        '<span id="duplicate" data-marimo-lens-cell-id="b"></span><span id="unbound" data-client-value="rows"></span>';
       document.body.append(region);
-      expect(targetFromElement(region, "[data-marimo-sources]")).toBeNull();
+      expect(targetFromElement(region, "[data-marimo-lens-inputs]")).toBeNull();
     },
   );
 
@@ -189,7 +186,7 @@ describe("selection targets", () => {
     const host = visible(document.createElement("section"));
     host.id = "summary-host";
     host.dataset.feedbackTarget = "";
-    host.dataset.runtimeCellId = "producer-cell";
+    host.dataset.marimoLensCellId = "producer-cell";
     const synthetic = visible(document.createElement("div"));
     synthetic.id = "output-synthetic-cell";
     const mark = document.createElement("span");
@@ -233,9 +230,9 @@ describe("selection targets", () => {
     section.dataset.feedbackTarget = "";
     const heading = document.createElement("h2");
     const total = document.createElement("strong");
-    total.dataset.runtimeCellId = "report-cell";
+    total.dataset.marimoLensCellId = "report-cell";
     const chart = document.createElement("div");
-    chart.dataset.runtimeCellId = "chart-cell";
+    chart.dataset.marimoLensCellId = "chart-cell";
     section.append(heading, total, chart);
     document.body.appendChild(section);
 
@@ -259,9 +256,9 @@ describe("selection targets", () => {
     section.id = "forecast-summary";
     section.dataset.feedbackTarget = "";
     const first = document.createElement("span");
-    first.dataset.runtimeCellId = "cell-a";
+    first.dataset.marimoLensCellId = "cell-a";
     const second = document.createElement("span");
-    second.dataset.runtimeCellId = "cell-b";
+    second.dataset.marimoLensCellId = "cell-b";
     section.append(first, second);
     document.body.appendChild(section);
     const selector = "[data-feedback-target]";
@@ -276,15 +273,15 @@ describe("selection targets", () => {
     const section = visible(document.createElement("section"));
     section.id = "forecast-summary";
     section.dataset.feedbackTarget = "";
-    section.dataset.runtimeCellId = "report-cell";
+    section.dataset.marimoLensCellId = "report-cell";
     document.body.appendChild(section);
     const selector = "[data-feedback-target]";
     const target = targetFromElement(section, selector)!.target;
 
     expect(getTargetSurface(document, target, selector)?.element).toBe(section);
-    section.dataset.runtimeCellId = "next-cell";
+    section.dataset.marimoLensCellId = "next-cell";
     expect(getTargetSurface(document, target, selector)).toBeNull();
-    section.dataset.runtimeCellId = "report-cell";
+    section.dataset.marimoLensCellId = "report-cell";
     delete section.dataset.feedbackTarget;
     expect(getTargetSurface(document, target, selector)).toBeNull();
   });
@@ -384,7 +381,7 @@ describe("selection targets", () => {
     section.dataset.feedbackTarget = "";
     for (let index = 0; index < 65; index += 1) {
       const producer = document.createElement("span");
-      producer.dataset.runtimeCellId = `cell-${index}`;
+      producer.dataset.marimoLensCellId = `cell-${index}`;
       section.appendChild(producer);
     }
     document.body.appendChild(section);
@@ -396,7 +393,7 @@ describe("selection targets", () => {
   test("skips roots with producer IDs outside the protocol bound", () => {
     const section = visible(document.createElement("section"));
     section.dataset.feedbackTarget = "";
-    section.dataset.runtimeCellId = "x".repeat(129);
+    section.dataset.marimoLensCellId = "x".repeat(129);
     document.body.appendChild(section);
 
     expect(targetFromElement(section, "[data-feedback-target]")).toBeNull();

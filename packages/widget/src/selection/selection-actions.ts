@@ -24,6 +24,7 @@ import type { SelectionSnapshotCapture } from "@/selection/selection-capture";
 import type { SelectionMotion, UiAction } from "@/selection/state";
 
 import { LensProtocolError } from "@/anywidget/client";
+import { targetInfo } from "@/notebook/target-info";
 import { anchorToViewport } from "@/selection/anchor";
 import { waitForRevision } from "@/selection/conflict";
 import { collectDomHint } from "@/selection/dom-hint";
@@ -160,6 +161,7 @@ export function useSelectionActions(options: {
         createdAt: new dom.window.Date().toISOString(),
         anchor,
         domHint: collectDomHint(detailElement, output),
+        description: targetInfo({ key: JSON.stringify(target), target, element: output }),
         snapshot: { status: "pending" },
       };
       const captureJob = selectionCapture.reserve(selection.id);

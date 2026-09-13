@@ -1,6 +1,6 @@
 import {
-  TARGET_LABEL_ATTRIBUTE,
-  TARGET_DETAIL_ATTRIBUTE,
+  TARGET_METADATA_ATTRIBUTES,
+  CAPTURE_CONTEXT_ATTRIBUTE,
   type SelectionTarget,
   type TargetSelector,
 } from "@marimo-lens/protocol";
@@ -34,6 +34,7 @@ import {
 type LayoutListener = () => void;
 
 const PAINT_FALLBACK_MS = 100;
+const TARGET_ATTRIBUTES = new Set<string>([...TARGET_METADATA_ATTRIBUTES, "id"]);
 
 export class NotebookDomAdapter {
   readonly document: Document;
@@ -41,6 +42,7 @@ export class NotebookDomAdapter {
 
   readonly #layoutListeners = new Set<LayoutListener>();
   #selector: TargetSelector = null;
+  #uiRoot: ShadowRoot | null = null;
   #stopLayoutObserver: (() => void) | null = null;
 
   constructor(ownerDocument: Document) {
@@ -50,8 +52,24 @@ export class NotebookDomAdapter {
     this.window = ownerWindow;
   }
 
-  get portalTarget(): HTMLElement {
-    return this.document.body;
+  get uiRoot(): Document | ShadowRoot {
+    return this.#uiRoot ?? this.document;
+  }
+
+  registerUiRoot(root: ShadowRoot): () => void {
+    if (root.ownerDocument !== this.document || this.#uiRoot) {
+      throw new Error("Lens UI requires one root in its owning document");
+    }
+    this.#uiRoot = root;
+    return () => {
+      if (this.#uiRoot === root) this.#uiRoot = null;
+    };
+  }
+
+  get activeElement(): Element | null {
+    let element = this.document.activeElement;
+    while (element?.shadowRoot?.activeElement) element = element.shadowRoot.activeElement;
+    return element;
   }
 
   registerHost(host: Element): () => void {
@@ -71,6 +89,14 @@ export class NotebookDomAdapter {
 
   targetFromElement(element: Element | null, selector: TargetSelector): TargetSurface | null {
     return targetFromElement(element, selector);
+  }
+
+  captureContext(element: HTMLElement): HTMLElement | "auto" {
+    const context = element.closest<HTMLElement>(`[${CAPTURE_CONTEXT_ATTRIBUTE}]`);
+    if (!context) return "auto";
+    return context === this.document.body || context === this.document.documentElement
+      ? element
+      : context;
   }
 
   getTarget(target: SelectionTarget, selector: TargetSelector): TargetSurface | null {
@@ -210,18 +236,7 @@ export class NotebookDomAdapter {
             records.length === 0 ||
             records.some((record) => {
               if (record.type !== "attributes") return true;
-              if (
-                [
-                  TARGET_LABEL_ATTRIBUTE,
-                  TARGET_DETAIL_ATTRIBUTE,
-                  "id",
-                  "data-marimo-sources",
-                  "data-runtime-cell-id",
-                  "data-marimo-projection-kind",
-                  "data-marimo-projection-target",
-                ].includes(record.attributeName ?? "")
-              )
-                return true;
+              if (TARGET_ATTRIBUTES.has(record.attributeName ?? "")) return true;
               const target = record.target;
               if (!(target instanceof this.window.HTMLElement)) return false;
               if (target.closest("[data-marimo-lens-ui]")) return false;

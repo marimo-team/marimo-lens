@@ -119,86 +119,98 @@ HTML, scripts, links, and custom presentation are not interpreted. Updates appea
 without moving the pointer. Keyboard target navigation announces the same text.
 
 Studio supplies these attributes from resolved projections. Regions linked with
-`data-marimo-sources` inherit their source hosts' labels; an explicit label on the
+`data-marimo-lens-inputs` inherit their source hosts' labels; an explicit label on the
 region takes precedence; source labels remain as secondary information unless
 the region supplies its own detail. Without consumer text, Lens uses available value
 selectors, accessible names, headings, or cell IDs. Display labels do not grant
 notebook access, change target identity, or establish provenance.
 
-## Notebook sources
+After selection, labels retain the captured description, such as “Revenue” or
+`athlete_summary.athletes`. Hover over the target label in the note editor or
+selection list to see its producing cell IDs and rendering reference. The same
+sources remain available in `Lens.context()` through note edits and History.
 
-Lens reads the resolved projection metadata on Studio's `mo-value`,
-`marimo-output`, and `marimo-cell` hosts. It retains producing cells and exact
-value selectors in `target.sources`, distinguishing values from the same cell.
+## Client metadata
 
-For custom JS rendering, put the existing hidden value hosts inside the selected
-region, or reference their unique IDs explicitly:
-
-```html
-<span id="revenue-data" hidden mo-value="summary.revenue"></span>
-<section data-marimo-sources="revenue-data">...</section>
-```
-
-Include `[data-marimo-sources]` in your `dom_selector`; Studio's
-`STUDIO_RESULT_SELECTOR` already includes it. The annotation is a space-separated
-list of projection host IDs in the same document and declares the complete input
-set. References cannot chain through another annotated region. Missing,
-duplicate, or unbound references make the region unavailable. Without an
-annotation, Lens collects sources inside the region. A target carries at most
-64 sources; value selectors accept up to 4,096 UTF-16 code units.
-
-Keep references current when component inputs change. Set `aria-busy="true"`
-during asynchronous rendering and clear it on completion; busy regions are
-unavailable for selection and capture. This declares notebook dependencies; it
-does not infer JS dataflow or record historical kernel values. Updating a value
-preserves attention, while changing its selector or producing cell detaches it.
-
-## Producing cells
-
-A configured DOM target can project values from several notebook cells. The host
-marks those producing cells with `data-runtime-cell-id` on the target or its descendants.
+Custom clients publish resolved notebook sources through Lens-owned attributes.
+Lens derives Python code, graph dependencies, and controls from those cell IDs
+in the active Marimo runtime. A value selector is descriptive evidence, not an
+expression that Lens executes.
 
 ```html
-<section class="lens-panel" data-runtime-cell-id="chart-cell">
-  <div data-runtime-cell-id="filter-cell">Region: Europe</div>
-  <div id="chart">Monthly revenue chart</div>
+<span
+  id="revenue-data"
+  hidden
+  data-marimo-lens-cell-id="summary-cell"
+  data-marimo-lens-selector="summary.revenue"
+></span>
+<section
+  id="revenue-card"
+  data-marimo-lens-inputs="revenue-data"
+  data-marimo-lens-label="Revenue"
+  data-marimo-lens-detail="Monthly total"
+  data-marimo-lens-render-source='{"path":"src/report.ts","symbol":"revenueCard"}'
+  data-marimo-lens-context
+>
+  <!-- The client renders the result. -->
 </section>
 ```
 
-```python
-lens = Lens(dom_selector=".lens-panel")
-lens
-```
+Configure `Lens(dom_selector="[data-marimo-lens-inputs]")` for these regions.
+Clients resolve `summary-cell` from their notebook integration at runtime.
+Studio publishes the same source attributes on its mounted projections.
 
-Lens reads every non-empty `data-runtime-cell-id`, removes duplicates, and stores
-the IDs in sorted order. Their order has no meaning. The producing-cell ID set
-becomes part of the target identity, so adding or removing producing-cell
-metadata detaches an existing selection until the original set returns.
+| Attribute                        | Meaning                                                                             |
+| -------------------------------- | ----------------------------------------------------------------------------------- |
+| `data-marimo-lens-cell-id`       | One resolved producing cell ID.                                                     |
+| `data-marimo-lens-selector`      | Optional symbolic value selector from that cell.                                    |
+| `data-marimo-lens-inputs`        | Whitespace-separated IDs of source elements in the same document.                   |
+| `data-marimo-lens-label`         | Display name, bounded to 256 UTF-16 units.                                          |
+| `data-marimo-lens-detail`        | Additional description, bounded to 512 UTF-16 units.                                |
+| `data-marimo-lens-render-source` | JSON rendering reference with a `path` and optional `line`, `column`, and `symbol`. |
+| `data-marimo-lens-context`       | Marks a containing element as the preferred image context.                          |
 
-A configured target with no producing-cell metadata is still selectable. Its context
-contains the target, point or region, note, DOM hint, and available selection
-image. It has no cell-backed graph context.
+A source element declares its complete notebook input. A container without its
+own source declaration collects its nested source elements. An explicit
+`data-marimo-lens-inputs` list declares the complete input set for that region.
+Source elements are opaque during collection, so nested renderer internals do
+not add unrelated dependencies.
 
-## Documents and reattachment
+Input IDs must be unique and resolve to elements with bound cell IDs. Missing,
+ambiguous, empty, or chained input references make the target unavailable.
+Targets retain at most 64 sources. Selectors accept up to 4,096 UTF-16 units.
+An optional selector must be nonempty when present.
 
-Every target belongs to one live browser document. Lens stores both an opaque
-document ID and the current document path to prevent a selector or cell ID from
-attaching to a similar element in another document.
+A new DOM element with the same unique ID and source signature can restore a
+selection. Changing the value selector or producing cells makes the original
+target unavailable. Changing its label or render-source reference preserves
+identity and applies to future selections.
 
-Reattachment requires the original live document:
+## Captured descriptions and rendering references
 
-| Target kind    | Reattachment requirements                                                                                                                       |
-| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Notebook       | Same document ID, same document path, same cell ID, and a visible output                                                                        |
-| Configured DOM | Same document ID, same document path, same exact selector, continued `dom_selector` eligibility, same producing-cell ID set, and a visible root |
+At selection creation, Lens records the resolved label, detail, and optional
+render-source reference in `selection.description`. This bounded description
+appears in the editor, Open list, History, and agent context, and survives reopen.
+It records what the person selected even if the live page later changes its label.
 
-A page reload creates a new browser document. Make a new selection after reload
-when an older target remains unavailable.
+A rendering reference describes client-owned source separately from the
+notebook inputs. Its path is interpreted within the client project and is
+bounded to 1,024 UTF-16 units. Line and column are positive safe integers, and
+symbol is bounded to 256 UTF-16 units. Lens carries the reference as client-supplied
+evidence. It does not read that file or infer browser dataflow. Malformed
+render-source metadata is omitted while valid labels and notebook inputs remain
+available.
 
-An unavailable selection stays in **Open** with its note and any selection image
-whose capture previously succeeded. Its marker returns when the target satisfies
-the reattachment requirements. You can also edit the note, inspect an available
-image, or remove the selection while the target is unavailable.
+## Capture context
+
+For DOM targets, the closest ancestor carrying `data-marimo-lens-context`
+supplies the preferred image container. Place it on the target itself to keep
+capture within that target. Otherwise Lens uses its bounded context heuristics.
+The context container must belong to the same document. Marking the document
+body or root keeps capture within the selected element.
+
+Capture plans keep the original target and normalized attention independent
+from the image crop. Native notebook selections retain their output boundary.
 
 ## Shadow roots and iframes
 
@@ -223,8 +235,7 @@ Host integrations should preserve these inputs:
 
 1. Give every configured root a stable and unique element ID when possible.
 2. Keep `dom_selector` focused on the roots that should own selections.
-3. Reference existing projections with `data-marimo-sources`. Cell-only integrations
-   can attach `data-runtime-cell-id` to configured roots or their descendants.
+3. Publish resolved sources and use `data-marimo-lens-inputs` for composed regions.
 4. Keep a target visible with non-zero rendered dimensions while it is
    selectable.
 5. Use `data-marimo-lens-output-cell-id="<cell-id>"` when a host exposes a

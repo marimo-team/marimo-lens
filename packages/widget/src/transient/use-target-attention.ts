@@ -57,7 +57,7 @@ export function useTargetAttention(
     for (const event of ready) {
       const locator = resolveTarget(event.payload.address, state, selector, dom);
       if (!locator) continue;
-      const active = dom.document.activeElement;
+      const active = dom.activeElement;
       if (
         active instanceof dom.window.HTMLElement &&
         active.closest("[data-marimo-lens-resolution-receipt]")

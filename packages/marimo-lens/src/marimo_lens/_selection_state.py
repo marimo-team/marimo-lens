@@ -23,7 +23,7 @@ from ._protocol_models import (
 )
 from ._references import validate_reference_capacity
 
-_IMMUTABLE_SELECTION_FIELDS = ("label", "target", "createdAt")
+_IMMUTABLE_SELECTION_FIELDS = ("label", "target", "createdAt", "description")
 MAX_SELECTION_STATE_BYTES = 48_000
 MAX_HISTORY_STATE_BYTES = 64_000
 
@@ -623,6 +623,7 @@ def reopen_selection(
         "target": _thaw(receipt["target"]),
         "createdAt": receipt["createdAt"],
         "anchor": _thaw(receipt["anchor"]),
+        "description": _thaw(receipt["description"]),
         "snapshot": {"status": "pending"},
         "previousResolution": {
             "addressedAt": receipt["addressedAt"],
@@ -823,6 +824,7 @@ def _addressed_selection(
         "createdAt": record.selection["createdAt"],
         "addressedAt": addressed_at,
         "anchor": _thaw(record.selection["anchor"]),
+        "description": _thaw(record.selection["description"]),
         "resolutionRevision": resolution_revision,
     }
     dom_hint = record.selection.get("domHint")

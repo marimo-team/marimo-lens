@@ -25,14 +25,14 @@ describe("selection overlay", () => {
     const target = document.createElement("section");
     target.id = "summary";
     target.dataset.feedbackTarget = "";
-    target.dataset.runtimeCellId = "cell-1";
+    target.dataset.marimoLensCellId = "cell-1";
     target.getBoundingClientRect = () => new DOMRect(20, 30, 400, 240);
     document.body.appendChild(target);
     const selector = "[data-feedback-target]";
     const activeTarget = targetFromElement(target, selector);
     expect(activeTarget).not.toBeNull();
 
-    target.dataset.runtimeCellId = "cell-2";
+    target.dataset.marimoLensCellId = "cell-2";
     renderOverlay([], null, {
       selector,
       workflow: { mode: "armed", activeTarget: activeTarget! },

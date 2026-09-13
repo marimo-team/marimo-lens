@@ -252,14 +252,17 @@ test("custom regions retain symbolic sources through kernel context and reject r
     const host = document.createElement("span");
     host.id = "visibility-input";
     host.hidden = true;
-    host.dataset.runtimeCellId = id;
-    host.dataset.marimoProjectionKind = "value";
-    host.dataset.marimoProjectionTarget = "show_revenue.value";
+    host.dataset.marimoLensCellId = id;
+    host.dataset.marimoLensSelector = "show_revenue.value";
     host.dataset.marimoLensLabel = "show_revenue.value";
     document.body.append(host);
     const region = document.getElementById("revenue-chart")!;
-    region.setAttribute("data-marimo-sources", host.id);
+    region.setAttribute("data-marimo-lens-inputs", host.id);
     region.setAttribute("data-marimo-lens-label", "Revenue visibility");
+    region.setAttribute(
+      "data-marimo-lens-render-source",
+      JSON.stringify({ path: "src/report.ts", symbol: "revenueCard", line: 12 }),
+    );
     return id;
   });
   await page.getByRole("button", { name: "Select a target", exact: true }).click();
@@ -282,14 +285,45 @@ test("custom regions retain symbolic sources through kernel context and reject r
       },
       cells: [{ id: cellId, status: "available" }],
       snapshot: { status: "available" },
+      description: {
+        label: "Revenue visibility",
+        detail: "Visibility control",
+        renderSource: { path: "src/report.ts", symbol: "revenueCard", line: 12 },
+      },
     },
   ]);
   expect(captured.text).toContain("show_revenue.value");
+  expect(captured.text).toContain("mo.ui.checkbox");
+  expect(captured.text).toContain("src/report.ts");
+  await page
+    .locator("#revenue-chart")
+    .evaluate((element) => element.setAttribute("data-marimo-lens-label", "Updated label"));
   await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
   await expect(page.getByRole("button", { name: /Current selection S1,/ })).toBeVisible();
-  // The input is outside the selected region: its mutation must invalidate attention itself.
+  await expect(page.locator(".ml-selection-list__details small")).toContainText(
+    "Revenue visibility",
+  );
+  await expect(page.locator(".ml-selection-list__details small")).toHaveAttribute(
+    "title",
+    new RegExp(`show_revenue.value.*Cell ${cellId}`),
+  );
+  await page
+    .locator("#visibility-input")
+    .evaluate((element) => element.replaceWith(element.cloneNode(true)));
+  await expect(
+    page.getByRole("button", { name: /Current selection S1,.*target unavailable/ }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Close selections" }).click();
+  await runAction(page, "Resolve");
+  await page.getByRole("button", { name: "Open selections, 0 open, 1 in history" }).click();
+  await expect(page.locator(".ml-history-list__target")).toContainText("Revenue visibility");
+  await page.getByRole("button", { name: "Reopen S1", exact: true }).click();
+  await expect(page.locator(".ml-selection-list__details small")).toContainText(
+    "Revenue visibility",
+  );
+  // A changed input signature invalidates the target even when its element stays mounted.
   await page.locator("#visibility-input").evaluate((host) => {
-    host.setAttribute("data-marimo-projection-target", "target_mode.value");
+    host.setAttribute("data-marimo-lens-selector", "target_mode.value");
   });
   await expect(
     page.getByRole("button", { name: /Current selection S1,.*target unavailable/ }),
@@ -393,4 +427,52 @@ test("target picking shows consumer labels at the element edge without intercept
   await page.mouse.click(overlap!.x + overlap!.width / 2, overlap!.y + overlap!.height / 2);
   await expect(page.getByRole("dialog", { name: /Add note for/ })).toBeVisible();
   await expect(label).toBeHidden();
+});
+
+test("Lens controls retain their appearance and keyboard behavior under page styles", async ({
+  page,
+}, testInfo) => {
+  const select = page.getByRole("button", { name: "Select a target", exact: true });
+  const styleOf = () =>
+    select.evaluate((button) => {
+      const style = getComputedStyle(button);
+      return {
+        font: style.font,
+        color: style.color,
+        background: style.backgroundColor,
+        padding: style.padding,
+        height: style.height,
+      };
+    });
+  const baseline = await styleOf();
+  await page.addStyleTag({
+    content: `
+    :root { --muted: magenta; --foreground: lime; --background: red; }
+    body { font: italic 48px serif; letter-spacing: 12px; text-transform: uppercase; }
+    button, textarea { background: magenta !important; color: lime !important; font: italic 40px serif !important; padding: 40px !important; }
+    header, footer { background: black !important; padding: 60px !important; }
+    dialog { width: 90vw !important; border: 20px solid red !important; }
+  `,
+  });
+  expect(await styleOf()).toEqual(baseline);
+  await selectOutput(page, "point", "S1", "Scoped controls");
+  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+  await page.getByRole("button", { name: "Edit note for S1" }).click();
+  const editor = page.getByRole("dialog", { name: /Edit note for S1/ });
+  await expectInsideViewport(page, editor);
+  const note = page.getByRole("textbox", { name: "Note for selection S1" });
+  await expect(note).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
+  await expect(editor.getByRole("button", { name: "Done", exact: true })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(note).toBeFocused();
+  expect(await note.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
+    "rgb(255, 0, 255)",
+  );
+  expect(
+    await editor.locator("footer").evaluate((element) => getComputedStyle(element).padding),
+  ).toBe("0px");
+  await screenshot(page, testInfo, "isolated-lens-controls");
+  await page.keyboard.press("Escape");
+  await expect(editor).toBeHidden();
 });

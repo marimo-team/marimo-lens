@@ -1,16 +1,19 @@
 import { boundedUtf16, parseErrorCause } from "@marimo-lens/protocol";
 
 import type { CapturedSnapshot, CaptureResult } from "../types";
+import type { SelectionCaptureTarget } from "./capture-plan";
 import type { RasterizeElement } from "./raster";
 
 import { composeOutputEvidence, composeSelectionEvidence } from "./evidence-layout";
-import {
-  captureOutputEvidence,
-  captureSelectionEvidence,
-  type SelectionCaptureOptions,
-} from "./evidence-source";
+import { captureOutputEvidence, captureSelectionEvidence } from "./evidence-source";
 import { isCaptureAbort, ownerWindow, throwIfCaptureAborted } from "./owner-realm";
 import { encodePng } from "./png";
+
+type SelectionCaptureOptions = SelectionCaptureTarget & {
+  selectionId: string;
+  label: string;
+  signal?: AbortSignal;
+};
 
 type OutputCaptureOptions = {
   imageId: string;
@@ -76,11 +79,10 @@ async function captureSelectionSnapshotWith(
   const capturedAt = new (ownerWindow(ownerDocument).Date)().toISOString();
   try {
     throwIfCaptureAborted(options.signal, ownerDocument);
-    const evidence = await captureSelectionEvidence(options, undefined, rasterize);
+    const evidence = await captureSelectionEvidence(options, options.signal, rasterize);
     throwIfCaptureAborted(options.signal, ownerDocument);
     const canvas = composeSelectionEvidence({
       ownerDocument,
-      anchor: options.anchor,
       label: options.label,
       ...evidence,
     });

@@ -1,8 +1,9 @@
 # Browser and host
 
 The widget locates notebook outputs and configured DOM roots as targets owned
-by one browser document. It uses the same resolved surface for selection,
-availability, annotated capture, and layout observation.
+by one browser document. It uses the same resolved surface for selection, availability, and layout
+observation. Image capture can include a bounded surrounding region for a small
+DOM target.
 
 Python receives validated target records. All
 [Document Object Model](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model)
@@ -38,13 +39,12 @@ A configured root:
 - Must be an `HTMLElement` in the document light DOM.
 - Must be visible and distinct from Lens UI or a Lens host.
 - Uses a unique authored ID or a generated element-lifetime locator.
-- Infers producing cells from its own and nested `data-runtime-cell-id`
-  attributes.
-- Reads resolved Studio projection kind and target metadata for exact value selectors.
-- Resolves `data-marimo-sources` as a bounded list of unique projection host IDs
+- Reads producing cells from declared `data-marimo-lens-cell-id` source elements.
+- Reads `data-marimo-lens-selector` for exact symbolic value selectors.
+- Resolves `data-marimo-lens-inputs` as a bounded list of unique source element IDs
   in the same document. An explicit region owns its complete input set;
-  otherwise Lens collects contained projections, treating native output subtrees
-  as opaque. Missing, duplicate, unbound, or chained references are unavailable.
+  otherwise Lens collects contained source elements, treating each source as
+  opaque. Missing, duplicate, unbound, or chained references are unavailable.
 - Skips regions with an `aria-busy="true"` ancestor or on the region itself.
 - Stores inferred IDs as a sorted unique set.
 
@@ -63,9 +63,8 @@ unavailable. The target is revalidated before captured image bytes are committed
 Each `target.sources` entry has `cellId` and `selector`. `selector: null` identifies
 a cell output or generic cell-only metadata. Sources are evidence, not permission
 to read or mutate the kernel. The transport preserves them in selections,
-context, and History. No runtime identities or value revisions are copied from
-Studio: document ownership scopes the target, and current notebook graph context
-is inspected separately from the captured image.
+context, and History. Document ownership scopes the target, and Python inspects
+current notebook graph context separately from the captured image.
 
 Stable element IDs support remountable targets. Unkeyed elements receive an
 element-lifetime locator, so replacing or reordering an unrelated sibling cannot
@@ -76,14 +75,18 @@ silently redirect a selection.
 `@marimo-lens/protocol` defines `TargetInfo` (`label`, optional `detail`) and its
 attribute names. The notebook adapter reads consumer text, source-host references,
 and native fallbacks. The selection overlay renders a compact, non-interactive
-label attached to the active target, clamped to the viewport. This presentation
-exists only in the armed workflow; it creates no Python state or transport fields.
+label attached to the active target, clamped to the viewport. The live indicator exists in the armed workflow. Selection creation snapshots
+the same description into the protocol for Python state, History, and context.
 
 Consumers such as Studio publish the attributes. Lens's presentation has no
 framework or Studio-specific knowledge. The existing layout observer refreshes
 labels after metadata changes, scrolling, and resize. Keyboard navigation uses
 the same label model for announcements. Selection identity is independent of
 consumer display text.
+
+Selection descriptions stay separate from target identity. Hover text combines
+the captured detail and render-source reference with `target.sources`.
+The document locator stays in agent context. The source signature controls reattachment.
 
 ## Target resolution
 
@@ -148,6 +151,17 @@ Keep target discovery in `notebook/selection-target.ts`, canonical output
 discovery in `notebook/output-root*.ts`, and document operations in
 `notebook-dom.tsx`. A feature should not bypass these paths with an unrelated
 query or ambient global.
+
+## UI style isolation
+
+The active UI lives in an open shadow root under the owning document body.
+The shadow stylesheet resets inherited typography and sets the color scheme.
+Lens consumes Marimo's Slate palette tokens, with local light and dark defaults.
+Theme changes on the body and document element update the shadow host.
+Document-level keyboard handling reads composed event paths, and focus restoration
+uses the explicitly registered UI root and follows its active element.
+`createLensSurface()` owns the host, theme observer, shared document styles,
+and disposal. The portal registers that root with `NotebookDomAdapter`.
 
 ## Browser view ownership
 

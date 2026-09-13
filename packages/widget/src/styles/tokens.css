@@ -1,16 +1,18 @@
 .marimo_lens {
-  --ml-surface: var(--popover, var(--background, #ffffff));
-  --ml-surface-subtle: var(--muted, #f1f5f9);
-  --ml-foreground: var(--foreground, #0f172a);
-  --ml-muted-foreground: var(--muted-foreground, #64748b);
-  --ml-border: var(--border, #e2e8f0);
+  all: initial;
+  color-scheme: light;
+  --ml-surface: var(--slate-1, #ffffff);
+  --ml-surface-subtle: var(--slate-3, #f1f5f9);
+  --ml-foreground: var(--slate-12, #0f172a);
+  --ml-muted-foreground: var(--slate-11, #64748b);
+  --ml-border: var(--slate-6, #e2e8f0);
   --ml-primary: #0880ea;
   --ml-primary-hover: #0b68cb;
   --ml-accent-foreground: #095eb8;
   --ml-on-primary: #f8fafc;
-  --ml-destructive: var(--destructive, #ea5d5d);
+  --ml-destructive: var(--red-9, #ea5d5d);
   --ml-destructive-soft: #fef2f2;
-  --ml-focus: var(--ring, #0880ea);
+  --ml-focus: #0880ea;
   --ml-hover: color-mix(in srgb, var(--ml-foreground) 6%, transparent);
   --ml-shadow: 0 2px 8px rgb(15 23 42 / 8%);
   --ml-radius-surface: 8px;
@@ -24,6 +26,7 @@
   line-height: 1.4;
 }
 
+:host([data-theme="dark"]) .marimo_lens,
 :is(
     .dark,
     .dark-mode,
@@ -33,11 +36,12 @@
     [data-vscode-theme-kind="vscode-high-contrast"]
   )
   .marimo_lens {
-  --ml-surface: var(--popover, var(--background, #101412));
-  --ml-border: var(--border, #3b403e);
+  color-scheme: dark;
+  --ml-surface: var(--slate-1, #101412);
+  --ml-border: var(--slate-6, #3b403e);
   --ml-surface-subtle: #181c1a;
-  --ml-foreground: var(--foreground, #f1f5f3);
-  --ml-muted-foreground: var(--muted-foreground, #aab2af);
+  --ml-foreground: var(--slate-12, #f1f5f3);
+  --ml-muted-foreground: var(--slate-11, #aab2af);
   --ml-accent-foreground: #8cc6ff;
   --ml-destructive-soft: #451f22;
   --ml-shadow: 0 2px 8px rgb(0 0 0 / 24%);

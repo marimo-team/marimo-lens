@@ -21,6 +21,7 @@ Selection
 ├── anchor: normalized point or rectangle
 ├── note
 ├── DOM hint
+├── captured description and optional render-source reference
 ├── creation time
 ├── selection image status and metadata
 └── previous resolution metadata, when reopened
@@ -29,10 +30,10 @@ Selection
 The target carries an opaque browser-document ID and the document pathname.
 Notebook targets carry exactly one cell ID. DOM targets carry an exact selector
 and a canonical sorted set of cell IDs inferred from nested
-`data-runtime-cell-id` metadata or explicit notebook source records. DOM targets
+`data-marimo-lens-cell-id` metadata or explicit notebook source records. DOM targets
 also preserve exact value selectors.
 
-The anchor and DOM hint can change. The label, target, and creation time are
+The anchor and DOM hint can change. The label, target, description, and creation time are
 immutable after selection creation. A geometry or DOM-hint change makes the
 stored image outdated until replacement capture succeeds.
 

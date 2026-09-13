@@ -81,6 +81,7 @@ def test_references_are_compact_and_text_is_standalone() -> None:
     }
     reference = references["selections"][0]
     assert set(reference) == {
+        "description",
         "id",
         "label",
         "note",
@@ -546,6 +547,7 @@ def test_context_accepts_dense_identity_state_within_selection_budget() -> None:
                 "id": selection_id,
                 "label": f"S{index + 1}",
                 "note": "",
+                "description": {"label": "Output"},
                 "target": {
                     "kind": "notebook",
                     "cellIds": [output_cell_id],

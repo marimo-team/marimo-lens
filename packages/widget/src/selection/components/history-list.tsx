@@ -3,7 +3,7 @@ import type { AddressedSelection } from "@marimo-lens/protocol";
 import { Bot, ChevronDown, LoaderCircle, RotateCcw, UserRound } from "lucide-react";
 
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
-import { targetLabel, targetTitle } from "@/selection/target-label";
+import { selectionTitle } from "@/selection/selection-description";
 
 const addressedAtFormatter = new Intl.DateTimeFormat(undefined, {
   month: "short",
@@ -47,8 +47,8 @@ export function HistoryList({
             <details className="ml-history-list__disclosure">
               <summary className="ml-history-list__row">
                 <span className="ml-label">{receipt.label}</span>
-                <span className="ml-history-list__target" title={targetTitle(receipt.target)}>
-                  <span className="ml-code">{targetLabel(receipt.target, receipt.domHint)}</span>
+                <span className="ml-history-list__target" title={selectionTitle(receipt)}>
+                  <span className="ml-code">{receipt.description.label}</span>
                   <SelectionKindMark kind={receipt.anchor.kind} />
                 </span>
                 <time
