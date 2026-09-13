@@ -158,6 +158,12 @@ It retains traces and screenshots for failures in
 `apps/e2e/test-results/` and an HTML report in `apps/e2e/playwright-report/`.
 Run `pnpm --filter @marimo-lens/e2e test:e2e:ui` for interactive debugging.
 
+`robustness.spec.ts` runs in both notebook and editor mode. It covers rejected
+agent revisions, atomic invalid resolutions, failed and interrupted PNG capture,
+output replacement, cancelled gestures, duplicate views, remounts, and selection
+capacity. `sessions.spec.ts` checks isolation between independent run-mode kernels. Capture tests hold the browser encoder to
+control races, then release it and verify kernel selections and image bytes.
+
 `performance.spec.ts` runs in desktop Chromium. A 1,000-row notebook streams 90
 updates with Lens hidden, with twelve annotations, while picking a target, and
 while the annotated output is unavailable. A second test creates, previews, and
@@ -179,6 +185,13 @@ garbage collection.
 These budgets detect regressions in the fixture workloads. Timings depend on the
 browser, hardware, and runner load. Performance measurements are attached as JSON
 to the HTML report and the machine-readable `test-results/results.json` report.
+
+Run the focused suites with:
+
+```sh
+pnpm --filter @marimo-lens/e2e test:e2e robustness.spec.ts performance.spec.ts --project=light
+pnpm --filter @marimo-lens/e2e test:e2e robustness.spec.ts --project=editor
+```
 
 Inspect documentation and browser behavior beyond those scenarios separately.
 

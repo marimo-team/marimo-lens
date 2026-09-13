@@ -24,6 +24,7 @@ import type { SelectionSnapshotCapture } from "@/selection/selection-capture";
 import type { SelectionMotion, UiAction } from "@/selection/state";
 
 import { LensProtocolError } from "@/anywidget/client";
+import { targetBelongsToDocument } from "@/notebook/selection-target";
 import { targetInfo } from "@/notebook/target-info";
 import { anchorToViewport } from "@/selection/anchor";
 import { waitForRevision } from "@/selection/conflict";
@@ -132,7 +133,21 @@ export function useSelectionActions(options: {
     selectionCapture.reconcile(new Set(stateRef.current.selections.map(({ id }) => id)));
   });
 
-  useEffect(() => () => selectionCapture.dispose(), [selectionCapture]);
+  useEffect(() => {
+    // Pending images at mount belong to capture jobs from the previous view.
+    for (const selection of stateRef.current.selections) {
+      if (
+        selection.snapshot.status === "pending" &&
+        targetBelongsToDocument(selection.target, dom.document)
+      ) {
+        selectionCapture.settleUnavailable(
+          selection.id,
+          "Image capture was interrupted when the Lens view closed.",
+        );
+      }
+    }
+    return () => selectionCapture.dispose();
+  }, [dom, selectionCapture, stateRef]);
 
   const invalidateSnapshotCapture = useCallback(
     (selectionId: string) => selectionCapture.invalidate(selectionId),

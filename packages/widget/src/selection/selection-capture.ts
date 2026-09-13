@@ -95,8 +95,11 @@ export class SelectionCapture {
     }
   }
 
-  settleUnavailable(selectionId: string): void {
-    this.#settleFailed(selectionId, "The target changed before snapshot capture completed.");
+  settleUnavailable(
+    selectionId: string,
+    error = "The target changed before snapshot capture completed.",
+  ): void {
+    this.#settleFailed(selectionId, error);
   }
 
   #settleFailed(selectionId: string, error: string): void {

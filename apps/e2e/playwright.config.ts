@@ -22,7 +22,13 @@ export default defineConfig({
   projects: [
     {
       name: "light",
-      testMatch: ["lens.spec.ts", "capture.spec.ts", "performance.spec.ts"],
+      testMatch: [
+        "lens.spec.ts",
+        "capture.spec.ts",
+        "robustness.spec.ts",
+        "performance.spec.ts",
+        "sessions.spec.ts",
+      ],
       use: { ...devices["Desktop Chrome"], colorScheme: "light" },
     },
     {
@@ -50,7 +56,7 @@ export default defineConfig({
     },
     {
       name: "editor",
-      testMatch: "editor.spec.ts",
+      testMatch: ["editor.spec.ts", "robustness.spec.ts"],
       use: { ...devices["Desktop Chrome"], colorScheme: "light", baseURL: "http://127.0.0.1:4820" },
     },
   ],
