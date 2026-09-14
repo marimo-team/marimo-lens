@@ -2,6 +2,7 @@ import type {
   AttentionActivityStartEvent,
   AttentionActivityStopEvent,
   AttentionRevealEvent,
+  Trail,
 } from "@marimo-lens/protocol";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
@@ -25,14 +26,32 @@ export type TargetAttentionPresentation = {
   locator: TargetLocator;
   kind: TargetAttentionKind;
   target: HTMLElement | null;
+  bounds: DOMRectReadOnly | null;
   expiresAt: number | null;
   framing: "pending" | "settled";
   phase: TargetAttentionPhase;
   label: string | null;
   message: string | null;
+  trail?: TrailNavigation;
 };
 
-type ActiveAttention = TargetAttentionPresentation & {
+export type TrailNavigation = {
+  id: string;
+  index: number;
+  count: number;
+  previous: () => void;
+  next: () => void;
+  close: () => void;
+};
+
+type ActiveTrail = {
+  route: Trail;
+  locators: TargetLocator[];
+  index: number;
+  expiresAt: number | null;
+};
+
+type ActiveAttention = Omit<TargetAttentionPresentation, "bounds"> & {
   activityId: string | null;
   exitDuration: number;
   framingTimeout: number;
@@ -41,7 +60,6 @@ type ActiveAttention = TargetAttentionPresentation & {
   reframeAfterPending: boolean;
   revealFramed: boolean;
   resizeObserver: ResizeObserver | null;
-  stopLayout: () => void;
   timeout: number;
   visibilityListener: () => void;
 };
@@ -64,6 +82,12 @@ export class TargetAttentionController {
   readonly #onChange: (presentation: TargetAttentionPresentation | null) => void;
   #active: ActiveAttention | null = null;
   #sequence = 0;
+  #trail: ActiveTrail | null = null;
+  #stopLayout: (() => void) | null = null;
+  #cancelScroll: (() => void) | null = null;
+  #lastPresentation: TargetAttentionPresentation | null = null;
+  #lastViewportWidth = 0;
+  #lastViewportHeight = 0;
 
   constructor(
     dom: NotebookDomAdapter,
@@ -74,6 +98,7 @@ export class TargetAttentionController {
   }
 
   startActivity(event: AttentionActivityStartEvent, locator: TargetLocator): void {
+    this.#trail = null;
     this.#start(
       {
         kind: "activity",
@@ -86,17 +111,16 @@ export class TargetAttentionController {
     );
   }
 
-  reveal(event: AttentionRevealEvent, locator: TargetLocator): void {
-    this.#start(
-      {
-        kind: "reveal",
-        activityId: null,
-        durationMs: event.payload.durationMs,
-        label: event.payload.label ?? null,
-        message: event.payload.message ?? null,
-      },
-      locator,
-    );
+  reveal(event: AttentionRevealEvent, locators: TargetLocator[]): void {
+    const route = event.payload;
+    this.#trail = {
+      route,
+      locators,
+      index: 0,
+      expiresAt:
+        route.durationMs === undefined ? null : this.#now() + route.durationMs + REVEAL_EXIT_MS,
+    };
+    this.#showTrail(this.#trail);
   }
 
   stopActivity(event: AttentionActivityStopEvent): void {
@@ -106,7 +130,40 @@ export class TargetAttentionController {
     }
   }
 
+  endTrail(id?: string): void {
+    if (!this.#trail || (id !== undefined && id !== this.#trail.route.id)) return;
+    this.#trail = null;
+    this.#clear(true);
+  }
+
+  #showTrail(trail: ActiveTrail): void {
+    const step = trail.route.steps[trail.index]!;
+    this.#start(
+      {
+        kind: "reveal",
+        activityId: null,
+        durationMs: null,
+        label: step.label ?? null,
+        message: step.message ?? null,
+      },
+      trail.locators[trail.index]!,
+    );
+  }
+
+  #moveTrail(trail: ActiveTrail, delta: number): void {
+    if (
+      this.#trail !== trail ||
+      (trail.expiresAt !== null && this.#now() >= trail.expiresAt - REVEAL_EXIT_MS)
+    )
+      return;
+    const index = Math.max(0, Math.min(trail.route.steps.length - 1, trail.index + delta));
+    if (index === trail.index) return;
+    trail.index = index;
+    this.#showTrail(trail);
+  }
+
   dispose(): void {
+    this.#trail = null;
     this.#clear(true);
   }
 
@@ -117,7 +174,11 @@ export class TargetAttentionController {
 
     const exitDuration = request.kind === "activity" ? ACTIVITY_EXIT_MS : REVEAL_EXIT_MS;
     const duration = request.durationMs;
-    const expiresAt = duration === null ? null : this.#now() + duration + exitDuration;
+    const expiresAt = this.#trail
+      ? this.#trail.expiresAt
+      : duration === null
+        ? null
+        : this.#now() + duration + exitDuration;
     const active: ActiveAttention = {
       ...request,
       sequence: ++this.#sequence,
@@ -133,17 +194,18 @@ export class TargetAttentionController {
       reframeAfterPending: false,
       revealFramed: request.kind === "reveal" && frameRequested,
       resizeObserver: null,
-      stopLayout: () => undefined,
       timeout: 0,
       visibilityListener: () => this.#handleVisibility(active),
     };
     this.#active = active;
     this.#scheduleFraming(active);
     this.#observeTarget(active, target);
-    active.stopLayout = this.#dom.subscribeLayout(() => this.#refresh(active));
+    this.#stopLayout ??= this.#dom.subscribeLayout(() => {
+      if (this.#active) this.#refresh(this.#active);
+    });
     this.#dom.document.addEventListener("visibilitychange", active.visibilityListener);
     this.#schedule(active);
-    this.#emit(active);
+    if (this.#active === active) this.#emit(active);
   }
 
   #refresh(active: ActiveAttention, reframe = false): void {
@@ -155,8 +217,11 @@ export class TargetAttentionController {
     const target = active.locator.resolve();
     const activityTargetChanged = target !== null && active.observedTarget !== target;
     active.target = target;
+    // A scrolling Trail can enter the viewport before its caption fits. Keep
+    // framing active so the stepper stays mounted through that top-edge gap.
     if (
       active.framing === "pending" &&
+      !(this.#trail && this.#trail.route.steps.length > 1) &&
       target !== null &&
       isFullyVisible(this.#dom.window, target.getBoundingClientRect())
     ) {
@@ -180,11 +245,18 @@ export class TargetAttentionController {
     if (kind !== "reveal" && isFullyVisible(this.#dom.window, rect)) {
       return false;
     }
+    const viewportHeight = this.#dom.window.innerHeight;
+    const distant = rect.bottom < -viewportHeight || rect.top > 2 * viewportHeight;
     target.scrollIntoView({
       block: "center",
       inline: "nearest",
-      behavior: prefersReducedMotion(this.#dom.window) ? "auto" : "smooth",
+      behavior:
+        (distant && (this.#trail?.route.steps.length ?? 0) < 2) ||
+        prefersReducedMotion(this.#dom.window)
+          ? "instant"
+          : "smooth",
     });
+    if (this.#trail) this.#cancelScroll = () => this.#dom.stopScroll(target);
     return true;
   }
 
@@ -202,7 +274,7 @@ export class TargetAttentionController {
     if (active.framing !== "pending") return;
     active.framingTimeout = this.#dom.window.setTimeout(
       () => this.#settleFraming(active),
-      FRAMING_SETTLE_MS,
+      (this.#trail?.route.steps.length ?? 0) > 1 ? 2_000 : FRAMING_SETTLE_MS,
     );
   }
 
@@ -263,17 +335,48 @@ export class TargetAttentionController {
 
   #emit(active: ActiveAttention): void {
     const { sequence, locator, kind, target, expiresAt, framing, phase, label, message } = active;
-    this.#onChange({
+    const bounds = target?.getBoundingClientRect() ?? null;
+    const { innerWidth, innerHeight } = this.#dom.window;
+    const previous = this.#lastPresentation;
+    if (
+      previous?.sequence === sequence &&
+      previous.target === target &&
+      previous.phase === phase &&
+      previous.framing === framing &&
+      sameBounds(previous.bounds, bounds) &&
+      this.#lastViewportWidth === innerWidth &&
+      this.#lastViewportHeight === innerHeight
+    )
+      return;
+    const trail = this.#trail;
+    const presentation: TargetAttentionPresentation = {
       sequence,
       locator,
       kind,
       target,
+      bounds,
       expiresAt,
       framing,
       phase,
       label,
       message,
-    });
+    };
+    if (trail && (trail.route.steps.length > 1 || trail.expiresAt === null)) {
+      presentation.trail = {
+        id: trail.route.id,
+        index: trail.index,
+        count: trail.route.steps.length,
+        previous: () => this.#moveTrail(trail, -1),
+        next: () => this.#moveTrail(trail, 1),
+        close: () => {
+          if (this.#trail === trail) this.endTrail();
+        },
+      };
+    }
+    this.#lastPresentation = presentation;
+    this.#lastViewportWidth = innerWidth;
+    this.#lastViewportHeight = innerHeight;
+    this.#onChange(presentation);
   }
 
   #observeTarget(active: ActiveAttention, target: HTMLElement | null): void {
@@ -298,10 +401,17 @@ export class TargetAttentionController {
     const active = this.#active;
     if (!active) return;
     this.#active = null;
+    this.#cancelScroll?.();
+    this.#cancelScroll = null;
     this.#dom.window.clearTimeout(active.timeout);
     this.#dom.window.clearTimeout(active.framingTimeout);
     active.resizeObserver?.disconnect();
-    active.stopLayout();
+    if (notify) {
+      this.#lastPresentation = null;
+      this.#trail = null;
+      this.#stopLayout?.();
+      this.#stopLayout = null;
+    }
     this.#dom.document.removeEventListener("visibilitychange", active.visibilityListener);
     if (notify) this.#onChange(null);
   }
@@ -346,6 +456,17 @@ function targetSize(target: HTMLElement): ElementSize {
 
 function sameSize(left: ElementSize | null, right: ElementSize): boolean {
   return left?.width === right.width && left.height === right.height;
+}
+
+function sameBounds(left: DOMRectReadOnly | null, right: DOMRectReadOnly | null): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.x === right.x &&
+      left.y === right.y &&
+      sameSize(left, right))
+  );
 }
 
 function prefersReducedMotion(ownerWindow: Window): boolean {

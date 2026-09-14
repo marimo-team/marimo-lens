@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -97,7 +98,9 @@ def test_code_mode_reference_requests_cell_image_with_saved_revision() -> None:
     assert calls == [("cell-view", 4)]
 
 
-def test_code_mode_reference_restores_activity_before_reveal() -> None:
+def test_code_mode_reference_resolves_after_reveal_with_captured_revision(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     calls: list[tuple[object, ...]] = []
     selection = _context().references["selections"][0].copy()
     selection["id"] = "243110..."
@@ -106,16 +109,17 @@ def test_code_mode_reference_restores_activity_before_reveal() -> None:
         references={"selections": [selection]},
     )
 
-    def stop_activity(activity: str) -> None:
-        calls.append(("stop", activity))
-
     def reveal(selection: object, **kwargs: object) -> None:
         calls.append(("reveal", selection, kwargs))
 
+    def resolve(selection_ids: list[str], **kwargs: object) -> int:
+        calls.append(("resolve", selection_ids, kwargs))
+        return 9
+
     mounted = SimpleNamespace(
         context=lambda: snapshot,
-        stop_activity=stop_activity,
         reveal=reveal,
+        resolve=resolve,
     )
     namespace: dict[str, object] = {"mounted": mounted}
     exec(  # noqa: S102 - Exercise the repository-owned reference example.
@@ -126,11 +130,20 @@ def test_code_mode_reference_restores_activity_before_reveal() -> None:
         namespace,
     )
 
-    assert calls[0] == ("stop", namespace["activity"])
-    assert calls[1][:2] == ("reveal", selection)
-    reveal_kwargs = cast(dict[str, object], calls[1][2])
+    assert len(calls) == 2
+    assert calls[0][:2] == ("reveal", selection)
+    reveal_kwargs = cast(dict[str, object], calls[0][2])
     assert reveal_kwargs["expected_revision"] == 8
-    assert reveal_kwargs["duration_ms"] == 8_000
+    assert calls[1][:2] == ("resolve", ["243110...", "8b20f4..."])
+    resolve_kwargs = cast(dict[str, object], calls[1][2])
+    assert resolve_kwargs["expected_revision"] == reveal_kwargs["expected_revision"]
+    summary = resolve_kwargs["summary"]
+    assert isinstance(summary, str) and summary.strip()
+    handoff = ast.literal_eval(capsys.readouterr().out)
+    assert handoff == {
+        "revision": 9,
+        "hold_ms": reveal_kwargs["duration_ms"],
+    }
     assert isinstance(reveal_kwargs["label"], str) and reveal_kwargs["label"]
     assert isinstance(reveal_kwargs["message"], str) and reveal_kwargs["message"]
 

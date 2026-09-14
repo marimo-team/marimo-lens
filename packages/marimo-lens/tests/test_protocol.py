@@ -24,47 +24,56 @@ from marimo_lens._protocol import (
 from marimo_lens._protocol import (
     snapshot_metadata as build_snapshot_metadata,
 )
-from marimo_lens._protocol_models import CellAttentionAddress, SelectionAttentionAddress
+from marimo_lens._protocol_models import (
+    CellAttentionAddress,
+    SelectionAttentionAddress,
+    Trail,
+    TrailStep,
+)
 
 from tests.support.factories import png, selection, snapshot_metadata
 
 
-def test_target_reveal_event_uses_transient_transport() -> None:
+def test_reveal_event_carries_ordered_targets_and_omits_absent_explanations() -> None:
     assert attention_reveal_event(
-        address=SelectionAttentionAddress(
-            kind="selection",
-            selection_id="selection-1",
-            revision=3,
-        ),
-        label="Updated chart",
-        message="Updated the aggregation.",
-        duration_ms=8_000,
+        Trail(
+            id="reveal-1",
+            duration_ms=8_000,
+            steps=[
+                TrailStep(
+                    address=SelectionAttentionAddress(
+                        kind="selection",
+                        selection_id="selection-1",
+                        revision=3,
+                    ),
+                    label="Updated chart",
+                    message="Updated the aggregation.",
+                ),
+                TrailStep(
+                    address=CellAttentionAddress(kind="cell", cell_id="cell-view")
+                ),
+            ],
+        )
     ) == {
         "protocol": "marimo-lens.event",
         "version": 6,
         "type": "attention.reveal",
         "payload": {
-            "address": {
-                "kind": "selection",
-                "selectionId": "selection-1",
-                "revision": 3,
-            },
-            "label": "Updated chart",
-            "message": "Updated the aggregation.",
+            "id": "reveal-1",
             "durationMs": 8_000,
+            "steps": [
+                {
+                    "address": {
+                        "kind": "selection",
+                        "selectionId": "selection-1",
+                        "revision": 3,
+                    },
+                    "label": "Updated chart",
+                    "message": "Updated the aggregation.",
+                },
+                {"address": {"kind": "cell", "cellId": "cell-view"}},
+            ],
         },
-    }
-
-
-def test_target_reveal_event_omits_an_absent_message() -> None:
-    assert attention_reveal_event(
-        address=CellAttentionAddress(kind="cell", cell_id="cell-view"),
-        label=None,
-        message=None,
-        duration_ms=4_000,
-    )["payload"] == {
-        "address": {"kind": "cell", "cellId": "cell-view"},
-        "durationMs": 4_000,
     }
 
 

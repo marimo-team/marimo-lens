@@ -140,7 +140,12 @@ export class RequestClient {
     const request = new Promise<AnyRequestReply>((resolve, reject) => {
       const timeout = this.#window.setTimeout(() => {
         this.#pending.delete(requestId);
-        reject(new LensProtocolError("timeout", `Lens request ${type} timed out`));
+        reject(
+          new LensProtocolError(
+            "timeout",
+            "Lens did not respond. Check the notebook connection, then try again.",
+          ),
+        );
       }, REQUEST_TIMEOUT_MS);
       this.#pending.set(requestId, { command, resolve, reject, timeout });
       try {

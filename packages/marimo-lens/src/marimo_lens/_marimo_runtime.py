@@ -30,6 +30,48 @@ class MarimoRuntimeAdapter:
     def cell_status(self, cell_id: str) -> RuntimeCellStatus:
         return runtime_cell_status(cell_id)
 
+    def observe_cells(
+        self, cell_ids: Sequence[str], on_change: Callable[[], None]
+    ) -> Callable[[], None] | None:
+        """Invalidate a consumer when a referenced cell's lifecycle ends."""
+        try:
+            from marimo._runtime.cell_lifecycle_item import CellLifecycleItem
+            from marimo._runtime.context import get_context
+
+            context = _read_runtime_context(get_context)
+        except (ImportError, _RuntimeReadError):
+            return None
+        registry = getattr(context, "cell_lifecycle_registry", None)
+        if registry is None:
+            return None
+        active = True
+
+        class Watch(CellLifecycleItem):
+            def create(self, context: Any) -> None:
+                pass
+
+            def dispose(self, context: Any, deletion: bool) -> bool:
+                if active:
+                    release()
+                    on_change()
+                return True
+
+        watches = {cell_id: Watch() for cell_id in dict.fromkeys(cell_ids)}
+
+        def release() -> None:
+            nonlocal active
+            active = False
+            for cell_id, watch in watches.items():
+                members = registry.registry.get(cell_id)
+                if members is not None:
+                    # Disposal may be iterating this set. Keep its iterator and
+                    # key alive until the host finishes the lifecycle callback.
+                    registry.registry[cell_id] = members - {watch}
+
+        for cell_id, watch in watches.items():
+            registry.inject(cell_id, watch)
+        return release
+
 
 def current_runtime_scope() -> object | None:
     """Return the active marimo UI registry as an opaque runtime identity."""

@@ -42,6 +42,7 @@ MAX_ATTENTION_MESSAGE = 240
 MAX_REVEAL_MESSAGE = 1_000
 MAX_ATTENTION_LABEL = 40
 MAX_ATTENTION_DURATION_MS = 300_000
+MAX_TRAIL_STEPS = 16
 MAX_SAFE_INTEGER = 9_007_199_254_740_991
 
 _TIMESTAMP_PATTERN = (
@@ -676,18 +677,34 @@ AttentionAddress: TypeAlias = Annotated[
 ]
 
 
-class AttentionRevealPayload(TransportModel):
+class TrailStep(TransportModel):
     address: AttentionAddress
-    duration_ms: AttentionDuration
     label: AttentionLabel | None = None
     message: RevealText | None = None
+
+
+class Trail(TransportModel):
+    id: Identifier
+    steps: Annotated[list[TrailStep], Field(min_length=1, max_length=MAX_TRAIL_STEPS)]
+    duration_ms: AttentionDuration | None = None
 
 
 class AttentionRevealEvent(TransportModel):
     protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
     version: ProtocolVersion = PROTOCOL_VERSION
     type: Literal["attention.reveal"] = "attention.reveal"
-    payload: AttentionRevealPayload
+    payload: Trail
+
+
+class TrailStopPayload(TransportModel):
+    trail_id: Identifier
+
+
+class AttentionTrailStopEvent(TransportModel):
+    protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
+    version: ProtocolVersion = PROTOCOL_VERSION
+    type: Literal["attention.trail.stop"] = "attention.trail.stop"
+    payload: TrailStopPayload
 
 
 class AttentionActivityStartPayload(TransportModel):
@@ -717,7 +734,10 @@ class AttentionActivityStopEvent(TransportModel):
 
 
 AttentionEvent: TypeAlias = (
-    AttentionActivityStartEvent | AttentionActivityStopEvent | AttentionRevealEvent
+    AttentionActivityStartEvent
+    | AttentionActivityStopEvent
+    | AttentionRevealEvent
+    | AttentionTrailStopEvent
 )
 
 

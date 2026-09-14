@@ -1,5 +1,15 @@
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+if (!HTMLElement.prototype.scrollTo) {
+  Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+    configurable: true,
+    value(this: HTMLElement, options: ScrollToOptions) {
+      this.scrollTop = options.top ?? this.scrollTop;
+      this.scrollLeft = options.left ?? this.scrollLeft;
+    },
+  });
+}
+
 if (!globalThis.matchMedia) {
   Object.assign(globalThis, {
     matchMedia: () => ({

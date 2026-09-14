@@ -87,8 +87,9 @@ export function listOutputRoots(ownerDocument: Document): OutputCell[] {
 }
 
 function* outputRoots(root: ParentNode): Generator<Element> {
+  const candidates = new Set(root.querySelectorAll(OUTPUT_ROOT_SELECTOR));
   for (const element of root.querySelectorAll("*")) {
-    if (isOutputRoot(element)) yield element;
+    if (candidates.has(element)) yield element;
     if (element.shadowRoot) yield* outputRoots(element.shadowRoot);
   }
 }
@@ -97,10 +98,6 @@ export function outputCellFromRoot(element: Element): OutputCell | null {
   const resolved = resolveOutputRoot(element);
   if (!resolved || containsLensHost(resolved.root)) return null;
   return { id: resolved.id, element: resolved.element };
-}
-
-function isOutputRoot(element: Element): boolean {
-  return element.matches(OUTPUT_ROOT_SELECTOR);
 }
 
 export function deepestElementAtPoint(

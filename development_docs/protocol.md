@@ -88,12 +88,13 @@ Python distinguish a displayed capture-capable Lens from an in-memory model.
 
 Python sends:
 
-| Type                       | Payload contract                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `attention.activity.start` | Activity ID, attention address, optional duration, optional label, and optional message.               |
-| `attention.activity.stop`  | Activity ID only.                                                                                      |
-| `attention.reveal`         | Attention address, required duration, optional label, and optional message.                            |
-| `selection.resolved`       | One or more resolved selection IDs and labels, their shared resolution revision, and optional summary. |
+| Type                       | Payload contract                                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `attention.activity.start` | Activity ID, attention address, optional duration, optional label, and optional message.                        |
+| `attention.activity.stop`  | Activity ID only.                                                                                               |
+| `attention.reveal`         | Transient ID, 1–16 steps with addresses and optional explanations, and optional duration for the entire reveal. |
+| `attention.trail.stop`     | Matching transient Trail ID whose referenced content changed.                                                   |
+| `selection.resolved`       | One or more resolved selection IDs and labels, their shared resolution revision, and optional summary.          |
 
 An attention address is tagged as `cell` or `selection`. A cell address carries
 one graph cell ID. A selection address carries the stored selection ID and the

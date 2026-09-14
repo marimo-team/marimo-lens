@@ -10,6 +10,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useRef,
   useState,
@@ -154,15 +155,13 @@ export function LensDock({
     dom.window.requestAnimationFrame(() => selectRef.current?.focus());
   }, [armed, dom, interactionLocked, onToggleArmed]);
 
+  const enterSelection = useEffectEvent((event: KeyboardEvent) => {
+    if (!isLensSelectionShortcut(event) || interactionLocked) return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!event.repeat) enterSelectionMode();
+  });
   useEffect(() => {
-    const enterSelection = (event: KeyboardEvent) => {
-      if (!isLensSelectionShortcut(event) || interactionLocked) return;
-      event.preventDefault();
-      event.stopPropagation();
-      if (event.repeat) return;
-      enterSelectionMode();
-    };
-
     return dom.observeInteractionSurfaces(
       {
         includeTargetFrames: true,
@@ -174,7 +173,7 @@ export function LensDock({
         return () => surface.document.removeEventListener("keydown", enterSelection, true);
       },
     );
-  }, [dom, enterSelectionMode, interactionLocked, selector]);
+  }, [dom, selector]);
 
   const openHistory = (event: SelectionResolvedEvent) => {
     setExpanded(true);

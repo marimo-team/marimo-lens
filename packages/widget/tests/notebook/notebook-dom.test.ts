@@ -6,9 +6,68 @@ afterEach(() => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
+async function paint() {
+  await Promise.resolve();
+  vi.advanceTimersToNextFrame();
+}
+
 describe("notebook DOM layout subscriptions", () => {
+  test("stops scrolling ancestors across a shadow root at their current positions", () => {
+    const host = document.createElement("div");
+    const scroller = document.createElement("div");
+    host.attachShadow({ mode: "open" }).append(scroller);
+    const target = document.createElement("div");
+    scroller.append(target);
+    document.body.append(host);
+    scroller.scrollTop = 123;
+    host.scrollLeft = 45;
+    const inner = vi.spyOn(scroller, "scrollTo");
+    const outer = vi.spyOn(host, "scrollTo");
+    new NotebookDomAdapter(document).stopScroll(target);
+    expect(inner).toHaveBeenCalledWith({ top: 123, left: 0, behavior: "instant" });
+    expect(outer).toHaveBeenCalledWith({ top: 0, left: 45, behavior: "instant" });
+  });
+
+  test("coalesces output layout changes and ignores its own overlay", async () => {
+    vi.useFakeTimers();
+    const observe = vi.fn();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe = observe;
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+    const host = document.createElement("div");
+    document.body.append(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const dom = new NotebookDomAdapter(document);
+    const unregister = dom.registerUiRoot(shadow);
+    const listener = vi.fn();
+    const release = dom.subscribeLayout(listener);
+    shadow.append(document.createElement("button"));
+    await paint();
+    expect(listener).not.toHaveBeenCalled();
+
+    const output = document.createElement("div");
+    output.id = "output-new";
+    document.body.append(output);
+    await Promise.resolve();
+    output.append(document.createElement("span"));
+    await Promise.resolve();
+    expect(observe).not.toHaveBeenCalledWith(output);
+    expect(listener).not.toHaveBeenCalled();
+    await paint();
+    expect(observe).toHaveBeenCalledWith(output);
+    expect(listener).toHaveBeenCalledOnce();
+    release();
+    unregister();
+  });
+
   test("shares one observer lifecycle across subscribers", () => {
     const disconnectMutation = vi.fn();
     const disconnectResize = vi.fn();
@@ -45,63 +104,6 @@ describe("notebook DOM layout subscriptions", () => {
     expect(disconnectResize).toHaveBeenCalledOnce();
   });
 
-  test("coalesces output topology scans until the next paint", () => {
-    let notifyMutation = () => {};
-    const MutationObserverStub = vi.fn(
-      class implements MutationObserver {
-        constructor(callback: MutationCallback) {
-          notifyMutation = () => callback([], this);
-        }
-
-        observe = vi.fn();
-        disconnect = vi.fn();
-        takeRecords = () => [];
-      },
-    );
-    const resizeObserve = vi.fn();
-    const ResizeObserverStub = vi.fn(
-      class {
-        observe = resizeObserve;
-        unobserve = vi.fn();
-        disconnect = vi.fn();
-      },
-    );
-    vi.stubGlobal("MutationObserver", MutationObserverStub);
-    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
-    const frames = new Map<number, FrameRequestCallback>();
-    let nextFrame = 1;
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      const id = nextFrame;
-      nextFrame += 1;
-      frames.set(id, callback);
-      return id;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
-      frames.delete(id);
-    });
-    const listener = vi.fn();
-    const dom = new NotebookDomAdapter(document);
-    const release = dom.subscribeLayout(listener);
-
-    const output = document.createElement("div");
-    output.id = "output-later-cell";
-    document.body.appendChild(output);
-    notifyMutation();
-    notifyMutation();
-    expect(resizeObserve).not.toHaveBeenCalledWith(output);
-    expect(listener).not.toHaveBeenCalled();
-    expect(frames.size).toBe(1);
-
-    const pending = [...frames.entries()][0];
-    if (!pending) throw new Error("Layout refresh was not scheduled");
-    frames.delete(pending[0]);
-    pending[1](0);
-
-    expect(resizeObserve).toHaveBeenCalledWith(output);
-    expect(listener).toHaveBeenCalledOnce();
-    release();
-  });
-
   test("observes hidden output roots so a CSS reveal updates layout", () => {
     const output = document.createElement("div");
     output.id = "output-hidden-cell";
@@ -125,74 +127,31 @@ describe("notebook DOM layout subscriptions", () => {
     release();
   });
 
-  test("invalidates layout when content scrolls inside an open shadow root", () => {
+  test("tracks scrolling and mutations only in attached shadow trees", async () => {
+    vi.useFakeTimers();
     const host = document.createElement("div");
     const shadow = host.attachShadow({ mode: "open" });
     const scroller = document.createElement("div");
-    shadow.appendChild(scroller);
-    document.body.appendChild(host);
-    const frames: FrameRequestCallback[] = [];
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      frames.push(callback);
-      return frames.length;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
-    const listener = vi.fn();
-    const dom = new NotebookDomAdapter(document);
-    const release = dom.subscribeLayout(listener);
-
-    scroller.dispatchEvent(new Event("scroll"));
-    expect(frames).toHaveLength(1);
-    frames.shift()?.(0);
-
-    expect(listener).toHaveBeenCalledOnce();
-    release();
-  });
-
-  test("stops observing a shadow tree after its host is removed", () => {
-    const host = document.createElement("div");
-    const shadow = host.attachShadow({ mode: "open" });
+    shadow.append(scroller);
     const survivingHost = document.createElement("div");
     const survivingShadow = survivingHost.attachShadow({ mode: "open" });
     document.body.append(host, survivingHost);
-    const observedTargets = new Set<Node>();
-    let notifyMutation = (_target: Node) => {};
-    const MutationObserverStub = vi.fn(
-      class implements MutationObserver {
-        constructor(callback: MutationCallback) {
-          notifyMutation = (target) => {
-            if (observedTargets.has(target)) callback([], this);
-          };
-        }
+    const listener = vi.fn();
+    const release = new NotebookDomAdapter(document).subscribeLayout(listener);
+    scroller.dispatchEvent(new Event("scroll"));
+    await paint();
+    expect(listener).toHaveBeenCalledOnce();
 
-        observe = vi.fn((target: Node) => observedTargets.add(target));
-        disconnect = vi.fn(() => observedTargets.clear());
-        takeRecords = () => [];
-      },
-    );
-    vi.stubGlobal("MutationObserver", MutationObserverStub);
-    const frames: FrameRequestCallback[] = [];
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      frames.push(callback);
-      return frames.length;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
-    const dom = new NotebookDomAdapter(document);
-    const release = dom.subscribeLayout(() => {});
-
-    expect(observedTargets.has(shadow)).toBe(true);
-    expect(observedTargets.has(survivingShadow)).toBe(true);
     host.remove();
-    notifyMutation(document.body);
-    frames.shift()?.(0);
-
-    expect(observedTargets.has(document.body)).toBe(true);
-    expect(observedTargets.has(shadow)).toBe(false);
-    expect(observedTargets.has(survivingShadow)).toBe(true);
-    notifyMutation(shadow);
-    expect(frames).toHaveLength(0);
-    notifyMutation(survivingShadow);
-    expect(frames).toHaveLength(1);
+    await paint();
+    listener.mockClear();
+    scroller.dispatchEvent(new Event("scroll"));
+    shadow.append(document.createElement("span"));
+    await paint();
+    expect(listener).not.toHaveBeenCalled();
+    survivingShadow.append(document.createElement("span"));
+    await paint();
+    expect(listener).toHaveBeenCalledOnce();
     release();
   });
 });
@@ -219,7 +178,6 @@ describe("notebook DOM paint scheduling", () => {
 
     await expect(ready).resolves.toBeUndefined();
     expect(cancelFrame).toHaveBeenCalledWith(7);
-    vi.useRealTimers();
   });
 
   test("cancels a pending paint wait", async () => {
@@ -237,6 +195,5 @@ describe("notebook DOM paint scheduling", () => {
     await expect(ready).rejects.toBe(reason);
     expect(cancelFrame).toHaveBeenCalledWith(11);
     expect(vi.getTimerCount()).toBe(0);
-    vi.useRealTimers();
   });
 });

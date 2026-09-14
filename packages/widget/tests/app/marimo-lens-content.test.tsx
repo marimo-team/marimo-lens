@@ -98,6 +98,133 @@ function actionsFor(dispatch: (action: UiAction) => void) {
 }
 
 describe("marimo-lens content", () => {
+  test("navigates transient Trail events and ignores stale cancellation", () => {
+    vi.useFakeTimers();
+    let listener: ((event: AttentionEvent) => void) | undefined;
+    const trail = {
+      id: "tour",
+      steps: [
+        {
+          address: { kind: "cell" as const, cellId: "first" },
+          label: "Question",
+          message: "Start here.",
+        },
+        { address: { kind: "cell" as const, cellId: "second" }, label: "Answer" },
+      ],
+    };
+    for (const id of ["first", "second"]) {
+      const cell = document.createElement("div");
+      cell.id = `cell-${id}`;
+      cell.getBoundingClientRect = () => new DOMRect(20, 200, 500, 200);
+      cell.scrollIntoView = vi.fn();
+      document.body.append(cell);
+    }
+    currentModel = {
+      state: lensState({
+        revision: 0,
+        nextLabel: "S1",
+        currentSelectionId: null,
+        selections: [],
+        history: [],
+      }),
+      css: "",
+      selector: null,
+      protocol: protocolClient({
+        onAttention: (next) => {
+          listener = next;
+          return () => {};
+        },
+      }),
+    };
+    const container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    const render = () => act(() => root?.render(<MarimoLensContent />));
+    const button = (label: string) =>
+      uiRoot().querySelector<HTMLButtonElement>(`[aria-label="${label}"]`)!;
+    render();
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 6,
+        type: "attention.reveal",
+        payload: trail,
+      }),
+    );
+    const next = button("Next trail step");
+    const indicator = () =>
+      uiRoot().querySelector<HTMLElement>("[data-marimo-lens-target-attention]")!;
+    expect(indicator().contains(next)).toBe(true);
+    expect(indicator().dataset.targetLabel).toBe("first");
+    expect(next.closest('[aria-hidden="true"]')).toBeNull();
+    expect(button("Previous trail step").getAttribute("aria-disabled")).toBe("true");
+    act(() => button("Previous trail step").click());
+    expect(indicator().dataset.targetLabel).toBe("first");
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(button("Next trail step")).not.toBeNull();
+    act(() => next.click());
+    expect(uiRoot().activeElement).toBe(next);
+    expect(indicator().dataset.targetLabel).toBe("second");
+    expect(document.getElementById("cell-second")?.scrollIntoView).toHaveBeenCalled();
+    expect(button("Next trail step").getAttribute("aria-disabled")).toBe("true");
+    act(() => next.click());
+    expect(indicator().dataset.targetLabel).toBe("second");
+    act(() => {
+      button("Previous trail step").dispatchEvent(
+        new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true }),
+      );
+    });
+    expect(button("Previous trail step").getAttribute("aria-disabled")).toBe("true");
+    expect(indicator().dataset.targetLabel).toBe("first");
+    act(() => button("End trail").click());
+    expect(button("Next trail step")).toBeNull();
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 6,
+        type: "attention.reveal",
+        payload: { ...trail, id: "fresh" },
+      }),
+    );
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 6,
+        type: "attention.trail.stop",
+        payload: { trailId: "tour" },
+      }),
+    );
+    expect(button("Next trail step")).not.toBeNull();
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 6,
+        type: "attention.trail.stop",
+        payload: { trailId: "fresh" },
+      }),
+    );
+    expect(button("Next trail step")).toBeNull();
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 6,
+        type: "attention.reveal",
+        payload: { id: "held", steps: [trail.steps[0]!] },
+      }),
+    );
+    expect(button("Next trail step")).toBeNull();
+    expect(button("Previous trail step")).toBeNull();
+    expect(button("Dismiss reveal")).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(button("Dismiss reveal")).not.toBeNull();
+    act(() => button("Dismiss reveal").click());
+    expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).toBeNull();
+  });
+
   test("captures the exact canonical output for a reverse protocol request", async () => {
     const frames = controlledAnimationFrames();
     let captureHandler: OutputCaptureHandler | undefined;
@@ -401,9 +528,11 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "cell", cellId: "BYtC" },
+          id: "reveal-1",
+          steps: [
+            { address: { kind: "cell", cellId: "BYtC" }, message: "Updated the aggregation." },
+          ],
           durationMs: 4_000,
-          message: "Updated the aggregation.",
         },
       }),
     );
@@ -483,7 +612,8 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "selection", selectionId: selection.id, revision: 3 },
+          id: "reveal-1",
+          steps: [{ address: { kind: "selection", selectionId: selection.id, revision: 3 } }],
           durationMs: 4_000,
         },
       }),
@@ -701,7 +831,8 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "selection", selectionId: selection.id, revision: 3 },
+          id: "reveal-1",
+          steps: [{ address: { kind: "selection", selectionId: selection.id, revision: 3 } }],
           durationMs: 4_000,
         },
       }),
@@ -1144,7 +1275,7 @@ describe("marimo-lens content", () => {
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
   });
 
-  test("presents an addressed receipt after the selection reveal finishes", () => {
+  test.each([false, true])("reveals before receipt (coalesced=%s)", (coalesced) => {
     vi.useFakeTimers();
     let attentionListener: ((event: AttentionEvent) => void) | undefined;
     let resolutionListener: ((event: SelectionResolvedEvent) => void) | undefined;
@@ -1182,19 +1313,27 @@ describe("marimo-lens content", () => {
     root = createRoot(container);
     act(() => root?.render(<MarimoLensContent />));
 
-    act(() =>
+    const reveal = () =>
       attentionListener?.({
         protocol: "marimo-lens.event",
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "selection", selectionId: selection.id, revision: 3 },
-          message: "Updated the chart.",
+          id: "reveal-1",
+          steps: [
+            {
+              address: { kind: "selection", selectionId: selection.id, revision: 3 },
+              message: "Updated the chart.",
+            },
+            {
+              address: { kind: "cell", cellId: selection.target.cellIds[0]! },
+              message: "The producing cell.",
+            },
+          ],
           durationMs: 4_000,
         },
-      }),
-    );
-    act(() => resolutionListener?.(event));
+      });
+    if (!coalesced) act(reveal);
     model = {
       ...model,
       state: {
@@ -1205,14 +1344,23 @@ describe("marimo-lens content", () => {
         history: [addressedReceipt(selection, event)],
       },
     };
-    act(() => root?.render(<MarimoLensContent />));
+    act(() => {
+      if (coalesced) reveal();
+      resolutionListener?.(event);
+      root?.render(<MarimoLensContent />);
+    });
 
     expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).not.toBeNull();
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
+    const next = uiRoot().querySelector<HTMLButtonElement>('[aria-label="Next trail step"]')!;
+    act(() => next.click());
+    expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")?.textContent).toContain(
+      "The producing cell.",
+    );
 
-    void act(() => vi.advanceTimersByTime(4_179));
+    void act(() => vi.advanceTimersByTime(4_000));
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
-    void act(() => vi.advanceTimersByTime(1));
+    void act(() => vi.runOnlyPendingTimers());
     expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).toBeNull();
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")?.textContent).toContain(
       "S1AddressedUpdated the chart.",
@@ -1224,14 +1372,22 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "cell", cellId: selection.target.cellIds[0]! },
-          message: "Showing the finished chart.",
+          id: "reveal-1",
+          steps: [
+            {
+              address: { kind: "cell", cellId: selection.target.cellIds[0]! },
+              message: "Showing the finished chart.",
+            },
+          ],
           durationMs: 4_000,
         },
       }),
     );
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
-    void act(() => vi.advanceTimersByTime(4_180));
+    act(() => {
+      vi.advanceTimersByTime(4_000);
+      vi.runOnlyPendingTimers();
+    });
     expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).toBeNull();
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).not.toBeNull();
 
@@ -1253,7 +1409,7 @@ describe("marimo-lens content", () => {
       }),
     );
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
-    void act(() => vi.advanceTimersByTime(16));
+    void act(() => vi.advanceTimersToNextFrame());
     expect(new NotebookDomAdapter(document).activeElement).toBe(
       uiRoot().querySelector("[data-ml-select]"),
     );
@@ -1264,14 +1420,73 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "cell", cellId: selection.target.cellIds[0]! },
+          id: "reveal-1",
+          steps: [{ address: { kind: "cell", cellId: selection.target.cellIds[0]! } }],
           durationMs: 4_000,
         },
       }),
     );
-    void act(() => vi.advanceTimersByTime(4_180));
+    act(() => {
+      vi.advanceTimersByTime(4_000);
+      vi.runOnlyPendingTimers();
+    });
     expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).toBeNull();
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
+  });
+
+  test.each([
+    { name: "completed activity", activity: true, resolutionRevision: 4, owned: true },
+    { name: "an earlier resolution", activity: false, resolutionRevision: 3, owned: true },
+    { name: "another document", activity: false, resolutionRevision: 4, owned: false },
+  ])("ignores delayed attention for $name", ({ activity, resolutionRevision, owned }) => {
+    let listener: ((event: AttentionEvent) => void) | undefined;
+    const selection = selectionFixture();
+    const receipt = addressedReceipt(selection, resolvedEvent());
+    receipt.resolutionRevision = resolutionRevision;
+    if (!owned) receipt.target.documentId = "another-document";
+    const output = document.createElement("section");
+    output.id = `output-${selection.target.cellIds[0]}`;
+    output.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
+    output.scrollIntoView = vi.fn();
+    document.body.appendChild(output);
+    currentModel = {
+      state: lensState({
+        revision: 4,
+        nextLabel: "S2",
+        currentSelectionId: null,
+        selections: [],
+        history: [receipt],
+      }),
+      css: "",
+      selector: null,
+      protocol: protocolClient({
+        onAttention: vi.fn((next: (event: AttentionEvent) => void) => {
+          listener = next;
+          return vi.fn();
+        }),
+      }),
+    };
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root?.render(<MarimoLensContent />));
+    const address = { kind: "selection" as const, selectionId: selection.id, revision: 3 };
+    const event: AttentionEvent = activity
+      ? {
+          protocol: "marimo-lens.event",
+          version: 6,
+          type: "attention.activity.start",
+          payload: { address, activityId: "completed-activity" },
+        }
+      : {
+          protocol: "marimo-lens.event",
+          version: 6,
+          type: "attention.reveal",
+          payload: { id: "reveal-1", steps: [{ address }], durationMs: 4_000 },
+        };
+    act(() => listener?.(event));
+    expect(output.scrollIntoView).not.toHaveBeenCalled();
+    expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).toBeNull();
   });
 
   test("presents a resolution receipt only in the selection's document", () => {
@@ -1684,8 +1899,13 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "cell", cellId: selection.target.cellIds[0]! },
-          message: "Showing the completed output.",
+          id: "reveal-1",
+          steps: [
+            {
+              address: { kind: "cell", cellId: selection.target.cellIds[0]! },
+              message: "Showing the completed output.",
+            },
+          ],
           durationMs: 4_000,
         },
       }),

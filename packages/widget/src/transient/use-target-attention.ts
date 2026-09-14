@@ -19,7 +19,7 @@ export function useTargetAttention(
   dom: NotebookDomAdapter,
   state: LensState,
   selector: string | null,
-): TargetAttentionPresentation | null {
+) {
   const [presentation, setPresentation] = useState<TargetAttentionPresentation | null>(null);
   const pending = useRef<PendingAttentionEvent[]>([]);
   const [attentionEventSequence, setAttentionEventSequence] = useState(0);
@@ -28,6 +28,14 @@ export function useTargetAttention(
   useEffect(() => {
     pending.current = [];
     const releaseAttention = protocol.onAttention((event) => {
+      if (event.type === "attention.trail.stop") {
+        pending.current = pending.current.filter(
+          (candidate) =>
+            candidate.type !== "attention.reveal" || candidate.payload.id !== event.payload.trailId,
+        );
+        controller.endTrail(event.payload.trailId);
+        return;
+      }
       if (event.type === "attention.activity.stop") {
         pending.current = pending.current.filter(
           (candidate) =>
@@ -47,16 +55,28 @@ export function useTargetAttention(
     };
   }, [controller, protocol]);
   useEffect(() => {
-    const blockedIndex = pending.current.findIndex(
-      ({ payload: { address } }) =>
-        address.kind === "selection" && state.revision < address.revision,
-    );
+    const blockedIndex = pending.current.findIndex((event) => {
+      const addresses =
+        event.type === "attention.reveal"
+          ? event.payload.steps.map((step) => step.address)
+          : [event.payload.address];
+      return addresses.some(
+        (address) => address.kind === "selection" && state.revision < address.revision,
+      );
+    });
     const ready = blockedIndex === -1 ? pending.current : pending.current.slice(0, blockedIndex);
     if (ready.length === 0) return;
     pending.current = pending.current.slice(ready.length);
     for (const event of ready) {
-      const locator = resolveTarget(event.payload.address, state, selector, dom);
-      if (!locator) continue;
+      const addresses =
+        event.type === "attention.reveal"
+          ? event.payload.steps.map((step) => step.address)
+          : [event.payload.address];
+      const locators = addresses.map((address) =>
+        resolveTarget(address, event.type === "attention.reveal", state, selector, dom),
+      );
+      if (!locators.every((locator): locator is TargetLocator => locator !== null)) continue;
+      const targets = locators;
       const active = dom.activeElement;
       if (
         active instanceof dom.window.HTMLElement &&
@@ -65,19 +85,23 @@ export function useTargetAttention(
         focusDock(dom);
       }
       if (event.type === "attention.activity.start") {
-        controller.startActivity(event, locator);
+        controller.startActivity(event, targets[0]!);
       } else {
-        controller.reveal(event, locator);
+        controller.reveal(event, targets);
       }
     }
   }, [attentionEventSequence, controller, dom, selector, state]);
   return presentation;
 }
 
-type PendingAttentionEvent = Exclude<AttentionEvent, { type: "attention.activity.stop" }>;
+type PendingAttentionEvent = Exclude<
+  AttentionEvent,
+  { type: "attention.activity.stop" | "attention.trail.stop" }
+>;
 
 function resolveTarget(
   address: AttentionAddress,
+  includeHistory: boolean,
   state: LensState,
   selector: string | null,
   dom: NotebookDomAdapter,
@@ -92,7 +116,15 @@ function resolveTarget(
   // Open selection identity and target are immutable, so a later canonical
   // revision can safely resolve an event whose model update was coalesced.
   if (state.revision < address.revision) return null;
-  const selection = state.selections.find((candidate) => candidate.id === address.selectionId);
+  const selection =
+    state.selections.find((candidate) => candidate.id === address.selectionId) ??
+    (includeHistory
+      ? state.history.find(
+          (candidate) =>
+            candidate.selectionId === address.selectionId &&
+            candidate.resolutionRevision > address.revision,
+        )
+      : undefined);
   if (!selection || !targetBelongsToDocument(selection.target, dom.document)) return null;
   return {
     kind: "selection",

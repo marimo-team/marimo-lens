@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from typing import Any, cast
 
-import marimo_lens
 import pytest
 from marimo_lens import (
     ActivityHandle,
@@ -19,6 +18,7 @@ from marimo_lens import (
     LensError,
     LensReferences,
     NotebookReference,
+    RevealStep,
     SelectionReference,
 )
 
@@ -88,18 +88,6 @@ class DelayedEventLens(RecordingLens):
 
 
 def test_public_api_exposes_context_and_resolution_contracts() -> None:
-    assert marimo_lens.__all__ == [
-        "ActivityHandle",
-        "CellReference",
-        "Lens",
-        "LensContext",
-        "LensError",
-        "LensReferences",
-        "NotebookReference",
-        "SelectionReference",
-        "SelectionTargetReference",
-        "__version__",
-    ]
     lens_parameters = inspect.signature(Lens).parameters
     assert list(lens_parameters) == ["dom_selector"]
     assert lens_parameters["dom_selector"].kind is inspect.Parameter.KEYWORD_ONLY
@@ -169,25 +157,24 @@ def test_public_api_exposes_context_and_resolution_contracts() -> None:
     }
 
 
-def test_reveal_sends_one_transient_event_without_changing_selection_state(
+def test_reveal_normalizes_a_bounded_message_without_changing_state_or_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
 
-    monkeypatch.setattr(
-        MarimoRuntimeAdapter,
-        "cell_status",
-        lambda _self, _cell_id: "available",
-    )
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", lambda *_: "available")
     lens = RecordingLens()
     _put(lens, revision=0, selection_value=selection())
     before = copy.deepcopy(_state(lens))
+    before_context = lens.context()
+    before_text = before_context.text
+    message = "x" * 1_000
 
     lens.reveal(
         "cell-view",
         label="Updated chart",
-        message="  Updated the aggregation used by the chart.  ",
-        duration_ms=8_000,
+        message=f"  {message}  ",
+        duration_ms=120_000,
     )
 
     assert lens.sent[-1] == (
@@ -196,44 +183,64 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
             "version": 6,
             "type": "attention.reveal",
             "payload": {
-                "address": {"kind": "cell", "cellId": "cell-view"},
-                "label": "Updated chart",
-                "message": "Updated the aggregation used by the chart.",
-                "durationMs": 8_000,
+                "id": lens.sent[-1][0]["payload"]["id"],
+                "steps": [
+                    {
+                        "address": {"kind": "cell", "cellId": "cell-view"},
+                        "label": "Updated chart",
+                        "message": message,
+                    }
+                ],
+                "durationMs": 120_000,
             },
         },
         [],
     )
     assert _state(lens) == before
     context = lens.context()
-    assert "reveal" not in json.dumps(context.references)
-    assert "Updated the aggregation" not in context.text
+    assert context.references == {
+        **before_context.references,
+        "generatedAt": context.references["generatedAt"],
+    }
+    assert context.text == before_text
 
 
-def test_reveal_uses_the_caller_supplied_hold_for_a_long_result_message(
+def test_reveal_mixes_cells_and_selections_with_one_revision_guard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
 
-    monkeypatch.setattr(
-        MarimoRuntimeAdapter,
-        "cell_status",
-        lambda _self, _cell_id: "available",
-    )
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", lambda *_: "available")
     lens = RecordingLens()
-    message = "x" * 1_000
-
-    lens.reveal(
-        "cell-view",
-        duration_ms=120_000,
-        message=message,
-    )
-
-    assert lens.sent[-1][0]["payload"] == {
-        "address": {"kind": "cell", "cellId": "cell-view"},
-        "message": message,
-        "durationMs": 120_000,
-    }
+    _put(lens, revision=0, selection_value=selection())
+    context = lens.context()
+    reference = context.current
+    assert reference is not None
+    steps: list[RevealStep] = [
+        {"target": "cell-view"},
+        {"target": reference, "message": "Checked this."},
+    ]
+    before = copy.deepcopy(_state(lens))
+    count = len(lens.sent)
+    with pytest.raises(TypeError, match="expected_revision"):
+        lens.reveal(steps, duration_ms=None)
+    with pytest.raises(LensError) as error:
+        lens.reveal(steps, expected_revision=context.revision - 1, duration_ms=None)
+    assert error.value.code == "revision_conflict"
+    assert len(lens.sent) == count
+    lens.reveal(steps, expected_revision=context.revision, duration_ms=None)
+    assert lens.sent[-1][0]["payload"]["steps"] == [
+        {"address": {"kind": "cell", "cellId": "cell-view"}},
+        {
+            "address": {
+                "kind": "selection",
+                "selectionId": reference["id"],
+                "revision": context.revision,
+            },
+            "message": "Checked this.",
+        },
+    ]
+    assert _state(lens) == before
 
 
 def test_start_activity_sends_one_transient_event_without_changing_selection_state(
@@ -375,7 +382,7 @@ def test_selection_attention_uses_stored_identity_and_revision(
         "attention.activity.stop",
     ]
     assert lens.sent[-3][0]["payload"]["address"] == address
-    assert lens.sent[-2][0]["payload"]["address"] == address
+    assert lens.sent[-2][0]["payload"]["steps"][0]["address"] == address
     assert "domSelector" not in lens.sent[-3][0]["payload"]
     assert _state(lens) == before
     assert not runtime_accessed
@@ -565,7 +572,6 @@ def test_target_attention_enforces_its_message_bound_before_runtime_access(
 @pytest.mark.parametrize(
     ("duration_ms", "error_type", "message"),
     [
-        (None, TypeError, "duration_ms must be an integer"),
         (True, TypeError, "duration_ms must be an integer"),
         (1.5, TypeError, "duration_ms must be an integer"),
         ("8000", TypeError, "duration_ms must be an integer"),

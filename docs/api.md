@@ -16,6 +16,7 @@ provided one.
 | Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                          |
 | Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal) |
 | Move addressed requests to History         | [`resolve()`](#lens-resolve)                                                                                     |
+| Show a user-paced notebook walkthrough     | [`reveal()`](#lens-reveal)                                                                                       |
 | Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                |
 | Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
 
@@ -168,16 +169,18 @@ raises `ValueError`. A closed Lens raises `LensError(code="lens_closed")`.
 
 ```python
 lens.reveal(
-    target: str | SelectionReference,
+    target: str | SelectionReference | Sequence[RevealStep],
     *,
     expected_revision: int | None = None,
-    duration_ms: int,
+    duration_ms: int | None,
     label: str | None = None,
     message: str | None = None,
 ) -> None
 ```
 
-Brings one selection or cell into view for a required hold.
+Brings a cell, selection, or ordered sequence of steps into view. A single
+target is a one-step reveal. Multiple steps add previous/next controls in the
+popover header and scroll smoothly, respecting reduced motion.
 
 ```python
 context = lens.context()
@@ -193,10 +196,41 @@ if selection is not None:
     )
 ```
 
+For a user-paced walkthrough, pass 1–16 `RevealStep` dictionaries:
+
+```python
+lens.reveal(
+    [
+        {
+            "target": "BYtC",
+            "label": "The question",
+            "message": "Compare demand with capacity.",
+        },
+        {"target": "rAqT", "label": "The evidence"},
+        {"target": "mNwP", "label": "The next step"},
+    ],
+    duration_ms=None,
+)
+```
+
+Each step requires `target` (a cell ID or `SelectionReference`) and accepts
+optional `label` and `message`. Put explanations on the steps, rather than in
+top-level `label` or `message` arguments. Selection references in the sequence
+share `expected_revision` from the same captured context. The whole sequence
+is validated before publication.
+
+Pass `duration_ms=None` to hold until dismissal or replacement. A finite
+duration limits the whole reveal, including time spent on previous steps.
+Navigation never resets the timer or advances automatically. A held single
+reveal has a dismiss button; multiple steps also have arrows and a count.
+Reveals are transient and do not enter notebook state or History. In a live
+notebook, rerunning or deleting a referenced cell ends the reveal.
+
 Target and revision rules match `start_activity()`. Reveal preserves selection
-state and keyboard focus. A later attention event replaces it. Wait for the
-hold before resolving when the resolution receipt should follow the revealed
-result.
+state and keyboard focus, and replaces current activity. Call `reveal()` before
+`resolve()` with the same captured revision in one kernel call. History retains
+the target for the reveal, and the receipt appears after the reveal ends. A later
+attention event replaces the reveal.
 
 `duration_ms` accepts 1 through 300,000 milliseconds. Labels accept 40 UTF-16
 code units. Reveal messages accept 1,000. See [Errors and
@@ -232,6 +266,12 @@ Pass one ID string or a sequence of up to 64 unique strings. Lens validates the
 entire batch before changing state. The resolved selections share one resulting
 revision and optional summary of up to 240 UTF-16 code units. Their
 selection-image bytes are released.
+
+Include `summary` to tell the user what changed or what you found and how you
+verified it. Lens stores it beside the original request in each History entry
+and displays it in the resolution receipt. Resolve separately with distinct
+summaries when requests have different outcomes, passing the returned revision
+to the next call.
 
 The state transition commits before Lens sends its best-effort resolution
 receipt. A receipt delivery failure does not roll back History. Expected errors are

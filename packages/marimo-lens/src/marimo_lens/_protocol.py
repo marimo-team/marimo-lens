@@ -28,7 +28,6 @@ from ._protocol_models import (
     AttentionActivityStopPayload,
     AttentionAddress,
     AttentionRevealEvent,
-    AttentionRevealPayload,
     AvailableSnapshot,
     ErrorDetail,
     FailureResponse,
@@ -44,6 +43,7 @@ from ._protocol_models import (
     SelectionResolvedPayload,
     SnapshotResponsePayload,
     SuccessResponse,
+    Trail,
     dump_model,
 )
 
@@ -171,27 +171,9 @@ def is_response_envelope(content: object) -> bool:
     return isinstance(content, Mapping) and content.get("protocol") == RESPONSE_PROTOCOL
 
 
-def attention_reveal_event(
-    *,
-    address: AttentionAddress,
-    label: str | None,
-    message: str | None,
-    duration_ms: int,
-) -> dict[str, Any]:
-    """Build one transient request to reveal an addressed target."""
-
-    try:
-        event = AttentionRevealEvent(
-            payload=AttentionRevealPayload(
-                address=address,
-                label=label,
-                message=message,
-                duration_ms=duration_ms,
-            ),
-        )
-    except ValidationError as error:
-        raise _protocol_error(error, context="Attention reveal event") from None
-    return dump_model(event)
+def attention_reveal_event(trail: Trail) -> dict[str, Any]:
+    """Build one transient reveal of an ordered set of targets."""
+    return dump_model(AttentionRevealEvent(payload=trail))
 
 
 def attention_activity_start_event(

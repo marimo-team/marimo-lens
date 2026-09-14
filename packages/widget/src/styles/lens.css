@@ -280,6 +280,39 @@
   overflow-wrap: anywhere;
 }
 
+.ml-trail-controls {
+  display: inline-flex;
+  grid-column: 3;
+  grid-row: 1;
+  align-items: center;
+  gap: 2px;
+  height: 16px;
+  color: var(--ml-muted-foreground);
+  pointer-events: auto;
+}
+
+.ml-trail-controls .ml-icon-button {
+  width: 18px;
+  height: 16px;
+  min-height: 0;
+  padding: 0;
+  border-radius: 3px;
+  color: inherit;
+}
+
+.ml-trail-controls__count {
+  padding: 0 2px;
+  font:
+    10px/16px "Fira Mono",
+    monospace;
+  white-space: nowrap;
+}
+
+.ml-trail-controls [aria-disabled="true"] {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .ml-target-attention {
   position: fixed;
   inset: 0;
@@ -370,6 +403,18 @@
   line-height: 14px;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
+  animation: ml-attention-enter 160ms var(--ml-ease-out);
+}
+
+@keyframes ml-attention-enter {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .ml-target-attention__target,
@@ -1754,6 +1799,10 @@
   }
 
   .ml-spin {
+    animation: none;
+  }
+
+  .ml-target-attention__message {
     animation: none;
   }
 
