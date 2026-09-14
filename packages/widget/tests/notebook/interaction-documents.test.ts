@@ -6,14 +6,29 @@ afterEach(() => {
   document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
+
+async function paint() {
+  await Promise.resolve();
+  vi.advanceTimersToNextFrame();
+}
 
 describe("interaction documents", () => {
   test.each([
-    { scale: 0.5, layout: { width: 400, height: 200 }, rendered: { width: 200, height: 100 } },
-    { scale: 1, layout: { width: 200, height: 100 }, rendered: { width: 200, height: 100 } },
-    { scale: 2, layout: { width: 100, height: 50 }, rendered: { width: 200, height: 100 } },
-  ])("maps iframe coordinates at $scale× scale", ({ layout, rendered, scale }) => {
+    {
+      name: "non-uniform scaling",
+      layout: { width: 400, height: 200 },
+      rendered: { width: 200, height: 400 },
+      expected: { x: 111, y: 76 },
+    },
+    {
+      name: "unavailable layout dimensions",
+      layout: { width: 0, height: 0 },
+      rendered: { width: 200, height: 400 },
+      expected: { x: 122, y: 63 },
+    },
+  ])("maps iframe coordinates with $name", ({ layout, rendered, expected }) => {
     const frame = document.createElement("iframe");
     frame.getBoundingClientRect = () => new DOMRect(100, 50, rendered.width, rendered.height);
     Object.defineProperties(frame, {
@@ -24,111 +39,115 @@ describe("interaction documents", () => {
     });
     const event = new PointerEvent("pointermove", { clientX: 20, clientY: 10 });
 
-    expect(parentViewportPoint(event, frame)).toEqual({
-      x: 100 + (2 + 20) * scale,
-      y: 50 + (3 + 10) * scale,
-    });
+    expect(parentViewportPoint(event, frame)).toEqual(expected);
   });
 
-  test("coalesces topology changes without reinstalling document surfaces", () => {
-    let notifyMutation = () => {};
-    const observe = vi.fn();
-    const disconnect = vi.fn();
-    vi.stubGlobal(
-      "MutationObserver",
-      vi.fn(
-        class implements MutationObserver {
-          constructor(callback: MutationCallback) {
-            notifyMutation = () => callback([], this);
-          }
-
-          observe = observe;
-          disconnect = disconnect;
-          takeRecords = () => [];
-        },
-      ),
-    );
-    const frames = new Map<number, FrameRequestCallback>();
-    let nextFrame = 1;
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      const id = nextFrame;
-      nextFrame += 1;
-      frames.set(id, callback);
-      return id;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation((id) => {
-      frames.delete(id);
-    });
-
+  test("coalesces frame discovery and retains document listeners until disposal", async () => {
+    vi.useFakeTimers();
+    const host = document.createElement("div");
     const output = document.createElement("div");
-    output.id = "output-cell-1";
     const frame = document.createElement("iframe");
-    output.appendChild(frame);
-    document.body.appendChild(output);
-    const query = vi.spyOn(document, "querySelectorAll");
+    output.append(frame);
+    document.body.append(host, output);
+    const controls = document.createElement("nav");
+    controls.dataset.marimoLensUi = "";
+    host.attachShadow({ mode: "open" }).append(controls);
+    const roots = vi.fn(() => [output]);
     const detachOwner = vi.fn();
     const detachFrame = vi.fn();
-    const attach = vi.fn(({ frame: ownerFrame }: { frame: HTMLIFrameElement | null }) =>
-      ownerFrame ? detachFrame : detachOwner,
+    const attach = vi.fn((surface: { frame: HTMLIFrameElement | null }) =>
+      surface.frame ? detachFrame : detachOwner,
     );
-
     const dispose = observeInteractionSurfaces(
       document,
       {
         includeTargetFrames: true,
-        lockSelectionGestures: true,
-        targetRoots: () => [output],
+        lockSelectionGestures: false,
+        targetRoots: roots,
       },
       attach,
     );
-    expect(query).toHaveBeenCalledTimes(1);
-    expect(attach).toHaveBeenCalledTimes(2);
+    await paint();
+    roots.mockClear();
+    controls.append(document.createElement("button"));
+    await paint();
+    expect(roots).not.toHaveBeenCalled();
 
-    notifyMutation();
-    notifyMutation();
-    frame.dispatchEvent(new Event("load"));
-    expect(query).toHaveBeenCalledTimes(1);
-    expect(frames.size).toBe(1);
-
-    const pending = [...frames.entries()][0];
-    if (!pending) throw new Error("Topology refresh was not scheduled");
-    frames.delete(pending[0]);
-    pending[1](0);
-
-    expect(query).toHaveBeenCalledTimes(2);
-    expect(attach).toHaveBeenCalledTimes(2);
+    host.dataset.progress = "reading";
+    await Promise.resolve();
+    output.append(document.createElement("span"));
+    await Promise.resolve();
+    expect(roots).not.toHaveBeenCalled();
+    await paint();
+    expect(roots).toHaveBeenCalledOnce();
+    expect(attach.mock.calls.map(([surface]) => surface.frame)).toEqual([null, frame]);
     expect(detachOwner).not.toHaveBeenCalled();
     expect(detachFrame).not.toHaveBeenCalled();
-    expect(disconnect).not.toHaveBeenCalled();
-
     dispose();
-    expect(disconnect).toHaveBeenCalledOnce();
     expect(detachOwner).toHaveBeenCalledOnce();
     expect(detachFrame).toHaveBeenCalledOnce();
   });
 
-  test("discovers dynamically added output frames while gesture locking is off", () => {
-    let notifyMutation = () => {};
-    vi.stubGlobal(
-      "MutationObserver",
-      vi.fn(
-        class implements MutationObserver {
-          constructor(callback: MutationCallback) {
-            notifyMutation = () => callback([], this);
-          }
-
-          observe = vi.fn();
-          disconnect = vi.fn();
-          takeRecords = () => [];
-        },
-      ),
+  test("refreshes frame eligibility and navigation without rescanning unchanged structure", async () => {
+    vi.useFakeTimers();
+    const output = document.createElement("div");
+    const frame = document.createElement("iframe");
+    output.append(frame);
+    document.body.append(output);
+    const query = vi.spyOn(document, "querySelectorAll");
+    const detach = vi.fn();
+    const attach = vi.fn(() => detach);
+    const dispose = observeInteractionSurfaces(
+      document,
+      {
+        includeTargetFrames: true,
+        lockSelectionGestures: false,
+        targetRoots: () => (output.className === "selected" ? [output] : []),
+      },
+      attach,
     );
-    let refresh: FrameRequestCallback | undefined;
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      refresh = callback;
-      return 1;
-    });
+    expect(attach).toHaveBeenCalledTimes(1);
+    query.mockClear();
+    output.className = "selected";
+    await paint();
+    expect(attach).toHaveBeenLastCalledWith({ document: frame.contentDocument, frame });
+    const nextDocument = document.implementation.createHTMLDocument("navigated");
+    Object.defineProperty(frame, "contentDocument", { configurable: true, value: nextDocument });
+    frame.dispatchEvent(new Event("load"));
+    await paint();
+    expect(detach).toHaveBeenCalledOnce();
+    expect(attach).toHaveBeenLastCalledWith({ document: nextDocument, frame });
+    expect(query).not.toHaveBeenCalled();
+    dispose();
+  });
 
+  test("discovers a newly attached shadow tree after a host attribute changes", async () => {
+    vi.useFakeTimers();
+    const host = document.createElement("div");
+    document.body.append(host);
+    const attach = vi.fn(() => () => {});
+    const dispose = observeInteractionSurfaces(
+      document,
+      {
+        includeTargetFrames: true,
+        lockSelectionGestures: false,
+        targetRoots: () => [host],
+      },
+      attach,
+    );
+    const shadow = host.attachShadow({ mode: "open" });
+    const frame = document.createElement("iframe");
+    const childDocument = document.implementation.createHTMLDocument("shadow frame");
+    Object.defineProperty(frame, "contentDocument", { value: childDocument });
+    shadow.append(frame);
+    host.className = "ready";
+    await paint();
+    expect(attach).toHaveBeenLastCalledWith({ document: childDocument, frame });
+    dispose();
+  });
+
+  test("discovers dynamically added output frames while gesture locking is off", async () => {
+    vi.useFakeTimers();
     const output = document.createElement("div");
     output.id = "output-cell-1";
     output.style.setProperty("touch-action", "pan-y");
@@ -151,8 +170,7 @@ describe("interaction documents", () => {
     const frame = document.createElement("iframe");
     output.appendChild(frame);
     frame.contentDocument?.documentElement.style.setProperty("touch-action", "manipulation");
-    notifyMutation();
-    refresh?.(0);
+    await paint();
 
     expect(attachedDocuments).toEqual([document, frame.contentDocument]);
     expect(output.style.getPropertyValue("touch-action")).toBe("pan-y");

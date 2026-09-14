@@ -46,6 +46,23 @@ function visibleIsland(id: string) {
 }
 
 describe("marimo output resolution", () => {
+  test("keeps output order when shadow and light DOM roots are interleaved", () => {
+    const first = visibleOutput("first");
+    const host = document.createElement("div");
+    first.append(host);
+    const nested = visibleOutput("nested");
+    host.attachShadow({ mode: "open" }).append(nested);
+    const light = visibleOutput("light");
+    first.append(light);
+    const last = visibleOutput("last");
+    expect(listOutputCells(document).map(({ element }) => element)).toEqual([
+      first,
+      nested,
+      light,
+      last,
+    ]);
+  });
+
   test("resolves the canonical output id across an open shadow root", () => {
     const output = visibleOutput("chart-cell");
     const host = document.createElement("div");

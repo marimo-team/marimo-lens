@@ -33,22 +33,27 @@ export function observeInteractionSurfaces(
   const hitTargetLocks = new Map<HTMLElement, InlineStyleValue>();
   const observedRoots = new Set<Node>();
   const ownerWindow = requireOwnerWindow(ownerDocument);
-  let activeTargets: readonly HTMLElement[] = [];
+  let tree: OpenTreeScan | null = null;
   const observer = new ownerWindow.MutationObserver((records) => {
-    const affectsTargets =
-      records.length === 0 ||
-      records.some((record) => {
-        if (record.type === "childList") {
-          return [...record.addedNodes, ...record.removedNodes].some((node) => node.nodeType === 1);
-        }
-        if (record.type !== "attributes") return false;
-        const target = record.target;
-        if (!(target instanceof ownerWindow.HTMLElement)) return false;
-        const related = (root: HTMLElement) =>
-          containsOpenTree(root, target) || containsOpenTree(target, root);
-        return activeTargets.some(related) || options.targetRoots().some(related);
-      });
-    if (affectsTargets) scheduleRefresh();
+    let structureChanged = records.length === 0;
+    let attributesChanged = false;
+    for (const record of records) {
+      const element =
+        record.target instanceof ownerWindow.Element ? record.target : record.target.parentElement;
+      if (element?.closest("[data-marimo-lens-ui]")) continue;
+      if (element?.shadowRoot && !observedRoots.has(element.shadowRoot)) structureChanged = true;
+      if (record.type === "childList") {
+        structureChanged ||= [...record.addedNodes, ...record.removedNodes].some(
+          (node) => node.nodeType === 1,
+        );
+      } else if (record.type === "attributes" && element instanceof ownerWindow.HTMLElement) {
+        attributesChanged = true;
+      }
+    }
+    if (structureChanged) tree = null;
+    if (!structureChanged && !attributesChanged) return;
+    if (tree?.frames.length === 0 && !options.lockSelectionGestures) return;
+    scheduleRefresh();
   });
   let refreshFrame = 0;
   let disposed = false;
@@ -78,9 +83,11 @@ export function observeInteractionSurfaces(
 
   function refresh() {
     if (disposed) return;
-    const scan = scanOpenTree(ownerDocument);
-    const targets = options.targetRoots().filter((target) => target.isConnected);
-    activeTargets = targets;
+    const scan = (tree ??= scanOpenTree(ownerDocument));
+    const targets =
+      scan.frames.length > 0 || options.lockSelectionGestures
+        ? options.targetRoots().filter((target) => target.isConnected)
+        : [];
     const frames = scan.frames.filter((frame) =>
       targets.some((target) => containsOpenTree(target, frame)),
     );
@@ -148,6 +155,7 @@ export function observeInteractionSurfaces(
     if (refreshFrame) ownerWindow.cancelAnimationFrame(refreshFrame);
     observer.disconnect();
     observedRoots.clear();
+    tree = null;
     for (const detach of attached.values()) detach();
     for (const frame of boundaries) delete frame.dataset.marimoLensPointerBoundary;
     for (const frame of frameLoadListeners) frame.removeEventListener("load", scheduleRefresh);
@@ -217,7 +225,10 @@ function scanOpenTree(root: ParentNode): OpenTreeScan {
 }
 
 function isIFrameElement(element: Element): element is HTMLIFrameElement {
-  return element instanceof requireOwnerWindow(element.ownerDocument).HTMLIFrameElement;
+  return (
+    element.localName === "iframe" &&
+    element instanceof requireOwnerWindow(element.ownerDocument).HTMLIFrameElement
+  );
 }
 
 type InlineStyleValue = { value: string; priority: string };

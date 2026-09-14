@@ -231,6 +231,10 @@ export class NotebookDomAdapter {
     const MutationObserverClass = this.window.MutationObserver;
     const mutationObserver = MutationObserverClass
       ? new MutationObserverClass((records) => {
+          if (records.length > 0) {
+            records = records.filter((record) => record.target.getRootNode() !== this.#uiRoot);
+            if (records.length === 0) return;
+          }
           let currentTargets: HTMLElement[] | null = null;
           const affectsTargets =
             records.length === 0 ||
@@ -243,6 +247,7 @@ export class NotebookDomAdapter {
               const related = (root: HTMLElement) =>
                 containsOpenTree(root, target) || containsOpenTree(target, root);
               if ([...observedOutputs].some(related)) return true;
+              if (this.#selector === null) return false;
               currentTargets ??= this.listTargets(this.#selector).map(({ element }) => element);
               return currentTargets.some(related);
             });
@@ -251,7 +256,8 @@ export class NotebookDomAdapter {
             records.length === 0 ||
             records.some(
               (record) =>
-                record.type === "attributes" ||
+                (record.type === "attributes" &&
+                  (this.#selector !== null || TARGET_ATTRIBUTES.has(record.attributeName ?? ""))) ||
                 [...record.addedNodes, ...record.removedNodes].some((node) => node.nodeType === 1),
             );
           if (topologyChanged) scheduleTopology();
@@ -269,7 +275,9 @@ export class NotebookDomAdapter {
       if (resizeObserver) {
         const outputs = new Set([
           ...listOutputRoots(this.document).map((output) => output.element),
-          ...this.listTargets(this.#selector).map((target) => target.element),
+          ...(this.#selector === null
+            ? []
+            : this.listTargets(this.#selector).map((target) => target.element)),
         ]);
         for (const output of observedOutputs) {
           if (outputs.has(output)) continue;
