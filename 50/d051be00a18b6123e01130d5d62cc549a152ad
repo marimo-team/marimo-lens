@@ -1,0 +1,26 @@
+packages/widget/tests/transient/target-attention.test.ts
+  s_99b8a4632dacdf::t_bf46cff1b8bd74 150-181
+packages/widget/tests/transient/target-attention-indicator.test.tsx
+  s_99b8a4632dacdf::t_d25e865a867cfa 375
+packages/widget/src/transient/target-attention-indicator.tsx
+  s_99b8a4632dacdf::t_d25e865a867cfa 59-64,75-76,274
+packages/widget/src/transient/target-attention.ts
+  s_99b8a4632dacdf::t_d25e865a867cfa 29,54,346,357,461
+  s_99b8a4632dacdf::t_bf46cff1b8bd74 88-90,338-345,347-350,376-378,410,462-469
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "50d051be00a18b6123e01130d5d62cc549a152ad",
+  "prompts": {},
+  "sessions": {
+    "s_99b8a4632dacdf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09f52-fce8-7370-a216-1b5c9506a2b1",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
