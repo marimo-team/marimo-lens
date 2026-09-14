@@ -150,13 +150,23 @@ logic. Use the selection image when the request depends on the marked pixels.
 Apply the change through code mode, run the affected cells, and verify the
 result from fresh runtime and browser evidence.
 
+## Guide a notebook with a Trail
+
+Prepare a short route through the notebook's question, evidence, main result,
+and next step in authored order. Call `mounted.show_trail(steps)` with
+cell IDs, labels, and short explanations. Users control the reading pace with
+small previous/next arrows in the popover header. Nothing is saved.
+
+Changing or rerunning referenced cells or their upstream inputs ends the
+Trail. The packaged Lens skill includes a complete recipe.
+
 ## Return verified work
 
 Save the Lens identity, selection ID, and activity handle in the agent's working
 state before ending a kernel call. After verification, reconnect and find the
 same selection ID in a fresh context. Reassess a changed note or mark before
-returning the result. Stop the owned activity, reveal the selected target, wait
-for the reveal hold, then resolve in a later kernel call.
+returning the result. Reveal the selected target to replace activity, then
+resolve with the same captured revision in that kernel call.
 
 ```python
 identity = mounted.identity
@@ -167,39 +177,30 @@ fresh_selection = next(
     for item in fresh_context.references["selections"]
     if item["id"] == selection_id
 )
+verified_revision = fresh_context.revision
 
-mounted.stop_activity(activity)
 mounted.reveal(
     fresh_selection,
     expected_revision=fresh_context.revision,
-    duration_ms=8_000,
+    duration_ms=4_000,
     label="Updated result",
     message="Verified the change and brought the selected result into view.",
 )
-```
-
-After the eight-second hold, reconnect and resolve:
-
-```python
-import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
-
-mounted = lens_agent.connect(cm.get_context(), identity=identity)
-current_context = mounted.context()
 revision = mounted.resolve(
     selection_id,
-    expected_revision=current_context.revision,
+    expected_revision=verified_revision,
     summary="Updated the result and verified the affected cells.",
 )
 print(revision)
 ```
 
-The resolution call receives `identity` and `selection_id` from the agent's
-working state. Each code-mode kernel call has a fresh scratch namespace.
+End the kernel call so the browser can present the result. On a revision
+conflict, reassess the request in fresh context before resolving.
 
-Resolution moves the selection to **History** and shows a resolution receipt
-with the visible status **Addressed**. A person can reopen the History entry for
-another pass.
+Resolution moves the selection to **History** immediately. The browser shows
+the **Addressed** receipt after the reveal ends. Use the remaining hold for
+independent reading or planning before starting the next activity. A person
+can reopen the History entry for another pass.
 
 ## Add Lens when the notebook has none
 

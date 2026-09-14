@@ -120,6 +120,7 @@ def test_agent_handoff_matches_documented_signatures() -> None:
     )
     expected_parameters = {
         "context": ["self"],
+        "show_trail": ["self", "steps"],
         "cell_image": ["self", "cell_id", "expected_revision"],
         "start_activity": [
             "self",

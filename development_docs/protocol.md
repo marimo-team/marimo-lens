@@ -93,6 +93,8 @@ Python sends:
 | `attention.activity.start` | Activity ID, attention address, optional duration, optional label, and optional message.               |
 | `attention.activity.stop`  | Activity ID only.                                                                                      |
 | `attention.reveal`         | Attention address, required duration, optional label, and optional message.                            |
+| `attention.trail`          | Transient ID and 1–16 ordered cell explanations; no synchronized catalog.                              |
+| `attention.trail.stop`     | Matching transient Trail ID whose referenced content changed.                                          |
 | `selection.resolved`       | One or more resolved selection IDs and labels, their shared resolution revision, and optional summary. |
 
 An attention address is tagged as `cell` or `selection`. A cell address carries

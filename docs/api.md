@@ -16,6 +16,7 @@ provided one.
 | Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                          |
 | Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal) |
 | Move addressed requests to History         | [`resolve()`](#lens-resolve)                                                                                     |
+| Show a user-paced notebook walkthrough     | [`show_trail()`](#lens-show-trail)                                                                               |
 | Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                |
 | Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
 
@@ -164,6 +165,40 @@ lens.stop_activity(activity)
 no effect. A non-string value raises `TypeError`. An empty or oversized value
 raises `ValueError`. A closed Lens raises `LensError(code="lens_closed")`.
 
+### `Lens.show_trail`
+
+`lens.show_trail(steps: Sequence[TrailStep]) -> None`
+
+Shows a transient walkthrough. Each step supplies a notebook
+`cell_id`, a `label`, and an optional `message`:
+
+```python
+lens.show_trail(
+    [
+        {
+            "cell_id": "BYtC",
+            "label": "The question",
+            "message": "Compare demand with capacity.",
+        },
+        {"cell_id": "rAqT", "label": "The evidence"},
+        {"cell_id": "mNwP", "label": "The next step"},
+    ],
+)
+```
+
+Use IDs from the current notebook after verifying the content. A small stepper
+in the popover header lets the user read at their own pace, move backward or
+forward, and dismiss the walkthrough. No Trail is saved to widget state,
+notebook files, local storage, or History. Refreshing the page ends it.
+
+Accepts 1–16 steps, with labels up to 40 UTF-16 units and optional messages up
+to 1,000. All steps are validated before display. Invalid arguments raise
+`TypeError` or `ValueError`; unavailable cells or runtime tracking raise `LensError`.
+
+A referenced cell or upstream change, rerun, or deletion ends the walkthrough.
+New activity, reveal, or another walkthrough replaces its presentation.
+Selections and their revisions remain unchanged.
+
 ### `Lens.reveal`
 
 ```python
@@ -178,6 +213,8 @@ lens.reveal(
 ```
 
 Brings one selection or cell into view for a required hold.
+Distant targets are reached immediately. Nearby targets scroll smoothly unless
+the browser requests reduced motion.
 
 ```python
 context = lens.context()
@@ -194,9 +231,10 @@ if selection is not None:
 ```
 
 Target and revision rules match `start_activity()`. Reveal preserves selection
-state and keyboard focus. A later attention event replaces it. Wait for the
-hold before resolving when the resolution receipt should follow the revealed
-result.
+state and keyboard focus, and replaces current activity. Call `reveal()` before
+`resolve()` with the same captured revision in one kernel call. History retains
+the target for the reveal, and the receipt appears after the reveal ends. A later
+attention event replaces the reveal.
 
 `duration_ms` accepts 1 through 300,000 milliseconds. Labels accept 40 UTF-16
 code units. Reveal messages accept 1,000. See [Errors and
@@ -232,6 +270,12 @@ Pass one ID string or a sequence of up to 64 unique strings. Lens validates the
 entire batch before changing state. The resolved selections share one resulting
 revision and optional summary of up to 240 UTF-16 code units. Their
 selection-image bytes are released.
+
+Include `summary` to tell the user what changed or what you found and how you
+verified it. Lens stores it beside the original request in each History entry
+and displays it in the resolution receipt. Resolve separately with distinct
+summaries when requests have different outcomes, passing the returned revision
+to the next call.
 
 The state transition commits before Lens sends its best-effort resolution
 receipt. A receipt delivery failure does not roll back History. Expected errors are
@@ -363,6 +407,7 @@ selection owned by that instance.
 | ------------------------------------------- | --------------------------------------------------- |
 | `identity`                                  | Opaque string for reconnecting across kernel calls. |
 | `context()`                                 | Delegates to `Lens.context()`.                      |
+| `show_trail(steps)`                         | Shows a transient, user-paced walkthrough.          |
 | `cell_image(cell_id, *, expected_revision)` | Requests a fresh, unmarked cell-output PNG.         |
 | `start_activity(...)`                       | Delegates to `Lens.start_activity()`.               |
 | `stop_activity(activity)`                   | Delegates to `Lens.stop_activity()`.                |

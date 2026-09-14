@@ -5,6 +5,8 @@ import {
   AttentionActivityStartEventSchema,
   AttentionActivityStopEventSchema,
   AttentionRevealEventSchema,
+  AttentionTrailEventSchema,
+  TrailSchema,
   ClearHistoryCommandSchema,
   GetSnapshotCommandSchema,
   DeleteSelectionCommandSchema,
@@ -23,6 +25,30 @@ import {
 import { selectionFixture } from "./fixtures";
 
 describe("transport envelope", () => {
+  test("carries a bounded transient Trail in its start event", () => {
+    const trail = { id: "trail-1", steps: [{ cellId: "cell-1", label: "Question" }] };
+    expect(
+      parseContract(
+        AttentionTrailEventSchema,
+        {
+          protocol: "marimo-lens.event",
+          version: 6,
+          type: "attention.trail",
+          payload: trail,
+        },
+        "event",
+      ).payload,
+    ).toEqual(trail);
+    expect(() => parseContract(TrailSchema, { ...trail, steps: [] }, "trail")).toThrow();
+    expect(() =>
+      parseContract(
+        TrailSchema,
+        { ...trail, steps: Array.from({ length: 17 }, () => trail.steps[0]) },
+        "trail",
+      ),
+    ).toThrow();
+  });
+
   test("decodes object discriminators and preserves the message body", () => {
     const message = {
       protocol: "marimo-lens.response",

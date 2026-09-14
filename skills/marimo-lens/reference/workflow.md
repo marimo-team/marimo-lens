@@ -97,17 +97,55 @@ if image_bytes is not None:
 Open the printed path, then delete it after the image reader returns. The
 kernel and image reader must share a filesystem.
 
-## Present and resolve across calls
+## Show a Trail
 
-After fresh verification succeeds, substitute the saved Lens identity, activity
-handle, and selection ID into the next call. Stop that activity and reveal the
-selected target:
+Choose and verify a short route in notebook order. Replace these example IDs
+with IDs from the current `ctx.cells` and `ctx.graph.cells`:
 
 ```python
 import marimo._code_mode as cm
 import marimo_lens.agent as lens_agent
 
-activity = "0123456789abcdef0123456789abcdef"
+mounted = lens_agent.connect(cm.get_context())
+mounted.show_trail(
+    [
+        {
+            "cell_id": "BYtC",
+            "label": "What we're checking",
+            "message": "Let's check whether current support capacity can cover launch demand.",
+        },
+        {
+            "cell_id": "rAqT",
+            "label": "Our baseline",
+            "message": "These cleaned records give us average waiting time and its upper tail.",
+        },
+        {
+            "cell_id": "mNwP",
+            "label": "A trial we can try",
+            "message": "Let's use a reversible trial to see whether extra capacity helps.",
+        },
+    ],
+)
+```
+
+The first step opens immediately. The user controls reading time with the
+small previous/next stepper in the existing popover header. No separate panel,
+saved route, or timing loop is needed. Accepts 1–16 steps, labels up to 40
+UTF-16 units, and optional messages up to 1,000.
+
+Changing or rerunning a referenced cell or upstream input ends the walkthrough.
+Refresh, dismissal, or new attention also ends its presentation. Showing a Trail
+does not change selections, History, or notebook state.
+
+## Present and resolve across calls
+
+After fresh verification succeeds, substitute the saved Lens identity and
+verified selection IDs into one completion call. Reveal replaces activity:
+
+```python
+import marimo._code_mode as cm
+import marimo_lens.agent as lens_agent
+
 mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
 snapshot = mounted.context()
 selection = next(
@@ -115,36 +153,30 @@ selection = next(
     for selection in snapshot.references["selections"]
     if selection["id"] == "243110..."
 )
-mounted.stop_activity(activity)
-hold_ms = 8_000
+hold_ms = 4_000
 mounted.reveal(
     selection,
     expected_revision=snapshot.revision,
     duration_ms=hold_ms,
     label="Updated aggregation",
-    message="Updated the aggregation and verified the output.",
+    message="I updated the aggregation and checked the chart totals against the source.",
 )
-print(hold_ms)
-```
-
-Honor the printed hold before resolving the addressed selections in a fresh
-kernel call:
-
-```python
-import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
-
-mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
 revision = mounted.resolve(
     ["243110...", "8b20f4..."],
-    expected_revision=8,
-    summary="Updated the aggregation and verified the chart.",
+    expected_revision=snapshot.revision,
+    summary="Counted distinct artists per region and checked chart totals against the source.",
 )
-print(revision)
+print({"hold_ms": hold_ms, "revision": revision})
 ```
 
-For separate resolution groups, pass the revision returned by one call into
-the next call.
+The summary appears beside each original request in History. Batch requests
+that share this outcome. For different outcomes, resolve with separate
+summaries and pass the revision returned by one call into the next call.
+
+End the kernel call so the browser can present the result. History retains the
+target for a reveal that arrives after resolution. The receipt waits until
+the reveal ends. Use the hold for independent reads or planning before
+starting the next activity or reveal. Keep revisioned mutations ordered.
 
 Selection activity and reveal resolve the stored target in its owning browser
 document. An owning-document **Target unavailable** notice can appear while a

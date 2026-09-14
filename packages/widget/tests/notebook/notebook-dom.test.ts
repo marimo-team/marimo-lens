@@ -15,6 +15,22 @@ async function paint() {
 }
 
 describe("notebook DOM layout subscriptions", () => {
+  test("stops scrolling ancestors across a shadow root at their current positions", () => {
+    const host = document.createElement("div");
+    const scroller = document.createElement("div");
+    host.attachShadow({ mode: "open" }).append(scroller);
+    const target = document.createElement("div");
+    scroller.append(target);
+    document.body.append(host);
+    scroller.scrollTop = 123;
+    host.scrollLeft = 45;
+    const inner = vi.spyOn(scroller, "scrollTo");
+    const outer = vi.spyOn(host, "scrollTo");
+    new NotebookDomAdapter(document).stopScroll(target);
+    expect(inner).toHaveBeenCalledWith({ top: 123, left: 0, behavior: "instant" });
+    expect(outer).toHaveBeenCalledWith({ top: 0, left: 45, behavior: "instant" });
+  });
+
   test("coalesces output layout changes and ignores its own overlay", async () => {
     vi.useFakeTimers();
     const observe = vi.fn();

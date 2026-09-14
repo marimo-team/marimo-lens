@@ -64,7 +64,10 @@ export function SelectionSheet({
       return;
     }
     onTabChange(nextTab);
-    event.currentTarget.ownerDocument.getElementById(`marimo-lens-${nextTab}-tab`)?.focus();
+    event.currentTarget
+      .closest('[role="tablist"]')
+      ?.querySelector<HTMLButtonElement>(`#marimo-lens-${nextTab}-tab`)
+      ?.focus();
   };
 
   return (

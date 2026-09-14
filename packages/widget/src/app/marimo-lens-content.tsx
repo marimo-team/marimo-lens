@@ -31,6 +31,7 @@ import {
   TargetAttentionIndicator,
   projectTargetAttentionSurface,
 } from "@/transient/target-attention-indicator";
+import { TrailControls } from "@/transient/trail-controls";
 import { useTargetAttention } from "@/transient/use-target-attention";
 import { LensDock } from "@/ui/components/lens-dock";
 import { LensPortal } from "@/ui/components/lens-portal";
@@ -97,6 +98,10 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
   const { invalidateSnapshotCapture, settleUnavailableSnapshot } = actions;
   useOutputCapture(model.protocol, dom, dependencies.captureOutputSnapshot);
   const targetAttention = useTargetAttention(model.protocol, dom, model.state, model.selector);
+  const trailId = targetAttention?.trail?.id;
+  useEffect(() => {
+    if (trailId) dispatch({ type: "setListOpen", open: false });
+  }, [trailId]);
   const [targetAttentionLabel, setTargetAttentionLabel] = useState<{
     sequence: number;
     height: number;
@@ -181,6 +186,10 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
   const noteSelection = noteWorkflow
     ? (selections.find(({ id }) => id === noteWorkflow.selectionId) ?? null)
     : null;
+  const trailControls =
+    targetAttention?.trail && !ui.listOpen && !noteSelection ? (
+      <TrailControls trail={targetAttention.trail} />
+    ) : null;
   useEffect(() => {
     const workflow = ui.workflow;
     if (
@@ -232,7 +241,10 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
           onResolutionReceiptInteractionChange={resolutionReceipt.setInteraction}
           targetAttentionFallback={
             targetAttentionSurface.fallback ? (
-              <TargetAttentionFallback {...targetAttentionSurface.fallback} />
+              <TargetAttentionFallback
+                {...targetAttentionSurface.fallback}
+                controls={trailControls}
+              />
             ) : null
           }
           onToggleArmed={() =>
@@ -295,6 +307,7 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
         <TargetAttentionIndicator
           view={targetAttentionSurface.view}
           onLabelMeasure={measureTargetAttentionLabel}
+          controls={trailControls}
         />
 
         {noteSelection && noteWorkflow ? (

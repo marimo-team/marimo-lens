@@ -21,6 +21,64 @@ afterEach(() => {
 });
 
 describe("target attention", () => {
+  test("obsolete Trail controls cannot replace newer attention", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
+    setupCell("first").scrollIntoView = vi.fn();
+    const second = setupCell("second");
+    second.scrollIntoView = vi.fn();
+    controller.startTrail({
+      id: "trail-1",
+      steps: [
+        { cellId: "first", label: "Question" },
+        { cellId: "second", label: "Answer" },
+      ],
+    });
+    const navigation = onChange.mock.lastCall?.[0].trail;
+    controller.startTrail({
+      id: "current",
+      steps: [{ cellId: "second", label: "Current result" }],
+    });
+    navigation.next();
+    navigation.close();
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({ target: second, trail: { id: "current" } });
+    controller.reveal(revealEvent("second", "New work"));
+    navigation.next();
+    navigation.close();
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({ target: second, message: "New work" });
+    expect(onChange.mock.lastCall?.[0].trail).toBeUndefined();
+    controller.dispose();
+  });
+
+  test("smoothly frames distant Trail steps while keeping the popover available", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
+    const cell = setupCell("distant");
+    cell.getBoundingClientRect = () => new DOMRect(20, 20_000, 400, 300);
+    cell.scrollIntoView = vi.fn();
+    controller.startTrail({ id: "tour", steps: [{ cellId: "distant", label: "Evidence" }] });
+    expect(cell.scrollIntoView).toHaveBeenCalledWith({
+      block: "center",
+      inline: "nearest",
+      behavior: "smooth",
+    });
+    const surface = projectTargetAttentionSurface(onChange.mock.lastCall?.[0], window);
+    expect(surface.view?.presentation.trail?.index).toBe(0);
+    expect(surface.fallback).toBeNull();
+    cell.getBoundingClientRect = () => new DOMRect(20, 49, 400, 300);
+    window.dispatchEvent(new Event("scroll"));
+    vi.advanceTimersToNextFrame();
+    const arriving = projectTargetAttentionSurface(onChange.mock.lastCall?.[0], window, {
+      height: 44,
+      maxWidth: 400,
+    });
+    expect(arriving.view).not.toBeNull();
+    expect(arriving.fallback).toBeNull();
+    controller.dispose();
+  });
+
   test("marks visible activity without scrolling or moving focus", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
@@ -132,7 +190,7 @@ describe("target attention", () => {
     controller.dispose();
   });
 
-  test("reveals the exact cell once and expires after its exit", () => {
+  test("reveals the cell wrapper instead of its nested output", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
     const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
@@ -150,10 +208,23 @@ describe("target attention", () => {
       behavior: "smooth",
     });
     expect(output.scrollIntoView).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(4_000);
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "exiting" }));
-    vi.advanceTimersByTime(180);
-    expect(onChange).toHaveBeenLastCalledWith(null);
+    controller.dispose();
+  });
+
+  test.each([-10_000, 10_000])("jumps directly to a distant reveal at %s", (top) => {
+    vi.useFakeTimers();
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), vi.fn());
+    const cell = setupCell("distant");
+    cell.getBoundingClientRect = () => new DOMRect(20, top, 400, 300);
+    cell.scrollIntoView = vi.fn();
+
+    controller.reveal(revealEvent("distant", "Read the next chapter."));
+
+    expect(cell.scrollIntoView).toHaveBeenCalledWith({
+      block: "center",
+      inline: "nearest",
+      behavior: "instant",
+    });
     controller.dispose();
   });
 
@@ -172,6 +243,8 @@ describe("target attention", () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "exiting" }));
     vi.advanceTimersByTime(180);
     expect(onChange).toHaveBeenLastCalledWith(null);
+    vi.runOnlyPendingTimers();
+    expect(onChange).toHaveBeenLastCalledWith(null);
     controller.dispose();
   });
 
@@ -187,7 +260,7 @@ describe("target attention", () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "active" }));
     vi.advanceTimersByTime(1);
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ phase: "exiting" }));
-    vi.advanceTimersByTime(120);
+    vi.runOnlyPendingTimers();
     expect(onChange).toHaveBeenLastCalledWith(null);
     controller.dispose();
   });
@@ -375,7 +448,7 @@ describe("target attention", () => {
     expect(output.scrollIntoView).toHaveBeenCalledWith({
       block: "center",
       inline: "nearest",
-      behavior: "auto",
+      behavior: "instant",
     });
     controller.dispose();
   });

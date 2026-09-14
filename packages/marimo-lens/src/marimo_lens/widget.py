@@ -48,8 +48,13 @@ from ._protocol_models import (
     REVISION_ADAPTER,
     SELECTION_ID_ADAPTER,
     AttentionAddress,
+    AttentionTrailEvent,
+    AttentionTrailStopEvent,
     CellAttentionAddress,
     SelectionAttentionAddress,
+    Trail,
+    TrailStopPayload,
+    dump_model,
 )
 from ._registry import register_lens, unregister_lens
 from ._selection_state import (
@@ -66,6 +71,7 @@ from ._selection_state import (
 from .activity import ActivityHandle
 from .context import LensContext, SelectionReference
 from .errors import LensError
+from .trail import TrailStep
 
 _LOGGER = logging.getLogger(__name__)
 _STATIC = pathlib.Path(__file__).parent / "static"
@@ -103,6 +109,8 @@ class Lens(anywidget.AnyWidget):
         self._browser_views = 0
         self._selection_store = SelectionStore()
         self._runtime = MarimoRuntimeAdapter()
+        self._trail_id: str | None = None
+        self._trail_release: Callable[[], None] | None = None
         super().__init__(
             _state=self._selection_store.state.payload(),
             _selector=selector,
@@ -130,6 +138,63 @@ class Lens(anywidget.AnyWidget):
             target_cell_ids(state.selections(), state.current_selection_id)
         )
         return build_lens_context(runtime, state)
+
+    def show_trail(self, steps: Sequence[TrailStep]) -> None:
+        """Show 1–16 user-paced steps without saving notebook or History state.
+
+        Each step has a cell_id, label (40 UTF-16 units), and optional message
+        (1,000 units). A referenced cell or upstream rerun ends the walkthrough.
+        """
+        if isinstance(steps, (str, bytes)) or not isinstance(steps, Sequence):
+            raise TypeError("steps must be a sequence of Trail steps.")
+        try:
+            trail = Trail.model_validate({"id": uuid.uuid4().hex, "steps": list(steps)})
+        except ValidationError as error:
+            raise ValueError(f"Invalid Trail: {_validation_detail(error)[1]}") from None
+        with self._lock:
+            self._require_open()
+        for step in trail.steps:
+            status = self._runtime.cell_status(step.cell_id)
+            if status != "available":
+                raise LensError(
+                    "cell_not_found" if status == "missing" else "runtime_unavailable",
+                    f"Trail cell {step.cell_id!r} is not available in the active notebook.",
+                )
+        owner = weakref.ref(self)
+
+        def invalidate() -> None:
+            lens = owner()
+            if lens is not None:
+                with lens._lock:
+                    if lens._trail_id == trail.id:
+                        lens._clear_trail()
+                        with suppress(Exception):
+                            lens.send(
+                                dump_model(
+                                    AttentionTrailStopEvent(
+                                        payload=TrailStopPayload(trail_id=trail.id)
+                                    )
+                                )
+                            )
+
+        release = self._runtime.observe_cells(
+            [step.cell_id for step in trail.steps], invalidate
+        )
+        if release is None:
+            raise LensError("runtime_unavailable", "Lens cannot track Trail validity.")
+        with self._lock:
+            if self._lens_closed:
+                release()
+                self._require_open()
+            self._clear_trail()
+            self._trail_id, self._trail_release = trail.id, release
+            with suppress(Exception):
+                self.send(dump_model(AttentionTrailEvent(payload=trail)))
+
+    def _clear_trail(self) -> None:
+        if self._trail_release is not None:
+            self._trail_release()
+        self._trail_id = self._trail_release = None
 
     def reveal(
         self,
@@ -250,6 +315,7 @@ class Lens(anywidget.AnyWidget):
                     "The active marimo dataflow graph has no cell with this ID.",
                     revision=revision,
                 )
+            self._clear_trail()
             with suppress(Exception):
                 self.send(event(address))
 
@@ -260,7 +326,12 @@ class Lens(anywidget.AnyWidget):
         expected_revision: int,
         summary: str | None = None,
     ) -> int:
-        """Move completed selections into History and return the new revision."""
+        """Move completed selections into History and return the new revision.
+
+        Include a summary of what changed and what you verified, up to 240
+        UTF-16 code units. It appears beside the original request in each
+        History entry. All selections in a batch share the same summary.
+        """
 
         normalized_ids = _selection_ids(selection_ids)
         expected_revision = _expected_revision(expected_revision)
@@ -311,6 +382,7 @@ class Lens(anywidget.AnyWidget):
             self._lens_closed = True
             self._output_capture.close()
             self._selection_store.release()
+            self._clear_trail()
         unregister_lens(self)
         super().close()
 

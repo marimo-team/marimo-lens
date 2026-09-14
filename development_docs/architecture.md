@@ -131,6 +131,18 @@ standalone text, compact references, and local storage.
 
 ## Design decisions
 
+### Trails are transient attention
+
+Python validates an ordered list of cell explanations, sends it in one
+`attention.trail` event, and keeps only one lifecycle watch for validity. A
+referenced cell or upstream rerun sends a matching `attention.trail.stop`.
+Replacement attention and Lens close release the watch.
+
+The browser owns the active Trail and step index, reusing target attention
+for framing and the existing popover header for navigation. Next/previous and
+dismissal are local. There is no catalog, synced trait, notebook serialization,
+History entry, or dock tab for Trails.
+
 ### Python owns selection state
 
 One Python aggregate gives browser views and agent calls the same revision,

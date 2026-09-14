@@ -120,6 +120,16 @@ export class NotebookDomAdapter {
     return listOutputCells(this.document);
   }
 
+  stopScroll(target: HTMLElement): void {
+    let node: Node | null = target;
+    while (node) {
+      if (node instanceof this.window.HTMLElement) {
+        node.scrollTo({ top: node.scrollTop, left: node.scrollLeft, behavior: "instant" });
+      }
+      node = node.parentNode ?? (node instanceof this.window.ShadowRoot ? node.host : null);
+    }
+  }
+
   deepestElementAtPoint(x: number, y: number): Element | null {
     return deepestElementAtPoint(this.document, x, y);
   }

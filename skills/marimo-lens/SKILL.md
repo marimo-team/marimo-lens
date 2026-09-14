@@ -14,9 +14,58 @@ description: >-
 
 # Work with marimo Lens
 
+## Work alongside the user
+
+Default to a colleague's voice across chat, activity, popovers, and resolution
+summaries. Show what you changed or found, why it matters to the shared task,
+and what we could look at next. Keep it conversational and concise; assume
+the user's competence. Use a teaching tone when the user asks for instruction.
+
+Use "I" for work you actually did and "let's" for shared exploration. A
+read-only walkthrough should describe existing findings without claiming you
+made the changes. Prefer "I removed the duplicates and checked the totals" or
+"This growth case exceeds capacity. Let's look at the trial next." Avoid lesson
+framing such as "Now you will learn", quizzes, or directing the user to notice
+each feature. Labels should name the change or finding, such as "Duplicates
+removed" or "Growth exceeds capacity".
+
+## Quick walkthrough
+
+In an active code-mode session, the loaded `marimo_lens.agent` capability already
+contains the complete walkthrough API. Reuse it; do not reload the same help,
+full skill, or reference recipe. Route introductions and exploratory tours here,
+without entering the selection/image lifecycle below.
+
+If the landmarks are not already known, read a compact outline of `ctx.cells`
+(IDs, names, statuses, and first code lines). Batch-read three to five useful
+cells, their errors, and relevant live values. Explain the question, evidence,
+main result, and next step in reading order. Reuse verified context from the
+conversation and show the route promptly; do not audit every supporting table.
+
+```python
+mounted.show_trail(
+    [
+        {
+            "cell_id": "<verified cell ID>",
+            "label": "What we're checking",
+            "message": "<what you changed or found, and why it matters>",
+        },
+        # Add the other verified landmarks in reading order.
+    ]
+)
+```
+
+Use short, concrete labels and one takeaway per step. The user controls the
+reading pace through the popover stepper. No sleeps or polling are needed.
+A text/data tour does not need selection context, PNG captures, or resolution.
+Do not edit or rerun cells unless requested. If more investigation is required,
+start meaningful activity on the first relevant landmark while verifying the
+rest, then show the Trail to replace it. Return control after showing it.
+
 ## Load the installed workflow
 
-In the notebook kernel, discover the installed API and read its packaged skill:
+For selection work, images, or target authoring, load the installed workflow
+once in the notebook kernel:
 
 ```python
 import marimo_lens.agent
@@ -252,8 +301,8 @@ if selection is None:
 activity = mounted.start_activity(
     selection,
     expected_revision=snapshot.revision,
-    label="Inspecting selected target",
-    message="Reading the marked view and its producer context.",
+    label="Checking this result",
+    message="I'm checking this result against the data that produced it.",
 )
 print(
     json.dumps(
@@ -289,6 +338,12 @@ Use these addressing rules:
 Leave `duration_ms` unset for work spanning context, edits, execution, and
 verification. Pass `duration_ms` for a bounded status that should clear itself
 after its hold.
+
+Start activity and read the needed context in the same kernel call. Keep it
+visible through edits, execution, and verification. At a meaningful phase
+change, start new activity with an updated label and retain its new handle.
+Reveal replaces activity directly, so a separate stop is unnecessary on the
+successful path. Stop the owned handle when abandoning or recovering work.
 
 ## Inspect the required evidence
 
@@ -327,6 +382,7 @@ executable graph membership. Read non-graph cells when they clarify the
 narrative, but do not use them as activity or reveal targets. Choose a short
 graph-member route through setup, inputs, transformations, and results, and
 reveal that route in notebook order when the selection list is empty too.
+Use the [Trail guidance](#quick-walkthrough) to plan the route and pace it.
 
 Selection PNGs are annotated capture-time evidence. Read the selection PNG
 when it supplies the required visual context. Start a fresh cell capture when
@@ -379,12 +435,28 @@ When the image reader requires a path, use the
 Delete the private path after the image reader returns. Make visual claims only
 after it returns visible pixels.
 
-When the reader reports that the current model or session cannot display
-images, treat visual inspection as unavailable for the rest of that session.
+Check the available tools before requesting images. If the session exposes
+only text results and no image reader, or the reader reports that it cannot
+display images, treat visual inspection as unavailable. Skip capture and
+image-inspection attempts that cannot inform the task. Python image objects,
+dimensions, hashes, base64, and OCR do not establish visual inspection.
 Delete the temporary path and skip later image-reader calls unless the reader
 capability changes. Verify through code, data, cell status, and errors. State
 the visual coverage limit in the final response, and attribute appearance
 claims supplied by the user or a source to that observer.
+
+## Trail lifetime
+
+`show_trail(steps)` takes 1–16 ordered steps with `cell_id`, a short `label`
+(up to 40 UTF-16 units), and an optional `message` (up to 1,000). It returns
+`None` and saves nothing. Use the [quick walkthrough](#quick-walkthrough) path
+for introductions and real-time exploration; a longer example is in the
+[Trail recipe](reference/workflow.md#show-a-trail).
+
+The popover holds each step until navigation or dismissal. Referenced cell or
+upstream changes end the Trail. Verify changed content before showing a new
+one, and refresh cell IDs after a kernel restart. Activity, timed reveal,
+another Trail, or page refresh replaces or ends the presentation.
 
 ## Apply, verify, and present
 
@@ -396,10 +468,14 @@ Use this lifecycle for each addressed selection:
 4. Inspect its producing cells and host source.
 5. Apply the change.
 6. Verify against fresh runtime and browser evidence.
-7. Stop the owned activity.
-8. Reveal the selected target.
-9. Wait for the reveal hold.
-10. Resolve the verified selection.
+7. Reveal the selected target, replacing activity.
+8. Resolve with a summary of the outcome and verification in the same call.
+
+Call `reveal()` before `resolve()` with the same captured revision, then end
+the kernel call. History updates immediately; the browser shows the reveal
+before its receipt, using the retained History target when needed. Use the
+hold for independent reading or planning. Keep notebook edits and revisioned
+Lens mutations ordered.
 
 Keep selection-addressed activity visible while inspecting and editing its
 producer cells or host source. The selection remains the presentation target.
@@ -434,13 +510,17 @@ path. Read that cell, confirm its status and relevant errors, inspect a fresh
 cell image when the claim is visual, then reveal and resolve. Do not enumerate
 the full notebook or create a duplicate cell.
 
-After verification succeeds, call `stop_activity(activity)` for persistent
-activity. Timed activity may be stopped early or allowed to finish its hold.
-Read fresh Lens context and find the same selection ID. Reassess its note,
-target, and revision when Lens state changed. Reveal that `SelectionReference`
-with the fresh captured revision. Set `duration_ms` long enough for the user to
-orient to the selected surface and read its message. Use one kernel call per
-reveal, print the hold, and wait for it before sending the next.
+After verification succeeds, read fresh Lens context and find the same
+selection ID. Reassess its note, target, and revision when Lens state changed.
+Reveal that `SelectionReference` with the fresh captured revision. Set
+`duration_ms` long enough for the user to orient to the selected surface and
+read its message. Resolve the verified IDs immediately after sending the
+reveal; completion needs no wait between those calls.
+
+Let the result remain visible for its hold before starting the next activity
+or reveal, since either replaces the current presentation. Read the next
+request or prepare its plan during this time. The receipt's display timer does
+not require an additional agent wait.
 
 Reveal each distinct selected surface before resolving it. Selections on one
 verified surface can share one reveal and batch resolve. Start with
@@ -449,11 +529,17 @@ revision returned by each resolve and carry it into the next call. Follow the
 [presentation recipe](reference/workflow.md#present-and-resolve-across-calls)
 for the kernel-call sequence.
 
-The addressed receipt is the final presentation. Keep its summary to one short
-sentence of at most 240 UTF-16 code units. Put detailed evidence in notebook
-cells and reveal messages. On `revision_conflict`, leave selections open,
-stop the saved activity handle, reconnect, and reassess fresh context. Start new
-activity if work continues.
+Pass `summary=` on each resolve call so the user can read what happened beside
+the original request in History. Name the concrete change or finding and what
+you verified, rather than a generic "Done". For a no-change resolution, explain
+why the verified result already answers the request. A batch attaches the same
+summary to every History entry; resolve separately when outcomes differ.
+
+The addressed receipt is the final presentation and shows the same summary.
+Keep it to one short sentence of at most 240 UTF-16 code units. Put detailed
+evidence in notebook cells and reveal messages. On `revision_conflict`, leave
+selections open, stop the saved activity handle, reconnect, and reassess fresh
+context. Start new activity if work continues.
 
 An owning-document **Target unavailable** notice is transient browser state.
 Keep the activity handle while the host view rebuilds and verify that the target

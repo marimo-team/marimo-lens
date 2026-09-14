@@ -1,5 +1,5 @@
 import { LocateFixed, MousePointer2 } from "lucide-react";
-import { useLayoutEffect, useRef, type CSSProperties } from "react";
+import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
 import {
   TARGET_ATTENTION_TOP_GUTTER,
@@ -73,7 +73,8 @@ export function projectTargetAttention(
   const target = presentation?.target;
   if (!presentation || !target?.isConnected) return null;
   const rect = target.getBoundingClientRect();
-  if (!intersectsViewport(rect, ownerWindow)) return null;
+  const transitioning = presentation.trail && presentation.framing === "pending";
+  if (!transitioning && !intersectsViewport(rect, ownerWindow)) return null;
 
   const anchor = clamp(
     ownerWindow.innerWidth - rect.right + 8,
@@ -84,7 +85,14 @@ export function projectTargetAttention(
   const labelMaxWidth = Math.floor(Math.min(LABEL_MAX_WIDTH, availableLabelWidth));
   const labelHeight =
     measurement?.maxWidth === labelMaxWidth ? measurement.height : LABEL_MIN_HEIGHT;
-  if (rect.top < Math.max(TARGET_ATTENTION_TOP_GUTTER, labelHeight + LABEL_GAP + VIEWPORT_MARGIN)) {
+  const minimumTop = Math.max(
+    TARGET_ATTENTION_TOP_GUTTER,
+    labelHeight + LABEL_GAP + VIEWPORT_MARGIN,
+  );
+  const labelTop = transitioning
+    ? clamp(rect.top, minimumTop, ownerWindow.innerHeight - VIEWPORT_MARGIN)
+    : rect.top;
+  if (labelTop < minimumTop) {
     return null;
   }
 
@@ -99,7 +107,7 @@ export function projectTargetAttention(
     },
     label: {
       right: anchor,
-      bottom: ownerWindow.innerHeight - rect.top + LABEL_GAP,
+      bottom: ownerWindow.innerHeight - labelTop + LABEL_GAP,
       maxWidth: labelMaxWidth,
     },
   };
@@ -108,21 +116,27 @@ export function projectTargetAttention(
 export function TargetAttentionIndicator({
   view,
   onLabelMeasure,
+  controls,
 }: {
   view: TargetAttentionView | null;
   onLabelMeasure?: (sequence: number, measurement: TargetAttentionLabelMeasurement) => void;
+  controls?: ReactNode;
 }) {
   const labelRef = useRef<HTMLDivElement>(null);
+  const sequence = view?.presentation.sequence;
+  const maxWidth = view?.labelMaxWidth;
+  const hasControls = !!controls;
   useLayoutEffect(() => {
-    if (!view || !onLabelMeasure || !labelRef.current) return;
+    if (sequence === undefined || maxWidth === undefined || !onLabelMeasure || !labelRef.current)
+      return;
     const height = Math.ceil(labelRef.current.getBoundingClientRect().height);
     if (height > 0) {
-      onLabelMeasure(view.presentation.sequence, {
+      onLabelMeasure(sequence, {
         height,
-        maxWidth: view.labelMaxWidth,
+        maxWidth,
       });
     }
-  }, [onLabelMeasure, view]);
+  }, [onLabelMeasure, sequence, maxWidth, hasControls]);
 
   if (!view) return null;
   const { presentation } = view;
@@ -140,7 +154,7 @@ export function TargetAttentionIndicator({
       data-target-kind={presentation.locator.kind}
       data-target-label={targetLabel}
       data-marimo-lens-ui
-      aria-hidden="true"
+      aria-hidden={controls ? undefined : true}
     >
       <div className="ml-target-attention__ring" style={view.ring} />
       <div ref={labelRef} className="ml-target-attention__label" style={view.label}>
@@ -150,14 +164,23 @@ export function TargetAttentionIndicator({
           <MousePointer2 size={14} strokeWidth={2} aria-hidden="true" />
         )}
         <span className="ml-target-attention__status">{status}</span>
-        <span className="ml-target-attention__target">{targetLabel}</span>
-        {detail ? <span className="ml-target-attention__message">{detail}</span> : null}
+        {!presentation.trail && <span className="ml-target-attention__target">{targetLabel}</span>}
+        {detail ? (
+          <span key={presentation.sequence} className="ml-target-attention__message">
+            {detail}
+          </span>
+        ) : null}
+        {controls}
       </div>
     </div>
   );
 }
 
-export function TargetAttentionFallback({ presentation, reason }: TargetAttentionFallbackView) {
+export function TargetAttentionFallback({
+  presentation,
+  reason,
+  controls,
+}: TargetAttentionFallbackView & { controls?: ReactNode }) {
   const { message } = presentation;
   const targetLabel = presentation.locator.label;
   const status =
@@ -176,12 +199,15 @@ export function TargetAttentionFallback({ presentation, reason }: TargetAttentio
       data-target-kind={presentation.locator.kind}
       data-target-label={targetLabel}
       data-marimo-lens-ui
-      aria-hidden="true"
+      aria-hidden={controls ? undefined : true}
     >
       <LocateFixed size={14} strokeWidth={2} aria-hidden="true" />
       <span className="ml-target-attention-notice__status">{status}</span>
-      <span className="ml-target-attention-notice__target">{targetLabel}</span>
+      {!presentation.trail && (
+        <span className="ml-target-attention-notice__target">{targetLabel}</span>
+      )}
       {message ? <span className="ml-target-attention-notice__message">{message}</span> : null}
+      {controls}
     </div>
   );
 }
@@ -237,7 +263,10 @@ function attentionAnnouncement(presentation: TargetAttentionPresentation): strin
       : label
         ? `${label} ${preposition} ${target}.`
         : `Revealed ${target}.`;
-  return message ? `${status} ${message}` : status;
+  const step = presentation.trail
+    ? `Step ${presentation.trail.index + 1} of ${presentation.trail.count}. `
+    : "";
+  return step + (message ? `${status} ${message}` : status);
 }
 
 function intersectsViewport(rect: DOMRect, ownerWindow: Window): boolean {

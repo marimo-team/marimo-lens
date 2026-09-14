@@ -140,6 +140,7 @@ lifetime.
 | `stop_activity(activity)`                   | Stops presentation when the handle still owns it.                        |
 | `reveal(target, ...)`                       | Brings one stored selection or graph cell into view for a supplied hold. |
 | `resolve(selection_ids, ...)`               | Moves verified selections to History in one revisioned state transition. |
+| `show_trail(steps)`                         | Shows a bounded, transient notebook walkthrough.                         |
 
 The handle delegates to the public `Lens` methods. Argument and lifecycle
 contracts therefore stay aligned between notebook users and agent integrations.
@@ -196,6 +197,18 @@ Activity remains until:
 handle cannot clear newer presentation. Transport failure during stop is
 best-effort and leaves Python selection state unchanged.
 
+## Trails
+
+After verifying cells, an agent calls `show_trail(steps)` once and returns.
+Python validates the complete route and sends an `attention.trail` event.
+The browser owns its index and the compact stepper in the popover header.
+There is no saved catalog or model trait, and navigation needs no kernel calls.
+
+The runtime adapter watches the referenced cells. A changed cell or upstream
+rerun sends `attention.trail.stop` with the matching ID, so an old callback
+cannot cancel newer attention. At most one watch remains; replacement attention
+and Lens close release it. Dismissal and browser refresh discard the UI route.
+
 ## Reveal and resolve
 
 Reveal is transient. Resolve is a durable change to the current in-memory Lens
@@ -204,12 +217,18 @@ aggregate.
 The normal completion sequence is:
 
 1. Verify the requested result against fresh notebook and browser evidence.
-2. Stop the matching activity handle.
-3. Reveal the stored selection or graph cell for a caller-supplied duration.
-4. Allow the reveal hold to finish.
-5. Reconnect, read the current revision, and resolve the verified selection IDs.
+2. Reveal the stored selection or graph cell, replacing the current activity.
+3. Resolve the verified selection IDs with the same captured revision in that call.
+4. End the kernel call so the browser can present the result.
+5. Use the hold for independent reading or planning.
 6. Let each owning document's resolution receipt become its final browser
    acknowledgement.
+
+The browser can locate a queued reveal through a History entry whose resolution
+revision follows the reveal's captured revision. Activity still requires an Open
+selection. Both paths enforce the owning document. Keep revisioned mutations
+ordered. A later attention event replaces the current reveal, so start the next
+activity after its hold.
 
 The browser queues a resolution receipt behind an active reveal. Python commits
 resolve before sending the event. Each document filters the event to History

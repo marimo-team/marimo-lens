@@ -52,6 +52,14 @@ Agents call `marimo_lens.agent.connect()` to reuse an existing Lens, including
 automatically mounted instances. `discover()` lists available handles when an
 agent needs to check availability or choose between instances.
 
+After verification, call `resolve(..., summary="...")` with what changed or
+what you found and checked. The summary appears beside the original request in
+History. A batch shares one summary; resolve separately when outcomes differ.
+
+Use `show_trail(steps)` for a transient notebook walkthrough. A small stepper
+in the popover header lets users move at their own pace. Nothing is saved;
+referenced cell or upstream changes end the walkthrough.
+
 Lens works with agents that can execute Python in the live notebook kernel,
 including [marimo Pair](https://marimo.io/pair). The package includes the matching
 agent instructions and registers its Lens capability with marimo. Follow

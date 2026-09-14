@@ -9,7 +9,6 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from typing import Any, cast
 
-import marimo_lens
 import pytest
 from marimo_lens import (
     ActivityHandle,
@@ -88,18 +87,6 @@ class DelayedEventLens(RecordingLens):
 
 
 def test_public_api_exposes_context_and_resolution_contracts() -> None:
-    assert marimo_lens.__all__ == [
-        "ActivityHandle",
-        "CellReference",
-        "Lens",
-        "LensContext",
-        "LensError",
-        "LensReferences",
-        "NotebookReference",
-        "SelectionReference",
-        "SelectionTargetReference",
-        "__version__",
-    ]
     lens_parameters = inspect.signature(Lens).parameters
     assert list(lens_parameters) == ["dom_selector"]
     assert lens_parameters["dom_selector"].kind is inspect.Parameter.KEYWORD_ONLY

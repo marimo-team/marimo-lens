@@ -29,6 +29,8 @@ export class EventRouter {
       message.type !== "selection.resolved" &&
       message.type !== "attention.activity.start" &&
       message.type !== "attention.activity.stop" &&
+      message.type !== "attention.trail" &&
+      message.type !== "attention.trail.stop" &&
       message.type !== "attention.reveal"
     ) {
       return false;
