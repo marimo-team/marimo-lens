@@ -163,6 +163,12 @@ uses the explicitly registered UI root and follows its active element.
 `createLensSurface()` owns the host, theme observer, shared document styles,
 and disposal. The portal registers that root with `NotebookDomAdapter`.
 
+The dock follows the visible intersection of that surface with its embedding
+page. This keeps it inside VS Code's notebook pane, whose output webview can be
+much taller than the pane. The notebook viewport adapter refreshes that
+intersection on VS Code's `view-scroll` messages, including translations that
+preserve the intersection ratio.
+
 ## Browser view ownership
 
 One Python `Lens` model can have several AnyWidget browser views. The first Lens
