@@ -9,6 +9,18 @@ description: Exact public shapes for Lens context references, targets, anchors, 
 The object represents one selection-state revision. It does not update when the
 notebook, browser document, or Lens state changes.
 
+To create `lens`, run this in a notebook cell with `marimo-lens` installed:
+
+```python
+from marimo_lens import Lens
+
+lens = Lens()
+lens
+```
+
+Keep that cell displayed, create a selection with **Select**, then run this in
+another cell. Rerun it to read changes to the selection:
+
 ```python
 context = lens.context()
 
@@ -87,6 +99,7 @@ Lens could not inspect the active marimo runtime.
 | `cells`              | `list[CellReference]`            | Producing cell IDs with current graph status.                    |
 | `anchor`             | `Mapping[str, object]`           | Normalized point or region geometry.                             |
 | `snapshot`           | `Mapping[str, object]`           | Selection-image status.                                          |
+| `description`        | `Mapping[str, object]`, optional | Captured target label, detail, and rendering reference.          |
 | `domHint`            | `Mapping[str, object]`, optional | Bounded description of the element at the point or region.       |
 | `previousResolution` | `Mapping[str, object]`, optional | Prior result for the current reopened selection.                 |
 
@@ -172,8 +185,8 @@ The `bounds` mapping contains `x`, `y`, `width`, and `height` between zero and
 one. The bounds remain inside the target.
 
 DOM hint fields are bounded when the browser collects them. When the complete
-reference exceeds its shared budget, fitting drops optional DOM hints before
-shortening notes. Target identity, selection identity, and anchor geometry
+reference exceeds its shared budget, fitting drops optional DOM hints and
+target descriptions before shortening notes. Target identity, selection identity, and anchor geometry
 remain intact.
 
 ## Captured target description
@@ -185,7 +198,8 @@ separate from runtime-derived notebook provenance. History and reopen retain
 the creation-time description. Compact context may omit descriptions to fit its
 byte budget, and standalone text reports truncation within its own budget.
 
-See [Client metadata](../concepts/targets#client-metadata) for the DOM contract.
+See [Custom labels and metadata](../custom-metadata) for runnable examples and
+[Client metadata](../concepts/targets#client-metadata) for the DOM contract.
 
 ## Selection image status
 

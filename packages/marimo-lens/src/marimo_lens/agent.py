@@ -49,8 +49,12 @@ Connect to Lens inside a live marimo code-mode kernel call:
     mounted = lens_agent.connect(ctx)
     snapshot = mounted.context()
 
-After connect(ctx) raises LensError(code="lens_unavailable"), queue a Lens cell
-in a fresh kernel call:
+connect() reuses authored and automatically mounted Lens instances. Call
+lens_agent.discover(ctx) to inspect available handles and choose an identity
+when several exist.
+
+If Lens is still rendering, end the kernel call and retry after it is ready.
+When no Lens exists, queue a Lens cell in a fresh kernel call:
 
     import marimo._code_mode as cm
     import marimo_lens.agent as lens_agent
@@ -294,12 +298,49 @@ def add_lens_cell(ctx: object) -> str:
     return str(cell_id)
 
 
+def discover(context: object | None = None) -> tuple[MountedLens, ...]:
+    """Return available Lens handles without creating a widget or notebook cell.
+
+    Includes browser-ready instances in the active runtime, even when the host
+    mounted them without a notebook variable. A supplied code-mode context also
+    contributes Lens objects in its globals, which may not be rendered yet.
+    Aliases and browser registrations for the same object produce one handle.
+
+    Returns an empty tuple when none are available. Each handle's identity can
+    be passed to connect() to select that instance. Order implies no priority.
+
+    Raises:
+        TypeError: The context lacks a globals mapping.
+    """
+
+    namespace: Mapping[str, object] | None = None
+    if context is not None:
+        raw_namespace = getattr(context, "globals", None)
+        if not isinstance(raw_namespace, Mapping):
+            raise TypeError("context must expose a globals mapping")
+        namespace = cast(Mapping[str, object], raw_namespace)
+    candidates = {id(lens): lens for lens in mounted_lenses(current_runtime_scope())}
+    if namespace is not None:
+        for value in namespace.values():
+            lens = _as_lens(value)
+            if lens is not None:
+                candidates.setdefault(id(lens), lens)
+
+    return tuple(
+        MountedLens(
+            identity=_identity(lens),
+            lens=lens,
+        )
+        for lens in candidates.values()
+    )
+
+
 def connect(
     context: object | None = None,
     *,
     identity: str | None = None,
 ) -> MountedLens:
-    """Return the Lens selected from code-mode context or browser registration.
+    """Select one of the Lens handles returned by discover().
 
     Pass a code-mode context to include existing Lens objects from its kernel
     globals. Pass an earlier handle's identity to reconnect to that Lens in a
@@ -313,32 +354,13 @@ def connect(
         ValueError: Identity is empty.
     """
 
-    namespace: Mapping[str, object] | None = None
-    if context is not None:
-        raw_namespace = getattr(context, "globals", None)
-        if not isinstance(raw_namespace, Mapping):
-            raise TypeError("context must expose a globals mapping")
-        namespace = cast(Mapping[str, object], raw_namespace)
     if identity is not None:
         if not isinstance(identity, str):
             raise TypeError("identity must be a string or None")
         if not identity:
             raise ValueError("identity must not be empty")
 
-    candidates = {id(lens): lens for lens in mounted_lenses(current_runtime_scope())}
-    if namespace is not None:
-        for value in namespace.values():
-            lens = _as_lens(value)
-            if lens is not None:
-                candidates.setdefault(id(lens), lens)
-
-    mounted = tuple(
-        MountedLens(
-            identity=_identity(lens),
-            lens=lens,
-        )
-        for lens in candidates.values()
-    )
+    mounted = discover(context)
     if identity is not None:
         for lens in mounted:
             if lens.identity == identity:
@@ -358,7 +380,7 @@ def connect(
         "lens_ambiguous",
         (
             "The active notebook has multiple available Lens instances. "
-            "Reconnect with an identity, or close or remove extra Lens instances."
+            "Use discover() to inspect candidates and reconnect with an identity."
         ),
     )
 
@@ -392,6 +414,7 @@ __all__ = [
     "agent_plugin",
     "agent_skill",
     "connect",
+    "discover",
 ]
 
 

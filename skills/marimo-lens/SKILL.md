@@ -8,33 +8,57 @@ description: >-
   producer context, and available images, then show activity on that target,
   verify the result, reveal it, and resolve the selection to History. Use when
   the user refers to "this" output, asks to address Lens selections, requests a
-  notebook walkthrough, or invokes `$marimo-lens address` for every open
-  selection.
+  notebook walkthrough, co-creates HTML or anywidget output for Lens, or
+  invokes `$marimo-lens address` for every open selection.
 ---
 
 # Work with marimo Lens
+
+## Load the installed workflow
+
+In the notebook kernel, discover the installed API and read its packaged skill:
+
+```python
+import marimo_lens.agent
+
+help(marimo_lens.agent)
+skill = marimo_lens.agent.agent_skill()
+print(skill.body)
+```
+
+Read the complete output and follow the instructions that match the installed
+Lens version. Resolve supporting files with `skill / "reference/workflow.md"`.
+If kernel access is not available yet, connect through Pair first.
 
 ## Execution environment
 
 Run this skill in a live marimo code-mode environment. If the current agent can
 already execute code in the notebook kernel, continue with the Lens workflow.
 
-Otherwise, install the
-[marimo Pair skill](https://github.com/marimo-team/marimo-pair/tree/main/skills/marimo-pair):
+Otherwise, run:
 
 ```console
-npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
+npx skills use "https://github.com/marimo-team/marimo-pair" --skill "marimo-pair"
 ```
 
-Use `$marimo-pair` to connect to or start the notebook. Resume `$marimo-lens`
-after code-mode execution is available.
+If `npx` is unavailable, use Deno through `uvx`:
+
+```console
+uvx deno x -y skills use "https://github.com/marimo-team/marimo-pair" --skill "marimo-pair"
+```
+
+Follow the generated skill instructions now. Read the complete output,
+redirecting it to a temporary file first if necessary. Resolve relative paths
+from the supporting-files directory it provides. Once connected, load the
+[installed Lens workflow](#load-the-installed-workflow).
 
 Notebook discovery, connection, scratchpad execution, and general notebook
 inspection and mutation belong to the active code-mode integration, such as
 Pair. This skill owns Lens grounding, images, activity, reveals, and resolution.
 
 Activate this workflow after the request identifies Lens work through a
-selection, output reference, overview, or walkthrough.
+selection, output reference, overview, walkthrough, or co-creation of output
+that will receive Lens feedback.
 
 Use [reference/workflow.md](reference/workflow.md) for Lens-specific kernel-call
 recipes, image-byte handling, and focused operation recovery. `SKILL.md` owns
@@ -53,7 +77,11 @@ why.
 
 ## Choose the mounted target scope
 
-Read the notebook and current browser surface before creating a Lens cell.
+Call `lens_agent.connect(ctx)` before creating a Lens cell. Authored and
+automatically mounted Lens instances are reused, including those with no named
+notebook variable. Read the notebook and current browser surface when no Lens
+is discoverable. If a mount is still rendering, end the kernel call and retry
+after browser readiness before adding another widget.
 
 - Use `Lens()` for an ordinary marimo notebook. Notebook outputs are selectable
   by default.
@@ -75,6 +103,55 @@ from marimo_lens import Lens
 lens = Lens()
 lens
 ```
+
+## Preserve meaning when co-creating outputs
+
+When creating or revising HTML or anywidgets with the user, attach Lens metadata
+to meaningful regions such as a chart, metric, or comparison panel. Encode what
+each region represents, its units or grouping, and where it is produced. These
+short descriptions carry the authored structure into later feedback and edits.
+
+| Attribute                                               | Meaning                                                                                                  |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `data-marimo-lens-label`                                | Human-readable name, up to 256 UTF-16 units.                                                             |
+| `data-marimo-lens-detail`                               | Context accompanying the name, such as measure, units, grouping, or filter, up to 512 UTF-16 units.      |
+| `data-marimo-lens-render-source`                        | JSON with a real project `path` and optional `symbol`, `line`, and `column` locating the rendering code. |
+| `data-marimo-lens-context`                              | Preferred image-context container for a configured DOM target.                                           |
+| `data-marimo-lens-cell-id`, `data-marimo-lens-selector` | A resolved producing cell ID and optional symbolic value selector. Lens does not execute the selector.   |
+| `data-marimo-lens-inputs`                               | Space-separated IDs of source elements declaring the region's complete notebook inputs.                  |
+
+For example, render this through `mo.Html` or an anywidget's renderer, replacing
+the rendering reference with the actual file and symbol:
+
+```html
+<section
+  id="regional-revenue"
+  data-marimo-lens-label="Revenue by region"
+  data-marimo-lens-detail="Monthly totals · USD · grouped by region"
+  data-marimo-lens-render-source='{"path":"widgets/revenue.js","symbol":"render"}'
+  data-marimo-lens-context
+>
+  <h3>Revenue by region</h3>
+  <!-- Render the comparison here. -->
+</section>
+```
+
+Labels inside ordinary notebook output can describe the whole output. To make
+this region independently selectable, include `#regional-revenue` in the mounted
+Lens's `dom_selector` and keep its ID unique and stable across renders. For an
+anywidget, put these attributes on a light-DOM wrapper. Rendering references
+must be on the selected root, even when its content lives in a shadow tree.
+
+Use the host's resolved cell IDs and source records for notebook provenance.
+Native notebook targets already identify their producing cell. Custom labels
+and file references do not establish notebook inputs. Omit unresolved source
+attributes, since invalid input references make a configured target unavailable.
+
+Check the target indicator and a new selection's `description` after rendering.
+Lens captures the label, detail, and rendering reference at selection time and
+retains them through History and reopen. Updating metadata affects future
+selections. See the [metadata guide](https://marimo-team.github.io/marimo-lens/custom-metadata)
+for interactive examples and the complete host contract.
 
 ## Connect and read the request
 
@@ -120,9 +197,10 @@ together. Reconnect in later kernel calls with
 `connect(cm.get_context(), identity=identity)`. Retry without the saved identity
 when that Lens becomes unavailable.
 
-Passing `ctx` lets `connect()` reuse an existing Lens object from notebook
-globals before considering a new Lens cell. When the first `connect(ctx)` call
-without an identity reports `lens_unavailable`, use the
+Passing `ctx` includes Lens objects from notebook globals alongside browser-ready
+instances in the active runtime. When `connect(ctx)` reports `lens_unavailable`,
+allow any pending mount to render and retry in a fresh kernel call. If none
+exists, use the
 [mount recipe](reference/workflow.md#mount-lens-when-unavailable) for a notebook
 or follow the host integration's mount workflow. Connect again in a fresh
 kernel call after the target document renders Lens.
@@ -137,9 +215,13 @@ In selection-address mode, do not iterate over `ctx.cells` or print a notebook
 inventory. Notebook-order enumeration belongs to explicit overview and
 walkthrough requests.
 
-When `connect(ctx)` reports `lens_ambiguous`, reconnect with a saved identity.
-Without an identity, ask the user to close or remove extra Lens instances.
-Report Lens as unavailable when adding or rendering the Lens cell fails.
+When `connect(ctx)` reports `lens_ambiguous`, use a saved identity or call
+`lens_agent.discover(ctx)` to get available `MountedLens` handles. Inspect their
+identities and compact current selections, then choose the instance that matches
+the request. Discovery returns an empty tuple when none are available and never
+mounts a widget. Order does not indicate browser ownership. Ask the user which
+instance to use if the evidence cannot distinguish them. Report Lens as
+unavailable when adding or rendering it fails.
 
 `snapshot.current` is the likely referent for "this", "here", or "the selected
 target". The explicit request takes priority over an older selection note. An
@@ -219,6 +301,11 @@ Route work from `selection["target"]["kind"]` before planning a mutation:
 For a DOM target, read `target["sources"]` to distinguish exact notebook values
 defined by the same cell. Match the selectors to the producing code and inspect current
 values through the active notebook integration before changing notebook logic.
+
+Read `selection.get("description")` for the captured name, detail, and rendering
+reference. Use that authored context to interpret the region and locate its
+implementation, then verify against current source and values. Descriptions are
+optional and can be omitted from bounded context.
 
 `documentId` is an opaque browser-document identity. Preserve it inside the
 `SelectionReference`; do not construct, compare, or pass it separately.

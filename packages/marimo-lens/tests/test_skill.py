@@ -5,17 +5,24 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
+import pytest
 from marimo_lens.context import LensContext
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_primary_skill_routes_agents_into_code_mode_through_pair() -> None:
-    skill = (REPOSITORY_ROOT / "skills/marimo-lens/SKILL.md").read_text()
+def test_primary_skill_reads_the_packaged_workflow(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    namespace: dict[str, Any] = {}
+    exec(  # noqa: S102 - Exercise the repository-owned skill example.
+        _python_block("skills/marimo-lens/SKILL.md", "## Load the installed workflow"),
+        namespace,
+    )
 
-    assert (
-        "npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair"
-    ) in skill
+    skill = namespace["skill"]
+    assert skill.body in capsys.readouterr().out
+    assert (skill / "reference/workflow.md").is_file()
 
 
 def test_primary_skill_image_snippet_reads_selection_evidence() -> None:

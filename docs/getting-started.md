@@ -68,7 +68,8 @@ mo.md(
 )
 ```
 
-Mount Lens in another cell:
+If the notebook already shows a Lens dock, use it. Otherwise mount Lens in
+another cell:
 
 ```python
 from marimo_lens import Lens
@@ -225,3 +226,7 @@ reads the current Lens context, verifies a change, reveals the result, and
 resolves the selection. Read [How Lens works](./how-lens-works) first when you
 want the complete collaboration model. The [Selections guide](./selections)
 covers gestures, notes, image status, deletion, History, and reopening.
+
+To name HTML output or select individual cards within it, try
+[Custom labels and metadata](./custom-metadata). The guide includes a complete
+`mo.Html` example and an editable preview.

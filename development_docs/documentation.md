@@ -36,6 +36,7 @@ The current site routes readers through:
 - `docs/how-lens-works.md`: end-to-end collaboration loop and interactive API proof.
 - `docs/concepts/`: targets, context and evidence, feedback, and History.
 - `docs/selections.md`: point and region interaction, notes, images, Open, and History.
+- `docs/custom-metadata.md`: runnable HTML metadata examples and a live captured-description inspector.
 - `docs/agents.md`: code-mode and Agent Skill workflow.
 - `docs/data-and-trust.md`: data exposure, redaction, lifetime, and transfer boundaries.
 - `docs/compatibility.md`: Python, marimo, browser, agent-host, and release-channel contracts.

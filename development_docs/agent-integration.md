@@ -47,6 +47,11 @@ The authored resources live at repository root in `plugin.json` and
 
 ## Add a Lens cell
 
+Try `connect(ctx)` or inspect `discover(ctx)` first. Authored and automatically
+mounted instances are already discoverable after browser readiness, including
+objects retained as cell outputs rather than notebook globals. Let pending
+mounts finish rendering before deciding to create another widget.
+
 `add_lens_cell(ctx)` accepts a live marimo code-mode context with cell lookup,
 creation, and execution APIs.
 
@@ -76,13 +81,19 @@ selector policy. `add_lens_cell()` creates the default notebook-output Lens.
 
 ## Connect to Lens
 
-`connect(context=None, *, identity=None)` considers two candidate sources:
+`discover(context=None)` returns a tuple of `MountedLens` handles from two
+candidate sources:
 
 - Existing `Lens` objects and supported marimo wrappers in `context.globals`.
 - Browser-ready Lens instances registered in the current marimo runtime scope.
 
 Candidates are deduplicated by Python object identity. Closed Lens objects and
 objects with no communication channel are excluded.
+
+An empty tuple reports no candidates. Order implies no browser ownership or
+priority. `connect(context=None, *, identity=None)` selects from that same
+public discovery path. Agents can inspect candidate contexts and reconnect by
+identity when several instances exist.
 
 Connection outcomes:
 

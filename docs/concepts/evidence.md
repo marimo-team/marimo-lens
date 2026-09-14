@@ -12,6 +12,7 @@ form answers a different question about the request. A Document Object Model
 | Evidence            | Question it answers                                            |
 | ------------------- | -------------------------------------------------------------- |
 | Selection reference | What did the person select and ask for?                        |
+| Target description  | What name and rendering reference did the author supply?       |
 | DOM hint            | What rendered element was at the selected point or region?     |
 | Graph context       | Which cells and controls produced the target?                  |
 | Selection image     | What did the target look like when the selection was captured? |
@@ -23,7 +24,19 @@ Python shapes.
 
 ## Selection references
 
-With the mounted `lens` from [Getting started](/getting-started),
+Install `marimo-lens` in the notebook environment and mount Lens in one cell:
+
+```python
+from marimo_lens import Lens
+
+lens = Lens()
+lens
+```
+
+Keep the cell displayed, press **Select**, and click or drag on another output.
+Run the inspection example in another cell, rerunning it after selections change.
+[Getting started](/getting-started) includes installation commands.
+
 `Lens.context()` returns compact references for every open selection. A
 selection reference contains its stable ID and `S<n>` label, note, target,
 producing cells, point or region, DOM hint, and selection snapshot status.

@@ -90,47 +90,33 @@ Create a new selection when the page now represents a different target.
 
 ## Target labels
 
-In Select mode, Lens outlines the pointed or keyboard-focused target and places
-its label at the element's edge. The indicator follows the Marimo theme and disappears when selection starts
-or Select mode ends. It does not intercept pointer input. Selectable content
-uses a crosshair cursor while Select mode is active, including native controls
-and custom-rendered descendants. Lens restores authored cursors when it leaves
-the target or exits Select mode. Declared targets that normally pass pointer
-input through to underlying content become pickable during Select mode; their
-authored pointer behavior is restored afterward.
+In Select mode, Lens outlines the pointed or keyboard-focused target and shows
+its name at the element's edge. The indicator disappears when selection starts
+or Select mode ends. Selectable content uses a crosshair cursor during selection.
 
-Any consumer can provide the display text. For example, configure
-`Lens(dom_selector="[data-feedback-target]")` and render:
+Set `data-marimo-lens-label` for a name and `data-marimo-lens-detail` for
+secondary text. Put them on the configured target root, or inside a notebook
+output to describe that output. Lens renders bounded plain text and announces
+the same text during keyboard target navigation.
 
-```html
-<section
-  data-feedback-target
-  data-marimo-lens-label="Revenue forecast"
-  data-marimo-lens-detail="Query · finance.monthly"
->
-  <!-- Your application renders this region. -->
-</section>
-```
+The [Custom labels and metadata guide](../custom-metadata) has runnable
+`mo.Html` examples and an interactive editor. It shows label fallback,
+rendering references, image context, and the description an agent receives.
 
-`data-marimo-lens-label` is the primary name; `data-marimo-lens-detail` is optional
-secondary text. Lens defines this `TargetInfo` model and renders bounded plain
-text (256 UTF-16 units for a name, 512 for detail). Consumers choose the data;
-HTML, scripts, links, and custom presentation are not interpreted. Updates appear
-without moving the pointer. Keyboard target navigation announces the same text.
+A root's explicit label takes precedence over labels on nested elements or
+sources named by `data-marimo-lens-inputs`. An explicit detail accompanies that
+label. Otherwise, collected source labels can supply secondary text. With no
+custom label, Lens uses available value selectors, headings, accessible names,
+producing cell IDs, or the element name.
 
-Studio supplies these attributes from resolved projections. Regions linked with
-`data-marimo-lens-inputs` inherit their source hosts' labels; an explicit label on the
-region takes precedence; source labels remain as secondary information unless
-the region supplies its own detail. Without consumer text, Lens uses available value
-selectors, accessible names, headings, or cell IDs. Display labels do not grant
-notebook access, change target identity, or establish provenance.
-
-After selection, labels retain the captured description, such as “Revenue” or
-`athlete_summary.athletes`. Hover over the target label in the note editor or
-selection list to see its producing cell IDs and rendering reference. The same
-sources remain available in `Lens.context()` through note edits and History.
+Labels describe a target. Its document, exact selector, and notebook sources
+establish identity. Changing a label updates the target indicator and future
+selections. Existing selections retain their captured description.
 
 ## Client metadata
+
+This contract is for hosts that already resolve notebook cell IDs. To label an
+ordinary `mo.Html` output, start with [Custom labels and metadata](../custom-metadata).
 
 Custom clients publish resolved notebook sources through Lens-owned attributes.
 Lens derives Python code, graph dependencies, and controls from those cell IDs

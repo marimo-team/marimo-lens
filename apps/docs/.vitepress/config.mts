@@ -41,7 +41,6 @@ const navigation = [
     text: "Concepts",
     items: [
       { text: "Targets", link: "/concepts/targets" },
-      { text: "Selections", link: "/selections" },
       { text: "Context and evidence", link: "/concepts/evidence" },
       { text: "Feedback and History", link: "/concepts/feedback" },
     ],
@@ -49,6 +48,8 @@ const navigation = [
   {
     text: "Guides",
     items: [
+      { text: "Selections", link: "/selections" },
+      { text: "Custom labels and metadata", link: "/custom-metadata" },
       { text: "Connect an agent", link: "/agents" },
       { text: "Data and trust", link: "/data-and-trust" },
       { text: "Compatibility", link: "/compatibility" },
