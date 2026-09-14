@@ -1,0 +1,53 @@
+docs/reference/errors.md
+  s_6fe6cca6f818d7::t_679bc9f535229c 85-87
+apps/docs/.vitepress/config.mts
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 51-52
+docs/concepts/evidence.md
+  s_6fe6cca6f818d7::t_679bc9f535229c 15
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 27-39
+development_docs/documentation.md
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 39
+docs/api.md
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 39-41
+docs/agents.md
+  s_6fe6cca6f818d7::t_67f6984cc7064d 36,39,42-51,63-74
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 12-26
+skills/marimo-lens/SKILL.md
+  s_6fe6cca6f818d7::t_14e6b202e95d47 53
+  s_6fe6cca6f818d7::t_67f6984cc7064d 17-32,38-44,47,50-52
+docs/selections.md
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 17-29
+packages/marimo-lens/tests/test_skill.py
+  s_6fe6cca6f818d7::t_61219666671896 14-16
+  s_6fe6cca6f818d7::t_67f6984cc7064d 8,17-21,23-25
+docs/reference/context.md
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 12-23,102,201-202
+  s_6fe6cca6f818d7::t_679bc9f535229c 188-189
+docs/concepts/targets.md
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 93-100,102-104,106-110,112-114,118-119
+docs/getting-started.md
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 228-231
+README.md
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 62
+packages/marimo-lens/README.md
+  s_6fe6cca6f818d7::t_760f935e6bd9b7 60
+docs/custom-metadata.md
+  s_6fe6cca6f818d7::t_cf1f9b6199fa4d 1-144,151-155,159-164,168-194,198-199,210-285
+  s_6fe6cca6f818d7::t_e97ec8e4960f16 145-150,156-158,165-167,195-197,200-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "37437020e92219fdb06e5668725f672fd3c3452d",
+  "prompts": {},
+  "sessions": {
+    "s_6fe6cca6f818d7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09dfa-4c1e-7ba3-b4e1-a676ff35fbb5",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
