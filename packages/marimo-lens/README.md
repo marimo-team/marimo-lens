@@ -29,8 +29,9 @@ uv add marimo-lens
 uv run marimo edit notebook.py
 ```
 
-Requires Python 3.10–3.14 and marimo 0.24.0 or newer. Mount Lens in one notebook
-cell and keep it displayed:
+Requires Python 3.10–3.14 and marimo 0.24.0 or newer. If the notebook already
+shows a Lens dock, use that instance. Otherwise mount Lens in one notebook cell
+and keep it displayed:
 
 ```python
 from marimo_lens import Lens
@@ -46,6 +47,10 @@ for notebook inputs, labels, rendering references, and image context. Native
 Marimo outputs remain selectable through their existing output cells.
 
 ## Connect an agent
+
+Agents call `marimo_lens.agent.connect()` to reuse an existing Lens, including
+automatically mounted instances. `discover()` lists available handles when an
+agent needs to check availability or choose between instances.
 
 Lens works with agents that can execute Python in the live notebook kernel,
 including [marimo Pair](https://marimo.io/pair). The package includes the matching

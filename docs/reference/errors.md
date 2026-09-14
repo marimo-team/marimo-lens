@@ -19,7 +19,7 @@ or malformed.
 | Code                      | Cause                                                              | Recovery                                                                      |
 | ------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
 | `lens_unavailable`        | No live Lens matches the requested identity.                       | Retry `connect()` without identity, then mount Lens when none is available.   |
-| `lens_ambiguous`          | Several Lens instances are available without a selecting identity. | Reconnect with a saved identity or remove extra instances.                    |
+| `lens_ambiguous`          | Several Lens instances are available without a selecting identity. | Inspect `discover()` handles and reconnect with the intended identity.        |
 | `lens_closed`             | The owning Lens instance closed.                                   | Mount and connect to a new Lens.                                              |
 | `revision_conflict`       | Selection state changed after the caller captured context.         | Stop owned activity, read a fresh context, and reassess the work.             |
 | `selection_not_found`     | A referenced selection is no longer Open.                          | Read current selections and keep unrelated work unchanged.                    |

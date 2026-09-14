@@ -114,7 +114,8 @@ can find several Python Lens instances even when one browser view owns the dock.
 `LensError(code="lens_ambiguous")`.
 
 **Action:** Reconnect with the `MountedLens.identity` saved from the intended
-Lens, or close and remove extra Lens instances before connecting again.
+Lens. If you have no saved identity, use `lens_agent.discover(ctx)` to inspect
+available handles and their current selections. See [Find an existing instance](./agents#find-an-existing-instance).
 
 ```python
 mounted = lens_agent.connect(ctx, identity=saved_identity)

@@ -13,8 +13,10 @@ Each kernel call has a fresh scratchpad namespace. Import
 
 ## Mount Lens when unavailable
 
-After the first `connect(cm.get_context())` call without an identity raises
-`LensError(code="lens_unavailable")`, queue one collapsed Lens cell:
+Start with `connect(cm.get_context())` to reuse a named or automatically mounted
+Lens. If it raises `LensError(code="lens_unavailable")`, allow pending notebook
+output to render and retry in a fresh kernel call. When no Lens exists, queue
+one collapsed Lens cell:
 
 ```python
 import marimo._code_mode as cm
@@ -42,8 +44,10 @@ import marimo_lens.agent as lens_agent
 mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
 ```
 
-Retry once without the saved identity when that Lens is unavailable. Read a
-fresh context before continuing with a different Lens.
+Retry once without the saved identity when that Lens is unavailable. Use
+`lens_agent.discover(cm.get_context())` to inspect available handles if connection
+is ambiguous. Select by identity using the request and each handle's current
+selection as evidence. Read a fresh context before continuing with a different Lens.
 
 ## Capture a current cell image
 
@@ -150,14 +154,14 @@ document identity, so reconnect and read fresh Lens context before continuing.
 
 ## Operation recovery
 
-| Error code            | Next action                                                          |
-| --------------------- | -------------------------------------------------------------------- |
-| `lens_unavailable`    | Retry without identity, then mount Lens when none is available.      |
-| `lens_ambiguous`      | Reconnect with an identity, or close or remove extra Lens instances. |
-| `revision_conflict`   | Stop saved activity, reconnect, and reassess fresh Lens context.     |
-| `selection_not_found` | Reconnect and inspect the current selections.                        |
-| `capture_busy`        | Finish the pending cell capture before requesting another.           |
-| `runtime_unavailable` | Keep the request open and report that verification is unavailable.   |
+| Error code            | Next action                                                            |
+| --------------------- | ---------------------------------------------------------------------- |
+| `lens_unavailable`    | Retry without identity, then mount Lens when none is available.        |
+| `lens_ambiguous`      | Inspect `discover()` handles and reconnect with the intended identity. |
+| `revision_conflict`   | Stop saved activity, reconnect, and reassess fresh Lens context.       |
+| `selection_not_found` | Reconnect and inspect the current selections.                          |
+| `capture_busy`        | Finish the pending cell capture before requesting another.             |
+| `runtime_unavailable` | Keep the request open and report that verification is unavailable.     |
 
 Keep selections open when recovery cannot restore current evidence and fresh
 verification.

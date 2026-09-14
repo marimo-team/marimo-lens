@@ -39,6 +39,7 @@ def test_agent_module_exports_the_handoff_surface() -> None:
         "agent_plugin",
         "agent_skill",
         "connect",
+        "discover",
     }
 
 
@@ -309,6 +310,32 @@ def test_connect_uses_a_lens_held_by_a_marimo_wrapper(
     lens.close()
 
 
+def test_discover_lists_candidates_for_explicit_reconnection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first = Lens()
+    second = _mounted_lens()
+    context = _code_mode_context(
+        first=first,
+        alias=first,
+        second=_marimo_wrapper(second, monkeypatch),
+    )
+    handles = agent.discover(context)
+    assert len({handle.identity for handle in handles}) == 2
+    for handle in handles:
+        assert (
+            agent.connect(context, identity=handle.identity).identity == handle.identity
+        )
+    assert set(context.globals) == {"first", "alias", "second"}
+
+    first.close()
+    assert [handle.identity for handle in agent.discover(context)] == [
+        agent.connect().identity
+    ]
+    second.close()
+    assert agent.discover(context) == ()
+
+
 def test_connect_reports_ambiguous_context_lenses() -> None:
     first = Lens()
     second = Lens()
@@ -355,6 +382,7 @@ def test_connect_requires_a_context_globals_mapping() -> None:
 
 def test_connect_tracks_the_browser_mount_lifecycle() -> None:
     lens = Lens()
+    assert agent.discover() == ()
 
     with pytest.raises(LensError) as raised:
         agent.connect()
@@ -364,11 +392,13 @@ def test_connect_tracks_the_browser_mount_lifecycle() -> None:
     _set_mounted(lens)
     _set_mounted(lens)
     identity = agent.connect().identity
+    assert [item.identity for item in agent.discover()] == [identity]
 
     _set_mounted(lens, mounted=False)
     assert agent.connect().identity == identity
 
     _set_mounted(lens, mounted=False)
+    assert agent.discover() == ()
     with pytest.raises(LensError) as raised:
         agent.connect()
 
@@ -422,6 +452,7 @@ def test_connect_scopes_mounted_lenses_by_ui_registry(
     assert second_identity != first_identity
     _active_runtime.context = SimpleNamespace(ui_element_registry=first_scope)
     assert agent.connect().identity == first_identity
+    assert [item.identity for item in agent.discover()] == [first_identity]
 
     first.close()
     second.close()

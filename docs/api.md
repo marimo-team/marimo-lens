@@ -5,16 +5,18 @@ description: Public Python contracts for mounting Lens and connecting a code-mod
 
 # Python API
 
-Mount `Lens` in a notebook cell. Connect to that instance from a live agent
-kernel call with `marimo_lens.agent.connect()`.
+Use `marimo_lens.agent.connect()` in the live notebook kernel to reuse an
+existing Lens. Notebook authors can mount `Lens` when the host has not already
+provided one.
 
 | Task                                       | API                                                                                                              |
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| Discover existing instances                | [`discover()`](#discover)                                                                                        |
 | Add the notebook interface                 | [`Lens`](#lens)                                                                                                  |
 | Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                          |
 | Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal) |
 | Move addressed requests to History         | [`resolve()`](#lens-resolve)                                                                                     |
-| Connect an agent or capture current output | [`connect()`](#connect), [`MountedLens`](#mountedlens)                                                           |
+| Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                |
 | Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
 
 The two caller roles are:
@@ -292,6 +294,9 @@ async with cm.get_context() as context:
     cell_id = lens_agent.add_lens_cell(context)
 ```
 
+Call `connect()` or `discover()` first to reuse an authored or automatically
+mounted Lens. This helper searches for agent-managed cells.
+
 The code-mode context creates and runs a queued cell when its async context
 manager exits. Connect in a later kernel call after the browser renders Lens.
 
@@ -299,11 +304,40 @@ manager exits. Connect in a later kernel call after the browser renders Lens.
 objects raise `TypeError`. Several agent-managed Lens cells raise
 `LensError(code="lens_ambiguous")`.
 
+### `discover`
+
+`discover(context=None) -> tuple[MountedLens, ...]`
+
+Returns the available Lens handles without creating a widget or notebook cell.
+An empty tuple means no instance is discoverable in this call. Multiple results
+let an agent inspect their contexts and choose an identity for `connect()`.
+
+```python
+import marimo._code_mode as cm
+import marimo_lens.agent as lens_agent
+
+available = lens_agent.discover(cm.get_context())
+for candidate in available:
+    print(candidate.identity, candidate.context().current)
+```
+
+Discovery combines browser-ready instances in the current runtime with Lens
+objects and supported marimo wrappers in `context.globals`. Aliases of one object
+produce one handle. Automatically mounted instances need no global variable,
+but must finish browser registration before this path finds them. Globals can
+expose an instance before it is rendered. Closed objects are excluded.
+
+Order implies no preference or browser ownership. Handles retain the same identity
+across calls while their Lens exists. Discovery does not keep an unreferenced
+instance alive after its returned handles are released. A supplied context
+without a globals mapping raises `TypeError`.
+
 ### `connect`
 
 `connect(context=None, *, identity=None) -> MountedLens`
 
-Finds one live Lens and returns its agent-facing handle.
+Selects one of the available handles from `discover()`. Reuses authored and
+automatically mounted instances without creating another Lens.
 
 ```python
 import marimo._code_mode as cm

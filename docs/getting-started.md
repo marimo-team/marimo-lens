@@ -68,7 +68,8 @@ mo.md(
 )
 ```
 
-Mount Lens in another cell:
+If the notebook already shows a Lens dock, use it. Otherwise mount Lens in
+another cell:
 
 ```python
 from marimo_lens import Lens

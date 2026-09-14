@@ -77,7 +77,11 @@ why.
 
 ## Choose the mounted target scope
 
-Read the notebook and current browser surface before creating a Lens cell.
+Call `lens_agent.connect(ctx)` before creating a Lens cell. Authored and
+automatically mounted Lens instances are reused, including those with no named
+notebook variable. Read the notebook and current browser surface when no Lens
+is discoverable. If a mount is still rendering, end the kernel call and retry
+after browser readiness before adding another widget.
 
 - Use `Lens()` for an ordinary marimo notebook. Notebook outputs are selectable
   by default.
@@ -107,14 +111,14 @@ to meaningful regions such as a chart, metric, or comparison panel. Encode what
 each region represents, its units or grouping, and where it is produced. These
 short descriptions carry the authored structure into later feedback and edits.
 
-| Attribute | Meaning |
-| --- | --- |
-| `data-marimo-lens-label` | Human-readable name, up to 256 UTF-16 units. |
-| `data-marimo-lens-detail` | Context accompanying the name, such as measure, units, grouping, or filter, up to 512 UTF-16 units. |
-| `data-marimo-lens-render-source` | JSON with a real project `path` and optional `symbol`, `line`, and `column` locating the rendering code. |
-| `data-marimo-lens-context` | Preferred image-context container for a configured DOM target. |
-| `data-marimo-lens-cell-id`, `data-marimo-lens-selector` | A resolved producing cell ID and optional symbolic value selector. Lens does not execute the selector. |
-| `data-marimo-lens-inputs` | Space-separated IDs of source elements declaring the region's complete notebook inputs. |
+| Attribute                                               | Meaning                                                                                                  |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `data-marimo-lens-label`                                | Human-readable name, up to 256 UTF-16 units.                                                             |
+| `data-marimo-lens-detail`                               | Context accompanying the name, such as measure, units, grouping, or filter, up to 512 UTF-16 units.      |
+| `data-marimo-lens-render-source`                        | JSON with a real project `path` and optional `symbol`, `line`, and `column` locating the rendering code. |
+| `data-marimo-lens-context`                              | Preferred image-context container for a configured DOM target.                                           |
+| `data-marimo-lens-cell-id`, `data-marimo-lens-selector` | A resolved producing cell ID and optional symbolic value selector. Lens does not execute the selector.   |
+| `data-marimo-lens-inputs`                               | Space-separated IDs of source elements declaring the region's complete notebook inputs.                  |
 
 For example, render this through `mo.Html` or an anywidget's renderer, replacing
 the rendering reference with the actual file and symbol:
@@ -193,9 +197,10 @@ together. Reconnect in later kernel calls with
 `connect(cm.get_context(), identity=identity)`. Retry without the saved identity
 when that Lens becomes unavailable.
 
-Passing `ctx` lets `connect()` reuse an existing Lens object from notebook
-globals before considering a new Lens cell. When the first `connect(ctx)` call
-without an identity reports `lens_unavailable`, use the
+Passing `ctx` includes Lens objects from notebook globals alongside browser-ready
+instances in the active runtime. When `connect(ctx)` reports `lens_unavailable`,
+allow any pending mount to render and retry in a fresh kernel call. If none
+exists, use the
 [mount recipe](reference/workflow.md#mount-lens-when-unavailable) for a notebook
 or follow the host integration's mount workflow. Connect again in a fresh
 kernel call after the target document renders Lens.
@@ -210,9 +215,13 @@ In selection-address mode, do not iterate over `ctx.cells` or print a notebook
 inventory. Notebook-order enumeration belongs to explicit overview and
 walkthrough requests.
 
-When `connect(ctx)` reports `lens_ambiguous`, reconnect with a saved identity.
-Without an identity, ask the user to close or remove extra Lens instances.
-Report Lens as unavailable when adding or rendering the Lens cell fails.
+When `connect(ctx)` reports `lens_ambiguous`, use a saved identity or call
+`lens_agent.discover(ctx)` to get available `MountedLens` handles. Inspect their
+identities and compact current selections, then choose the instance that matches
+the request. Discovery returns an empty tuple when none are available and never
+mounts a widget. Order does not indicate browser ownership. Ask the user which
+instance to use if the evidence cannot distinguish them. Report Lens as
+unavailable when adding or rendering it fails.
 
 `snapshot.current` is the likely referent for "this", "here", or "the selected
 target". The explicit request takes priority over an older selection note. An

@@ -11,18 +11,13 @@ returns the verified result to the same target for review.
 
 ## Before connecting
 
-Install `marimo-lens` in the notebook environment and display one Lens cell:
+Install `marimo-lens` in the notebook environment and connect the agent to its
+live kernel. The Lens instance may come from a notebook cell, a host integration,
+or automatic mounting. It need not be assigned to a notebook variable.
 
-```python
-from marimo_lens import Lens
-
-lens = Lens()
-lens
-```
-
-Keep the cell mounted. Press **Select**, mark another output, and optionally add
-a note. [Getting started](./getting-started) covers installation. Run the agent
-examples through the live code-mode connection, where the notebook is executing.
+Try [Connect to Lens](#connect-to-lens) before adding a widget. If the dock is
+already visible, use it to mark an output and add a note. [Getting started](./getting-started)
+covers installation and manual mounting.
 
 ## Enter code mode
 
@@ -93,6 +88,43 @@ instance in a later kernel call.
 `lens_context.current` is the current selection and the likely referent for
 “this” or “here.” The current user instruction takes priority over an older
 selection note.
+
+## Find an existing instance
+
+`connect()` reuses an available Lens. It never creates a widget or notebook cell.
+It finds browser-ready instances in the active runtime, including automatically
+mounted ones, and Lens objects in the supplied code-mode globals.
+
+Use `discover()` to check availability or inspect several candidates:
+
+```python
+import marimo._code_mode as cm
+import marimo_lens.agent as lens_agent
+
+available = lens_agent.discover(cm.get_context())
+for candidate in available:
+    print(candidate.identity, candidate.context().current)
+```
+
+| Result          | Next action                                                                                                   |
+| --------------- | ------------------------------------------------------------------------------------------------------------- |
+| One handle      | Use it directly, or call `connect()` to select it.                                                            |
+| Several handles | Inspect their current selections, then reconnect with the intended handle's `identity`.                       |
+| Empty tuple     | Let any pending mount finish rendering and retry in a fresh kernel call. Add Lens when the notebook has none. |
+
+Discovery order does not indicate which instance owns the visible dock. Avoid
+choosing the first candidate arbitrarily or deleting another instance's selections
+to resolve ambiguity. Save the intended identity in the agent's working state:
+
+```python
+mounted = lens_agent.connect(cm.get_context(), identity=saved_identity)
+```
+
+An automatically mounted Lens appears in discovery after its browser view reports
+ready. An empty result during startup is not proof that the notebook needs another
+Lens. An existing object found in globals can be discovered before it is rendered.
+Rerunning the mounting cell can replace its Lens. Rediscover and read fresh
+context when the saved identity is no longer available.
 
 ## Address the current selection
 
@@ -171,8 +203,9 @@ another pass.
 
 ## Add Lens when the notebook has none
 
-When `connect()` raises `LensError(code="lens_unavailable")`, queue one
-collapsed Lens cell through the code-mode context:
+When discovery remains empty after notebook rendering, queue one collapsed Lens
+cell through the code-mode context. `add_lens_cell()` reuses an agent-managed
+cell, but does not replace discovery of authored or automatically mounted widgets:
 
 ```python
 import marimo._code_mode as cm
@@ -203,7 +236,8 @@ The identity belongs to one live Lens instance and lasts for that runtime. It
 is not a notebook-persistent ID. Retry once without the saved identity when
 that instance is gone, then read a fresh context before continuing.
 
-When several Lens instances are available, `connect()` requires an identity.
+When several Lens instances are available, use `discover()` to inspect their
+handles. `connect()` requires an identity to select one.
 The first displayed Lens view in each browser document owns interaction. Other
 views show **Lens is already active** until ownership changes.
 
