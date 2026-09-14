@@ -169,7 +169,7 @@
   position: fixed;
   z-index: 10;
   right: 0;
-  bottom: max(16px, env(safe-area-inset-bottom));
+  bottom: calc(var(--ml-viewport-bottom, 0px) + max(16px, env(safe-area-inset-bottom)));
   left: 0;
   display: flex;
   width: auto;
@@ -1625,7 +1625,7 @@
 
 @media (max-width: 640px) {
   .ml-dock {
-    bottom: max(12px, env(safe-area-inset-bottom));
+    bottom: calc(var(--ml-viewport-bottom, 0px) + max(12px, env(safe-area-inset-bottom)));
   }
 
   .ml-resolution-receipt,

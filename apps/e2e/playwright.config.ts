@@ -28,6 +28,7 @@ export default defineConfig({
         "robustness.spec.ts",
         "performance.spec.ts",
         "sessions.spec.ts",
+        "embedded.spec.ts",
       ],
       use: { ...devices["Desktop Chrome"], colorScheme: "light" },
     },

@@ -30,6 +30,7 @@ export function createLensSurface(ownerDocument: Document) {
   }
   const releaseStyles = acquireLensGlobalStyles(ownerDocument, FRAME_STYLES);
   return {
+    host,
     root: shadow,
     dispose: () => {
       observer.disconnect();

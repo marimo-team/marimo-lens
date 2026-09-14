@@ -38,6 +38,14 @@ reduced-motion preferences, forced colors, open shadow roots, and accessible
 same-origin iframe documents. A cross-origin iframe remains outside the
 document boundary and can block image capture.
 
+## VS Code native notebooks
+
+Lens positions its dock within the visible output webview. VS Code's code
+editors can cover that webview, including the dock. The marimo VS Code extension
+0.17.3 also omits graph cell IDs from its output DOM, so `Lens()` cannot discover
+those outputs as notebook targets. Use marimo's browser editor for the complete
+selection workflow.
+
 ## Code-mode agents
 
 The agent workflow requires an integration that can execute Python in the live
