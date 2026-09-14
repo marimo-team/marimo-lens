@@ -54,10 +54,22 @@ export const test = base.extend<{ browserErrors: string[]; notebook: void }>({
     async ({ page }, use, testInfo) => {
       const errors: string[] = [];
       const copilotStartup: string[] = [];
+      const backgroundImageFailures: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
       page.on("console", (message) => {
         if (message.type() !== "error") return;
         const text = message.text();
+        const url = message.location().url;
+        // Windows can exhaust a socket buffer loading marimo's decorative texture.
+        // Keep the diagnostic without failing Lens coverage on this optional image.
+        if (
+          text === "Failed to load resource: net::ERR_NO_BUFFER_SPACE" &&
+          url.startsWith(`${new URL(page.url()).origin}/assets/`) &&
+          /\/assets\/noise-[\w-]+\.png$/.test(url)
+        ) {
+          backgroundImageFailures.push(`${url}: ${text}`);
+          return;
+        }
         // marimo 0.24 eagerly initializes its disabled Copilot client in each editor.
         if (
           testInfo.project.name === "editor" &&
@@ -71,6 +83,12 @@ export const test = base.extend<{ browserErrors: string[]; notebook: void }>({
         errors.push(text);
       });
       await use(errors);
+      if (backgroundImageFailures.length > 0) {
+        await testInfo.attach("marimo-background-image-failures", {
+          body: JSON.stringify(backgroundImageFailures, null, 2),
+          contentType: "application/json",
+        });
+      }
       if (copilotStartup.length > 0) {
         await testInfo.attach("marimo-disabled-copilot-startup", {
           body: JSON.stringify(copilotStartup, null, 2),
