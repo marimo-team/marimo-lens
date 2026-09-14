@@ -25,6 +25,9 @@ uv sync --locked
 pnpm install --frozen-lockfile
 ```
 
+CI installs Node.js and pnpm from the root manifest through the shared
+`.github/actions/setup-js` action. Vite+ comes from the frozen workspace install.
+
 Install the Chromium browser used by the end-to-end suite:
 
 ```sh
