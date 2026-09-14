@@ -1,0 +1,71 @@
+packages/marimo-lens/src/marimo_lens/_protocol.py
+  s_99b8a4632dacdf::t_e0c5bfc5642542 174-176
+packages/marimo-lens/src/marimo_lens/_protocol_models.py
+  s_99b8a4632dacdf::t_e0c5bfc5642542 680,689,692,695,699-700
+packages/widget/src/transient/use-target-attention.ts
+  s_99b8a4632dacdf::t_6160af072b6eba 78-79
+  s_99b8a4632dacdf::t_381ed7fed34c2d 1,34,58-66,71-77,88,90,103-104,121
+packages/widget/tests/transient/target-attention.test.ts
+  s_99b8a4632dacdf::t_fcb71ce4590da2 708-709
+  s_99b8a4632dacdf::t_4da9b346d52284 31-41,44-51,64-110,118-129,584-586,650-653
+packages/protocol/src/contracts.ts
+  s_99b8a4632dacdf::t_381ed7fed34c2d 503,509-514,531
+packages/marimo-lens/src/marimo_lens/widget.py
+  s_99b8a4632dacdf::t_e0c5bfc5642542 56,75,143-152,154-156,159-183,186-191,193-213,218-219,223,292-315,321
+packages/protocol/tests/contracts.test.ts
+  s_99b8a4632dacdf::t_4da9b346d52284 28-31,559-563,574-577,579-584,586-588,594-597,605-613,615-620
+  s_99b8a4632dacdf::t_fcb71ce4590da2 558,568,571-573,578,589
+packages/marimo-lens/src/marimo_lens/__init__.py
+  s_99b8a4632dacdf::t_e0c5bfc5642542 18
+packages/marimo-lens/src/marimo_lens/reveal.py
+  s_99b8a4632dacdf::t_e0c5bfc5642542 1,7,10-14
+docs/agents.md
+  s_99b8a4632dacdf::t_6160af072b6eba 156
+development_docs/agent-integration.md
+  s_99b8a4632dacdf::t_6160af072b6eba 202-203
+docs/api.md
+  s_99b8a4632dacdf::t_8f74d7982b7b3d 19
+  s_99b8a4632dacdf::t_6160af072b6eba 172,175,181-183,199-227
+packages/widget/tests/anywidget/client.test.ts
+  s_99b8a4632dacdf::t_4da9b346d52284 439-440,482-483
+skills/marimo-lens/SKILL.md
+  s_99b8a4632dacdf::t_6160af072b6eba 46,49,54-55,451,457-460
+packages/widget/src/transient/trail-controls.tsx
+  s_99b8a4632dacdf::t_381ed7fed34c2d 27-64,68
+development_docs/architecture.md
+  s_99b8a4632dacdf::t_6160af072b6eba 136-137
+packages/marimo-lens/tests/test_widget.py
+  s_99b8a4632dacdf::t_ab8149bd5d73e3 21,187-194,226-229,234-267
+packages/marimo-lens/src/marimo_lens/agent.py
+  s_99b8a4632dacdf::t_177551101c97c0 81-85
+  s_99b8a4632dacdf::t_e0c5bfc5642542 21,282,285,289
+  s_99b8a4632dacdf::t_6160af072b6eba 75-76,79
+packages/widget/tests/app/marimo-lens-content.test.tsx
+  s_99b8a4632dacdf::t_177551101c97c0 209-219,223-225
+  s_99b8a4632dacdf::t_4da9b346d52284 107-111,531-534,615-616,834-835,1322-1327,1332,1355-1359,1375-1381,1420-1421,1479,1896-1902
+  s_99b8a4632dacdf::t_d87cf72d36d622 220-222
+packages/marimo-lens/README.md
+  s_99b8a4632dacdf::t_6160af072b6eba 59
+skills/marimo-lens/reference/workflow.md
+  s_99b8a4632dacdf::t_6160af072b6eba 110,113,118,123,128
+packages/widget/src/transient/target-attention.ts
+  s_99b8a4632dacdf::t_381ed7fed34c2d 46-51,110-119,142,145,150-154,173-177,204,220,250-253,273,346,389
+development_docs/protocol.md
+  s_99b8a4632dacdf::t_6160af072b6eba 95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2e01560cab1be0546dcbe8754e07269149263283",
+  "prompts": {},
+  "sessions": {
+    "s_99b8a4632dacdf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09f52-fce8-7370-a216-1b5c9506a2b1",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
