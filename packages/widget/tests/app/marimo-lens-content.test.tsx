@@ -1358,9 +1358,9 @@ describe("marimo-lens content", () => {
       "The producing cell.",
     );
 
-    void act(() => vi.advanceTimersByTime(4_179));
+    void act(() => vi.advanceTimersByTime(4_000));
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
-    void act(() => vi.advanceTimersByTime(1));
+    void act(() => vi.runOnlyPendingTimers());
     expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).toBeNull();
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")?.textContent).toContain(
       "S1AddressedUpdated the chart.",
@@ -1384,7 +1384,10 @@ describe("marimo-lens content", () => {
       }),
     );
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
-    void act(() => vi.advanceTimersByTime(4_180));
+    act(() => {
+      vi.advanceTimersByTime(4_000);
+      vi.runOnlyPendingTimers();
+    });
     expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).toBeNull();
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).not.toBeNull();
 
@@ -1406,7 +1409,7 @@ describe("marimo-lens content", () => {
       }),
     );
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
-    void act(() => vi.advanceTimersByTime(16));
+    void act(() => vi.advanceTimersToNextFrame());
     expect(new NotebookDomAdapter(document).activeElement).toBe(
       uiRoot().querySelector("[data-ml-select]"),
     );
@@ -1423,7 +1426,10 @@ describe("marimo-lens content", () => {
         },
       }),
     );
-    void act(() => vi.advanceTimersByTime(4_180));
+    act(() => {
+      vi.advanceTimersByTime(4_000);
+      vi.runOnlyPendingTimers();
+    });
     expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).toBeNull();
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
   });

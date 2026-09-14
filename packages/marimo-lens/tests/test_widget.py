@@ -157,25 +157,24 @@ def test_public_api_exposes_context_and_resolution_contracts() -> None:
     }
 
 
-def test_reveal_sends_one_transient_event_without_changing_selection_state(
+def test_reveal_normalizes_a_bounded_message_without_changing_state_or_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
 
-    monkeypatch.setattr(
-        MarimoRuntimeAdapter,
-        "cell_status",
-        lambda _self, _cell_id: "available",
-    )
+    monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", lambda *_: "available")
     lens = RecordingLens()
     _put(lens, revision=0, selection_value=selection())
     before = copy.deepcopy(_state(lens))
+    before_context = lens.context()
+    before_text = before_context.text
+    message = "x" * 1_000
 
     lens.reveal(
         "cell-view",
         label="Updated chart",
-        message="  Updated the aggregation used by the chart.  ",
-        duration_ms=8_000,
+        message=f"  {message}  ",
+        duration_ms=120_000,
     )
 
     assert lens.sent[-1] == (
@@ -189,46 +188,21 @@ def test_reveal_sends_one_transient_event_without_changing_selection_state(
                     {
                         "address": {"kind": "cell", "cellId": "cell-view"},
                         "label": "Updated chart",
-                        "message": "Updated the aggregation used by the chart.",
+                        "message": message,
                     }
                 ],
-                "durationMs": 8_000,
+                "durationMs": 120_000,
             },
         },
         [],
     )
     assert _state(lens) == before
     context = lens.context()
-    assert "reveal" not in json.dumps(context.references)
-    assert "Updated the aggregation" not in context.text
-
-
-def test_reveal_uses_the_caller_supplied_hold_for_a_long_result_message(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
-
-    monkeypatch.setattr(
-        MarimoRuntimeAdapter,
-        "cell_status",
-        lambda _self, _cell_id: "available",
-    )
-    lens = RecordingLens()
-    message = "x" * 1_000
-
-    lens.reveal(
-        "cell-view",
-        duration_ms=120_000,
-        message=message,
-    )
-
-    assert lens.sent[-1][0]["payload"] == {
-        "id": lens.sent[-1][0]["payload"]["id"],
-        "steps": [
-            {"address": {"kind": "cell", "cellId": "cell-view"}, "message": message}
-        ],
-        "durationMs": 120_000,
+    assert context.references == {
+        **before_context.references,
+        "generatedAt": context.references["generatedAt"],
     }
+    assert context.text == before_text
 
 
 def test_reveal_mixes_cells_and_selections_with_one_revision_guard(

@@ -74,20 +74,6 @@ def test_new_trail_releases_previous_watch_and_invalidation_is_scoped(
     assert not any(registry.registry.values())
 
 
-@pytest.mark.parametrize(
-    "steps",
-    [[], [{"target": "first", "label": "Question"}] * 17],
-)
-def test_invalid_step_count_is_rejected_before_publication(
-    trail_lens: Any, steps: Any
-) -> None:
-    lens, registry, messages = trail_lens
-    with pytest.raises(ValueError):
-        lens.reveal(steps, duration_ms=None)
-    assert not messages
-    assert not any(registry.registry.values())
-
-
 def test_missing_cell_rejects_the_entire_trail(trail_lens: Any) -> None:
     lens, registry, messages = trail_lens
     with pytest.raises(LensError) as error:
@@ -131,21 +117,27 @@ def test_single_and_sequence_reveals_share_the_same_held_contract(
 
 
 @pytest.mark.parametrize(
-    "steps, kwargs",
+    "steps, kwargs, error",
     [
-        ([{"target": "first"}], {"label": "Ambiguous"}),
-        ([{"target": "first"}, {"target": "second", "message": "x" * 1001}], {}),
-        ([{"target": "first", "unexpected": True}], {}),
-        (["first"], {}),
+        ([], {}, ValueError),
+        ([{"target": "first"}] * 17, {}, ValueError),
+        ([{"target": "first"}], {"label": "Ambiguous"}, TypeError),
+        (
+            [{"target": "first"}, {"target": "second", "message": "x" * 1001}],
+            {},
+            ValueError,
+        ),
+        ([{"target": "first", "unexpected": True}], {}, TypeError),
+        (["first"], {}, TypeError),
     ],
 )
 def test_invalid_reveal_steps_preserve_current_attention(
-    trail_lens: Any, steps: Any, kwargs: Any
+    trail_lens: Any, steps: Any, kwargs: Any, error: type[Exception]
 ) -> None:
     lens, registry, messages = trail_lens
     lens.reveal("first", duration_ms=None)
     current_id = messages[-1]["payload"]["id"]
-    with pytest.raises((TypeError, ValueError)):
+    with pytest.raises(error):
         lens.reveal(steps, duration_ms=None, **kwargs)
     assert len(messages) == 1
     registry.dispose("first", deletion=False)

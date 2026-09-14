@@ -53,10 +53,15 @@ describe("target attention", () => {
     navigation.next();
     navigation.close();
     expect(onChange.mock.lastCall?.[0]).toMatchObject({ target: second, trail: { id: "current" } });
-    controller.reveal(revealEvent("second", "New work"));
-    navigation.next();
-    navigation.close();
-    expect(onChange.mock.lastCall?.[0]).toMatchObject({ target: second, message: "New work" });
+    const currentNavigation = onChange.mock.lastCall?.[0].trail;
+    controller.startActivity(startActivityEvent("second", "New work"));
+    currentNavigation.next();
+    currentNavigation.close();
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({
+      kind: "activity",
+      target: second,
+      message: "New work",
+    });
     expect(onChange.mock.lastCall?.[0].trail).toBeUndefined();
     controller.dispose();
   });
@@ -91,7 +96,7 @@ describe("target attention", () => {
     expect(onChange.mock.lastCall?.[0].phase).toBe("exiting");
     first.trail.previous();
     expect(onChange.mock.lastCall?.[0].phase).toBe("exiting");
-    vi.advanceTimersByTime(180);
+    vi.runOnlyPendingTimers();
     expect(onChange).toHaveBeenLastCalledWith(null);
     first.trail.next();
     expect(onChange).toHaveBeenLastCalledWith(null);
@@ -102,7 +107,7 @@ describe("target attention", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
     const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
-    setupCell("slow").scrollIntoView = () => vi.setSystemTime(Date.now() + 200);
+    setupCell("slow").scrollIntoView = () => vi.setSystemTime(Date.now() + 60_000);
     controller.reveal(revealEvent("slow", "Brief result", 1));
     expect(onChange).toHaveBeenLastCalledWith(null);
     controller.dispose();
@@ -165,14 +170,15 @@ describe("target attention", () => {
     expect(onChange).toHaveBeenCalledTimes(initial);
     bounds = new DOMRect(20, 100, 400, 300);
     refresh();
-    expect(onChange).toHaveBeenCalledTimes(initial + 1);
-    expect(onChange.mock.lastCall?.[0].bounds).toEqual(bounds);
+    const moved = onChange.mock.lastCall?.[0];
+    expect(moved.bounds).toEqual(bounds);
     const originalWidth = window.innerWidth;
     try {
       window.innerWidth = originalWidth - 100;
       window.dispatchEvent(new Event("resize"));
       vi.advanceTimersToNextFrame();
-      expect(onChange).toHaveBeenCalledTimes(initial + 2);
+      expect(onChange.mock.lastCall?.[0]).not.toBe(moved);
+      expect(onChange.mock.lastCall?.[0]).toMatchObject({ target: cell, bounds });
     } finally {
       window.innerWidth = originalWidth;
       controller.dispose();

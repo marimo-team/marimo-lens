@@ -5,7 +5,6 @@ import {
   AttentionActivityStartEventSchema,
   AttentionActivityStopEventSchema,
   AttentionRevealEventSchema,
-  TrailSchema,
   ClearHistoryCommandSchema,
   GetSnapshotCommandSchema,
   DeleteSelectionCommandSchema,
@@ -24,33 +23,6 @@ import {
 import { selectionFixture } from "./fixtures";
 
 describe("transport envelope", () => {
-  test("carries a bounded transient Trail in its start event", () => {
-    const trail = {
-      id: "trail-1",
-      steps: [{ address: { kind: "cell" as const, cellId: "cell-1" }, label: "Question" }],
-    };
-    expect(
-      parseContract(
-        AttentionRevealEventSchema,
-        {
-          protocol: "marimo-lens.event",
-          version: 6,
-          type: "attention.reveal",
-          payload: trail,
-        },
-        "event",
-      ).payload,
-    ).toEqual(trail);
-    expect(() => parseContract(TrailSchema, { ...trail, steps: [] }, "trail")).toThrow();
-    expect(() =>
-      parseContract(
-        TrailSchema,
-        { ...trail, steps: Array.from({ length: 17 }, () => trail.steps[0]) },
-        "trail",
-      ),
-    ).toThrow();
-  });
-
   test("decodes object discriminators and preserves the message body", () => {
     const message = {
       protocol: "marimo-lens.response",
@@ -570,6 +542,20 @@ describe("selection contracts", () => {
     expect(parseContract(AttentionRevealEventSchema, reveal, "event")).toEqual(reveal);
     const held = { ...reveal, payload: { id: "held", steps: [step] } };
     expect(parseContract(AttentionRevealEventSchema, held, "event")).toEqual(held);
+    const maximum = { ...held, payload: { ...held.payload, steps: Array(16).fill(step) } };
+    expect(parseContract(AttentionRevealEventSchema, maximum, "event")).toEqual(maximum);
+    for (const steps of [[], Array(17).fill(step)]) {
+      expect(() =>
+        parseContract(
+          AttentionRevealEventSchema,
+          {
+            ...held,
+            payload: { ...held.payload, steps },
+          },
+          "event",
+        ),
+      ).toThrow();
+    }
     for (const invalidStep of [
       { ...step, address: { kind: "cell", cellId: "x".repeat(129) } },
       { ...step, message: "   " },
