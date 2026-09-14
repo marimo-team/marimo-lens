@@ -1,0 +1,19 @@
+skills/marimo-lens/SKILL.md
+  s_6fe6cca6f818d7::t_20a1ef07f74256 11-12,60-61,103-151,296-299
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6c0c7f8628fe5011982564f3e72d9ac7b722f986",
+  "prompts": {},
+  "sessions": {
+    "s_6fe6cca6f818d7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09dfa-4c1e-7ba3-b4e1-a676ff35fbb5",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
