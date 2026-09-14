@@ -1,0 +1,180 @@
+packages/widget/src/anywidget/event-router.ts
+  s_99b8a4632dacdf::t_a17ef65378b305 32
+packages/marimo-lens/src/marimo_lens/__init__.py
+  s_99b8a4632dacdf::t_778fd90e4ef22a 18,33
+packages/marimo-lens/src/marimo_lens/widget.py
+  s_99b8a4632dacdf::t_778fd90e4ef22a 55,57,74,147-150,152-167,183-185,187,191,193
+  s_99b8a4632dacdf::t_96311c385cb1e5 52,56,112-113,142-146,151,168-182,186,188-190,192,194-198,318,385
+  s_99b8a4632dacdf::t_07b5f6f5d4f800 329-334
+  s_99b8a4632dacdf::t_247d0414238b0b 51
+packages/widget/tests/transient/target-attention.test.ts
+  s_99b8a4632dacdf::t_bd0069eaedfcba 39-42
+  s_99b8a4632dacdf::t_2520e999eebef2 24,43-45
+  s_99b8a4632dacdf::t_dde0700b578846 54-69,71-72,79-81
+  s_99b8a4632dacdf::t_6968b337b72196 193,246-247,263
+  s_99b8a4632dacdf::t_9462527faee902 70,73-78
+  s_99b8a4632dacdf::t_aa282f278c33bd 451
+  s_99b8a4632dacdf::t_609df9724fd2bc 25-31,37-38,46-53
+  s_99b8a4632dacdf::t_bc0197ec607816 214-227
+  s_99b8a4632dacdf::t_33f95491d407af 32-36
+packages/widget/src/transient/target-attention-indicator.tsx
+  s_99b8a4632dacdf::t_247d0414238b0b 266-268
+  s_99b8a4632dacdf::t_3ac83c1fcadd62 168-172,179-183,206-208
+  s_99b8a4632dacdf::t_b34baeb8d99285 269
+  s_99b8a4632dacdf::t_9f1b2ee44255b4 2,119,123,157,167,173,202,210
+  s_99b8a4632dacdf::t_4b9753fc278554 126-128,134,136,139
+  s_99b8a4632dacdf::t_23edb308bbec62 130-131
+  s_99b8a4632dacdf::t_3b62f6917d6359 76-77,88-95,110
+packages/marimo-lens/tests/test_skill.py
+  ai_agent 141
+  s_99b8a4632dacdf::t_2c50f819af56e1 101,115-118,122,133,137-140,144
+  s_99b8a4632dacdf::t_2b59f9eeca547e 3,102-103,134-135,142-143,145-146
+packages/marimo-lens/tests/test_agent.py
+  s_99b8a4632dacdf::t_43e1b77043e8ee 123
+development_docs/architecture.md
+  s_99b8a4632dacdf::t_63f38c7d21b4d5 135,140
+  s_99b8a4632dacdf::t_43e1b77043e8ee 134,136-139,141-144
+packages/widget/src/app/marimo-lens-content.tsx
+  s_99b8a4632dacdf::t_1c2940786a5799 34,101-104,189-192,244-247,310
+packages/protocol/src/contracts.ts
+  s_99b8a4632dacdf::t_96311c385cb1e5 495-501,566
+  s_99b8a4632dacdf::t_a17ef65378b305 480-494,503-504,565,610-612
+  s_99b8a4632dacdf::t_1be37a09bf5ff4 502
+packages/marimo-lens/src/marimo_lens/_marimo_runtime.py
+  s_99b8a4632dacdf::t_778fd90e4ef22a 33-74
+packages/widget/src/transient/target-attention.ts
+  s_99b8a4632dacdf::t_247d0414238b0b 141-152
+  s_99b8a4632dacdf::t_1c2940786a5799 127,132-133
+  s_99b8a4632dacdf::t_bc0197ec607816 243-244
+  s_99b8a4632dacdf::t_27af2c8426e7d5 80,198-200,384-387
+  s_99b8a4632dacdf::t_bb4c2650287b7a 215-216
+  s_99b8a4632dacdf::t_3b62f6917d6359 248-249,269
+  s_99b8a4632dacdf::t_f25447c2eec5b3 331,341-354
+  s_99b8a4632dacdf::t_60cd61c36e6d4d 219
+  s_99b8a4632dacdf::t_a259578c67f5be 5,34,37-47,79,92,106,126,128-131,134-140,153-163,165,330
+  s_99b8a4632dacdf::t_21117198cfdc93 81,251,379-380
+packages/widget/src/selection/components/selection-sheet.tsx
+  s_99b8a4632dacdf::t_1c2940786a5799 67-70
+packages/widget/src/anywidget/request-client.ts
+  s_99b8a4632dacdf::t_10014234aeb560 143-148
+packages/widget/tests/notebook/notebook-dom.test.ts
+  s_99b8a4632dacdf::t_761b50630472f2 18-33
+development_docs/protocol.md
+  s_99b8a4632dacdf::t_43e1b77043e8ee 96-97
+skills/marimo-lens/SKILL.md
+  s_99b8a4632dacdf::t_df3c9b070fd7e0 540-542
+  s_99b8a4632dacdf::t_8d8c71b287c73d 385
+  s_99b8a4632dacdf::t_c2a3301891e4ad 17-51
+  s_99b8a4632dacdf::t_03a2357c1b99c7 448-459
+  s_99b8a4632dacdf::t_60f36a393a3c2d 342-347,471,477,513-514,519-523
+  s_99b8a4632dacdf::t_088f611ad7990e 472-476,478,516-517
+  s_99b8a4632dacdf::t_2af461d00ab9a3 515
+  s_99b8a4632dacdf::t_0d1bc04f1f1077 304-305
+  s_99b8a4632dacdf::t_0cba841507c23d 460,518
+  s_99b8a4632dacdf::t_6fb925a603e58f 438-442
+  s_99b8a4632dacdf::t_07b5f6f5d4f800 532-539
+packages/widget/src/transient/use-target-attention.ts
+  s_99b8a4632dacdf::t_247d0414238b0b 59-62
+  s_99b8a4632dacdf::t_a259578c67f5be 68,70-71,97
+  s_99b8a4632dacdf::t_a1dae2e09229e8 22
+  s_99b8a4632dacdf::t_0575bc906df1dc 72,102,113-121
+  s_99b8a4632dacdf::t_1c2940786a5799 1,31-38,69,91-94
+packages/widget/tests/setup.ts
+  s_99b8a4632dacdf::t_21117198cfdc93 3-12
+packages/marimo-lens/tests/test_context_types.py
+  s_99b8a4632dacdf::t_aca850083d85c5 19,35
+packages/widget/tests/app/marimo-lens-content.test.tsx
+  s_99b8a4632dacdf::t_71051a97692852 151-152
+  s_99b8a4632dacdf::t_eb65abf9d75f01 159-161,170-174
+  s_99b8a4632dacdf::t_a742e3f6b8b3c8 156,164-167,175
+  s_99b8a4632dacdf::t_cf6bcf2c246406 1291,1302,1313-1317,1384
+  s_99b8a4632dacdf::t_bdfb7a0c10dca1 1301,1385-1401,1409-1438
+  s_99b8a4632dacdf::t_a5fe80fdcf8987 1402-1408
+docs/api.md
+  s_99b8a4632dacdf::t_63f38c7d21b4d5 169-171,173-175,177,183-188,193,197,201
+  s_99b8a4632dacdf::t_088f611ad7990e 234-237
+  s_99b8a4632dacdf::t_07b5f6f5d4f800 274-279
+  s_99b8a4632dacdf::t_43e1b77043e8ee 19,168,172,176,189-192,194-196,198-200,410
+  s_99b8a4632dacdf::t_0cba841507c23d 216-217
+  s_99b8a4632dacdf::t_f8f84031652e9d 178-182
+packages/widget/src/transient/trail-controls.tsx
+  s_99b8a4632dacdf::t_6c26847dd8210a 2-3
+  s_99b8a4632dacdf::t_199dca3198b61f 33-36,49-52
+  s_99b8a4632dacdf::t_b445988e5efa2a 1,12,20-25,37,53
+  s_99b8a4632dacdf::t_1c2940786a5799 10,13-19,27,39,55,61,67
+  s_99b8a4632dacdf::t_247d0414238b0b 6-7,28-31,38,41-47,54,57-60,62-66
+  s_99b8a4632dacdf::t_991778334ad05a 32,48
+  s_99b8a4632dacdf::t_a1dae2e09229e8 69
+  s_99b8a4632dacdf::t_e7a258728ab7c4 4-5,8-9,11,26,40,56,68,70-71
+skills/marimo-lens/reference/workflow.md
+  s_99b8a4632dacdf::t_088f611ad7990e 143,166,169,176-179
+  s_99b8a4632dacdf::t_43e1b77043e8ee 100,110,132-134,136-138
+  s_99b8a4632dacdf::t_0d1bc04f1f1077 162
+  s_99b8a4632dacdf::t_f8f84031652e9d 112-113,116-118,121-123,126
+  s_99b8a4632dacdf::t_60f36a393a3c2d 142,156,175
+  s_99b8a4632dacdf::t_c2a3301891e4ad 114-115,119-120,124-125
+  s_99b8a4632dacdf::t_0cba841507c23d 101,104-108,129-130,139
+  s_99b8a4632dacdf::t_03a2357c1b99c7 102-103,109,111,127-128,131,135
+  s_99b8a4632dacdf::t_07b5f6f5d4f800 167,172-174
+packages/marimo-lens/tests/test_trails.py
+  s_99b8a4632dacdf::t_6968b337b72196 74,76-78,80,82-95
+  s_99b8a4632dacdf::t_4f50d05fbe2afa 1-13,17-32,38,49-54,57-63,69-71,79,81,96-101,105-110
+  s_99b8a4632dacdf::t_1be37a09bf5ff4 48
+  s_99b8a4632dacdf::t_ec345388a9ca56 14-16,34-37,41-47,55,64-65,72-73,75,102-103
+packages/marimo-lens/README.md
+  s_99b8a4632dacdf::t_07b5f6f5d4f800 55-58
+  s_99b8a4632dacdf::t_43e1b77043e8ee 59-61
+  s_99b8a4632dacdf::t_7fe9e1476e4535 62
+packages/widget/src/styles/lens.css
+  s_99b8a4632dacdf::t_4b9753fc278554 406-417
+  s_99b8a4632dacdf::t_1c2940786a5799 284-286,288-290,294-300,304-308
+  s_99b8a4632dacdf::t_991778334ad05a 311-315
+  s_99b8a4632dacdf::t_b34baeb8d99285 283,287,291-293,301-303,309-310
+  s_99b8a4632dacdf::t_66b45f7d900a35 1805-1808
+packages/marimo-lens/src/marimo_lens/_protocol_models.py
+  s_99b8a4632dacdf::t_96311c385cb1e5 705,713-720,754
+  s_99b8a4632dacdf::t_1be37a09bf5ff4 706-708
+  s_99b8a4632dacdf::t_778fd90e4ef22a 45,694-704,709-712,721-722,750-753
+packages/marimo-lens/src/marimo_lens/agent.py
+  s_99b8a4632dacdf::t_c2a3301891e4ad 56-77
+  s_99b8a4632dacdf::t_778fd90e4ef22a 21,282
+  s_99b8a4632dacdf::t_07b5f6f5d4f800 89-91,95,110,255-259
+  s_99b8a4632dacdf::t_088f611ad7990e 92-94,297-299
+  s_99b8a4632dacdf::t_60f36a393a3c2d 296
+  s_99b8a4632dacdf::t_96311c385cb1e5 277,283
+  s_99b8a4632dacdf::t_43e1b77043e8ee 278-281
+development_docs/agent-integration.md
+  s_99b8a4632dacdf::t_60f36a393a3c2d 220
+  s_99b8a4632dacdf::t_63f38c7d21b4d5 200-201
+  s_99b8a4632dacdf::t_088f611ad7990e 221-223,227-231
+  s_99b8a4632dacdf::t_43e1b77043e8ee 143,202-210
+packages/widget/src/notebook/notebook-dom.tsx
+  s_99b8a4632dacdf::t_21117198cfdc93 123-132
+docs/agents.md
+  s_99b8a4632dacdf::t_95661b43898f94 180,191
+  s_99b8a4632dacdf::t_43e1b77043e8ee 156,158,160
+  s_99b8a4632dacdf::t_03a2357c1b99c7 153-155,157,159,161
+  s_99b8a4632dacdf::t_60f36a393a3c2d 168,185,200-203
+  s_99b8a4632dacdf::t_0cba841507c23d 162
+  s_99b8a4632dacdf::t_088f611ad7990e 169,197-198
+packages/protocol/tests/contracts.test.ts
+  s_99b8a4632dacdf::t_609df9724fd2bc 8-9,28-51
+packages/marimo-lens/src/marimo_lens/trail.py
+  s_99b8a4632dacdf::t_778fd90e4ef22a 1-13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "09dfcb30ed4605e8ca5d0c38240cad2cc9f6b4c2",
+  "prompts": {},
+  "sessions": {
+    "s_99b8a4632dacdf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09f52-fce8-7370-a216-1b5c9506a2b1",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
