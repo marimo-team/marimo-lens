@@ -2,6 +2,10 @@ import { expect, type CDPSession, type Page } from "@playwright/test";
 
 import { runAction, selectOutput, test } from "./support";
 
+// DOM snapshots run inside the ScriptDuration interval and scale with table size.
+// Screenshot recording also competes with the frame and resource measurements.
+test.use({ trace: { mode: "retain-on-failure", snapshots: false, screenshots: false } });
+
 type AnnotationLatency = {
   armMs: number | null;
   selectionMs: number | null;
