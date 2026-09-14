@@ -199,11 +199,13 @@ test("duplicate views and repeated unmounts retain one owner and the same kernel
 });
 
 test("the selection limit rejects overflow and deletion restores capacity", async ({ page }) => {
-  test.setTimeout(180_000);
   await interceptEncoding(page, "fail");
-  for (let index = 1; index <= 64; index += 1) {
-    await selectOutput(page, "point", `S${index}`, `Request ${index}`);
-  }
+  await selectOutput(page, "point", "S1", "First selection");
+  expect((await runAction(page, "Seed 63 selections")).references.selections).toHaveLength(63);
+  await expect(
+    page.getByRole("button", { name: "Open selections, 63 open, 0 in history" }),
+  ).toBeVisible();
+  await selectOutput(page, "point", "S64", "Last available selection");
   const full = await runAction(page);
   expect(full.references.selections).toHaveLength(64);
   await page.getByRole("region", { name: "Revenue by month" }).scrollIntoViewIfNeeded();
