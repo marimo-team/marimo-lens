@@ -436,8 +436,8 @@ describe("Lens protocol client", () => {
       version: 6,
       type: "attention.reveal",
       payload: {
-        address: { kind: "cell", cellId: "cell-2" },
-        message: "Updated the chart.",
+        id: "reveal-1",
+        steps: [{ address: { kind: "cell", cellId: "cell-2" }, message: "Updated the chart." }],
         durationMs: 8_000,
         displayHint: "compact",
       },
@@ -479,8 +479,8 @@ describe("Lens protocol client", () => {
       version: 6,
       type: "attention.reveal",
       payload: {
-        address: { kind: "cell", cellId: "cell-2" },
-        message: "Updated the chart.",
+        id: "reveal-1",
+        steps: [{ address: { kind: "cell", cellId: "cell-2" }, message: "Updated the chart." }],
         durationMs: 8_000,
       },
     });

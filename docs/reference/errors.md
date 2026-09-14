@@ -46,7 +46,10 @@ presentation.
 - `resolve()` requires at least one and at most 64 unique selection IDs.
 - Optional labels, messages, and summaries trim edge whitespace. A
   whitespace-only value becomes `None`.
-- `duration_ms` is an integer from 1 through 300,000.
+- `duration_ms` is an integer from 1 through 300,000, or `None` to hold until
+  dismissal or replacement. Reveal durations apply to the entire sequence.
+- `reveal()` accepts 1–16 steps. Each step supplies a `target` and optional
+  `label` and `message`. Selection steps share one `expected_revision`.
 - `dom_selector` must be nonblank valid Unicode. Browser selector parsing can
   still reject invalid CSS syntax after Lens mounts.
 

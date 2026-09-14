@@ -14,9 +14,9 @@ from marimo_lens import (
     LensError,
     LensReferences,
     NotebookReference,
+    RevealStep,
     SelectionReference,
     SelectionTargetReference,
-    TrailStep,
 )
 from marimo_lens._runtime import RuntimeSnapshot
 
@@ -32,7 +32,7 @@ def test_package_exports_the_public_api() -> None:
         "NotebookReference": NotebookReference,
         "SelectionReference": SelectionReference,
         "SelectionTargetReference": SelectionTargetReference,
-        "TrailStep": TrailStep,
+        "RevealStep": RevealStep,
         "__version__": pkg.version("marimo-lens"),
     }
 

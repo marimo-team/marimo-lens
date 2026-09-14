@@ -133,8 +133,8 @@ standalone text, compact references, and local storage.
 
 ### Trails are transient attention
 
-Python validates an ordered list of cell explanations, sends it in one
-`attention.trail` event, and keeps only one lifecycle watch for validity. A
+Python normalizes single targets and ordered reveal steps into a Trail, sends one
+`attention.reveal` event, and keeps one runtime lifecycle watch for validity. A
 referenced cell or upstream rerun sends a matching `attention.trail.stop`.
 Replacement attention and Lens close release the watch.
 

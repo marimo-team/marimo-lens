@@ -16,7 +16,7 @@ provided one.
 | Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                          |
 | Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal) |
 | Move addressed requests to History         | [`resolve()`](#lens-resolve)                                                                                     |
-| Show a user-paced notebook walkthrough     | [`show_trail()`](#lens-show-trail)                                                                               |
+| Show a user-paced notebook walkthrough     | [`reveal()`](#lens-reveal)                                                                                       |
 | Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                |
 | Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
 
@@ -165,56 +165,22 @@ lens.stop_activity(activity)
 no effect. A non-string value raises `TypeError`. An empty or oversized value
 raises `ValueError`. A closed Lens raises `LensError(code="lens_closed")`.
 
-### `Lens.show_trail`
-
-`lens.show_trail(steps: Sequence[TrailStep]) -> None`
-
-Shows a transient walkthrough. Each step supplies a notebook
-`cell_id`, a `label`, and an optional `message`:
-
-```python
-lens.show_trail(
-    [
-        {
-            "cell_id": "BYtC",
-            "label": "The question",
-            "message": "Compare demand with capacity.",
-        },
-        {"cell_id": "rAqT", "label": "The evidence"},
-        {"cell_id": "mNwP", "label": "The next step"},
-    ],
-)
-```
-
-Use IDs from the current notebook after verifying the content. A small stepper
-in the popover header lets the user read at their own pace, move backward or
-forward, and dismiss the walkthrough. No Trail is saved to widget state,
-notebook files, local storage, or History. Refreshing the page ends it.
-
-Accepts 1–16 steps, with labels up to 40 UTF-16 units and optional messages up
-to 1,000. All steps are validated before display. Invalid arguments raise
-`TypeError` or `ValueError`; unavailable cells or runtime tracking raise `LensError`.
-
-A referenced cell or upstream change, rerun, or deletion ends the walkthrough.
-New activity, reveal, or another walkthrough replaces its presentation.
-Selections and their revisions remain unchanged.
-
 ### `Lens.reveal`
 
 ```python
 lens.reveal(
-    target: str | SelectionReference,
+    target: str | SelectionReference | Sequence[RevealStep],
     *,
     expected_revision: int | None = None,
-    duration_ms: int,
+    duration_ms: int | None,
     label: str | None = None,
     message: str | None = None,
 ) -> None
 ```
 
-Brings one selection or cell into view for a required hold.
-Distant targets are reached immediately. Nearby targets scroll smoothly unless
-the browser requests reduced motion.
+Brings a cell, selection, or ordered sequence of steps into view. A single
+target is a one-step reveal. Multiple steps add previous/next controls in the
+popover header and scroll smoothly, respecting reduced motion.
 
 ```python
 context = lens.context()
@@ -229,6 +195,36 @@ if selection is not None:
         message="Verified the change and brought the selected target into view.",
     )
 ```
+
+For a user-paced walkthrough, pass 1–16 `RevealStep` dictionaries:
+
+```python
+lens.reveal(
+    [
+        {
+            "target": "BYtC",
+            "label": "The question",
+            "message": "Compare demand with capacity.",
+        },
+        {"target": "rAqT", "label": "The evidence"},
+        {"target": "mNwP", "label": "The next step"},
+    ],
+    duration_ms=None,
+)
+```
+
+Each step requires `target` (a cell ID or `SelectionReference`) and accepts
+optional `label` and `message`. Put explanations on the steps, rather than in
+top-level `label` or `message` arguments. Selection references in the sequence
+share `expected_revision` from the same captured context. The whole sequence
+is validated before publication.
+
+Pass `duration_ms=None` to hold until dismissal or replacement. A finite
+duration limits the whole reveal, including time spent on previous steps.
+Navigation never resets the timer or advances automatically. A held single
+reveal has a dismiss button; multiple steps also have arrows and a count.
+Reveals are transient and do not enter notebook state or History. In a live
+notebook, rerunning or deleting a referenced cell ends the reveal.
 
 Target and revision rules match `start_activity()`. Reveal preserves selection
 state and keyboard focus, and replaces current activity. Call `reveal()` before
@@ -407,7 +403,6 @@ selection owned by that instance.
 | ------------------------------------------- | --------------------------------------------------- |
 | `identity`                                  | Opaque string for reconnecting across kernel calls. |
 | `context()`                                 | Delegates to `Lens.context()`.                      |
-| `show_trail(steps)`                         | Shows a transient, user-paced walkthrough.          |
 | `cell_image(cell_id, *, expected_revision)` | Requests a fresh, unmarked cell-output PNG.         |
 | `start_activity(...)`                       | Delegates to `Lens.start_activity()`.               |
 | `stop_activity(activity)`                   | Delegates to `Lens.stop_activity()`.                |

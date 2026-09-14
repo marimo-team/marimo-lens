@@ -31,19 +31,24 @@ def test_trail_is_transient_and_does_not_mutate_selections(trail_lens: Any) -> N
     lens, _, messages = trail_lens
     state = deepcopy(lens.get_state())
     assert (
-        lens.show_trail(
+        lens.reveal(
             [
-                {"cell_id": "first", "label": "Question", "message": "Compare demand."},
-                {"cell_id": "second", "label": "Answer"},
-            ]
+                {"target": "first", "label": "Question", "message": "Compare demand."},
+                {"target": "second", "label": "Answer"},
+            ],
+            duration_ms=None,
         )
         is None
     )
     assert lens.get_state() == state
-    assert messages[-1]["type"] == "attention.trail"
+    assert messages[-1]["type"] == "attention.reveal"
     assert messages[-1]["payload"]["steps"] == [
-        {"cellId": "first", "label": "Question", "message": "Compare demand."},
-        {"cellId": "second", "label": "Answer"},
+        {
+            "address": {"kind": "cell", "cellId": "first"},
+            "label": "Question",
+            "message": "Compare demand.",
+        },
+        {"address": {"kind": "cell", "cellId": "second"}, "label": "Answer"},
     ]
     assert set(messages[-1]["payload"]) == {"id", "steps"}
 
@@ -52,13 +57,13 @@ def test_new_trail_releases_previous_watch_and_invalidation_is_scoped(
     trail_lens: Any,
 ) -> None:
     lens, registry, messages = trail_lens
-    lens.show_trail([{"cell_id": "first", "label": "Question"}])
+    lens.reveal([{"target": "first", "label": "Question"}], duration_ms=None)
     previous_id = messages[-1]["payload"]["id"]
-    lens.show_trail([{"cell_id": "second", "label": "Answer"}])
+    lens.reveal([{"target": "second", "label": "Answer"}], duration_ms=None)
     current_id = messages[-1]["payload"]["id"]
     assert current_id != previous_id
     registry.dispose("first", deletion=False)
-    assert messages[-1]["type"] == "attention.trail"
+    assert messages[-1]["type"] == "attention.reveal"
     registry.dispose("second", deletion=True)
     assert messages[-1] == {
         "protocol": "marimo-lens.event",
@@ -71,14 +76,14 @@ def test_new_trail_releases_previous_watch_and_invalidation_is_scoped(
 
 @pytest.mark.parametrize(
     "steps",
-    [[], [{"cell_id": "first", "label": "Question"}] * 17],
+    [[], [{"target": "first", "label": "Question"}] * 17],
 )
 def test_invalid_step_count_is_rejected_before_publication(
     trail_lens: Any, steps: Any
 ) -> None:
     lens, registry, messages = trail_lens
     with pytest.raises(ValueError):
-        lens.show_trail(steps)
+        lens.reveal(steps, duration_ms=None)
     assert not messages
     assert not any(registry.registry.values())
 
@@ -86,11 +91,12 @@ def test_invalid_step_count_is_rejected_before_publication(
 def test_missing_cell_rejects_the_entire_trail(trail_lens: Any) -> None:
     lens, registry, messages = trail_lens
     with pytest.raises(LensError) as error:
-        lens.show_trail(
+        lens.reveal(
             [
-                {"cell_id": "first", "label": "Question"},
-                {"cell_id": "missing", "label": "Answer"},
-            ]
+                {"target": "first", "label": "Question"},
+                {"target": "missing", "label": "Answer"},
+            ],
+            duration_ms=None,
         )
     assert error.value.code == "cell_not_found"
     assert not messages
@@ -99,12 +105,48 @@ def test_missing_cell_rejects_the_entire_trail(trail_lens: Any) -> None:
 
 def test_replacement_attention_and_close_release_watches(trail_lens: Any) -> None:
     lens, registry, messages = trail_lens
-    lens.show_trail([{"cell_id": "first", "label": "Question"}])
-    lens.reveal("second", duration_ms=1000)
+    lens.reveal([{"target": "first", "label": "Question"}], duration_ms=None)
+    lens.start_activity("second", duration_ms=1000)
     assert not any(registry.registry.values())
-    assert messages[-1]["type"] == "attention.reveal"
-    lens.show_trail([{"cell_id": "first", "label": "Question"}])
+    assert messages[-1]["type"] == "attention.activity.start"
+    lens.reveal([{"target": "first", "label": "Question"}], duration_ms=None)
     lens.close()
     assert not any(registry.registry.values())
     with pytest.raises(LensError, match="closed"):
-        lens.show_trail([{"cell_id": "first", "label": "Question"}])
+        lens.reveal([{"target": "first", "label": "Question"}], duration_ms=None)
+
+
+@pytest.mark.parametrize("target", ["first", [{"target": "first"}]])
+def test_single_and_sequence_reveals_share_the_same_held_contract(
+    trail_lens: Any, target: Any
+) -> None:
+    lens, registry, messages = trail_lens
+    lens.reveal(target, duration_ms=None)
+    assert messages[-1]["payload"]["steps"] == [
+        {"address": {"kind": "cell", "cellId": "first"}}
+    ]
+    assert "durationMs" not in messages[-1]["payload"]
+    registry.dispose("first", deletion=False)
+    assert messages[-1]["type"] == "attention.trail.stop"
+
+
+@pytest.mark.parametrize(
+    "steps, kwargs",
+    [
+        ([{"target": "first"}], {"label": "Ambiguous"}),
+        ([{"target": "first"}, {"target": "second", "message": "x" * 1001}], {}),
+        ([{"target": "first", "unexpected": True}], {}),
+        (["first"], {}),
+    ],
+)
+def test_invalid_reveal_steps_preserve_current_attention(
+    trail_lens: Any, steps: Any, kwargs: Any
+) -> None:
+    lens, registry, messages = trail_lens
+    lens.reveal("first", duration_ms=None)
+    current_id = messages[-1]["payload"]["id"]
+    with pytest.raises((TypeError, ValueError)):
+        lens.reveal(steps, duration_ms=None, **kwargs)
+    assert len(messages) == 1
+    registry.dispose("first", deletion=False)
+    assert messages[-1]["payload"] == {"trailId": current_id}

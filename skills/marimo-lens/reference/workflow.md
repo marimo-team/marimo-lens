@@ -107,24 +107,25 @@ import marimo._code_mode as cm
 import marimo_lens.agent as lens_agent
 
 mounted = lens_agent.connect(cm.get_context())
-mounted.show_trail(
+mounted.reveal(
     [
         {
-            "cell_id": "BYtC",
+            "target": "BYtC",
             "label": "What we're checking",
             "message": "Let's check whether current support capacity can cover launch demand.",
         },
         {
-            "cell_id": "rAqT",
+            "target": "rAqT",
             "label": "Our baseline",
             "message": "These cleaned records give us average waiting time and its upper tail.",
         },
         {
-            "cell_id": "mNwP",
+            "target": "mNwP",
             "label": "A trial we can try",
             "message": "Let's use a reversible trial to see whether extra capacity helps.",
         },
     ],
+    duration_ms=None,
 )
 ```
 

@@ -28,17 +28,27 @@ describe("target attention", () => {
     setupCell("first").scrollIntoView = vi.fn();
     const second = setupCell("second");
     second.scrollIntoView = vi.fn();
-    controller.startTrail({
-      id: "trail-1",
-      steps: [
-        { cellId: "first", label: "Question" },
-        { cellId: "second", label: "Answer" },
-      ],
+    controller.reveal({
+      protocol: "marimo-lens.event",
+      version: 6,
+      type: "attention.reveal",
+      payload: {
+        id: "trail-1",
+        steps: [
+          { address: { kind: "cell", cellId: "first" }, label: "Question" },
+          { address: { kind: "cell", cellId: "second" }, label: "Answer" },
+        ],
+      },
     });
     const navigation = onChange.mock.lastCall?.[0].trail;
-    controller.startTrail({
-      id: "current",
-      steps: [{ cellId: "second", label: "Current result" }],
+    controller.reveal({
+      protocol: "marimo-lens.event",
+      version: 6,
+      type: "attention.reveal",
+      payload: {
+        id: "current",
+        steps: [{ address: { kind: "cell", cellId: "second" }, label: "Current result" }],
+      },
     });
     navigation.next();
     navigation.close();
@@ -51,6 +61,53 @@ describe("target attention", () => {
     controller.dispose();
   });
 
+  test("navigation shares one reveal deadline and expired controls cannot revive it", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
+    setupCell("first").scrollIntoView = vi.fn();
+    setupCell("second").scrollIntoView = vi.fn();
+    controller.reveal({
+      protocol: "marimo-lens.event",
+      version: 6,
+      type: "attention.reveal",
+      payload: {
+        id: "timed",
+        durationMs: 4_000,
+        steps: [
+          { address: { kind: "cell", cellId: "first" } },
+          { address: { kind: "cell", cellId: "second" } },
+        ],
+      },
+    });
+    const first = onChange.mock.lastCall?.[0];
+    vi.advanceTimersByTime(3_000);
+    first.trail.next();
+    expect(onChange.mock.lastCall?.[0]).toMatchObject({
+      expiresAt: first.expiresAt,
+      locator: { label: "second" },
+    });
+    vi.advanceTimersByTime(1_000);
+    expect(onChange.mock.lastCall?.[0].phase).toBe("exiting");
+    first.trail.previous();
+    expect(onChange.mock.lastCall?.[0].phase).toBe("exiting");
+    vi.advanceTimersByTime(180);
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    first.trail.next();
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    controller.dispose();
+  });
+
+  test("does not publish a reveal whose lifetime elapsed while framing its target", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
+    setupCell("slow").scrollIntoView = () => vi.setSystemTime(Date.now() + 200);
+    controller.reveal(revealEvent("slow", "Brief result", 1));
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    controller.dispose();
+  });
+
   test("smoothly frames distant Trail steps while keeping the popover available", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
@@ -58,7 +115,18 @@ describe("target attention", () => {
     const cell = setupCell("distant");
     cell.getBoundingClientRect = () => new DOMRect(20, 20_000, 400, 300);
     cell.scrollIntoView = vi.fn();
-    controller.startTrail({ id: "tour", steps: [{ cellId: "distant", label: "Evidence" }] });
+    controller.reveal({
+      protocol: "marimo-lens.event",
+      version: 6,
+      type: "attention.reveal",
+      payload: {
+        id: "tour",
+        steps: [
+          { address: { kind: "cell", cellId: "distant" }, label: "Evidence" },
+          { address: { kind: "cell", cellId: "distant" } },
+        ],
+      },
+    });
     expect(cell.scrollIntoView).toHaveBeenCalledWith({
       block: "center",
       inline: "nearest",
@@ -513,6 +581,9 @@ describe("target attention", () => {
     secondary.id = "cell-shared";
     secondary.getBoundingClientRect = () => new DOMRect(20, 20, 400, 300);
     secondary.scrollIntoView = vi.fn();
+    for (const element of [secondary, secondaryDocument.body, secondaryDocument.documentElement]) {
+      element.scrollTo = vi.fn();
+    }
     secondaryDocument.body.appendChild(secondary);
     const controller = new TestAttentionController(
       new NotebookDomAdapter(secondaryDocument),
@@ -576,7 +647,10 @@ class TestAttentionController extends TargetAttentionController {
   }
 
   reveal(event: AttentionRevealEvent): void {
-    super.reveal(event, cellTarget(this.#testDom.document, event.payload.address));
+    super.reveal(
+      event,
+      event.payload.steps.map((step) => cellTarget(this.#testDom.document, step.address)),
+    );
   }
 }
 
@@ -631,10 +705,11 @@ function activityStopEvent(activityId: string): AttentionActivityStopEvent {
 
 function revealEvent(cellId: string, message?: string, durationMs = 4_000): AttentionRevealEvent {
   const payload: AttentionRevealEvent["payload"] = {
-    address: { kind: "cell", cellId },
+    id: "reveal-1",
+    steps: [{ address: { kind: "cell", cellId } }],
     durationMs,
   };
-  if (message) payload.message = message;
+  if (message) payload.steps[0]!.message = message;
   return {
     protocol: "marimo-lens.event",
     version: 6,

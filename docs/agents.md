@@ -153,7 +153,7 @@ result from fresh runtime and browser evidence.
 ## Guide a notebook with a Trail
 
 Prepare a short route through the notebook's question, evidence, main result,
-and next step in authored order. Call `mounted.show_trail(steps)` with
+and next step in authored order. Call `mounted.reveal(steps, duration_ms=None)` with
 cell IDs, labels, and short explanations. Users control the reading pace with
 small previous/next arrows in the popover header. Nothing is saved.
 

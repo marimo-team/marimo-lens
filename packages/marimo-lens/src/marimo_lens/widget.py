@@ -42,17 +42,18 @@ from ._protocol_models import (
     DOM_SELECTOR_ADAPTER,
     MAX_ATTENTION_DURATION_MS,
     MAX_SELECTIONS,
+    MAX_TRAIL_STEPS,
     OPTIONAL_ATTENTION_LABEL_ADAPTER,
     OPTIONAL_ATTENTION_TEXT_ADAPTER,
     OPTIONAL_REVEAL_TEXT_ADAPTER,
     REVISION_ADAPTER,
     SELECTION_ID_ADAPTER,
     AttentionAddress,
-    AttentionTrailEvent,
     AttentionTrailStopEvent,
     CellAttentionAddress,
     SelectionAttentionAddress,
     Trail,
+    TrailStep,
     TrailStopPayload,
     dump_model,
 )
@@ -71,7 +72,7 @@ from ._selection_state import (
 from .activity import ActivityHandle
 from .context import LensContext, SelectionReference
 from .errors import LensError
-from .trail import TrailStep
+from .reveal import RevealStep
 
 _LOGGER = logging.getLogger(__name__)
 _STATIC = pathlib.Path(__file__).parent / "static"
@@ -139,91 +140,92 @@ class Lens(anywidget.AnyWidget):
         )
         return build_lens_context(runtime, state)
 
-    def show_trail(self, steps: Sequence[TrailStep]) -> None:
-        """Show 1–16 user-paced steps without saving notebook or History state.
+    def reveal(
+        self,
+        target: str | SelectionReference | Sequence[RevealStep],
+        *,
+        expected_revision: int | None = None,
+        duration_ms: int | None,
+        label: str | None = None,
+        message: str | None = None,
+    ) -> None:
+        """Reveal a cell, selection, or 1–16 ordered steps.
 
-        Each step has a cell_id, label (40 UTF-16 units), and optional message
-        (1,000 units). A referenced cell or upstream rerun ends the walkthrough.
+        Selection references require their captured expected_revision. Labels
+        and messages belong on each step when passing a sequence. None holds
+        until dismissal; a finite duration limits the entire presentation.
         """
-        if isinstance(steps, (str, bytes)) or not isinstance(steps, Sequence):
-            raise TypeError("steps must be a sequence of Trail steps.")
-        try:
-            trail = Trail.model_validate({"id": uuid.uuid4().hex, "steps": list(steps)})
-        except ValidationError as error:
-            raise ValueError(f"Invalid Trail: {_validation_detail(error)[1]}") from None
+        duration = (
+            _validated_duration_ms(duration_ms) if duration_ms is not None else None
+        )
+        if isinstance(target, Sequence) and not isinstance(target, (str, bytes)):
+            if label is not None or message is not None:
+                raise TypeError("Put label and message on each reveal step.")
+            steps = target
+        else:
+            steps = [{"target": target, "label": label, "message": message}]
+        if not 1 <= len(steps) <= MAX_TRAIL_STEPS:
+            raise ValueError(f"reveal requires 1–{MAX_TRAIL_STEPS} steps.")
+        normalized = []
+        for step in steps:
+            if not isinstance(step, Mapping) or "target" not in step:
+                raise TypeError("Each reveal step must contain a target.")
+            if set(step) - {"target", "label", "message"}:
+                raise TypeError("Reveal steps accept only target, label, and message.")
+            normalized.append(
+                (
+                    _attention_address(
+                        step["target"], expected_revision=expected_revision
+                    ),
+                    _attention_label(step.get("label")),
+                    _reveal_message(step.get("message")),
+                )
+            )
         with self._lock:
             self._require_open()
-        for step in trail.steps:
-            status = self._runtime.cell_status(step.cell_id)
-            if status != "available":
-                raise LensError(
-                    "cell_not_found" if status == "missing" else "runtime_unavailable",
-                    f"Trail cell {step.cell_id!r} is not available in the active notebook.",
+            trail_steps = []
+            cell_ids = []
+            for (address, revision), step_label, step_message in normalized:
+                self._validate_attention_address(address, revision)
+                trail_steps.append(
+                    TrailStep(address=address, label=step_label, message=step_message)
                 )
-        owner = weakref.ref(self)
+                if isinstance(address, CellAttentionAddress):
+                    cell_ids.append(address.cell_id)
+                else:
+                    record = self._selection_store.state.record(address.selection_id)
+                    assert record is not None
+                    cell_ids.extend(record.selection["target"]["cellIds"])
+            trail = Trail(id=uuid.uuid4().hex, steps=trail_steps, duration_ms=duration)
+            owner = weakref.ref(self)
 
-        def invalidate() -> None:
-            lens = owner()
-            if lens is not None:
-                with lens._lock:
-                    if lens._trail_id == trail.id:
-                        lens._clear_trail()
-                        with suppress(Exception):
-                            lens.send(
-                                dump_model(
-                                    AttentionTrailStopEvent(
-                                        payload=TrailStopPayload(trail_id=trail.id)
+            def invalidate() -> None:
+                lens = owner()
+                if lens is not None:
+                    with lens._lock:
+                        if lens._trail_id == trail.id:
+                            lens._clear_trail()
+                            with suppress(Exception):
+                                lens.send(
+                                    dump_model(
+                                        AttentionTrailStopEvent(
+                                            payload=TrailStopPayload(trail_id=trail.id)
+                                        )
                                     )
                                 )
-                            )
 
-        release = self._runtime.observe_cells(
-            [step.cell_id for step in trail.steps], invalidate
-        )
-        if release is None:
-            raise LensError("runtime_unavailable", "Lens cannot track Trail validity.")
-        with self._lock:
-            if self._lens_closed:
-                release()
-                self._require_open()
+            release = (
+                self._runtime.observe_cells(cell_ids, invalidate) if cell_ids else None
+            )
             self._clear_trail()
             self._trail_id, self._trail_release = trail.id, release
             with suppress(Exception):
-                self.send(dump_model(AttentionTrailEvent(payload=trail)))
+                self.send(attention_reveal_event(trail))
 
     def _clear_trail(self) -> None:
         if self._trail_release is not None:
             self._trail_release()
         self._trail_id = self._trail_release = None
-
-    def reveal(
-        self,
-        target: str | SelectionReference,
-        *,
-        expected_revision: int | None = None,
-        duration_ms: int,
-        label: str | None = None,
-        message: str | None = None,
-    ) -> None:
-        """Reveal an exact cell or stored selection for the supplied hold.
-
-        A SelectionReference requires its captured expected_revision. A cell ID
-        may omit the revision and must belong to the current marimo graph.
-        """
-
-        reveal_message = _reveal_message(message)
-        attention_label = _attention_label(label)
-        reveal_duration = _validated_duration_ms(duration_ms)
-        self._send_attention(
-            target,
-            expected_revision=expected_revision,
-            event=lambda address: attention_reveal_event(
-                address=address,
-                label=attention_label,
-                message=reveal_message,
-                duration_ms=reveal_duration,
-            ),
-        )
 
     def start_activity(
         self,
@@ -285,39 +287,43 @@ class Lens(anywidget.AnyWidget):
             target,
             expected_revision=expected_revision,
         )
-        cell_status: str | None = None
-        if isinstance(address, CellAttentionAddress):
-            with self._lock:
-                self._require_open()
-            cell_status = self._runtime.cell_status(address.cell_id)
         with self._lock:
             self._require_open()
-            state = self._selection_store.state
-            revision = state.revision
-            if expected_revision is not None and revision != expected_revision:
-                raise _revision_conflict(expected_revision, revision)
-            if isinstance(address, SelectionAttentionAddress):
-                if state.record(address.selection_id) is None:
-                    raise LensError(
-                        "selection_not_found",
-                        "The Lens selection does not exist.",
-                        revision=revision,
-                    )
-            elif cell_status == "unavailable":
+            self._validate_attention_address(address, expected_revision)
+            self._clear_trail()
+            with suppress(Exception):
+                self.send(event(address))
+
+    def _validate_attention_address(
+        self,
+        address: AttentionAddress,
+        expected_revision: int | None,
+    ) -> None:
+        state = self._selection_store.state
+        revision = state.revision
+        if expected_revision is not None and revision != expected_revision:
+            raise _revision_conflict(expected_revision, revision)
+        if isinstance(address, SelectionAttentionAddress):
+            if state.record(address.selection_id) is None:
+                raise LensError(
+                    "selection_not_found",
+                    "The Lens selection does not exist.",
+                    revision=revision,
+                )
+        else:
+            status = self._runtime.cell_status(address.cell_id)
+            if status == "unavailable":
                 raise LensError(
                     "runtime_unavailable",
                     "Lens cannot inspect the active marimo runtime.",
                     revision=revision,
                 )
-            elif cell_status == "missing":
+            if status == "missing":
                 raise LensError(
                     "cell_not_found",
                     "The active marimo dataflow graph has no cell with this ID.",
                     revision=revision,
                 )
-            self._clear_trail()
-            with suppress(Exception):
-                self.send(event(address))
 
     def resolve(
         self,
@@ -714,7 +720,7 @@ def _activity_id(value: object) -> str:
 
 
 def _attention_address(
-    target: str | SelectionReference,
+    target: object,
     *,
     expected_revision: int | None,
 ) -> tuple[AttentionAddress, int | None]:

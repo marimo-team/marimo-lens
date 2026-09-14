@@ -43,7 +43,12 @@ export type TrailNavigation = {
   close: () => void;
 };
 
-type ActiveTrail = { route: Trail; index: number };
+type ActiveTrail = {
+  route: Trail;
+  locators: TargetLocator[];
+  index: number;
+  expiresAt: number | null;
+};
 
 type ActiveAttention = TargetAttentionPresentation & {
   activityId: string | null;
@@ -102,18 +107,16 @@ export class TargetAttentionController {
     );
   }
 
-  reveal(event: AttentionRevealEvent, locator: TargetLocator): void {
-    this.#trail = null;
-    this.#start(
-      {
-        kind: "reveal",
-        activityId: null,
-        durationMs: event.payload.durationMs,
-        label: event.payload.label ?? null,
-        message: event.payload.message ?? null,
-      },
-      locator,
-    );
+  reveal(event: AttentionRevealEvent, locators: TargetLocator[]): void {
+    const route = event.payload;
+    this.#trail = {
+      route,
+      locators,
+      index: 0,
+      expiresAt:
+        route.durationMs === undefined ? null : this.#now() + route.durationMs + REVEAL_EXIT_MS,
+    };
+    this.#showTrail(this.#trail);
   }
 
   stopActivity(event: AttentionActivityStopEvent): void {
@@ -121,12 +124,6 @@ export class TargetAttentionController {
     if (active?.kind === "activity" && active.activityId === event.payload.activityId) {
       this.#clear(true);
     }
-  }
-
-  startTrail(route: Trail): void {
-    if (route.steps.length === 0) return;
-    this.#trail = { route, index: 0 };
-    this.#showTrail(this.#trail);
   }
 
   endTrail(id?: string): void {
@@ -142,19 +139,19 @@ export class TargetAttentionController {
         kind: "reveal",
         activityId: null,
         durationMs: null,
-        label: step.label,
+        label: step.label ?? null,
         message: step.message ?? null,
       },
-      {
-        kind: "cell",
-        label: step.cellId,
-        resolve: () => cellAddressTarget(this.#dom, step.cellId),
-      },
+      trail.locators[trail.index]!,
     );
   }
 
   #moveTrail(trail: ActiveTrail, delta: number): void {
-    if (this.#trail !== trail) return;
+    if (
+      this.#trail !== trail ||
+      (trail.expiresAt !== null && this.#now() >= trail.expiresAt - REVEAL_EXIT_MS)
+    )
+      return;
     const index = Math.max(0, Math.min(trail.route.steps.length - 1, trail.index + delta));
     if (index === trail.index) return;
     trail.index = index;
@@ -173,7 +170,11 @@ export class TargetAttentionController {
 
     const exitDuration = request.kind === "activity" ? ACTIVITY_EXIT_MS : REVEAL_EXIT_MS;
     const duration = request.durationMs;
-    const expiresAt = duration === null ? null : this.#now() + duration + exitDuration;
+    const expiresAt = this.#trail
+      ? this.#trail.expiresAt
+      : duration === null
+        ? null
+        : this.#now() + duration + exitDuration;
     const active: ActiveAttention = {
       ...request,
       sequence: ++this.#sequence,
@@ -200,7 +201,7 @@ export class TargetAttentionController {
     });
     this.#dom.document.addEventListener("visibilitychange", active.visibilityListener);
     this.#schedule(active);
-    this.#emit(active);
+    if (this.#active === active) this.#emit(active);
   }
 
   #refresh(active: ActiveAttention, reframe = false): void {
@@ -216,7 +217,7 @@ export class TargetAttentionController {
     // framing active so the stepper stays mounted through that top-edge gap.
     if (
       active.framing === "pending" &&
-      !this.#trail &&
+      !(this.#trail && this.#trail.route.steps.length > 1) &&
       target !== null &&
       isFullyVisible(this.#dom.window, target.getBoundingClientRect())
     ) {
@@ -246,7 +247,10 @@ export class TargetAttentionController {
       block: "center",
       inline: "nearest",
       behavior:
-        (distant && !this.#trail) || prefersReducedMotion(this.#dom.window) ? "instant" : "smooth",
+        (distant && (this.#trail?.route.steps.length ?? 0) < 2) ||
+        prefersReducedMotion(this.#dom.window)
+          ? "instant"
+          : "smooth",
     });
     if (this.#trail) this.#cancelScroll = () => this.#dom.stopScroll(target);
     return true;
@@ -266,7 +270,7 @@ export class TargetAttentionController {
     if (active.framing !== "pending") return;
     active.framingTimeout = this.#dom.window.setTimeout(
       () => this.#settleFraming(active),
-      this.#trail ? 2_000 : FRAMING_SETTLE_MS,
+      (this.#trail?.route.steps.length ?? 0) > 1 ? 2_000 : FRAMING_SETTLE_MS,
     );
   }
 
@@ -339,7 +343,7 @@ export class TargetAttentionController {
       label,
       message,
     };
-    if (trail) {
+    if (trail && (trail.route.steps.length > 1 || trail.expiresAt === null)) {
       presentation.trail = {
         id: trail.route.id,
         index: trail.index,
@@ -382,6 +386,7 @@ export class TargetAttentionController {
     this.#dom.window.clearTimeout(active.framingTimeout);
     active.resizeObserver?.disconnect();
     if (notify) {
+      this.#trail = null;
       this.#stopLayout?.();
       this.#stopLayout = null;
     }

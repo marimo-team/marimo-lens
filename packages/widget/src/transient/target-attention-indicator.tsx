@@ -263,9 +263,10 @@ function attentionAnnouncement(presentation: TargetAttentionPresentation): strin
       : label
         ? `${label} ${preposition} ${target}.`
         : `Revealed ${target}.`;
-  const step = presentation.trail
-    ? `Step ${presentation.trail.index + 1} of ${presentation.trail.count}. `
-    : "";
+  const step =
+    presentation.trail && presentation.trail.count > 1
+      ? `Step ${presentation.trail.index + 1} of ${presentation.trail.count}. `
+      : "";
   return step + (message ? `${status} ${message}` : status);
 }
 

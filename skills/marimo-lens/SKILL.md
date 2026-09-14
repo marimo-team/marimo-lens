@@ -43,15 +43,16 @@ main result, and next step in reading order. Reuse verified context from the
 conversation and show the route promptly; do not audit every supporting table.
 
 ```python
-mounted.show_trail(
+mounted.reveal(
     [
         {
-            "cell_id": "<verified cell ID>",
+            "target": "<verified cell ID>",
             "label": "What we're checking",
             "message": "<what you changed or found, and why it matters>",
         },
         # Add the other verified landmarks in reading order.
-    ]
+    ],
+    duration_ms=None,
 )
 ```
 
@@ -447,11 +448,16 @@ claims supplied by the user or a source to that observer.
 
 ## Trail lifetime
 
-`show_trail(steps)` takes 1–16 ordered steps with `cell_id`, a short `label`
+`reveal(steps, duration_ms=None)` takes 1–16 ordered steps with `target`, an optional short `label`
 (up to 40 UTF-16 units), and an optional `message` (up to 1,000). It returns
 `None` and saves nothing. Use the [quick walkthrough](#quick-walkthrough) path
 for introductions and real-time exploration; a longer example is in the
 [Trail recipe](reference/workflow.md#show-a-trail).
+
+Use `target` for a cell ID or selection reference. Selection references require
+the captured `expected_revision` for the whole sequence. Labels and messages
+belong on each step. `duration_ms=None` holds until dismissal; a finite duration
+limits the entire reveal, and navigation never restarts it.
 
 The popover holds each step until navigation or dismissal. Referenced cell or
 upstream changes end the Trail. Verify changed content before showing a new

@@ -477,24 +477,6 @@ export const SelectionResolvedEventSchema = v.object({
   }),
 });
 
-export const TrailStepSchema = v.object({
-  cellId: BoundedIdentifierSchema,
-  label: AttentionLabelSchema,
-  message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(1_000))),
-});
-
-export const TrailSchema = v.object({
-  id: BoundedIdentifierSchema,
-  steps: v.pipe(v.array(TrailStepSchema), v.minLength(1), v.maxLength(16)),
-});
-
-export const AttentionTrailEventSchema = v.object({
-  protocol: v.literal("marimo-lens.event"),
-  version: v.literal(WIDGET_TRANSPORT_VERSION),
-  type: v.literal("attention.trail"),
-  payload: TrailSchema,
-});
-
 export const AttentionTrailStopEventSchema = v.object({
   protocol: v.literal("marimo-lens.event"),
   version: v.literal(WIDGET_TRANSPORT_VERSION),
@@ -518,11 +500,16 @@ export const AttentionAddressSchema = v.variant("kind", [
   SelectionAttentionAddressSchema,
 ]);
 
-const AttentionRevealPayloadSchema = v.object({
+export const TrailStepSchema = v.object({
   address: AttentionAddressSchema,
-  durationMs: AttentionDurationSchema,
   label: v.optional(AttentionLabelSchema),
   message: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(1_000))),
+});
+
+export const TrailSchema = v.object({
+  id: BoundedIdentifierSchema,
+  steps: v.pipe(v.array(TrailStepSchema), v.minLength(1), v.maxLength(16)),
+  durationMs: v.optional(AttentionDurationSchema),
 });
 
 const AttentionActivityStartPayloadSchema = v.object({
@@ -541,7 +528,7 @@ export const AttentionRevealEventSchema = v.object({
   protocol: v.literal("marimo-lens.event"),
   version: v.literal(WIDGET_TRANSPORT_VERSION),
   type: v.literal("attention.reveal"),
-  payload: AttentionRevealPayloadSchema,
+  payload: TrailSchema,
 });
 
 export const AttentionActivityStartEventSchema = v.object({
@@ -562,7 +549,6 @@ export const AttentionEventSchema = v.variant("type", [
   AttentionActivityStartEventSchema,
   AttentionActivityStopEventSchema,
   AttentionRevealEventSchema,
-  AttentionTrailEventSchema,
   AttentionTrailStopEventSchema,
 ]);
 
@@ -607,7 +593,6 @@ export type LensResponse = v.InferOutput<typeof LensResponseSchema>;
 export type ResolvedSelection = v.InferOutput<typeof ResolvedSelectionSchema>;
 export type SelectionResolvedEvent = v.InferOutput<typeof SelectionResolvedEventSchema>;
 export type AttentionRevealEvent = v.InferOutput<typeof AttentionRevealEventSchema>;
-export type AttentionTrailEvent = v.InferOutput<typeof AttentionTrailEventSchema>;
 export type Trail = v.InferOutput<typeof TrailSchema>;
 export type TrailStep = v.InferOutput<typeof TrailStepSchema>;
 export type AttentionActivityStartEvent = v.InferOutput<typeof AttentionActivityStartEventSchema>;

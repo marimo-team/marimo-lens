@@ -677,40 +677,27 @@ AttentionAddress: TypeAlias = Annotated[
 ]
 
 
-class AttentionRevealPayload(TransportModel):
-    address: AttentionAddress
-    duration_ms: AttentionDuration
-    label: AttentionLabel | None = None
-    message: RevealText | None = None
-
-
-class AttentionRevealEvent(TransportModel):
-    protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
-    version: ProtocolVersion = PROTOCOL_VERSION
-    type: Literal["attention.reveal"] = "attention.reveal"
-    payload: AttentionRevealPayload
-
-
 class TrailStep(TransportModel):
-    cell_id: CellId
-    label: AttentionLabel
+    address: AttentionAddress
+    label: AttentionLabel | None = None
     message: RevealText | None = None
 
 
 class Trail(TransportModel):
     id: Identifier
     steps: Annotated[list[TrailStep], Field(min_length=1, max_length=MAX_TRAIL_STEPS)]
+    duration_ms: AttentionDuration | None = None
+
+
+class AttentionRevealEvent(TransportModel):
+    protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
+    version: ProtocolVersion = PROTOCOL_VERSION
+    type: Literal["attention.reveal"] = "attention.reveal"
+    payload: Trail
 
 
 class TrailStopPayload(TransportModel):
     trail_id: Identifier
-
-
-class AttentionTrailEvent(TransportModel):
-    protocol: Literal["marimo-lens.event"] = EVENT_PROTOCOL
-    version: ProtocolVersion = PROTOCOL_VERSION
-    type: Literal["attention.trail"] = "attention.trail"
-    payload: Trail
 
 
 class AttentionTrailStopEvent(TransportModel):
@@ -750,7 +737,6 @@ AttentionEvent: TypeAlias = (
     AttentionActivityStartEvent
     | AttentionActivityStopEvent
     | AttentionRevealEvent
-    | AttentionTrailEvent
     | AttentionTrailStopEvent
 )
 

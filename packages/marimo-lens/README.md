@@ -56,7 +56,7 @@ After verification, call `resolve(..., summary="...")` with what changed or
 what you found and checked. The summary appears beside the original request in
 History. A batch shares one summary; resolve separately when outcomes differ.
 
-Use `show_trail(steps)` for a transient notebook walkthrough. A small stepper
+Use `reveal(steps, duration_ms=None)` for a transient notebook walkthrough. A small stepper
 in the popover header lets users move at their own pace. Nothing is saved;
 referenced cell or upstream changes end the walkthrough.
 

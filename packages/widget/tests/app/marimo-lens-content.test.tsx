@@ -104,8 +104,12 @@ describe("marimo-lens content", () => {
     const trail = {
       id: "tour",
       steps: [
-        { cellId: "first", label: "Question", message: "Start here." },
-        { cellId: "second", label: "Answer" },
+        {
+          address: { kind: "cell" as const, cellId: "first" },
+          label: "Question",
+          message: "Start here.",
+        },
+        { address: { kind: "cell" as const, cellId: "second" }, label: "Answer" },
       ],
     };
     for (const id of ["first", "second"]) {
@@ -143,7 +147,7 @@ describe("marimo-lens content", () => {
       listener?.({
         protocol: "marimo-lens.event",
         version: 6,
-        type: "attention.trail",
+        type: "attention.reveal",
         payload: trail,
       }),
     );
@@ -180,7 +184,7 @@ describe("marimo-lens content", () => {
       listener?.({
         protocol: "marimo-lens.event",
         version: 6,
-        type: "attention.trail",
+        type: "attention.reveal",
         payload: { ...trail, id: "fresh" },
       }),
     );
@@ -202,6 +206,23 @@ describe("marimo-lens content", () => {
       }),
     );
     expect(button("Next trail step")).toBeNull();
+    act(() =>
+      listener?.({
+        protocol: "marimo-lens.event",
+        version: 6,
+        type: "attention.reveal",
+        payload: { id: "held", steps: [trail.steps[0]!] },
+      }),
+    );
+    expect(button("Next trail step")).toBeNull();
+    expect(button("Previous trail step")).toBeNull();
+    expect(button("Dismiss reveal")).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(button("Dismiss reveal")).not.toBeNull();
+    act(() => button("Dismiss reveal").click());
+    expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).toBeNull();
   });
 
   test("captures the exact canonical output for a reverse protocol request", async () => {
@@ -507,9 +528,11 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "cell", cellId: "BYtC" },
+          id: "reveal-1",
+          steps: [
+            { address: { kind: "cell", cellId: "BYtC" }, message: "Updated the aggregation." },
+          ],
           durationMs: 4_000,
-          message: "Updated the aggregation.",
         },
       }),
     );
@@ -589,7 +612,8 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "selection", selectionId: selection.id, revision: 3 },
+          id: "reveal-1",
+          steps: [{ address: { kind: "selection", selectionId: selection.id, revision: 3 } }],
           durationMs: 4_000,
         },
       }),
@@ -807,7 +831,8 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "selection", selectionId: selection.id, revision: 3 },
+          id: "reveal-1",
+          steps: [{ address: { kind: "selection", selectionId: selection.id, revision: 3 } }],
           durationMs: 4_000,
         },
       }),
@@ -1294,8 +1319,17 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "selection", selectionId: selection.id, revision: 3 },
-          message: "Updated the chart.",
+          id: "reveal-1",
+          steps: [
+            {
+              address: { kind: "selection", selectionId: selection.id, revision: 3 },
+              message: "Updated the chart.",
+            },
+            {
+              address: { kind: "cell", cellId: selection.target.cellIds[0]! },
+              message: "The producing cell.",
+            },
+          ],
           durationMs: 4_000,
         },
       });
@@ -1318,6 +1352,11 @@ describe("marimo-lens content", () => {
 
     expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")).not.toBeNull();
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
+    const next = uiRoot().querySelector<HTMLButtonElement>('[aria-label="Next trail step"]')!;
+    act(() => next.click());
+    expect(uiRoot().querySelector("[data-marimo-lens-target-attention]")?.textContent).toContain(
+      "The producing cell.",
+    );
 
     void act(() => vi.advanceTimersByTime(4_179));
     expect(uiRoot().querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
@@ -1333,8 +1372,13 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "cell", cellId: selection.target.cellIds[0]! },
-          message: "Showing the finished chart.",
+          id: "reveal-1",
+          steps: [
+            {
+              address: { kind: "cell", cellId: selection.target.cellIds[0]! },
+              message: "Showing the finished chart.",
+            },
+          ],
           durationMs: 4_000,
         },
       }),
@@ -1373,7 +1417,8 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "cell", cellId: selection.target.cellIds[0]! },
+          id: "reveal-1",
+          steps: [{ address: { kind: "cell", cellId: selection.target.cellIds[0]! } }],
           durationMs: 4_000,
         },
       }),
@@ -1431,7 +1476,7 @@ describe("marimo-lens content", () => {
           protocol: "marimo-lens.event",
           version: 6,
           type: "attention.reveal",
-          payload: { address, durationMs: 4_000 },
+          payload: { id: "reveal-1", steps: [{ address }], durationMs: 4_000 },
         };
     act(() => listener?.(event));
     expect(output.scrollIntoView).not.toHaveBeenCalled();
@@ -1848,8 +1893,13 @@ describe("marimo-lens content", () => {
         version: 6,
         type: "attention.reveal",
         payload: {
-          address: { kind: "cell", cellId: selection.target.cellIds[0]! },
-          message: "Showing the completed output.",
+          id: "reveal-1",
+          steps: [
+            {
+              address: { kind: "cell", cellId: selection.target.cellIds[0]! },
+              message: "Showing the completed output.",
+            },
+          ],
           durationMs: 4_000,
         },
       }),

@@ -138,9 +138,8 @@ lifetime.
 | `cell_image(cell_id, *, expected_revision)` | Starts, polls, and consumes one unannotated cell-output PNG transfer.    |
 | `start_activity(target, ...)`               | Starts transient work presentation and returns its opaque owner handle.  |
 | `stop_activity(activity)`                   | Stops presentation when the handle still owns it.                        |
-| `reveal(target, ...)`                       | Brings one stored selection or graph cell into view for a supplied hold. |
+| `reveal(target, ...)`                       | Reveals a cell, selection, or ordered steps for a supplied hold.         |
 | `resolve(selection_ids, ...)`               | Moves verified selections to History in one revisioned state transition. |
-| `show_trail(steps)`                         | Shows a bounded, transient notebook walkthrough.                         |
 
 The handle delegates to the public `Lens` methods. Argument and lifecycle
 contracts therefore stay aligned between notebook users and agent integrations.
@@ -172,6 +171,7 @@ Activity and reveal accept:
 - A stored `SelectionReference` plus its captured revision for human-selected
   notebook and DOM targets.
 
+Reveal also accepts an ordered sequence of steps using these same addresses.
 Python validates cell addresses against exact active graph membership.
 Selection addresses validate the expected revision and stored selection ID.
 The browser then finds the trusted target record from synchronized state.
@@ -199,8 +199,8 @@ best-effort and leaves Python selection state unchanged.
 
 ## Trails
 
-After verifying cells, an agent calls `show_trail(steps)` once and returns.
-Python validates the complete route and sends an `attention.trail` event.
+After verifying targets, an agent calls `reveal(steps, duration_ms=None)` once and returns.
+Python validates the complete route and sends an `attention.reveal` event.
 The browser owns its index and the compact stepper in the popover header.
 There is no saved catalog or model trait, and navigation needs no kernel calls.
 

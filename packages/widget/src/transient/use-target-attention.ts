@@ -1,4 +1,4 @@
-import type { AttentionEvent, AttentionTrailEvent, LensState } from "@marimo-lens/protocol";
+import type { AttentionAddress, AttentionEvent, LensState } from "@marimo-lens/protocol";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -31,7 +31,7 @@ export function useTargetAttention(
       if (event.type === "attention.trail.stop") {
         pending.current = pending.current.filter(
           (candidate) =>
-            candidate.type !== "attention.trail" || candidate.payload.id !== event.payload.trailId,
+            candidate.type !== "attention.reveal" || candidate.payload.id !== event.payload.trailId,
         );
         controller.endTrail(event.payload.trailId);
         return;
@@ -55,22 +55,28 @@ export function useTargetAttention(
     };
   }, [controller, protocol]);
   useEffect(() => {
-    const blockedIndex = pending.current.findIndex(
-      (event) =>
-        event.type !== "attention.trail" &&
-        event.payload.address.kind === "selection" &&
-        state.revision < event.payload.address.revision,
-    );
+    const blockedIndex = pending.current.findIndex((event) => {
+      const addresses =
+        event.type === "attention.reveal"
+          ? event.payload.steps.map((step) => step.address)
+          : [event.payload.address];
+      return addresses.some(
+        (address) => address.kind === "selection" && state.revision < address.revision,
+      );
+    });
     const ready = blockedIndex === -1 ? pending.current : pending.current.slice(0, blockedIndex);
     if (ready.length === 0) return;
     pending.current = pending.current.slice(ready.length);
     for (const event of ready) {
-      if (event.type === "attention.trail") {
-        controller.startTrail(event.payload);
-        continue;
-      }
-      const locator = resolveTarget(event, state, selector, dom);
-      if (!locator) continue;
+      const addresses =
+        event.type === "attention.reveal"
+          ? event.payload.steps.map((step) => step.address)
+          : [event.payload.address];
+      const locators = addresses.map((address) =>
+        resolveTarget(address, event.type === "attention.reveal", state, selector, dom),
+      );
+      if (!locators.every((locator): locator is TargetLocator => locator !== null)) continue;
+      const targets = locators;
       const active = dom.activeElement;
       if (
         active instanceof dom.window.HTMLElement &&
@@ -79,9 +85,9 @@ export function useTargetAttention(
         focusDock(dom);
       }
       if (event.type === "attention.activity.start") {
-        controller.startActivity(event, locator);
+        controller.startActivity(event, targets[0]!);
       } else {
-        controller.reveal(event, locator);
+        controller.reveal(event, targets);
       }
     }
   }, [attentionEventSequence, controller, dom, selector, state]);
@@ -94,12 +100,12 @@ type PendingAttentionEvent = Exclude<
 >;
 
 function resolveTarget(
-  event: Exclude<PendingAttentionEvent, AttentionTrailEvent>,
+  address: AttentionAddress,
+  includeHistory: boolean,
   state: LensState,
   selector: string | null,
   dom: NotebookDomAdapter,
 ): TargetLocator | null {
-  const { address } = event.payload;
   if (address.kind === "cell") {
     return {
       kind: "cell",
@@ -112,7 +118,7 @@ function resolveTarget(
   if (state.revision < address.revision) return null;
   const selection =
     state.selections.find((candidate) => candidate.id === address.selectionId) ??
-    (event.type === "attention.reveal"
+    (includeHistory
       ? state.history.find(
           (candidate) =>
             candidate.selectionId === address.selectionId &&

@@ -5,7 +5,6 @@ import {
   AttentionActivityStartEventSchema,
   AttentionActivityStopEventSchema,
   AttentionRevealEventSchema,
-  AttentionTrailEventSchema,
   TrailSchema,
   ClearHistoryCommandSchema,
   GetSnapshotCommandSchema,
@@ -26,14 +25,17 @@ import { selectionFixture } from "./fixtures";
 
 describe("transport envelope", () => {
   test("carries a bounded transient Trail in its start event", () => {
-    const trail = { id: "trail-1", steps: [{ cellId: "cell-1", label: "Question" }] };
+    const trail = {
+      id: "trail-1",
+      steps: [{ address: { kind: "cell" as const, cellId: "cell-1" }, label: "Question" }],
+    };
     expect(
       parseContract(
-        AttentionTrailEventSchema,
+        AttentionRevealEventSchema,
         {
           protocol: "marimo-lens.event",
           version: 6,
-          type: "attention.trail",
+          type: "attention.reveal",
           payload: trail,
         },
         "event",
@@ -553,78 +555,46 @@ describe("selection contracts", () => {
     ).toThrow();
   });
 
-  test("accepts bounded target reveal events", () => {
+  test("accepts bounded reveal steps and an optional whole-reveal duration", () => {
+    const step = {
+      address: { kind: "cell", cellId: "BYtC" },
+      label: "Updated chart",
+      message: "Updated the aggregation.",
+    };
     const reveal = {
       protocol: "marimo-lens.event",
       version: 6,
       type: "attention.reveal",
-      payload: {
-        address: { kind: "cell" as const, cellId: "BYtC" },
-        label: "Updated chart",
-        message: "Updated the aggregation.",
-        durationMs: 8_000,
-      },
+      payload: { id: "reveal-1", steps: [step], durationMs: 8_000 },
     };
     expect(parseContract(AttentionRevealEventSchema, reveal, "event")).toEqual(reveal);
-    expect(() =>
-      parseContract(
-        AttentionRevealEventSchema,
-        { ...reveal, payload: { address: reveal.payload.address } },
-        "event",
-      ),
-    ).toThrow();
-    expect(() =>
-      parseContract(
-        AttentionRevealEventSchema,
-        {
-          ...reveal,
-          payload: { ...reveal.payload, address: { kind: "cell", cellId: "x".repeat(129) } },
-        },
-        "event",
-      ),
-    ).toThrow();
-    expect(() =>
-      parseContract(
-        AttentionRevealEventSchema,
-        { ...reveal, payload: { ...reveal.payload, message: "   " } },
-        "event",
-      ),
-    ).toThrow();
-    expect(
-      parseContract(
-        AttentionRevealEventSchema,
-        {
-          ...reveal,
-          payload: {
-            address: reveal.payload.address,
-            message: "x".repeat(1_000),
-            durationMs: 300_000,
+    const held = { ...reveal, payload: { id: "held", steps: [step] } };
+    expect(parseContract(AttentionRevealEventSchema, held, "event")).toEqual(held);
+    for (const invalidStep of [
+      { ...step, address: { kind: "cell", cellId: "x".repeat(129) } },
+      { ...step, message: "   " },
+      { ...step, message: "x".repeat(1_001) },
+      { ...step, label: "x".repeat(41) },
+    ]) {
+      expect(() =>
+        parseContract(
+          AttentionRevealEventSchema,
+          {
+            ...reveal,
+            payload: { ...reveal.payload, steps: [invalidStep] },
           },
-        },
-        "event",
-      ),
-    ).toMatchObject({
-      payload: { message: "x".repeat(1_000), durationMs: 300_000 },
-    });
-    expect(() =>
-      parseContract(
-        AttentionRevealEventSchema,
-        { ...reveal, payload: { ...reveal.payload, message: "x".repeat(1_001) } },
-        "event",
-      ),
-    ).toThrow();
-    expect(() =>
-      parseContract(
-        AttentionRevealEventSchema,
-        { ...reveal, payload: { ...reveal.payload, label: "x".repeat(41) } },
-        "event",
-      ),
-    ).toThrow();
+          "event",
+        ),
+      ).toThrow();
+    }
     for (const durationMs of [0, 300_001, 1.5]) {
       expect(() =>
         parseContract(
           AttentionRevealEventSchema,
-          { ...reveal, payload: { ...reveal.payload, durationMs } },
+          {
+            ...reveal,
+            payload: { ...reveal.payload, durationMs },
+          },
           "event",
         ),
       ).toThrow();
@@ -632,10 +602,22 @@ describe("selection contracts", () => {
     expect(
       parseContract(
         AttentionRevealEventSchema,
-        { ...reveal, payload: { ...reveal.payload, displayHint: "compact" } },
+        {
+          ...reveal,
+          payload: {
+            ...reveal.payload,
+            steps: [{ ...step, message: "x".repeat(1_000) }],
+            durationMs: 300_000,
+            displayHint: "compact",
+          },
+        },
         "event",
-      ),
-    ).toEqual(reveal);
+      ).payload,
+    ).toEqual({
+      id: "reveal-1",
+      steps: [{ ...step, message: "x".repeat(1_000) }],
+      durationMs: 300_000,
+    });
   });
 
   test("accepts bounded target activity start events", () => {

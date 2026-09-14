@@ -18,7 +18,7 @@ from ._registry import mounted_lenses
 from .activity import ActivityHandle
 from .context import LensContext, SelectionReference
 from .errors import LensError
-from .trail import TrailStep
+from .reveal import RevealStep
 from .widget import Lens
 
 _DISTRIBUTION_NAME = "marimo-lens"
@@ -72,14 +72,17 @@ Quick notebook walkthrough (complete workflow):
 - Explain the question, evidence, main result, and next step in reading order.
   Show it as soon as those landmarks are verified; don't audit the whole notebook.
 
-    mounted.show_trail([
-        {{"cell_id": "<verified cell ID>", "label": "What we're checking",
+    mounted.reveal([
+        {{"target": "<verified cell ID>", "label": "What we're checking",
           "message": "<what you changed or found, and why it matters>"}},
         # Add the other verified landmarks in reading order.
-    ])
+    ], duration_ms=None)
 
-show_trail(steps) returns None. It accepts 1-16 steps with cell_id, label
-(up to 40 UTF-16 units), and optional message (up to 1,000). The small popover
+reveal(steps, duration_ms=None) returns None. It accepts 1-16 steps with target,
+optional label (up to 40 UTF-16 units), and optional message (up to 1,000).
+Targets are cell IDs or selection references; selections require the captured
+expected_revision for the whole sequence. A finite duration_ms limits the whole
+reveal, and navigation never resets the timer. The small popover
 stepper holds until the user navigates or dismisses it. Nothing is saved.
 Changing referenced cells or their inputs ends the walkthrough. Return control
 after showing it; no sleeps, captures, polling, or timing loops are needed.
@@ -274,24 +277,16 @@ class MountedLens:
             summary=summary,
         )
 
-    def show_trail(self, steps: Sequence[TrailStep]) -> None:
-        """Show a transient walkthrough with a popover stepper.
-
-        Each step has cell_id, label, and an optional message. See
-        Lens.show_trail() for bounds and lifecycle.
-        """
-        self._lens.show_trail(steps)
-
     def reveal(
         self,
-        target: str | SelectionReference,
+        target: str | SelectionReference | Sequence[RevealStep],
         *,
         expected_revision: int | None = None,
-        duration_ms: int,
+        duration_ms: int | None,
         label: str | None = None,
         message: str | None = None,
     ) -> None:
-        """Bring one exact cell or selection into view for the supplied hold.
+        """Reveal one target or ordered steps for the supplied hold.
 
         Pass a LensContext revision with a SelectionReference. Reveal replaces
         current activity. Call reveal() before resolve() with the same captured

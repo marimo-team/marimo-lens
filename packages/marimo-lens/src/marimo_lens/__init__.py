@@ -15,7 +15,7 @@ from .context import (
     SelectionTargetReference,
 )
 from .errors import LensError
-from .trail import TrailStep
+from .reveal import RevealStep
 from .widget import Lens
 
 __version__ = metadata.version("marimo-lens")
@@ -28,8 +28,8 @@ __all__ = [
     "LensError",
     "LensReferences",
     "NotebookReference",
+    "RevealStep",
     "SelectionReference",
     "SelectionTargetReference",
-    "TrailStep",
     "__version__",
 ]
