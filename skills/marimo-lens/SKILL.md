@@ -14,20 +14,43 @@ description: >-
 
 # Work with marimo Lens
 
+## Load the installed workflow
+
+In the notebook kernel, discover the installed API and read its packaged skill:
+
+```python
+import marimo_lens.agent
+
+help(marimo_lens.agent)
+skill = marimo_lens.agent.agent_skill()
+print(skill.body)
+```
+
+Read the complete output and follow the instructions that match the installed
+Lens version. Resolve supporting files with `skill / "reference/workflow.md"`.
+If kernel access is not available yet, connect through Pair first.
+
 ## Execution environment
 
 Run this skill in a live marimo code-mode environment. If the current agent can
 already execute code in the notebook kernel, continue with the Lens workflow.
 
-Otherwise, install the
-[marimo Pair skill](https://github.com/marimo-team/marimo-pair/tree/main/skills/marimo-pair):
+Otherwise, run:
 
 ```console
-npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
+npx skills use "https://github.com/marimo-team/marimo-pair" --skill "marimo-pair"
 ```
 
-Use `$marimo-pair` to connect to or start the notebook. Resume `$marimo-lens`
-after code-mode execution is available.
+If `npx` is unavailable, use Deno through `uvx`:
+
+```console
+uvx deno x -y skills use "https://github.com/marimo-team/marimo-pair" --skill "marimo-pair"
+```
+
+Follow the generated skill instructions now. Read the complete output,
+redirecting it to a temporary file first if necessary. Resolve relative paths
+from the supporting-files directory it provides. Once connected, load the
+[installed Lens workflow](#load-the-installed-workflow).
 
 Notebook discovery, connection, scratchpad execution, and general notebook
 inspection and mutation belong to the active code-mode integration, such as

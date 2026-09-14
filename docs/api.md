@@ -5,16 +5,6 @@ description: Public Python contracts for mounting Lens and connecting a code-mod
 
 # Python API
 
-Selection descriptions preserve client labels and optional rendering locations
-through History and reopen. See [Client metadata](./concepts/targets#client-metadata).
-
-DOM selection targets expose `sources` alongside `cellIds`. Each source records
-`cellId` and the exact notebook `selector`. The selector is `None` for cell
-outputs or cell-only metadata.
-Two selectors defined by one cell remain distinct sources. Inspect these
-references before reading or editing a selected value through the active kernel
-integration. `cellIds` continues to identify the producing graph cells.
-
 Mount `Lens` in a notebook cell. Connect to that instance from a live agent
 kernel call with `marimo_lens.agent.connect()`.
 
@@ -45,6 +35,10 @@ differ.
 :::
 
 ## Notebook-author API
+
+Install `marimo-lens` in the notebook environment. The examples use one mounted
+`lens` instance, created in the [`Lens` example](#lens). For installation and a
+first selection, see [Getting started](./getting-started).
 
 The top-level package exports:
 

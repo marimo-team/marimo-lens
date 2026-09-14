@@ -14,6 +14,19 @@ Notebook output targets are available by default. `dom_selector` adds
 configured DOM targets through a host-owned CSS policy. Read [Targets](./concepts/targets)
 for target priority, producing-cell metadata, documents, and reattachment.
 
+To use these controls in your own notebook, install `marimo-lens` and keep this
+cell displayed:
+
+```python
+from marimo_lens import Lens
+
+lens = Lens()
+lens
+```
+
+[Getting started](./getting-started) includes the installation command. The
+interactive chart on this page already mounts its own Lens.
+
 <llm-exclude>
 
 ```marimo-config

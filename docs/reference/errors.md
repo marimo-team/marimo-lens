@@ -82,9 +82,9 @@ including many emoji, use two.
 ## How limits degrade or reject work
 
 Lens preserves required identity and geometry before optional descriptive data.
-Compact-reference fitting removes optional DOM hints and shortens notes when
-needed. Standalone text budgets selections, controls, cells, and limit notices
-independently.
+Compact-reference fitting removes optional DOM hints and target descriptions
+before shortening notes when needed. Standalone text budgets selections,
+controls, cells, and limit notices independently.
 
 Mutations that cannot preserve required selection identity and geometry raise
 `selection_context_limit` before state changes. History follows a different

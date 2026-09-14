@@ -59,6 +59,7 @@ Lens works with agents that can run code in the live notebook kernel, including
 [Getting started](https://marimo-team.github.io/marimo-lens/getting-started) ·
 [Concepts](https://marimo-team.github.io/marimo-lens/overview) ·
 [Selections](https://marimo-team.github.io/marimo-lens/selections) ·
+[Custom labels](https://marimo-team.github.io/marimo-lens/custom-metadata) ·
 [Python API](https://marimo-team.github.io/marimo-lens/api) ·
 [Troubleshooting](https://marimo-team.github.io/marimo-lens/troubleshooting)
 

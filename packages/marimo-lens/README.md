@@ -57,6 +57,7 @@ and the inspection, verification, and review workflow.
 
 [Getting started](https://marimo-team.github.io/marimo-lens/getting-started) ·
 [Concepts](https://marimo-team.github.io/marimo-lens/overview) ·
+[Custom labels](https://marimo-team.github.io/marimo-lens/custom-metadata) ·
 [Python API](https://marimo-team.github.io/marimo-lens/api) ·
 [Compatibility](https://marimo-team.github.io/marimo-lens/compatibility) ·
 [Data and trust](https://marimo-team.github.io/marimo-lens/data-and-trust)

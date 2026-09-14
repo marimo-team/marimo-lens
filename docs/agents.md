@@ -9,6 +9,21 @@ Lens works with agents that can run Python inside the live marimo kernel. The
 agent reads the current selection, inspects and edits its producing cells, then
 returns the verified result to the same target for review.
 
+## Before connecting
+
+Install `marimo-lens` in the notebook environment and display one Lens cell:
+
+```python
+from marimo_lens import Lens
+
+lens = Lens()
+lens
+```
+
+Keep the cell mounted. Press **Select**, mark another output, and optionally add
+a note. [Getting started](./getting-started) covers installation. Run the agent
+examples through the live code-mode connection, where the notebook is executing.
+
 ## Enter code mode
 
 **Code mode** is a live connection to the notebook kernel. It lets an agent read
@@ -18,16 +33,22 @@ If your agent already has code-mode access, continue to
 [Connect to Lens](#connect-to-lens).
 
 [marimo Pair](https://github.com/marimo-team/marimo-pair) can provide this
-connection. Install its Agent Skill:
+connection. Ask the agent to run:
 
 ```console
-npx skills add https://github.com/marimo-team/marimo-pair --skill marimo-pair
+npx skills use "https://github.com/marimo-team/marimo-pair" --skill "marimo-pair"
 ```
 
-An [Agent Skill](https://agentskills.io/home) is a set of workflow instructions
-an agent host can load by name. The command requires Node.js, `npx`, network access, and an agent host
-that supports Agent Skills. Use `$marimo-pair` to connect to or start the
-notebook, then resume `$marimo-lens`.
+If `npx` is unavailable, use Deno through `uvx`:
+
+```console
+uvx deno x -y skills use "https://github.com/marimo-team/marimo-pair" --skill "marimo-pair"
+```
+
+These commands require network access and return an [Agent Skill](https://agentskills.io/home),
+a set of workflow instructions. Have the agent read the complete output and
+follow it now, redirecting it to a temporary file first if necessary. Resolve
+relative paths from the supporting-files directory it provides.
 
 Pair owns notebook connection, inspection, edits, and execution. Lens owns
 selection grounding, visual evidence, activity, reveal, and resolution.
@@ -38,6 +59,19 @@ The `marimo-lens` Python package includes the matching Lens Agent Skill inside
 an **Agent Plugin**, the installed resource bundle that keeps the workflow and
 Python version together. It also registers `marimo_lens.agent` as marimo's
 `lens` **capability**, the Python module marimo advertises to code-mode agents.
+
+Discover the installed API and read its packaged workflow in the notebook kernel:
+
+```python
+import marimo_lens.agent
+
+help(marimo_lens.agent)
+skill = marimo_lens.agent.agent_skill()
+print(skill.body)
+```
+
+Follow the complete skill output. Access supporting files through `skill`, for
+example `skill / "reference/workflow.md"`.
 
 Run this inside one live code-mode kernel call:
 
