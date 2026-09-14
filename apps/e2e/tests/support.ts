@@ -111,7 +111,9 @@ export async function runAction(page: Page, action = "Inspect context"): Promise
   const output = page.locator('[aria-label="Agent result"]');
   const previous = (await output.count()) > 0 ? await output.textContent() : null;
   await page.getByRole("combobox", { name: "Agent action" }).selectOption({ label: action });
-  await page.getByRole("button", { name: "Run agent action", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Run agent action", exact: true })
+    .click({ noWaitAfter: true });
   await expect(output).toBeVisible();
   await expect(output).not.toHaveText(previous ?? "");
   const report: Report = JSON.parse((await output.textContent()) ?? "");
@@ -127,7 +129,12 @@ export async function selectOutput(
 ) {
   const target = page.getByRole("region", { name: "Revenue by month" });
   await target.scrollIntoViewIfNeeded();
-  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Select a target", exact: true })
+    .click({ noWaitAfter: true });
+  await expect(
+    page.getByRole("button", { name: "Cancel selection mode", exact: true }),
+  ).toBeVisible();
   const bounds = await target.boundingBox();
   if (!bounds) throw new Error("Revenue output is not rendered");
   const x = bounds.x + bounds.width * 0.3;
@@ -144,7 +151,9 @@ export async function selectOutput(
   await expect(editor).toBeVisible();
   await expect(page.getByRole("textbox", { name: `Note for selection ${label}` })).toBeFocused();
   await page.getByRole("textbox", { name: `Note for selection ${label}` }).fill(note);
-  await editor.getByRole("button", { name: "Done", exact: true }).click();
+  // This button saves through the widget transport. The dialog and enabled dock
+  // below acknowledge completion without Playwright's unrelated navigation barrier.
+  await editor.getByRole("button", { name: "Done", exact: true }).click({ noWaitAfter: true });
   await expect(editor).toBeHidden();
   await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeEnabled();
 }

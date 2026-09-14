@@ -115,6 +115,7 @@ def _(mo):
             "Remember revision",
             "Resolve remembered",
             "Resolve unknown",
+            "Seed 63 selections",
         ],
         value="Inspect context",
         label="Agent action",
@@ -131,7 +132,39 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
     _references = _context.references
     _selections = _references["selections"]
     _error = None
-    if action.value == "Start activity":
+    if action.value == "Seed 63 selections":
+        # Seed through the widget transport so Python still validates every revision.
+        # The browser test exercises the final admission and overflow through gestures.
+        _state = lens.get_state("_state")["_state"]
+        assert len(_state["selections"]) == 1
+        assert lens.comm is not None
+        _template = _state["selections"][0]
+        with lens.hold_sync():
+            for _index in range(2, 64):
+                _command = {
+                    "protocol": "marimo-lens.command",
+                    "version": 6,
+                    "requestId": f"seed-{_index}",
+                    "type": "selection.put",
+                    "payload": {
+                        "selection": {
+                            **_template,
+                            "id": f"seed-{_index}",
+                            "label": f"S{_index}",
+                        },
+                        "imageAction": "clear",
+                        "expectedRevision": lens.get_state("_state")["_state"][
+                            "revision"
+                        ],
+                    },
+                }
+                lens.comm.handle_msg(
+                    {
+                        "content": {"data": {"method": "custom", "content": _command}},
+                        "buffers": [],
+                    }
+                )
+    elif action.value == "Start activity":
         activity["handle"] = lens.start_activity(
             _selections[0],
             expected_revision=_references["revision"],
