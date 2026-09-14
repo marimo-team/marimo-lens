@@ -56,11 +56,12 @@ export function projectTargetAttentionSurface(
         ? null
         : {
             presentation,
-            reason: !target?.isConnected
-              ? "target-unavailable"
-              : intersectsViewport(target.getBoundingClientRect(), ownerWindow)
-                ? "label-space"
-                : "offscreen",
+            reason:
+              !target?.isConnected || !presentation.bounds
+                ? "target-unavailable"
+                : intersectsViewport(presentation.bounds, ownerWindow)
+                  ? "label-space"
+                  : "offscreen",
           },
   };
 }
@@ -71,8 +72,8 @@ export function projectTargetAttention(
   measurement?: TargetAttentionLabelMeasurement,
 ): TargetAttentionView | null {
   const target = presentation?.target;
-  if (!presentation || !target?.isConnected) return null;
-  const rect = target.getBoundingClientRect();
+  const rect = presentation?.bounds;
+  if (!presentation || !target?.isConnected || !rect) return null;
   const transitioning = presentation.trail && presentation.framing === "pending";
   if (!transitioning && !intersectsViewport(rect, ownerWindow)) return null;
 
@@ -270,7 +271,7 @@ function attentionAnnouncement(presentation: TargetAttentionPresentation): strin
   return step + (message ? `${status} ${message}` : status);
 }
 
-function intersectsViewport(rect: DOMRect, ownerWindow: Window): boolean {
+function intersectsViewport(rect: DOMRectReadOnly, ownerWindow: Window): boolean {
   const visibleWidth = Math.min(rect.right, ownerWindow.innerWidth) - Math.max(rect.left, 0);
   const visibleHeight = Math.min(rect.bottom, ownerWindow.innerHeight) - Math.max(rect.top, 0);
   return visibleWidth >= MIN_VISIBLE_TARGET && visibleHeight >= MIN_VISIBLE_TARGET;

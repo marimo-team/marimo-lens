@@ -26,6 +26,7 @@ export type TargetAttentionPresentation = {
   locator: TargetLocator;
   kind: TargetAttentionKind;
   target: HTMLElement | null;
+  bounds: DOMRectReadOnly | null;
   expiresAt: number | null;
   framing: "pending" | "settled";
   phase: TargetAttentionPhase;
@@ -50,7 +51,7 @@ type ActiveTrail = {
   expiresAt: number | null;
 };
 
-type ActiveAttention = TargetAttentionPresentation & {
+type ActiveAttention = Omit<TargetAttentionPresentation, "bounds"> & {
   activityId: string | null;
   exitDuration: number;
   framingTimeout: number;
@@ -84,6 +85,9 @@ export class TargetAttentionController {
   #trail: ActiveTrail | null = null;
   #stopLayout: (() => void) | null = null;
   #cancelScroll: (() => void) | null = null;
+  #lastPresentation: TargetAttentionPresentation | null = null;
+  #lastViewportWidth = 0;
+  #lastViewportHeight = 0;
 
   constructor(
     dom: NotebookDomAdapter,
@@ -331,12 +335,26 @@ export class TargetAttentionController {
 
   #emit(active: ActiveAttention): void {
     const { sequence, locator, kind, target, expiresAt, framing, phase, label, message } = active;
+    const bounds = target?.getBoundingClientRect() ?? null;
+    const { innerWidth, innerHeight } = this.#dom.window;
+    const previous = this.#lastPresentation;
+    if (
+      previous?.sequence === sequence &&
+      previous.target === target &&
+      previous.phase === phase &&
+      previous.framing === framing &&
+      sameBounds(previous.bounds, bounds) &&
+      this.#lastViewportWidth === innerWidth &&
+      this.#lastViewportHeight === innerHeight
+    )
+      return;
     const trail = this.#trail;
     const presentation: TargetAttentionPresentation = {
       sequence,
       locator,
       kind,
       target,
+      bounds,
       expiresAt,
       framing,
       phase,
@@ -355,6 +373,9 @@ export class TargetAttentionController {
         },
       };
     }
+    this.#lastPresentation = presentation;
+    this.#lastViewportWidth = innerWidth;
+    this.#lastViewportHeight = innerHeight;
     this.#onChange(presentation);
   }
 
@@ -386,6 +407,7 @@ export class TargetAttentionController {
     this.#dom.window.clearTimeout(active.framingTimeout);
     active.resizeObserver?.disconnect();
     if (notify) {
+      this.#lastPresentation = null;
       this.#trail = null;
       this.#stopLayout?.();
       this.#stopLayout = null;
@@ -434,6 +456,17 @@ function targetSize(target: HTMLElement): ElementSize {
 
 function sameSize(left: ElementSize | null, right: ElementSize): boolean {
   return left?.width === right.width && left.height === right.height;
+}
+
+function sameBounds(left: DOMRectReadOnly | null, right: DOMRectReadOnly | null): boolean {
+  return (
+    left === right ||
+    (left !== null &&
+      right !== null &&
+      left.x === right.x &&
+      left.y === right.y &&
+      sameSize(left, right))
+  );
 }
 
 function prefersReducedMotion(ownerWindow: Window): boolean {

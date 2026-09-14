@@ -147,6 +147,38 @@ describe("target attention", () => {
     controller.dispose();
   });
 
+  test("skips unchanged layout notifications but publishes geometry and viewport changes", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const controller = new TestAttentionController(new NotebookDomAdapter(document), onChange);
+    const cell = setupCell("steady");
+    let bounds = new DOMRect(20, 80, 400, 300);
+    cell.getBoundingClientRect = () => bounds;
+    controller.startActivity(startActivityEvent("steady"));
+    const refresh = () => {
+      window.dispatchEvent(new Event("scroll"));
+      vi.advanceTimersToNextFrame();
+    };
+    const initial = onChange.mock.calls.length;
+    refresh();
+    refresh();
+    expect(onChange).toHaveBeenCalledTimes(initial);
+    bounds = new DOMRect(20, 100, 400, 300);
+    refresh();
+    expect(onChange).toHaveBeenCalledTimes(initial + 1);
+    expect(onChange.mock.lastCall?.[0].bounds).toEqual(bounds);
+    const originalWidth = window.innerWidth;
+    try {
+      window.innerWidth = originalWidth - 100;
+      window.dispatchEvent(new Event("resize"));
+      vi.advanceTimersToNextFrame();
+      expect(onChange).toHaveBeenCalledTimes(initial + 2);
+    } finally {
+      window.innerWidth = originalWidth;
+      controller.dispose();
+    }
+  });
+
   test("marks visible activity without scrolling or moving focus", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();

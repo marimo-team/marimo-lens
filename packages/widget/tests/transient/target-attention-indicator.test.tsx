@@ -161,7 +161,11 @@ describe("target attention presentation", () => {
 
     targetWidth = 900;
     expect(
-      projectTargetAttention(presentation, viewport(1_280, 720), measurement)?.labelMaxWidth,
+      projectTargetAttention(
+        { ...presentation, bounds: target.getBoundingClientRect() },
+        viewport(1_280, 720),
+        measurement,
+      )?.labelMaxWidth,
     ).toBe(480);
   });
 
@@ -368,6 +372,7 @@ function activityPresentation(target: HTMLElement, label?: string): TargetAttent
     sequence: 1,
     locator: { kind: "cell", label: "BYtC", resolve: () => target },
     target,
+    bounds: target.getBoundingClientRect(),
     expiresAt: null,
     framing: "settled",
     phase: "active",
