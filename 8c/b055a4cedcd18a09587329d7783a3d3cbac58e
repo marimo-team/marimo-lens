@@ -1,0 +1,29 @@
+packages/marimo-lens/tests/test_trails.py
+  s_99b8a4632dacdf::t_9574b5ddfd3ba2 120,122-131,135,140
+packages/widget/tests/transient/target-attention.test.ts
+  s_99b8a4632dacdf::t_a3226c8ad92b7a 181
+  s_99b8a4632dacdf::t_1f316e06ec98ae 56-64,99,110,173-174,180
+packages/widget/tests/app/marimo-lens-content.test.tsx
+  s_99b8a4632dacdf::t_1f316e06ec98ae 1361,1363,1412
+  s_99b8a4632dacdf::t_a3226c8ad92b7a 1387-1390,1429-1432
+packages/marimo-lens/tests/test_widget.py
+  s_99b8a4632dacdf::t_9c5ce48e321add 170,205
+  s_99b8a4632dacdf::t_1f316e06ec98ae 201-203
+  s_99b8a4632dacdf::t_9574b5ddfd3ba2 160,165,169,171,176-177,191,194
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8cb055a4cedcd18a09587329d7783a3d3cbac58e",
+  "prompts": {},
+  "sessions": {
+    "s_99b8a4632dacdf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a09f52-fce8-7370-a216-1b5c9506a2b1",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
