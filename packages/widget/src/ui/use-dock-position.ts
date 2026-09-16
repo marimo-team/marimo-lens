@@ -161,7 +161,9 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
       move({ x: drag.origin.x + dx, y: drag.origin.y + dy });
     };
     const up = (event: PointerEvent) => {
-      if (event.pointerId === drag?.id) finish(event.type !== "pointerup");
+      if (event.pointerId !== drag?.id) return;
+      if (event.type === "pointerup") pointerMove(event);
+      finish(event.type === "pointercancel");
     };
     const click = (event: MouseEvent) => {
       if (!suppressClick || event.detail === 0) return;
@@ -197,7 +199,7 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
       }
       save();
     };
-    const blur = () => finish(true);
+    const blur = () => finish(false);
     const resize = () => {
       visibleBounds = { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight };
       finish(true);
@@ -215,10 +217,10 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
           })
         : () => {};
     dock.addEventListener("pointerdown", down);
-    dock.addEventListener("pointermove", pointerMove);
-    dock.addEventListener("pointerup", up);
-    dock.addEventListener("pointercancel", up);
-    dock.addEventListener("lostpointercapture", up);
+    // Keep tracking outside the dock even if the host releases pointer capture.
+    win.addEventListener("pointermove", pointerMove, true);
+    win.addEventListener("pointerup", up, true);
+    win.addEventListener("pointercancel", up, true);
     dock.addEventListener("click", click, true);
     dock.addEventListener("keydown", keydown, true);
     win.addEventListener("blur", blur);
@@ -231,10 +233,9 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
       observer?.disconnect();
       stopViewport();
       dock.removeEventListener("pointerdown", down);
-      dock.removeEventListener("pointermove", pointerMove);
-      dock.removeEventListener("pointerup", up);
-      dock.removeEventListener("pointercancel", up);
-      dock.removeEventListener("lostpointercapture", up);
+      win.removeEventListener("pointermove", pointerMove, true);
+      win.removeEventListener("pointerup", up, true);
+      win.removeEventListener("pointercancel", up, true);
       dock.removeEventListener("click", click, true);
       dock.removeEventListener("keydown", keydown, true);
       win.removeEventListener("blur", blur);
