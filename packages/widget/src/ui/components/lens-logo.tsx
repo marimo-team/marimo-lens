@@ -1,5 +1,5 @@
-import darkLogo from "../assets/marimo-logo-dark.svg";
-import lightLogo from "../assets/marimo-logo-light.svg";
+import darkLogo from "../assets/marimo-lens-mark-dark.svg";
+import lightLogo from "../assets/marimo-lens-mark-light.svg";
 
 type LensLogoProps = {
   className?: string;
@@ -11,16 +11,16 @@ export function LensLogo({ className }: LensLogoProps) {
       <img
         className="ml-dock-tab__logo-image ml-dock-tab__logo-image--light"
         src={lightLogo}
-        width={26}
-        height={26}
+        width={30}
+        height={30}
         alt=""
         draggable={false}
       />
       <img
         className="ml-dock-tab__logo-image ml-dock-tab__logo-image--dark"
         src={darkLogo}
-        width={26}
-        height={26}
+        width={30}
+        height={30}
         alt=""
         draggable={false}
       />

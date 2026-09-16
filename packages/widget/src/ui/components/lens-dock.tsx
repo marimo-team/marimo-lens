@@ -25,6 +25,7 @@ import { useNotebookDom } from "@/notebook/notebook-dom";
 import { SelectionSheet } from "@/selection/components/selection-sheet";
 import { ResolutionReceipt } from "@/transient/resolution-receipt";
 import { LensLogo } from "@/ui/components/lens-logo";
+import { useDockMotion } from "@/ui/use-dock-motion";
 import { useDockPosition } from "@/ui/use-dock-position";
 
 const LENS_SELECTION_SHORTCUT = "Alt+L";
@@ -99,6 +100,7 @@ export function LensDock({
   const dom = useNotebookDom();
   const dockRef = useRef<HTMLElement>(null);
   useDockPosition(dockRef);
+  useDockMotion(dockRef);
   const selectRef = useRef<HTMLButtonElement>(null);
   const tabRef = useRef<HTMLButtonElement>(null);
   const listTriggerRef = useRef<HTMLButtonElement>(null);
@@ -305,6 +307,7 @@ export function LensDock({
           <button
             className="ml-dockbar__action ml-dockbar__icon"
             type="button"
+            data-ml-dock-toggle
             onClick={collapse}
             aria-label="Collapse Lens"
             title="Collapse Lens"
@@ -318,6 +321,7 @@ export function LensDock({
           className="ml-dock-tab"
           type="button"
           data-ml-dock-tab
+          data-ml-dock-toggle
           data-ml-dock-drag
           aria-describedby="ml-dock-move-help"
           onClick={expand}

@@ -192,11 +192,10 @@
   column-gap: 6px;
   row-gap: 1px;
   color: var(--ml-muted-foreground);
-  background: color-mix(in srgb, var(--ml-surface) 96%, transparent);
+  background: var(--ml-surface);
   border: 1px solid var(--ml-border);
   border-radius: var(--ml-radius-control);
   box-shadow: var(--ml-shadow);
-  backdrop-filter: blur(12px);
   pointer-events: none;
   transform: translateX(-50%);
   transition:
@@ -221,7 +220,7 @@
 
 @media (hover: hover) and (pointer: fine) {
   .ml-resolution-receipt:hover {
-    background: var(--ml-hover);
+    background: color-mix(in srgb, var(--ml-foreground) 6%, var(--ml-surface));
   }
 }
 
@@ -502,14 +501,28 @@
 
 .ml-dockbar,
 .ml-dock-tab {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   color: var(--ml-foreground);
-  background: color-mix(in srgb, var(--ml-surface) 96%, transparent);
-  border: 1px solid var(--ml-border);
-  box-shadow: var(--ml-shadow);
-  backdrop-filter: blur(12px);
+  border: 1px solid transparent;
   pointer-events: auto;
+}
+
+.ml-dockbar::before,
+.ml-dock-tab::before {
+  position: absolute;
+  z-index: -1;
+  inset: -1px;
+  border: 1px solid var(--ml-border);
+  border-radius: inherit;
+  background: var(--ml-surface);
+  box-shadow: var(--ml-shadow);
+  transform-origin: top left;
+  pointer-events: none;
+  content: "";
+  transition: background-color 140ms var(--ml-ease);
 }
 
 .ml-dockbar {
@@ -613,26 +626,25 @@
 
 .ml-dock-tab {
   position: relative;
-  width: 40px;
-  min-width: 40px;
-  height: 36px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
   padding: 0;
-  border-radius: var(--ml-radius-surface) var(--ml-radius-surface) 0 0;
-  transform-origin: center bottom;
+  border-radius: 12px;
 }
 
 .ml-dock-tab__logo {
   display: grid;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   place-items: center;
 }
 
 .ml-dock-tab__logo-image {
   display: block;
   grid-area: 1 / 1;
-  width: 26px;
-  height: 26px;
+  width: 30px;
+  height: 30px;
 }
 
 .ml-dock-tab__logo > .ml-dock-tab__logo-image--dark {
@@ -692,9 +704,12 @@
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .ml-dockbar__action:not(:disabled):hover,
-  .ml-dock-tab:hover {
+  .ml-dockbar__action:not(:disabled):hover {
     background: var(--ml-hover);
+  }
+
+  .ml-dock-tab:hover::before {
+    background: color-mix(in srgb, var(--ml-foreground) 6%, var(--ml-surface));
   }
 
   .ml-dockbar[data-armed="true"] .ml-dockbar__select:hover {
@@ -1850,6 +1865,7 @@
   .ml-icon-button,
   .ml-dockbar button,
   .ml-dock-tab,
+  .ml-dock-tab::before,
   .ml-snapshot-trigger button,
   .ml-snapshot-preview button {
     transition-duration: 0ms;
@@ -1915,8 +1931,8 @@
   .ml-anchor-preview,
   .ml-marker,
   .ml-resize-handle,
-  .ml-dockbar,
-  .ml-dock-tab,
+  .ml-dockbar::before,
+  .ml-dock-tab::before,
   .ml-snapshot-preview {
     border-color: Highlight;
   }
