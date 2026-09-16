@@ -920,7 +920,7 @@
 
 .ml-selection-sheet__panel {
   min-height: 0;
-  padding: 0 6px 6px;
+  padding: 0 0 6px;
   overflow: auto;
 }
 
@@ -1007,7 +1007,6 @@
   align-items: center;
   min-height: 56px;
   flex-shrink: 0;
-  border-radius: var(--ml-radius-control);
 }
 
 .ml-selection-list__item[data-current="true"] {
@@ -1097,7 +1096,7 @@
 .ml-selection-list__footer {
   display: flex;
   min-height: 38px;
-  padding: 4px 2px 0;
+  padding: 4px 8px 0;
   flex: 0 0 auto;
   align-items: center;
   justify-content: flex-end;
@@ -1121,7 +1120,6 @@
 .ml-history-list__item {
   position: relative;
   min-height: 42px;
-  border-radius: var(--ml-radius-control);
 }
 
 .ml-history-list__disclosure {
