@@ -1,0 +1,24 @@
+apps/e2e/tests/lens.spec.ts
+  s_8e07d8e5413245::t_462d3ec7ead07c 562,565-578
+  s_8e07d8e5413245::t_eddbfbe94d48da 539,559-561,563-564
+  s_8e07d8e5413245::t_4eed0d65ed5d67 525-532,535-537,549-558,579-580
+packages/widget/src/ui/use-dock-position.ts
+  s_8e07d8e5413245::t_1f6c571843ced3 166
+  s_8e07d8e5413245::t_3c6efd713ce4ae 164-165,202,220-223,236-238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "39cc3194ab492c2c051fb6c5dd48a4c55a7f942e",
+  "prompts": {},
+  "sessions": {
+    "s_8e07d8e5413245": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0aa8e-4237-7641-9bb2-b7903097d784",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
