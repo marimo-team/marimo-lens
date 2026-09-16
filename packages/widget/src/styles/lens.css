@@ -166,13 +166,14 @@
 }
 
 .ml-dock {
+  --ml-safe-area-bottom: env(safe-area-inset-bottom, 0px);
   position: fixed;
   z-index: 10;
-  right: 0;
-  bottom: calc(var(--ml-viewport-bottom, 0px) + max(16px, env(safe-area-inset-bottom)));
+  top: 0;
   left: 0;
   display: flex;
-  width: auto;
+  width: max-content;
+  max-width: calc(var(--ml-dock-viewport-width, 100vw) - 24px);
   justify-content: center;
   pointer-events: none;
 }
@@ -512,7 +513,9 @@
 }
 
 .ml-dockbar {
-  height: 42px;
+  min-height: 42px;
+  max-width: 100%;
+  flex-wrap: wrap;
   padding: 4px;
   gap: 2px;
   border-radius: 12px;
@@ -723,6 +726,7 @@
 
 .ml-sheet-stack {
   position: absolute;
+  z-index: 2;
   bottom: calc(100% + 8px);
   left: calc(50% - 184px);
   width: min(368px, calc(100vw - 24px));
@@ -735,6 +739,65 @@
   inset: auto;
   width: 100%;
   max-height: inherit;
+}
+
+.ml-dockbar__grip {
+  width: 24px;
+  padding: 0;
+  color: var(--ml-muted-foreground);
+}
+
+.ml-dock [data-ml-dock-drag] {
+  touch-action: none;
+  user-select: none;
+  cursor: grab;
+}
+
+.ml-dock[data-dragging] {
+  will-change: transform;
+}
+
+.ml-dock[data-dragging] [data-ml-dock-drag] {
+  cursor: grabbing;
+}
+
+.ml-dock > :is(.ml-sheet-stack, .ml-resolution-receipt, .ml-target-attention-notice) {
+  --ml-panel-width: min(480px, calc(var(--ml-dock-viewport-width, 100vw) - 24px));
+  position: absolute;
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 8px);
+  left: clamp(
+    calc(var(--ml-dock-viewport-left, 0px) + 12px - var(--ml-dock-x, 0px)),
+    calc(50% - var(--ml-panel-width) / 2),
+    calc(
+      var(--ml-dock-viewport-right, 100vw) - 12px - var(--ml-dock-x, 0px) - var(--ml-panel-width)
+    )
+  );
+  width: var(--ml-panel-width);
+  max-height: min(520px, var(--ml-dock-space));
+  transform: none;
+}
+
+.ml-dock > .ml-sheet-stack {
+  --ml-panel-width: min(368px, calc(var(--ml-dock-viewport-width, 100vw) - 24px));
+}
+
+.ml-dock[data-placement="below"]
+  > :is(.ml-sheet-stack, .ml-resolution-receipt, .ml-target-attention-notice) {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+.ml-dock[data-panel-overlay="true"]
+  > :is(.ml-sheet-stack, .ml-resolution-receipt, .ml-target-attention-notice) {
+  top: var(--ml-dock-panel-top);
+  bottom: auto;
+  max-height: min(520px, var(--ml-dock-panel-height));
+}
+
+.ml-dock > :is(.ml-resolution-receipt, .ml-target-attention-notice) {
+  overflow: auto;
 }
 
 .ml-sheet__header {
@@ -1669,10 +1732,6 @@
 }
 
 @media (max-width: 640px) {
-  .ml-dock {
-    bottom: calc(var(--ml-viewport-bottom, 0px) + max(12px, env(safe-area-inset-bottom)));
-  }
-
   .ml-resolution-receipt,
   .ml-target-attention-notice {
     max-width: calc(100vw - 24px);
@@ -1740,7 +1799,7 @@
   }
 
   .ml-dockbar {
-    height: 44px;
+    min-height: 44px;
   }
 
   .ml-dockbar__action {

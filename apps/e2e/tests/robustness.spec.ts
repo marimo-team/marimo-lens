@@ -262,3 +262,78 @@ test("unmounting during capture settles the interrupted image after remount", as
     .poll(async () => (await runAction(page)).references.selections[0].snapshot.status)
     .toBe("available");
 });
+
+test("touch dragging and cancellation leave the next dock action usable", async ({ page }) => {
+  const session = await page.context().newCDPSession(page);
+  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+  const start = (await grip.boundingBox())!;
+  const dock = page.locator("[data-marimo-lens-dock]");
+  const before = (await dock.boundingBox())!;
+  const x = start.x + start.width / 2;
+  const y = start.y + start.height / 2;
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x, y, id: 1 }],
+  });
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [{ x: x + 40, y: y - 120, id: 1 }],
+  });
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(before.y - 120, 0);
+  await page.getByRole("button", { name: "Collapse Lens" }).click();
+  const pill = page.getByRole("button", { name: "Open Lens", exact: true });
+  const closed = (await pill.boundingBox())!;
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: closed.x + 20, y: closed.y + 20, id: 1 }],
+  });
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [{ x: closed.x + 40, y: closed.y - 80, id: 1 }],
+  });
+  await session.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(closed.y, 0);
+  await pill.click();
+  await expect(grip).toBeVisible();
+  await session.detach();
+});
+
+test("invalid or unavailable position storage preserves dock controls", async ({ page }) => {
+  await page.evaluate(() =>
+    localStorage.setItem("marimo-lens:dock-position:v1", '{"x":null,"y":1e999}'),
+  );
+  await page.reload();
+  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+  await expect(grip).toBeVisible();
+  const dock = page.locator("[data-marimo-lens-dock]");
+  const initial = (await dock.boundingBox())!;
+  expect(initial.y + initial.height).toBeLessThan(page.viewportSize()!.height);
+  await page.addInitScript(() => {
+    const get = Storage.prototype.getItem;
+    const set = Storage.prototype.setItem;
+    Storage.prototype.getItem = function (key) {
+      if (key.startsWith("marimo-lens:")) throw new DOMException("Denied", "SecurityError");
+      return get.call(this, key);
+    };
+    Storage.prototype.setItem = function (key, value) {
+      if (key.startsWith("marimo-lens:")) throw new DOMException("Denied", "SecurityError");
+      return set.call(this, key, value);
+    };
+  });
+  await page.reload();
+  await expect(grip).toBeVisible();
+  await grip.press("Shift+ArrowUp");
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(initial.y - 40, 0);
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.getByRole("button", { name: "Collapse Lens" }).click();
+  await expect(page.getByRole("button", { name: "Open Lens", exact: true })).toBeVisible();
+  expect(
+    await dock.evaluate(
+      (element) =>
+        element
+          .getAnimations({ subtree: true })
+          .filter((animation) => animation.playState === "running").length,
+    ),
+  ).toBe(0);
+});

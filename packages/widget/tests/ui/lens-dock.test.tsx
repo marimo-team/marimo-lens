@@ -274,7 +274,12 @@ describe("Lens dock", () => {
       Array.from(document.querySelectorAll<HTMLButtonElement>(".ml-dockbar button")).map((button) =>
         button.getAttribute("aria-label"),
       ),
-    ).toEqual(["Select a target", "Open selections, 1 open, 0 in history", "Collapse Lens"]);
+    ).toEqual([
+      "Move Lens",
+      "Select a target",
+      "Open selections, 1 open, 0 in history",
+      "Collapse Lens",
+    ]);
   });
 
   test("keeps bulk clearing in the selection sheet", () => {

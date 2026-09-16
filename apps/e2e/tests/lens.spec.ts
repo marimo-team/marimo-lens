@@ -476,3 +476,76 @@ test("Lens controls retain their appearance and keyboard behavior under page sty
   await page.keyboard.press("Escape");
   await expect(editor).toBeHidden();
 });
+
+test("dock movement survives reload and keeps click, cancel, and keyboard controls distinct", async ({
+  page,
+}, testInfo) => {
+  const dock = page.locator("[data-marimo-lens-dock]");
+  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+  const initial = (await dock.boundingBox())!;
+  const handle = (await grip.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2 + 60, handle.y - 180, { steps: 20 });
+  await page.mouse.up();
+  const moved = (await dock.boundingBox())!;
+  expect(moved.y).toBeLessThan(initial.y - 100);
+  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(grip).toBeVisible();
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y, 0);
+  await expect.poll(async () => (await dock.boundingBox())!.x).toBeCloseTo(moved.x, 0);
+
+  await page.getByRole("button", { name: "Collapse Lens" }).click();
+  const pill = page.getByRole("button", { name: "Open Lens", exact: true });
+  const closed = (await pill.boundingBox())!;
+  await page.mouse.move(closed.x + closed.width / 2, closed.y + closed.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(closed.x + closed.width / 2 - 50, closed.y - 80, { steps: 12 });
+  await page.mouse.up();
+  await expect(pill).toBeVisible();
+  await expectInsideViewport(page, pill);
+  await screenshot(page, testInfo, "movable-collapsed");
+  const beforeCancel = (await dock.boundingBox())!;
+  await page.mouse.down();
+  await page.mouse.move(closed.x, closed.y, { steps: 8 });
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(beforeCancel.y, 0);
+  await pill.click();
+  await expect(grip).toBeVisible();
+  await grip.focus();
+  await page.keyboard.press("Home");
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(initial.y, 0);
+  await page.keyboard.press("Shift+ArrowUp");
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(initial.y - 40, 0);
+  await expect(grip).toBeFocused();
+});
+
+test("moved dock keeps selections reachable at viewport edges and after resizing", async ({
+  page,
+}, testInfo) => {
+  await selectOutput(page, "point", "S1", "Keep the panel reachable");
+  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+  const sheet = page.getByRole("region", { name: "Selections", exact: true });
+  const viewport = page.viewportSize()!;
+  for (const corner of [
+    { x: 0, y: 0 },
+    { x: viewport.width, y: viewport.height },
+  ]) {
+    const handle = (await grip.boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(corner.x, corner.y, { steps: 15 });
+    await page.mouse.up();
+    await expectInsideViewport(page, sheet);
+    await expectInsideViewport(page, page.locator("[data-marimo-lens-dock]"));
+    await screenshot(page, testInfo, corner.y === 0 ? "dock-top-left" : "dock-bottom-right");
+  }
+  await page.setViewportSize({ width: 320, height: 480 });
+  await expectInsideViewport(page, sheet);
+  await expectInsideViewport(page, page.locator("[data-marimo-lens-dock]"));
+  await page.getByRole("button", { name: "Close selections" }).click();
+  await expect(sheet).toBeHidden();
+});
