@@ -522,6 +522,62 @@ test("dock movement survives reload and keeps click, cancel, and keyboard contro
   await expect(grip).toBeFocused();
 });
 
+test("fast dock drags released outside the dock keep their final position", async ({ page }) => {
+  const dock = page.locator("[data-marimo-lens-dock]");
+  for (const collapsed of [false, true]) {
+    if (collapsed) await page.getByRole("button", { name: "Collapse Lens" }).click();
+    const handle = page.getByRole("button", {
+      name: collapsed ? "Open Lens" : "Move Lens",
+      exact: true,
+    });
+    await handle.focus();
+    await page.keyboard.press("Home");
+    const start = (await handle.boundingBox())!;
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    // A host can release capture while the pointer is still held down.
+    await handle.evaluate((element: HTMLElement) => {
+      element.addEventListener(
+        "pointermove",
+        (event) => {
+          element.releasePointerCapture(event.pointerId);
+        },
+        { once: true },
+      );
+    });
+    await page.mouse.move(start.x + start.width / 2, start.y - 40);
+    await page.mouse.move(0, 0);
+    await page.mouse.up();
+    await expect.poll(async () => (await dock.boundingBox())!.y).toBeLessThan(20);
+    await expect.poll(async () => (await dock.boundingBox())!.x).toBeLessThan(20);
+    await expect(handle).toBeVisible();
+    const moved = (await dock.boundingBox())!;
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Move Lens", exact: true })).toBeVisible();
+    await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y, 0);
+    await expect.poll(async () => (await dock.boundingBox())!.x).toBeCloseTo(moved.x, 0);
+  }
+});
+
+test("losing window focus keeps the last dock position and ends the drag", async ({ page }) => {
+  const dock = page.locator("[data-marimo-lens-dock]");
+  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+  const handle = (await grip.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2, handle.y - 150);
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeLessThan(handle.y - 100);
+  const moved = (await dock.boundingBox())!;
+  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+  await page.mouse.move(0, 0);
+  await page.mouse.up();
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y, 0);
+  await expect.poll(async () => (await dock.boundingBox())!.x).toBeCloseTo(moved.x, 0);
+  await grip.focus();
+  await page.keyboard.press("ArrowUp");
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y - 10, 0);
+});
+
 test("moved dock keeps selections reachable at viewport edges and after resizing", async ({
   page,
 }, testInfo) => {
