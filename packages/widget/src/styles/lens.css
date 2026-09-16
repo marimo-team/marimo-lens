@@ -978,11 +978,9 @@
 .ml-selection-list__items {
   display: flex;
   min-height: 0;
-  max-height: min(428px, calc(100dvh - 152px));
   margin: 0;
   padding: 0;
-  overflow: auto;
-  flex: 1 1 auto;
+  flex: 1 0 auto;
   flex-direction: column;
   gap: 2px;
   list-style: none;
@@ -993,6 +991,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   min-height: 56px;
+  flex-shrink: 0;
   border-radius: var(--ml-radius-control);
 }
 
@@ -1045,9 +1044,8 @@
 
 .ml-selection-list__note,
 .ml-selection-list__details small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .ml-selection-list__note {
@@ -1064,6 +1062,7 @@
 
 .ml-selection-list__details small {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 3px;
   color: var(--ml-muted-foreground);
@@ -1141,13 +1140,11 @@
 }
 
 .ml-history-list__target {
-  display: inline-flex;
   min-width: 0;
-  align-items: center;
-  gap: 3px;
   color: var(--ml-muted-foreground);
   font-size: 11px;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .ml-history-list__date {
@@ -1728,6 +1725,37 @@
 @keyframes ml-spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 300px) {
+  .ml-history-list__item {
+    display: grid;
+  }
+
+  .ml-history-list__row {
+    grid-template-columns: auto minmax(0, 1fr) 14px;
+    padding-right: 8px;
+  }
+
+  .ml-history-list__date {
+    grid-row: 2;
+    grid-column: 2;
+  }
+
+  .ml-history-list__reopen {
+    position: static;
+    justify-self: end;
+    margin: 0 8px 6px;
+  }
+
+  .ml-selection-list__item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ml-selection-list__actions {
+    justify-content: flex-end;
+    padding-bottom: 4px;
   }
 }
 
