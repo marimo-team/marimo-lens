@@ -14,23 +14,23 @@ catalog:
   "@oxlint/plugins": 1.76.0
   "@playwright/test": 1.61.1
   "@types/node": ^22.20.1
-  "@types/react": ^19.2.17
-  "@types/react-dom": ^19.2.3
-  esbuild: ^0.28.1
+  "@types/react": ^19.2.18
+  "@types/react-dom": ^19.2.5
+  esbuild: ^0.28.2
   html-to-image: 1.11.13
   jsdom: 29.1.1
-  lucide-react: ^1.24.0
+  lucide-react: ^1.39.0
   oxlint: 1.76.0
   oxlint-tsgolint: 7.0.2001
   portless: 0.15.5
-  react: ^19.2.7
-  react-dom: ^19.2.7
+  react: ^19.2.8
+  react-dom: ^19.2.8
   typescript: ^6.0.3
   valibot: ^1.4.2
   vite: npm:@voidzero-dev/vite-plus-core@0.2.4
   vite-plus: 0.2.4
   vitepress: ^1.6.4
-  vue: ^3.5.39
+  vue: ^3.5.42
 
 overrides:
   vite: "catalog:"

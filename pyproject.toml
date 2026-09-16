@@ -2,11 +2,18 @@
 members = ["packages/marimo-lens"]
 
 [dependency-groups]
-dev = ["marimo>=0.24.0", "pyrefly>=1", "pytest>=9.0.3", "ruff>=0.15.14", "ty>=0.0.39"]
+dev = ["basedpyright>=1.40", "marimo>=0.24", "pyrefly>=1", "pytest>=9", "ruff>=0.16", "ty>=0.0.39"]
 
 [tool.uv]
 exclude-newer = "3 days"
 exclude-newer-package = { agent-plugins = false, marimo = false }
+
+[tool.basedpyright]
+include = ["packages/marimo-lens", "examples", "scripts"]
+extraPaths = ["packages/marimo-lens/src", "packages/marimo-lens"]
+pythonVersion = "3.10"
+typeCheckingMode = "standard"
+failOnWarnings = true
 
 [tool.pyrefly]
 project-includes = ["packages/marimo-lens", "examples", "scripts"]

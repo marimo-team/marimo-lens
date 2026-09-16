@@ -89,7 +89,11 @@ uv run ruff format --check
 uv run ruff check
 uv run ty check
 uv run pyrefly check --min-severity warn
+uv run basedpyright
 ```
+
+Basedpyright checks the Python package, tests, examples, and scripts in standard
+mode against Python 3.10. Warnings fail the check.
 
 ## Contract-to-test map
 

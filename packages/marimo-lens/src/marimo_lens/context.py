@@ -121,7 +121,7 @@ class LensContext:
     ) -> None:
         self._references = cast(LensReferences, deepcopy(references))
         self._text = text
-        self._text_factory: Callable[[], str] | None = None
+        self._text_factory = None
         self._images = MappingProxyType(dict(images))
         self._lock = threading.RLock()
 

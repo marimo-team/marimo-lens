@@ -426,12 +426,13 @@ class Lens(anywidget.AnyWidget):
         if comm is None:
             return
         comm_type = type(comm)
-        original_close = comm_type.close
+        # The wrapper forwards the host comm's positional and keyword arguments unchanged.
+        original_close = cast(Callable[..., None], comm_type.close)
         lens_ref = weakref.ref(self)
         comm_ref = weakref.ref(comm)
         pending_close: tuple[tuple[object, ...], dict[str, object]] | None = None
 
-        def close_comm(*args: object, **kwargs: object) -> object:
+        def close_comm(*args: object, **kwargs: object) -> None:
             nonlocal pending_close
             lens = lens_ref()
             bound_comm = comm_ref()
