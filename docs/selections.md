@@ -230,8 +230,15 @@ image limits, and the separate cell-output image used after an agent change.
 ## Work with open selections
 
 Open **Selections** to review open selections and their notes. The dock shows
-the Open count. Collapse the dock to a Lens tab when it covers the notebook.
-The collapsed tab keeps the Open count visible.
+the Open count. Drag the grip to move the dock out of the way. Lens remembers
+its position in this browser for the site, including after a reload. Collapse
+the dock to a compact Lens button, which you can also drag. The button keeps the
+Open count visible.
+
+Focus the grip or collapsed button and use arrow keys to move it. Hold `Shift`
+for larger steps, press `Home` to reset to bottom center, or press `Escape`
+to cancel a drag. Selections open toward the available space and stay inside
+the viewport.
 
 Lens focuses the current selection in the **Open** tab. That selection is the
 likely referent when you ask an agent to change “this” or inspect “here.”

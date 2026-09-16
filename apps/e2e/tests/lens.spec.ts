@@ -476,3 +476,168 @@ test("Lens controls retain their appearance and keyboard behavior under page sty
   await page.keyboard.press("Escape");
   await expect(editor).toBeHidden();
 });
+
+test("dock movement survives reload and keeps click, cancel, and keyboard controls distinct", async ({
+  page,
+}, testInfo) => {
+  const dock = page.locator("[data-marimo-lens-dock]");
+  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+  const initial = (await dock.boundingBox())!;
+  const handle = (await grip.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2 + 60, handle.y - 180, { steps: 20 });
+  await page.mouse.up();
+  const moved = (await dock.boundingBox())!;
+  expect(moved.y).toBeLessThan(initial.y - 100);
+  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeVisible();
+  await page.reload();
+  await expect(grip).toBeVisible();
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y, 0);
+  await expect.poll(async () => (await dock.boundingBox())!.x).toBeCloseTo(moved.x, 0);
+
+  await page.getByRole("button", { name: "Collapse Lens" }).click();
+  const pill = page.getByRole("button", { name: "Open Lens", exact: true });
+  const closed = (await pill.boundingBox())!;
+  await page.mouse.move(closed.x + closed.width / 2, closed.y + closed.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(closed.x + closed.width / 2 - 50, closed.y - 80, { steps: 12 });
+  await page.mouse.up();
+  await expect(pill).toBeVisible();
+  await expectInsideViewport(page, pill);
+  await screenshot(page, testInfo, "movable-collapsed");
+  const beforeCancel = (await dock.boundingBox())!;
+  await page.mouse.down();
+  await page.mouse.move(closed.x, closed.y, { steps: 8 });
+  await page.keyboard.press("Escape");
+  await page.mouse.up();
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(beforeCancel.y, 0);
+  await pill.click();
+  await expect(grip).toBeVisible();
+  await grip.focus();
+  await page.keyboard.press("Home");
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(initial.y, 0);
+  await page.keyboard.press("Shift+ArrowUp");
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(initial.y - 40, 0);
+  await expect(grip).toBeFocused();
+});
+
+test("moved dock keeps selections reachable at viewport edges and after resizing", async ({
+  page,
+}, testInfo) => {
+  await selectOutput(page, "point", "S1", "Keep the panel reachable");
+  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+  const sheet = page.getByRole("region", { name: "Selections", exact: true });
+  const viewport = page.viewportSize()!;
+  for (const corner of [
+    { x: 0, y: 0 },
+    { x: viewport.width, y: viewport.height },
+  ]) {
+    const handle = (await grip.boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(corner.x, corner.y, { steps: 15 });
+    await page.mouse.up();
+    await expectInsideViewport(page, sheet);
+    await expectInsideViewport(page, page.locator("[data-marimo-lens-dock]"));
+    await screenshot(page, testInfo, corner.y === 0 ? "dock-top-left" : "dock-bottom-right");
+  }
+  await page.setViewportSize({ width: 320, height: 480 });
+  await expectInsideViewport(page, sheet);
+  await expectInsideViewport(page, page.locator("[data-marimo-lens-dock]"));
+  await page.getByRole("button", { name: "Close selections" }).click();
+  await expect(sheet).toBeHidden();
+});
+
+test("expanding the pill at every corner keeps controls and long notes inside the viewport", async ({
+  page,
+}) => {
+  const note = "Inspect this long annotation: " + "unbroken-label-".repeat(18);
+  await selectOutput(page, "point", "S1", note);
+  await page.setViewportSize({ width: 280, height: 480 });
+  const dock = page.locator("[data-marimo-lens-dock]");
+  for (const corner of [
+    { x: 0, y: 0 },
+    { x: 280, y: 0 },
+    { x: 0, y: 480 },
+    { x: 280, y: 480 },
+  ]) {
+    await page.getByRole("button", { name: "Collapse Lens" }).click();
+    const pill = page.getByRole("button", { name: /^Open Lens/ });
+    const start = (await pill.boundingBox())!;
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(corner.x, corner.y, { steps: 12 });
+    await page.mouse.up();
+    await pill.click();
+    await expectInsideViewport(page, dock);
+    for (const name of ["Move Lens", "Select a target", "Collapse Lens"]) {
+      await expectInsideViewport(page, page.getByRole("button", { name, exact: true }));
+    }
+    await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+    await expectInsideViewport(page, page.getByRole("region", { name: "Selections", exact: true }));
+    const label = page.locator(".ml-selection-list__note");
+    expect(
+      await label.evaluate(
+        (element) =>
+          element.scrollWidth <= element.clientWidth &&
+          element.scrollHeight <= element.clientHeight,
+      ),
+    ).toBe(true);
+    await page
+      .getByRole("button", { name: "Edit note for S1", exact: true })
+      .scrollIntoViewIfNeeded();
+    await expectInsideViewport(
+      page,
+      page.getByRole("button", { name: "Edit note for S1", exact: true }),
+    );
+    await page.getByRole("button", { name: "Close selections" }).click();
+  }
+});
+
+test("short viewports keep every item in a full selection panel reachable", async ({
+  page,
+}, testInfo) => {
+  await selectOutput(page, "point", "S1", "Review this selection");
+  expect((await runAction(page, "Seed 63 selections")).references.selections).toHaveLength(63);
+  for (const viewport of [
+    { width: 240, height: 240 },
+    { width: 320, height: 200 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.getByRole("button", { name: "Move Lens", exact: true }).press("Home");
+    await page.getByRole("button", { name: "Open selections, 63 open, 0 in history" }).click();
+    const sheet = page.getByRole("region", { name: "Selections", exact: true });
+    await expectInsideViewport(page, sheet);
+    const last = page.getByRole("button", { name: "Remove selection S63", exact: true });
+    await last.scrollIntoViewIfNeeded();
+    await expectInsideViewport(page, last);
+    await expectInsideViewport(page, page.getByRole("button", { name: "Close selections" }));
+    expect(await sheet.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+      true,
+    );
+    await screenshot(page, testInfo, `short-panel-${viewport.width}`);
+    await page.getByRole("button", { name: "Close selections" }).click();
+  }
+  await page.setViewportSize({ width: 640, height: 600 });
+  await runAction(page, "Resolve");
+  await page.setViewportSize({ width: 240, height: 320 });
+  await page.getByRole("button", { name: "Open selections, 0 open, 63 in history" }).click();
+  await page.getByRole("tab", { name: /History/ }).click();
+  const lastHistory = page.getByRole("button", { name: "Reopen S1", exact: true });
+  await lastHistory.scrollIntoViewIfNeeded();
+  await expectInsideViewport(page, lastHistory);
+  expect(
+    await page
+      .locator(".ml-history-list__target")
+      .evaluateAll((elements) =>
+        elements.every((element) => element.scrollWidth <= element.clientWidth),
+      ),
+  ).toBe(true);
+  await screenshot(page, testInfo, "short-history");
+  await lastHistory.click();
+  await expect(
+    page.getByRole("button", { name: "Open selections, 1 open, 63 in history" }),
+  ).toBeVisible();
+});

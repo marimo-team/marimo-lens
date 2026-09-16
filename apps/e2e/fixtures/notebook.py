@@ -151,6 +151,10 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
                             **_template,
                             "id": f"seed-{_index}",
                             "label": f"S{_index}",
+                            "snapshot": {
+                                "status": "failed",
+                                "capturedAt": _template["createdAt"],
+                            },
                         },
                         "imageAction": "clear",
                         "expectedRevision": lens.get_state("_state")["_state"][

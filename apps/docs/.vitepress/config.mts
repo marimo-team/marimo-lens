@@ -74,17 +74,7 @@ export default defineConfig({
     [
       "link",
       {
-        href: publicPath("/brand/marimo-lens-mark-light.svg"),
-        media: "(prefers-color-scheme: light)",
-        rel: "icon",
-        type: "image/svg+xml",
-      },
-    ],
-    [
-      "link",
-      {
-        href: publicPath("/brand/marimo-lens-mark-dark.svg"),
-        media: "(prefers-color-scheme: dark)",
+        href: publicPath("/brand/marimo-lens-favicon.svg"),
         rel: "icon",
         type: "image/svg+xml",
       },

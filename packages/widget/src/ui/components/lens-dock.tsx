@@ -5,7 +5,7 @@ import type {
   TargetSelector,
 } from "@marimo-lens/protocol";
 
-import { ChevronDown, List, MousePointer2 } from "lucide-react";
+import { ChevronDown, GripVertical, List, MousePointer2 } from "lucide-react";
 import {
   Fragment,
   useCallback,
@@ -25,6 +25,8 @@ import { useNotebookDom } from "@/notebook/notebook-dom";
 import { SelectionSheet } from "@/selection/components/selection-sheet";
 import { ResolutionReceipt } from "@/transient/resolution-receipt";
 import { LensLogo } from "@/ui/components/lens-logo";
+import { useDockMotion } from "@/ui/use-dock-motion";
+import { useDockPosition } from "@/ui/use-dock-position";
 
 const LENS_SELECTION_SHORTCUT = "Alt+L";
 const LENS_SELECTION_SHORTCUT_LABEL = "Option/Alt+L";
@@ -97,6 +99,8 @@ export function LensDock({
 }: LensDockProps) {
   const dom = useNotebookDom();
   const dockRef = useRef<HTMLElement>(null);
+  useDockPosition(dockRef);
+  useDockMotion(dockRef);
   const selectRef = useRef<HTMLButtonElement>(null);
   const tabRef = useRef<HTMLButtonElement>(null);
   const listTriggerRef = useRef<HTMLButtonElement>(null);
@@ -189,6 +193,9 @@ export function LensDock({
       data-marimo-lens-ui
       aria-label="marimo-lens"
     >
+      <span id="ml-dock-move-help" hidden>
+        Drag or use arrow keys to move. Shift moves faster. Home resets position.
+      </span>
       {expanded && listOpen ? (
         <div className="ml-sheet-stack">
           <SelectionSheet
@@ -241,6 +248,16 @@ export function LensDock({
       {expanded ? (
         <div className="ml-dockbar" data-armed={armed ? "true" : "false"}>
           <button
+            className="ml-dockbar__action ml-dockbar__grip"
+            type="button"
+            data-ml-dock-drag
+            aria-label="Move Lens"
+            aria-describedby="ml-dock-move-help"
+            title="Move Lens · Arrow keys to move · Home to reset"
+          >
+            <GripVertical size={14} aria-hidden="true" />
+          </button>
+          <button
             ref={selectRef}
             className="ml-dockbar__action ml-dockbar__select"
             type="button"
@@ -290,6 +307,7 @@ export function LensDock({
           <button
             className="ml-dockbar__action ml-dockbar__icon"
             type="button"
+            data-ml-dock-toggle
             onClick={collapse}
             aria-label="Collapse Lens"
             title="Collapse Lens"
@@ -303,6 +321,9 @@ export function LensDock({
           className="ml-dock-tab"
           type="button"
           data-ml-dock-tab
+          data-ml-dock-toggle
+          data-ml-dock-drag
+          aria-describedby="ml-dock-move-help"
           onClick={expand}
           aria-label={
             hasSelectionSurface
