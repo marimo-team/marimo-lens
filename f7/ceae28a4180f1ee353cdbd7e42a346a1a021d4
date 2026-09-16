@@ -1,0 +1,11 @@
+apps/docs/public/brand/marimo-lens-favicon.svg
+  ai_agent 1-23
+apps/docs/.vitepress/config.mts
+  ai_agent 77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f7ceae28a4180f1ee353cdbd7e42a346a1a021d4",
+  "prompts": {}
+}
