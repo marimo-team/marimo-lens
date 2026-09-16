@@ -64,6 +64,7 @@ jobs:
           uv run ruff check
           uv run ty check
           uv run pyrefly check --min-severity warn
+          uv run basedpyright
       - name: Check shell scripts
         run: shellcheck scripts/*.sh
       - name: Check whitespace

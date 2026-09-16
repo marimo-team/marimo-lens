@@ -34,7 +34,7 @@ The published package currently requires:
 
 - `agent-plugins>=0.2` for packaged agent resources.
 - `anywidget>=0.9` and `traitlets>=5` for the widget model and transport.
-- `marimo>=0.24.0` for notebook runtime and agent capability integration.
+- `marimo>=0.24` for notebook runtime and agent capability integration.
 - `pydantic>=2` for transport validation.
 - `typing-extensions>=4.4` for public types on Python 3.10.
 

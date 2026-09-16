@@ -1146,7 +1146,7 @@ def test_browser_reopens_addressed_selection_and_clears_history() -> None:
     assert _put(lens, revision=0, selection_value=selected)["ok"] is True
     context = lens.context()
     assert context.current is not None
-    assert context.current["description"] == description
+    assert context.current.get("description") == description
     assert "src/report.ts" in context.text
     assert "client supplied" in context.text
     edited = copy.deepcopy(selected)
@@ -1188,7 +1188,7 @@ def test_browser_reopens_addressed_selection_and_clears_history() -> None:
     assert _state(lens)["currentSelectionId"] == selected["id"]
     context = lens.context()
     assert context.current is not None
-    assert context.current["previousResolution"] == {
+    assert context.current.get("previousResolution") == {
         "addressedAt": _state(lens)["history"][0]["addressedAt"],
         "summary": "Aligned the label and verified the chart.",
     }

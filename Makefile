@@ -9,6 +9,7 @@ check:
 	uv run ruff check
 	uv run ty check
 	uv run pyrefly check --min-severity warn
+	uv run basedpyright
 	uv run pytest -q
 	pnpm test:e2e
 	shellcheck scripts/*.sh

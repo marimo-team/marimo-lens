@@ -469,13 +469,14 @@ __all__ = [
 
 
 class _AgentModule(ModuleType):
+    # Module help resolves packaged resource paths lazily through a writable descriptor.
     @property
     def __doc__(self) -> str | None:  # pyrefly: ignore [bad-override]
         summary = self.__dict__.get("__doc__")
         return _module_help(summary) if isinstance(summary, str) else None
 
     @__doc__.setter
-    def __doc__(self, value: str | None) -> None:
+    def __doc__(self, value: str | None) -> None:  # pyright: ignore[reportIncompatibleVariableOverride]
         self.__dict__["__doc__"] = value
 
 
