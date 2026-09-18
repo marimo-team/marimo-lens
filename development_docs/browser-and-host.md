@@ -28,8 +28,24 @@ own output selectable.
 A notebook target records exactly one producing cell ID, the browser-document
 identity, and the document pathname.
 
+## View-local picking scopes
+
+`data-marimo-lens-scope` enables broad picking inside an authored subtree. Its
+selector groups a clicked descendant into a region, with the nearest rendered
+block as fallback. The DOM hint still describes the clicked element. Regions
+marked with `data-marimo-lens-target` or `data-marimo-lens-inputs` have equal
+priority, with the region nearest the clicked element winning. Both outrank hosts marked
+only with `data-marimo-lens-cell-id`. Source targets and native notebook outputs
+outrank broad picking. The existing resolver, source validation, document
+identity, and bounded evidence own both paths. Broad discovery skips native
+output and Lens UI subtrees.
+
 ## Configured DOM roots
 
+Light-DOM roots with `data-marimo-lens-target`, `data-marimo-lens-cell-id`,
+or `data-marimo-lens-inputs` are selectable by default, as are direct parents of
+hidden source elements with `data-marimo-lens-cell-id`. These declarations are owned by
+the document and reuse the same target resolver, provenance checks, and lifecycle.
 `Lens(dom_selector=...)` adds light-DOM roots that match one CSS selector. A
 selector can use normal CSS grouping to identify several roots. The host
 integration owns the selector and the meaning of every matched region.

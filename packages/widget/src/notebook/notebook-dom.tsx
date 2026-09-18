@@ -23,6 +23,8 @@ import {
   registerLensHostOutput,
 } from "@/notebook/output-root";
 import {
+  DECLARED_TARGET_SELECTOR,
+  TARGET_SCOPE,
   getTargetSurface,
   listTargetSurfaces,
   targetFromElement,
@@ -34,7 +36,12 @@ import {
 type LayoutListener = () => void;
 
 const PAINT_FALLBACK_MS = 100;
-const TARGET_ATTRIBUTES = new Set<string>([...TARGET_METADATA_ATTRIBUTES, "id"]);
+const TARGET_ATTRIBUTES = new Set<string>([
+  ...TARGET_METADATA_ATTRIBUTES,
+  "data-marimo-lens-target",
+  "data-marimo-lens-scope",
+  "id",
+]);
 
 export class NotebookDomAdapter {
   readonly document: Document;
@@ -236,6 +243,15 @@ export class NotebookDomAdapter {
     this.window.addEventListener("resize", schedule);
     this.window.addEventListener("scroll", schedule, true);
 
+    const inDomRegion = (node: Node) => {
+      if (!(node instanceof this.window.Element)) return false;
+      if (node.closest(TARGET_SCOPE)) return true;
+      try {
+        return node.closest(DECLARED_TARGET_SELECTOR) !== null;
+      } catch {
+        return false;
+      }
+    };
     const observedOutputs = new Set<HTMLElement>();
     const observedShadows = new Set<ShadowRoot>();
     const MutationObserverClass = this.window.MutationObserver;
@@ -257,7 +273,7 @@ export class NotebookDomAdapter {
               const related = (root: HTMLElement) =>
                 containsOpenTree(root, target) || containsOpenTree(target, root);
               if ([...observedOutputs].some(related)) return true;
-              if (this.#selector === null) return false;
+              if (this.#selector === null && !inDomRegion(target)) return false;
               currentTargets ??= this.listTargets(this.#selector).map(({ element }) => element);
               return currentTargets.some(related);
             });
@@ -267,7 +283,9 @@ export class NotebookDomAdapter {
             records.some(
               (record) =>
                 (record.type === "attributes" &&
-                  (this.#selector !== null || TARGET_ATTRIBUTES.has(record.attributeName ?? ""))) ||
+                  (this.#selector !== null ||
+                    inDomRegion(record.target) ||
+                    TARGET_ATTRIBUTES.has(record.attributeName ?? ""))) ||
                 [...record.addedNodes, ...record.removedNodes].some((node) => node.nodeType === 1),
             );
           if (topologyChanged) scheduleTopology();
@@ -285,9 +303,7 @@ export class NotebookDomAdapter {
       if (resizeObserver) {
         const outputs = new Set([
           ...listOutputRoots(this.document).map((output) => output.element),
-          ...(this.#selector === null
-            ? []
-            : this.listTargets(this.#selector).map((target) => target.element)),
+          ...this.listTargets(this.#selector).map((target) => target.element),
         ]);
         for (const output of observedOutputs) {
           if (outputs.has(output)) continue;

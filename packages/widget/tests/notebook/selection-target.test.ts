@@ -9,10 +9,222 @@ import {
   targetFromElement,
   validateTargetSelector,
 } from "@/notebook/selection-target";
+import { collectDomHint } from "@/selection/dom-hint";
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  vi.restoreAllMocks();
+});
 
 describe("selection targets", () => {
+  test.each(["Only text", "<span data-marimo-lens-target hidden></span>"])(
+    "lists the scope itself when descendants provide no broad roots: %s",
+    (content) => {
+      const scope = visible(document.createElement("section"));
+      scope.id = "scope";
+      scope.dataset.marimoLensScope = "article";
+      scope.innerHTML = content;
+      document.body.append(scope);
+      const picked = targetFromElement(scope, null)!;
+      expect(picked.target).toMatchObject({ kind: "dom", domSelector: "#scope" });
+      expect(listTargetSurfaces(document, null)).toEqual([picked]);
+      expect(getTargetSurface(document, picked.target, null)?.element).toBe(scope);
+    },
+  );
+
+  test("unsupported :has selectors preserve native, custom, and scoped picking", () => {
+    const matches = Element.prototype.matches;
+    vi.spyOn(Element.prototype, "matches").mockImplementation(function (this: Element, selector) {
+      if (selector.includes(":has(")) throw new DOMException("Unsupported :has", "SyntaxError");
+      return matches.call(this, selector);
+    });
+    const query = Document.prototype.querySelectorAll;
+    vi.spyOn(Document.prototype, "querySelectorAll").mockImplementation(
+      function (this: Document, selector) {
+        if (selector.includes(":has(")) throw new DOMException("Unsupported :has", "SyntaxError");
+        return query.call(this, selector);
+      },
+    );
+    document.body.innerHTML =
+      '<div id="output-native">Native</div><section id="custom">Custom</section><main id="scope" data-marimo-lens-scope="article"><article id="card"><span>Text</span></article></main>';
+    const native = visible(document.getElementById("output-native")!);
+    const custom = visible(document.getElementById("custom")!);
+    const scope = visible(document.getElementById("scope")!);
+    const card = visible(document.getElementById("card")!);
+    expect(targetFromElement(native, null)?.target.kind).toBe("notebook");
+    expect(targetFromElement(custom, "#custom")?.element).toBe(custom);
+    const picked = targetFromElement(card.firstElementChild, null)!;
+    expect(picked.element).toBe(card);
+    expect(getTargetSurface(document, picked.target, null)?.element).toBe(card);
+    expect(listTargetSurfaces(document, "#custom").map(({ element }) => element)).toEqual([
+      native,
+      custom,
+      scope,
+      card,
+    ]);
+  });
+
+  test("the nearest declared region wins inside another declared region", () => {
+    document.body.innerHTML =
+      '<section id="outer" data-marimo-lens-target><article id="inner" data-marimo-lens-inputs="source"><em>Detail</em></article></section><span id="source" hidden data-marimo-lens-cell-id="producer"></span>';
+    const outer = visible(document.getElementById("outer")!);
+    const inner = visible(document.getElementById("inner")!);
+    expect(targetFromElement(inner.firstElementChild, null)?.element).toBe(inner);
+    expect(targetFromElement(outer, null)?.element).toBe(outer);
+  });
+
+  test("discovery rechecks changed and duplicate source IDs on every read", () => {
+    const region = visible(document.createElement("article"));
+    region.id = "metric";
+    region.dataset.marimoLensInputs = "input";
+    const input = document.createElement("span");
+    input.id = "input";
+    input.hidden = true;
+    input.dataset.marimoLensCellId = "first";
+    document.body.append(region, input);
+    const targets = () => listTargetSurfaces(document, "article");
+    expect(targets()[0]?.target.cellIds).toEqual(["first"]);
+    input.dataset.marimoLensCellId = "second";
+    expect(targets()[0]?.target.cellIds).toEqual(["second"]);
+    const duplicate = input.cloneNode(true);
+    document.body.append(duplicate);
+    expect(targets()).toEqual([]);
+    document.body.removeChild(duplicate);
+    expect(targets()[0]?.target.cellIds).toEqual(["second"]);
+  });
+
+  test("nested scope policies stay independent and refresh between discoveries", () => {
+    document.body.innerHTML =
+      '<main data-marimo-lens-scope="article"><article id="outer"><div id="inner" data-marimo-lens-scope=".group"><section id="panel" class="group"><p id="text">Text</p></section></div></article></main>';
+    const outer = visible(document.getElementById("outer")!);
+    const inner = visible(document.getElementById("inner")!);
+    const panel = visible(document.getElementById("panel")!);
+    const text = visible(document.getElementById("text")!);
+    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([
+      outer,
+      inner,
+      panel,
+    ]);
+    panel.className = "";
+    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([
+      outer,
+      inner,
+      panel,
+      text,
+    ]);
+    expect(targetFromElement(text, null)?.element).toBe(text);
+    panel.className = "group";
+    expect(targetFromElement(text, null)?.element).toBe(panel);
+  });
+
+  test("native targets outrank fallback scopes on the same element", () => {
+    const output = visible(document.createElement("div"));
+    output.id = "output-native";
+    output.dataset.marimoLensScope = "section";
+    output.append(document.createElement("span"));
+    document.body.append(output);
+    expect(listTargetSurfaces(document, null).map(({ target }) => target.kind)).toEqual([
+      "notebook",
+    ]);
+  });
+
+  test("scoped HTML groups a tiny clicked child and keeps its bounded evidence", () => {
+    document.body.innerHTML =
+      '<main data-marimo-lens-scope=".card"><div id="card" class="card"><h2>Forecast</h2><p>Keep <em>this small phrase</em></p></div><button id="loose">Standalone</button></main><p id="outside">Editor chrome</p>';
+    const card = visible(document.querySelector<HTMLElement>("#card")!);
+    const child = visible(document.querySelector<HTMLElement>("em")!);
+    const loose = visible(document.querySelector<HTMLElement>("#loose")!);
+    const target = targetFromElement(child, null)!;
+    expect(target.element).toBe(card);
+    expect(target.target).toMatchObject({ kind: "dom", sources: [], domSelector: "#card" });
+    expect(collectDomHint(child, card)).toMatchObject({
+      tag: "em",
+      text: "this small phrase",
+      path: "p > em",
+    });
+    expect(targetFromElement(loose, null)?.element).toBe(loose);
+    expect(targetFromElement(document.querySelector("#outside"), null)).toBeNull();
+    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([card, loose]);
+
+    document.querySelector("main")!.setAttribute("data-marimo-lens-scope", "p");
+    const paragraph = visible(child.parentElement!);
+    expect(targetFromElement(child, null)?.element).toBe(paragraph);
+  });
+
+  test("explicit parent targets outrank small source hosts and retain their provenance", () => {
+    const card = visible(document.createElement("div"));
+    card.dataset.marimoLensInputs = "metric-input";
+    const value = visible(document.createElement("strong"));
+    value.id = "metric-input";
+    value.dataset.marimoLensCellId = "producer";
+    value.dataset.marimoLensSelector = "metrics.revenue";
+    card.append(value);
+    document.body.append(card);
+    const selected = targetFromElement(value, "strong")!;
+    expect(selected.element).toBe(card);
+    expect(selected.target).toMatchObject({
+      sources: [{ cellId: "producer", selector: "metrics.revenue" }],
+    });
+    expect(listTargetSurfaces(document, "strong").map(({ element }) => element)).toEqual([card]);
+  });
+
+  test("broad scopes preserve native boundaries and reject unresolved source regions", () => {
+    document.body.innerHTML =
+      '<main data-marimo-lens-scope="section"><div id="output-native"><span>Native</span></div><div data-marimo-lens-inputs="missing"><button>Unresolved</button></div></main>';
+    const output = visible(document.querySelector<HTMLElement>("#output-native")!);
+    const child = visible(output.querySelector<HTMLElement>("span")!);
+    expect(targetFromElement(child, null)?.target).toMatchObject({
+      kind: "notebook",
+      cellIds: ["native"],
+    });
+    expect(
+      targetFromElement(visible(document.querySelector<HTMLElement>("button")!), null),
+    ).toBeNull();
+  });
+
+  test("discovers authored regions without configuring or remounting Lens", () => {
+    const heading = visible(document.createElement("h1"));
+    heading.id = "intro";
+    document.body.append(heading);
+    expect(targetFromElement(heading, null)).toBeNull();
+
+    heading.dataset.marimoLensTarget = "";
+    const selected = targetFromElement(heading, null)!;
+    expect(selected.target).toMatchObject({
+      kind: "dom",
+      domSelector: "#intro",
+      sources: [],
+      cellIds: [],
+    });
+    expect(listTargetSurfaces(document, null)).toEqual([selected]);
+    expect(getTargetSurface(document, selected.target, null)?.element).toBe(heading);
+
+    delete heading.dataset.marimoLensTarget;
+    expect(getTargetSurface(document, selected.target, null)).toBeNull();
+    expect(listTargetSurfaces(document, null)).toEqual([]);
+    heading.dataset.marimoLensTarget = "";
+    expect(getTargetSurface(document, selected.target, null)?.element).toBe(heading);
+
+    const frame = document.createElement("iframe");
+    document.body.append(frame);
+    frame.contentDocument!.body.innerHTML =
+      '<h1 id="intro" data-marimo-lens-target>Other view</h1>';
+    expect(getTargetSurface(frame.contentDocument!, selected.target, null)).toBeNull();
+  });
+
+  test("combines declared regions and instance selectors without duplicate targets", () => {
+    const heading = visible(document.createElement("h1"));
+    heading.dataset.marimoLensTarget = "";
+    const footer = visible(document.createElement("footer"));
+    document.body.append(heading, footer);
+    expect(listTargetSurfaces(document, "h1, footer").map(({ element }) => element)).toEqual([
+      heading,
+      footer,
+    ]);
+    expect(targetFromElement(heading, "footer")?.element).toBe(heading);
+    expect(targetFromElement(footer, "footer")?.element).toBe(footer);
+  });
+
   test("picks an individual metric field ahead of its summary row", () => {
     const row = visible(document.createElement("section"));
     row.dataset.marimoLensInputs = "summary";
@@ -30,7 +242,7 @@ describe("selection targets", () => {
       input.dataset.marimoLensSelector = `summary.${field}`;
       card.append(input, value);
       row.append(card);
-      return targetFromElement(value, "section, article")!;
+      return targetFromElement(value, null)!;
     });
     expect(
       targets.map((surface) => surface.target.kind === "dom" && surface.target.sources),
@@ -80,7 +292,7 @@ describe("selection targets", () => {
     const totals = input("totals", "summary-cell", "summary.total");
     region.append(input("unrelated", "control-cell", "control"));
     document.body.append(region, rows, totals);
-    const selector = "[data-marimo-lens-inputs]";
+    const selector = null;
     const target = targetFromElement(region, selector)!.target;
     expect(target).toMatchObject({
       cellIds: ["data-cell", "summary-cell"],
@@ -109,7 +321,7 @@ describe("selection targets", () => {
         '<span id="duplicate" data-marimo-lens-cell-id="a"></span>' +
         '<span id="duplicate" data-marimo-lens-cell-id="b"></span><span id="unbound" data-client-value="rows"></span>';
       document.body.append(region);
-      expect(targetFromElement(region, "[data-marimo-lens-inputs]")).toBeNull();
+      expect(targetFromElement(region, null)).toBeNull();
     },
   );
 
@@ -194,7 +406,7 @@ describe("selection targets", () => {
     host.appendChild(synthetic);
     document.body.appendChild(host);
 
-    const selector = "[data-feedback-target]";
+    const selector = null;
     const target = targetFromElement(mark, selector);
 
     expect(target?.target).toEqual({
@@ -283,6 +495,7 @@ describe("selection targets", () => {
     expect(getTargetSurface(document, target, selector)).toBeNull();
     section.dataset.marimoLensCellId = "report-cell";
     delete section.dataset.feedbackTarget;
+    delete section.dataset.marimoLensCellId;
     expect(getTargetSurface(document, target, selector)).toBeNull();
   });
 

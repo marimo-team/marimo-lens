@@ -133,6 +133,27 @@ test("keyboard selection, dialog cancellation, and dock focus remain usable", as
   expect(report.references.selections[0].note).toBe("Preserve this note");
 });
 
+test("keyboard selection reaches a scope containing only text", async ({ page }) => {
+  await page.evaluate(() => {
+    const scope = document.createElement("section");
+    scope.id = "text-only-scope";
+    scope.dataset.marimoLensScope = "article";
+    scope.textContent = "A scope without element descendants";
+    scope.style.padding = "12px";
+    document.body.prepend(scope);
+  });
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: /Add note for S1/ });
+  await dialog.getByRole("textbox").fill("Review this text-only region");
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  const report = await runAction(page);
+  expect(report.references.selections).toMatchObject([
+    { target: { kind: "dom", domSelector: "#text-only-scope", cellIds: [] } },
+  ]);
+});
+
 test("configured DOM targets retain attention while their output disappears and returns", async ({
   page,
 }) => {
