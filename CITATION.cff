@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use marimo-lens in your work, please cite our workshop paper."
+type: software
+title: "marimo-lens"
+version: "0.1.1"
+authors:
+  - family-names: "Gyarmati"
+    given-names: "Péter Ferenc"
+    orcid: "https://orcid.org/0009-0006-6122-2709"
+  - family-names: "Manz"
+    given-names: "Trevor"
+    orcid: "https://orcid.org/0000-0001-7694-5164"
+  - family-names: "Moritz"
+    given-names: "Dominik"
+    orcid: "https://orcid.org/0000-0002-3110-1053"
+  - family-names: "El-Assady"
+    given-names: "Mennatallah"
+    orcid: "https://orcid.org/0000-0001-8526-2613"
+repository-code: "https://github.com/marimo-team/marimo-lens"
+url: "https://marimo-team.github.io/marimo-lens/"
+preferred-citation:
+  type: generic
+  title: "Point, Revise, Review: Grounded Agentic Analysis in Reactive Notebooks with marimo-lens"
+  authors:
+    - family-names: "Gyarmati"
+      given-names: "Péter Ferenc"
+      orcid: "https://orcid.org/0009-0006-6122-2709"
+    - family-names: "Manz"
+      given-names: "Trevor"
+      orcid: "https://orcid.org/0000-0001-7694-5164"
+    - family-names: "Moritz"
+      given-names: "Dominik"
+      orcid: "https://orcid.org/0000-0002-3110-1053"
+    - family-names: "El-Assady"
+      given-names: "Mennatallah"
+      orcid: "https://orcid.org/0000-0001-8526-2613"
+  collection-title: "2nd Workshop on GenAI, Agents, and the Future of VIS at IEEE VIS 2026"
+  date-published: "2026-09-17"
+  doi: "10.48550/arXiv.2609.19839"
+  notes: "Accepted for presentation at the VISxGenAI Workshop, IEEE VIS 2026."
+  url: "https://arxiv.org/abs/2609.19839"
+  year: 2026
