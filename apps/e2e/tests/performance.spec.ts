@@ -270,3 +270,69 @@ test("preview and annotation churn releases PNG URLs and bounds retained browser
   const last = durations.slice(-4).reduce((sum, duration) => sum + duration, 0) / 4;
   expect(last).toBeLessThan(first * 1.75 + 250);
 });
+
+test("large authored scopes preserve parent picking, child evidence, and responsive outlines", async ({
+  page,
+  context,
+}, testInfo) => {
+  await page.evaluate(() => {
+    const scope = document.createElement("main");
+    scope.id = "scoped-cards";
+    scope.dataset.marimoLensScope = "article";
+    scope.style.cssText =
+      "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;padding:16px";
+    scope.innerHTML = Array.from(
+      { length: 500 },
+      (_, i) =>
+        `<article id="scoped-card-${i}" style="padding:16px;border:1px solid #999"><h3>Card ${i}</h3><p><em>Focus ${i}</em> ${"<span>Detail</span> ".repeat(20)}</p></article>`,
+    ).join("");
+    document.body.append(scope);
+  });
+  const target = page.locator("#scoped-card-0 em");
+  await target.scrollIntoViewIfNeeded();
+  const session = await context.newCDPSession(page);
+  await session.send("Performance.enable");
+  const before = await browserMetrics(session);
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await target.hover();
+  await expect(page.locator("[data-marimo-lens-target-label]")).toContainText("Card 0");
+  await target.click();
+  const dialog = page.getByRole("dialog", { name: /Add note for S1/ });
+  await dialog.getByRole("textbox").fill("Keep this phrase in its card");
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
+  const report = await runAction(page);
+  expect(report.references.selections).toMatchObject([
+    {
+      target: { kind: "dom", domSelector: "#scoped-card-0", cellIds: [] },
+      domHint: { tag: "em", text: "Focus 0", path: "p > em" },
+    },
+  ]);
+  const after = await browserMetrics(session);
+  await testInfo.attach("scoped-picking-performance", {
+    body: JSON.stringify({
+      cards: 500,
+      scriptMs: after.scriptMs - before.scriptMs,
+      nodes: after.nodes,
+    }),
+    contentType: "application/json",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await target.scrollIntoViewIfNeeded();
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await target.hover();
+  const label = page.locator("[data-marimo-lens-target-label]");
+  await expect(label).toContainText("Card 0");
+  expect(
+    await label.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return (
+        rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight
+      );
+    }),
+  ).toBe(true);
+  await testInfo.attach("scoped-picking-narrow", {
+    body: await page.screenshot(),
+    contentType: "image/png",
+  });
+  await page.keyboard.press("Escape");
+});

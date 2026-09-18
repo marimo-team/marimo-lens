@@ -9,6 +9,7 @@ type Selection = {
   note: string;
   target: { kind: string; cellIds: string[]; domSelector?: string };
   cells: { id: string; status: string }[];
+  domHint?: { tag: string; text?: string; path?: string };
   anchor: { kind: string; x: number; y: number; width?: number; height?: number };
   snapshot: { status: string };
 };

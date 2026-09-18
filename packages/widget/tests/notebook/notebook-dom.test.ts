@@ -15,6 +15,71 @@ async function paint() {
 }
 
 describe("notebook DOM layout subscriptions", () => {
+  test("default scoped targets observe resizing and rebind after grouping changes", async () => {
+    vi.useFakeTimers();
+    const observed = new Set<Element>();
+    let resized = () => {};
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resized = callback;
+        }
+        observe(element: Element) {
+          observed.add(element);
+        }
+        unobserve(element: Element) {
+          observed.delete(element);
+        }
+        disconnect() {
+          observed.clear();
+        }
+      },
+    );
+    document.body.innerHTML =
+      '<main data-marimo-lens-scope=".group"><article class="group"><p>Text</p></article></main>';
+    const card = document.querySelector("article")!;
+    const text = document.querySelector("p")!;
+    for (const element of [card, text])
+      element.getBoundingClientRect = () => new DOMRect(0, 0, 400, 100);
+    const dom = new NotebookDomAdapter(document);
+    const listener = vi.fn();
+    const release = dom.subscribeLayout(listener);
+    expect(observed.has(card)).toBe(true);
+    expect(observed.has(text)).toBe(false);
+    resized();
+    await paint();
+    expect(listener).toHaveBeenCalled();
+    card.className = "";
+    await paint();
+    expect(observed.has(text)).toBe(true);
+    card.className = "group";
+    await paint();
+    expect(observed.has(text)).toBe(false);
+    release();
+    expect(observed.size).toBe(0);
+  });
+
+  test("refreshes default Lens when an existing region opts in or out", async () => {
+    vi.useFakeTimers();
+    const heading = document.createElement("h1");
+    heading.id = "intro";
+    heading.getBoundingClientRect = () => new DOMRect(0, 0, 400, 100);
+    document.body.append(heading);
+    const dom = new NotebookDomAdapter(document);
+    const targets: HTMLElement[][] = [];
+    const release = dom.subscribeLayout(() => {
+      targets.push(dom.listTargets(null).map(({ element }) => element));
+    });
+    heading.dataset.marimoLensTarget = "";
+    await paint();
+    expect(targets.at(-1)).toEqual([heading]);
+    delete heading.dataset.marimoLensTarget;
+    await paint();
+    expect(targets.at(-1)).toEqual([]);
+    release();
+  });
+
   test("stops scrolling ancestors across a shadow root at their current positions", () => {
     const host = document.createElement("div");
     const scroller = document.createElement("div");

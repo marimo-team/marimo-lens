@@ -71,7 +71,8 @@ Lens(*, dom_selector: str | None = None) -> Lens
 Creates the Python widget and browser UI that own one Lens instance.
 
 - `dom_selector: str | None` adds configured DOM targets to the default
-  notebook output targets. The string is stripped and accepts at most 1,024
+  notebook outputs and regions declared with Lens target or source attributes.
+  See [Targets](./concepts/targets). The string is stripped and accepts at most 1,024
   UTF-16 code units.
 - Returns a renderable `Lens` instance.
 - Raises `TypeError` for a non-string selector.

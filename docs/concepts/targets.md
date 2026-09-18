@@ -6,8 +6,22 @@ description: How Lens identifies notebook outputs and configured page regions, c
 # Targets
 
 A target is the rendered area that owns a Lens selection. Lens selects notebook
-outputs by default. Pass `dom_selector` when an authored page region should also
-accept selections.
+outputs and regions with Lens source metadata by default. Mark any other authored
+region with `data-marimo-lens-target`, including layout or copy with no notebook
+inputs:
+
+```html
+<header id="intro" data-marimo-lens-target data-marimo-lens-label="Introduction">
+  <h1>Regional outlook</h1>
+</header>
+```
+
+Each view owns its declarations. Adding, removing, or replacing a region updates
+selection eligibility without recreating Lens. A stable, unique ID lets existing
+feedback reconnect after a rebuild. Regions without notebook inputs have empty
+`cells` and `sources` arrays, while retaining their note, DOM evidence, and image.
+
+Pass `dom_selector` to add targets using an existing CSS selector:
 
 ```python
 from marimo_lens import Lens
@@ -21,6 +35,31 @@ lens
 The selector applies to the document that displays `lens`. Each matching region
 becomes a configured [Document Object Model (DOM)](https://developer.mozilla.org/en-US/docs/Web/API/Document_Object_Model)
 target. Notebook outputs outside those regions remain selectable.
+
+## Broad picking inside a host view
+
+A host can make an entire authored subtree selectable with
+`data-marimo-lens-scope`. Its value is a CSS selector for preferred grouping roots:
+
+```html
+<main data-marimo-lens-scope=".card, section, figure">
+  <div id="outlook" class="card">
+    <h2>Outlook</h2>
+    <p>Focus on <em>this phrase</em>.</p>
+  </div>
+</main>
+```
+
+Clicking the phrase selects the card and retains `em`, its short text, relative
+bounds, and `p > em` as the DOM hint. When no grouping root matches, Lens uses
+the nearest rendered block. The scope stays in its own document and can change
+with the rendered view. Invalid grouping syntax falls back to blocks.
+
+Explicit `data-marimo-lens-target` parents take precedence over smaller source
+hosts. Source targets and native notebook outputs take precedence over broad
+picking. Unresolved source declarations remain unavailable, and native output
+subtrees are opaque to broad picking. Notebook and editor chrome outside the
+scope remain unchanged.
 
 ## Target, point, and region
 
@@ -59,7 +98,13 @@ For each matching root, Lens records:
 - A unique, exact CSS selector for that root.
 - Zero or more producing cell IDs.
 
-The configured selector chooses which roots can become targets. The exact
+Lens recognizes `[data-marimo-lens-target]`, `[data-marimo-lens-cell-id]`,
+`[data-marimo-lens-inputs]`, and parents of hidden elements with
+`data-marimo-lens-cell-id`. Source metadata must resolve before a region is
+selectable. Hidden source elements themselves remain unavailable.
+`dom_selector` adds to these declarations and the native notebook targets.
+
+The declarations and configured selector choose which roots can become targets. The exact
 selector reconnects one chosen root after its DOM node is replaced.
 
 ### Selection precedence
@@ -142,7 +187,7 @@ expression that Lens executes.
 </section>
 ```
 
-Configure `Lens(dom_selector="[data-marimo-lens-inputs]")` for these regions.
+`Lens()` recognizes these regions automatically.
 Clients resolve `summary-cell` from their notebook integration at runtime.
 Studio publishes the same source attributes on its mounted projections.
 

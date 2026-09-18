@@ -43,7 +43,10 @@ lens
 Press **Select**, click a point or drag a region, then add a note.
 
 Custom pages can publish [Lens client metadata](https://marimo-team.github.io/marimo-lens/concepts/targets#client-metadata)
-for notebook inputs, labels, rendering references, and image context. Native
+for notebook inputs, labels, rendering references, and image context. Lens
+recognizes these source regions automatically. Add `data-marimo-lens-target`
+to select authored copy or layout without notebook inputs. Each view controls
+its targets through its own markup, including with automatically mounted Lens. Native
 Marimo outputs remain selectable through their existing output cells.
 
 ## Connect an agent

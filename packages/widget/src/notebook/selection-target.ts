@@ -2,7 +2,7 @@ import type { SelectionTarget, TargetSelector } from "@marimo-lens/protocol";
 
 import { parseSelectionTarget } from "@marimo-lens/protocol";
 
-import { containsOpenTree } from "@/notebook/open-tree";
+import { indexDocumentIds } from "@/notebook/document-ids";
 import {
   containsLensHost,
   getOutputCell,
@@ -10,6 +10,14 @@ import {
   outputCellFromRoot,
 } from "@/notebook/output-root";
 import { notebookSources } from "@/notebook/projection-sources";
+
+// Authored targets and published projection sources belong to each document,
+// including when one default Lens model is shared by several views.
+const REGION_SELECTOR =
+  "[data-marimo-lens-target], [data-marimo-lens-inputs], " +
+  ":has(> [hidden][data-marimo-lens-cell-id])";
+export const DECLARED_TARGET_SELECTOR = `${REGION_SELECTOR}, [data-marimo-lens-cell-id]`;
+export const TARGET_SCOPE = "[data-marimo-lens-scope]";
 
 const DOCUMENT_POSITION_FOLLOWING = 4;
 const DOCUMENT_ID: unique symbol = Symbol.for("marimo-lens.document-id.v1");
@@ -42,8 +50,7 @@ export function targetFromElement(
   while (current) {
     if (isLensUi(current)) return null;
     elements.push(current);
-    const root = current.getRootNode();
-    current = current.parentElement ?? (isShadowRoot(root) ? root.host : null);
+    current = parentInOpenTree(current);
   }
   return bestTarget(elements, selector);
 }
@@ -58,11 +65,12 @@ export function getTargetSurface(
     const output = getOutputCell(ownerDocument, target.cellIds[0]!);
     return output ? surface(target, output.element) : null;
   }
-  if (!selector) return null;
   const element = queryTarget(ownerDocument, target.domSelector);
   if (!element) return null;
-  const current = configuredDomTarget(element, selector);
-  return current?.key === surface(target, element)?.key ? current : null;
+  const current = configuredDomTarget(element, selector) ?? domTarget(scopedDomRoot(element));
+  return current?.element === element && current.key === surface(target, element)?.key
+    ? current
+    : null;
 }
 
 export function targetBelongsToDocument(target: SelectionTarget, ownerDocument: Document): boolean {
@@ -76,38 +84,64 @@ export function listTargetSurfaces(
   ownerDocument: Document,
   selector: TargetSelector,
 ): TargetSurface[] {
-  const candidates: Array<{ priority: number; surface: TargetSurface }> = [];
-  if (selector) {
-    queryTargets(ownerDocument, selector).forEach((element) => {
-      const candidate = domTarget(element);
-      if (candidate) candidates.push({ priority: 2, surface: candidate });
-    });
-  }
-  listOutputRoots(ownerDocument).forEach((output) => {
-    const candidate = notebookTarget(output.element);
-    if (candidate) candidates.push({ priority: 1, surface: candidate });
-  });
-
   const strongest = new Map<HTMLElement, { priority: number; surface: TargetSurface }>();
-  for (const candidate of candidates) {
-    const current = strongest.get(candidate.surface.element);
-    if (!current || candidate.priority > current.priority) {
-      strongest.set(candidate.surface.element, candidate);
+  let ids: ReadonlyMap<string, Element | null> | undefined;
+  const configured = new Set(queryTargets(ownerDocument, DECLARED_TARGET_SELECTOR));
+  if (selector) queryTargets(ownerDocument, selector).forEach((element) => configured.add(element));
+  for (const element of configured) {
+    const candidate = domTarget(element, (ids ??= indexDocumentIds(ownerDocument)));
+    if (candidate)
+      strongest.set(element, {
+        priority: element.matches(REGION_SELECTOR) ? 3 : 2,
+        surface: candidate,
+      });
+  }
+  const scopedRoots = new Set<HTMLElement>();
+  const positions = new Map<Element, ScopedPosition | null>();
+  for (const scope of ownerDocument.querySelectorAll(TARGET_SCOPE)) {
+    const walker = ownerDocument.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT, {
+      acceptNode: (node) =>
+        isElement(node) &&
+        (isLensUi(node) || outputCellFromRoot(node) || node.matches(DECLARED_TARGET_SELECTOR))
+          ? NodeFilter.FILTER_REJECT
+          : NodeFilter.FILTER_ACCEPT,
+    });
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      if (!isElement(node)) continue;
+      const root = scopedDomRoot(node, positions);
+      if (root) scopedRoots.add(root);
     }
   }
-  const unique = [...strongest.values()];
-  return unique
-    .filter(
-      (candidate) =>
-        !unique.some(
-          (other) =>
-            other.priority > candidate.priority &&
-            containsOpenTree(other.surface.element, candidate.surface.element),
-        ),
-    )
+  for (const root of scopedRoots) {
+    if (strongest.has(root)) continue;
+    const candidate = domTarget(root, (ids ??= indexDocumentIds(ownerDocument)));
+    if (candidate) strongest.set(root, { priority: 0, surface: candidate });
+  }
+  for (const output of listOutputRoots(ownerDocument)) {
+    if ((strongest.get(output.element)?.priority ?? -1) >= 1) continue;
+    const candidate = notebookTarget(output.element);
+    if (candidate) strongest.set(output.element, { priority: 1, surface: candidate });
+  }
+
+  return [...strongest.values()]
+    .filter(({ priority, surface }) => {
+      for (
+        let parent = parentInOpenTree(surface.element);
+        parent;
+        parent = parentInOpenTree(parent)
+      ) {
+        const ancestor = isHTMLElement(parent) ? strongest.get(parent) : undefined;
+        if (ancestor && ancestor.priority > priority) return false;
+      }
+      return true;
+    })
     .map(({ surface }) => surface)
-    .filter(({ element }) => isVisible(element))
     .sort((left, right) => documentOrder(left.element, right.element));
+}
+
+function parentInOpenTree(element: Element): Element | null {
+  const root = element.getRootNode();
+  return element.parentElement ?? (isShadowRoot(root) ? root.host : null);
 }
 
 export function validateTargetSelector(ownerDocument: Document, selector: TargetSelector): void {
@@ -124,15 +158,26 @@ function bestTarget(elements: Element[], selector: TargetSelector): TargetSurfac
   if (elements.some((element) => element.getAttribute("aria-busy") === "true")) return null;
   let best: { priority: number; surface: TargetSurface } | null = null;
   for (const element of elements) {
-    const candidates = [
-      selector ? ranked(2, configuredDomTarget(element, selector)) : null,
-      ranked(1, notebookTarget(element)),
-    ];
-    for (const candidate of candidates) {
-      if (candidate && (!best || candidate.priority > best.priority)) best = candidate;
+    const priority = element.matches(REGION_SELECTOR) ? 3 : 2;
+    if (!best || priority > best.priority) {
+      const candidate = configuredDomTarget(element, selector);
+      if (candidate) {
+        if (priority === 3) return candidate;
+        best = { priority, surface: candidate };
+      }
+    }
+    if (!best) {
+      const candidate = notebookTarget(element);
+      if (candidate) best = { priority: 1, surface: candidate };
     }
   }
-  return best?.surface ?? null;
+  if (best) return best.surface;
+  const positions = new Map<Element, ScopedPosition | null>();
+  for (const element of elements) {
+    const fallback = domTarget(scopedDomRoot(element, positions));
+    if (fallback) return fallback;
+  }
+  return null;
 }
 
 function notebookTarget(element: Element): TargetSurface | null {
@@ -149,11 +194,72 @@ function notebookTarget(element: Element): TargetSurface | null {
   );
 }
 
-function configuredDomTarget(element: Element, selector: string): TargetSurface | null {
-  return matchesSelector(element, selector) ? domTarget(element) : null;
+function configuredDomTarget(element: Element, selector: TargetSelector): TargetSurface | null {
+  return matchesSelector(element, DECLARED_TARGET_SELECTOR) ||
+    (selector && matchesSelector(element, selector))
+    ? domTarget(element)
+    : null;
 }
 
-function domTarget(element: Element): TargetSurface | null {
+type ScopedPosition = {
+  scope: HTMLElement;
+  selector: string;
+  group: HTMLElement | null;
+  block: HTMLElement | null;
+};
+
+/** Share ancestor work within a synchronous read, never across DOM changes. */
+function scopedDomRoot(
+  element: Element,
+  positions = new Map<Element, ScopedPosition | null>(),
+): HTMLElement | null {
+  if (!isHTMLElement(element)) return null;
+  const pending: Element[] = [];
+  let current: Element | null = element;
+  while (current && !positions.has(current)) {
+    pending.push(current);
+    if (current.hasAttribute("data-marimo-lens-scope")) break;
+    current = current.parentElement;
+  }
+  let position = current ? (positions.get(current) ?? null) : null;
+  for (const node of pending.reverse()) {
+    if (isHTMLElement(node) && node.hasAttribute("data-marimo-lens-scope")) {
+      let selector = node.getAttribute("data-marimo-lens-scope")?.trim() ?? "";
+      if (selector) {
+        try {
+          node.matches(selector);
+        } catch {
+          selector = "";
+        }
+      }
+      position = { scope: node, selector, group: null, block: null };
+    } else if (
+      !position ||
+      isLensUi(node) ||
+      outputCellFromRoot(node) ||
+      node.matches(`${DECLARED_TARGET_SELECTOR}, script, style, template, noscript`)
+    ) {
+      position = null;
+    } else if (isHTMLElement(node)) {
+      const group: HTMLElement | null =
+        position.selector && node.matches(position.selector) ? node : position.group;
+      let block: HTMLElement | null = position.block;
+      if (!group) {
+        const display = node.ownerDocument.defaultView?.getComputedStyle(node).display;
+        if (display !== "inline" && display !== "contents" && display !== "none") block = node;
+      }
+      if (group !== position.group || block !== position.block)
+        position = { ...position, group, block };
+    }
+    positions.set(node, position);
+  }
+  return position ? (position.group ?? position.block ?? position.scope) : null;
+}
+
+function domTarget(
+  element: Element | null,
+  ids?: ReadonlyMap<string, Element | null>,
+): TargetSurface | null {
   if (!isHTMLElement(element) || element.getRootNode() !== element.ownerDocument) return null;
   if (
     isLensUi(element) ||
@@ -163,7 +269,7 @@ function domTarget(element: Element): TargetSurface | null {
   ) {
     return null;
   }
-  const sources = notebookSources(element);
+  const sources = notebookSources(element, ids);
   if (sources === null) return null;
   return surface(
     {
@@ -172,17 +278,25 @@ function domTarget(element: Element): TargetSurface | null {
       sources,
       documentId: documentIdentity(element.ownerDocument),
       documentPath: documentPath(element.ownerDocument),
-      domSelector: domSelector(element),
+      domSelector: domSelector(element, ids),
     },
     element,
   );
 }
 
-function domSelector(element: HTMLElement): string {
+function domSelector(
+  element: HTMLElement,
+  documentIds?: ReadonlyMap<string, Element | null>,
+): string {
   const ownerDocument = element.ownerDocument;
   if (element.id) {
     const selector = `#${escapeIdentifier(element.id, ownerDocument)}`;
-    if (selector.length <= 1_024 && queryTarget(ownerDocument, selector) === element)
+    if (
+      selector.length <= 1_024 &&
+      (documentIds?.get(element.id) === element ||
+        ((!documentIds || documentIds.get(element.id) === null) &&
+          queryTarget(ownerDocument, selector) === element))
+    )
       return selector;
   }
   let ids = ownerDocument[TARGET_IDS];
@@ -209,10 +323,6 @@ function surface(target: SelectionTarget, element: HTMLElement): TargetSurface |
   } catch {
     return null;
   }
-}
-
-function ranked(priority: number, value: TargetSurface | null) {
-  return value ? { priority, surface: value } : null;
 }
 
 function queryTarget(ownerDocument: Document, selector: string): HTMLElement | null {
