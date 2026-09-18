@@ -67,6 +67,9 @@ context, and visual evidence together for the agent.
 result answers the question. Reopening restores the mark and note on the
 current output, which may have changed since the original selection.
 
+Our [Point, Revise, Review](https://arxiv.org/abs/2609.19839) paper illustrates
+this loop through an analysis of the National Gallery of Art's open data.
+
 ## Connect your notebook agent
 
 A **code-mode agent** can execute Python in the live notebook kernel to
