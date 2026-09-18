@@ -1,0 +1,19 @@
+apps/e2e/tests/performance.spec.ts
+  s_3fd814a2f82500::t_072be60fec758b 295-296,301-312
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7a2af23d20cec2f7a6ecce9639ec73d00a6713b6",
+  "prompts": {},
+  "sessions": {
+    "s_3fd814a2f82500": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b33c-a511-7712-ac29-174372a0cff0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
