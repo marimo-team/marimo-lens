@@ -1,0 +1,22 @@
+CITATION.cff
+  s_db3be7d10f7dab::t_1e1b2d319a2773 1-11,13-17,19-29,31-35,37-42
+  s_db3be7d10f7dab::t_e2d56c9f4a2643 12,18,30,36
+docs/overview.md
+  s_db3be7d10f7dab::t_b9b6567d73e75f 70-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e7a78ea1a442d9a72d04e73c5e02521c3ffa34b0",
+  "prompts": {},
+  "sessions": {
+    "s_db3be7d10f7dab": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b2a0-86dd-72d3-9b11-0eaccae878fa",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
