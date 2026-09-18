@@ -15,6 +15,24 @@ async function paint() {
 }
 
 describe("notebook DOM layout subscriptions", () => {
+  test("unsupported :has selectors do not interrupt layout notifications", async () => {
+    vi.useFakeTimers();
+    const closest = Element.prototype.closest;
+    vi.spyOn(Element.prototype, "closest").mockImplementation(function (this: Element, selector) {
+      if (selector.includes(":has(")) throw new DOMException("Unsupported :has", "SyntaxError");
+      return closest.call(this, selector);
+    });
+    const output = document.createElement("div");
+    output.id = "output-native";
+    document.body.append(output);
+    const listener = vi.fn();
+    const release = new NotebookDomAdapter(document).subscribeLayout(listener);
+    output.className = "changed";
+    await paint();
+    expect(listener).toHaveBeenCalled();
+    release();
+  });
+
   test("default scoped targets observe resizing and rebind after grouping changes", async () => {
     vi.useFakeTimers();
     const observed = new Set<Element>();
@@ -55,6 +73,7 @@ describe("notebook DOM layout subscriptions", () => {
     expect(observed.has(text)).toBe(true);
     card.className = "group";
     await paint();
+    expect(observed.has(card)).toBe(true);
     expect(observed.has(text)).toBe(false);
     release();
     expect(observed.size).toBe(0);

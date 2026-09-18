@@ -243,9 +243,15 @@ export class NotebookDomAdapter {
     this.window.addEventListener("resize", schedule);
     this.window.addEventListener("scroll", schedule, true);
 
-    const inDomRegion = (node: Node) =>
-      node instanceof this.window.Element &&
-      node.closest(`${TARGET_SCOPE}, ${DECLARED_TARGET_SELECTOR}`) !== null;
+    const inDomRegion = (node: Node) => {
+      if (!(node instanceof this.window.Element)) return false;
+      if (node.closest(TARGET_SCOPE)) return true;
+      try {
+        return node.closest(DECLARED_TARGET_SELECTOR) !== null;
+      } catch {
+        return false;
+      }
+    };
     const observedOutputs = new Set<HTMLElement>();
     const observedShadows = new Set<ShadowRoot>();
     const MutationObserverClass = this.window.MutationObserver;

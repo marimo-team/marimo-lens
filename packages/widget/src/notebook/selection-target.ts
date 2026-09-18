@@ -92,7 +92,7 @@ export function listTargetSurfaces(
     const candidate = domTarget(element, (ids ??= indexDocumentIds(ownerDocument)));
     if (candidate)
       strongest.set(element, {
-        priority: element.matches(REGION_SELECTOR) ? 3 : 2,
+        priority: matchesSelector(element, REGION_SELECTOR) ? 3 : 2,
         surface: candidate,
       });
   }
@@ -102,11 +102,13 @@ export function listTargetSurfaces(
     const walker = ownerDocument.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT, {
       acceptNode: (node) =>
         isElement(node) &&
-        (isLensUi(node) || outputCellFromRoot(node) || node.matches(DECLARED_TARGET_SELECTOR))
+        (isLensUi(node) ||
+          outputCellFromRoot(node) ||
+          matchesSelector(node, DECLARED_TARGET_SELECTOR))
           ? NodeFilter.FILTER_REJECT
           : NodeFilter.FILTER_ACCEPT,
     });
-    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+    for (let node: Node | null = scope; node; node = walker.nextNode()) {
       if (!isElement(node)) continue;
       const root = scopedDomRoot(node, positions);
       if (root) scopedRoots.add(root);
@@ -158,7 +160,7 @@ function bestTarget(elements: Element[], selector: TargetSelector): TargetSurfac
   if (elements.some((element) => element.getAttribute("aria-busy") === "true")) return null;
   let best: { priority: number; surface: TargetSurface } | null = null;
   for (const element of elements) {
-    const priority = element.matches(REGION_SELECTOR) ? 3 : 2;
+    const priority = matchesSelector(element, REGION_SELECTOR) ? 3 : 2;
     if (!best || priority > best.priority) {
       const candidate = configuredDomTarget(element, selector);
       if (candidate) {
@@ -237,12 +239,12 @@ function scopedDomRoot(
       !position ||
       isLensUi(node) ||
       outputCellFromRoot(node) ||
-      node.matches(`${DECLARED_TARGET_SELECTOR}, script, style, template, noscript`)
+      matchesSelector(node, `${DECLARED_TARGET_SELECTOR}, script, style, template, noscript`)
     ) {
       position = null;
     } else if (isHTMLElement(node)) {
       const group: HTMLElement | null =
-        position.selector && node.matches(position.selector) ? node : position.group;
+        position.selector && matchesSelector(node, position.selector) ? node : position.group;
       let block: HTMLElement | null = position.block;
       if (!group) {
         const display = node.ownerDocument.defaultView?.getComputedStyle(node).display;

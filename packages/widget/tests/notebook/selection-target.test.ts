@@ -11,9 +11,68 @@ import {
 } from "@/notebook/selection-target";
 import { collectDomHint } from "@/selection/dom-hint";
 
-afterEach(() => document.body.replaceChildren());
+afterEach(() => {
+  document.body.replaceChildren();
+  vi.restoreAllMocks();
+});
 
 describe("selection targets", () => {
+  test.each(["Only text", "<span data-marimo-lens-target hidden></span>"])(
+    "lists the scope itself when descendants provide no broad roots: %s",
+    (content) => {
+      const scope = visible(document.createElement("section"));
+      scope.id = "scope";
+      scope.dataset.marimoLensScope = "article";
+      scope.innerHTML = content;
+      document.body.append(scope);
+      const picked = targetFromElement(scope, null)!;
+      expect(picked.target).toMatchObject({ kind: "dom", domSelector: "#scope" });
+      expect(listTargetSurfaces(document, null)).toEqual([picked]);
+      expect(getTargetSurface(document, picked.target, null)?.element).toBe(scope);
+    },
+  );
+
+  test("unsupported :has selectors preserve native, custom, and scoped picking", () => {
+    const matches = Element.prototype.matches;
+    vi.spyOn(Element.prototype, "matches").mockImplementation(function (this: Element, selector) {
+      if (selector.includes(":has(")) throw new DOMException("Unsupported :has", "SyntaxError");
+      return matches.call(this, selector);
+    });
+    const query = Document.prototype.querySelectorAll;
+    vi.spyOn(Document.prototype, "querySelectorAll").mockImplementation(
+      function (this: Document, selector) {
+        if (selector.includes(":has(")) throw new DOMException("Unsupported :has", "SyntaxError");
+        return query.call(this, selector);
+      },
+    );
+    document.body.innerHTML =
+      '<div id="output-native">Native</div><section id="custom">Custom</section><main id="scope" data-marimo-lens-scope="article"><article id="card"><span>Text</span></article></main>';
+    const native = visible(document.getElementById("output-native")!);
+    const custom = visible(document.getElementById("custom")!);
+    const scope = visible(document.getElementById("scope")!);
+    const card = visible(document.getElementById("card")!);
+    expect(targetFromElement(native, null)?.target.kind).toBe("notebook");
+    expect(targetFromElement(custom, "#custom")?.element).toBe(custom);
+    const picked = targetFromElement(card.firstElementChild, null)!;
+    expect(picked.element).toBe(card);
+    expect(getTargetSurface(document, picked.target, null)?.element).toBe(card);
+    expect(listTargetSurfaces(document, "#custom").map(({ element }) => element)).toEqual([
+      native,
+      custom,
+      scope,
+      card,
+    ]);
+  });
+
+  test("the nearest declared region wins inside another declared region", () => {
+    document.body.innerHTML =
+      '<section id="outer" data-marimo-lens-target><article id="inner" data-marimo-lens-inputs="source"><em>Detail</em></article></section><span id="source" hidden data-marimo-lens-cell-id="producer"></span>';
+    const outer = visible(document.getElementById("outer")!);
+    const inner = visible(document.getElementById("inner")!);
+    expect(targetFromElement(inner.firstElementChild, null)?.element).toBe(inner);
+    expect(targetFromElement(outer, null)?.element).toBe(outer);
+  });
+
   test("discovery rechecks changed and duplicate source IDs on every read", () => {
     const region = visible(document.createElement("article"));
     region.id = "metric";
