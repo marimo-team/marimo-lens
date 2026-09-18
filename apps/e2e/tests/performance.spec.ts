@@ -292,10 +292,24 @@ test("large authored scopes preserve parent picking, child evidence, and respons
   await target.scrollIntoViewIfNeeded();
   const session = await context.newCDPSession(page);
   await session.send("Performance.enable");
+  // Measure discovery before image capture; GC excludes unrelated detached nodes.
+  await session.send("HeapProfiler.collectGarbage");
   const before = await browserMetrics(session);
   await page.getByRole("button", { name: "Select a target", exact: true }).click();
   await target.hover();
   await expect(page.locator("[data-marimo-lens-target-label]")).toContainText("Card 0");
+  await session.send("HeapProfiler.collectGarbage");
+  const after = await browserMetrics(session);
+  const nodeDelta = after.nodes - before.nodes;
+  await testInfo.attach("scoped-picking-performance", {
+    body: JSON.stringify({
+      cards: 500,
+      scriptMs: after.scriptMs - before.scriptMs,
+      nodeDelta,
+    }),
+    contentType: "application/json",
+  });
+  expect(nodeDelta).toBeLessThan(500);
   await target.click();
   const dialog = page.getByRole("dialog", { name: /Add note for S1/ });
   await dialog.getByRole("textbox").fill("Keep this phrase in its card");
@@ -307,15 +321,6 @@ test("large authored scopes preserve parent picking, child evidence, and respons
       domHint: { tag: "em", text: "Focus 0", path: "p > em" },
     },
   ]);
-  const after = await browserMetrics(session);
-  await testInfo.attach("scoped-picking-performance", {
-    body: JSON.stringify({
-      cards: 500,
-      scriptMs: after.scriptMs - before.scriptMs,
-      nodes: after.nodes,
-    }),
-    contentType: "application/json",
-  });
   await page.setViewportSize({ width: 390, height: 844 });
   await target.scrollIntoViewIfNeeded();
   await page.getByRole("button", { name: "Select a target", exact: true }).click();
