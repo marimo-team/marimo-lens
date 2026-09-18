@@ -1,0 +1,22 @@
+development_docs/browser-and-host.md
+  s_3fd814a2f82500::t_d8c1036d62aadf 37,46-47
+  s_3fd814a2f82500::t_4da4c86c6084b2 35-36,38-41
+docs/concepts/targets.md
+  s_3fd814a2f82500::t_4da4c86c6084b2 58-62,104
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "72e2e20cc6a7712a215679841963128a3325aee6",
+  "prompts": {},
+  "sessions": {
+    "s_3fd814a2f82500": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b33c-a511-7712-ac29-174372a0cff0",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
