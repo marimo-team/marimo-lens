@@ -55,9 +55,11 @@ bounds, and `p > em` as the DOM hint. When no grouping root matches, Lens uses
 the nearest rendered block. The scope stays in its own document and can change
 with the rendered view. Invalid grouping syntax falls back to blocks.
 
-Explicit `data-marimo-lens-target` parents take precedence over smaller source
-hosts. Source targets and native notebook outputs take precedence over broad
-picking. Unresolved source declarations remain unavailable, and native output
+Regions marked with `data-marimo-lens-target` or `data-marimo-lens-inputs` have
+equal priority. When nested, the region nearest the clicked element wins. Both
+take precedence over hosts marked only with `data-marimo-lens-cell-id`. Source
+targets and native notebook outputs take precedence over broad picking.
+Unresolved source declarations remain unavailable, and native output
 subtrees are opaque to broad picking. Notebook and editor chrome outside the
 scope remain unchanged.
 
@@ -99,7 +101,7 @@ For each matching root, Lens records:
 - Zero or more producing cell IDs.
 
 Lens recognizes `[data-marimo-lens-target]`, `[data-marimo-lens-cell-id]`,
-`[data-marimo-lens-inputs]`, and parents of hidden elements with
+`[data-marimo-lens-inputs]`, and direct parents of hidden elements with
 `data-marimo-lens-cell-id`. Source metadata must resolve before a region is
 selectable. Hidden source elements themselves remain unavailable.
 `dom_selector` adds to these declarations and the native notebook targets.
