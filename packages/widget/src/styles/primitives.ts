@@ -64,13 +64,6 @@ export const ui = stylex.create({
       },
     },
   },
-  secondary: {
-    color: colors.foreground,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: colors.border,
-  },
   danger: {
     color: {
       default: colors.mutedForeground,

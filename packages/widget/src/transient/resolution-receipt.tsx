@@ -8,12 +8,10 @@ import { transientStyles } from "./transient.styles";
 
 export function ResolutionReceipt({
   event,
-  inline = false,
   onOpenHistory,
   onInteractionChange,
 }: {
   event: SelectionResolvedEvent;
-  inline?: boolean;
   onOpenHistory: (event: SelectionResolvedEvent) => void;
   onInteractionChange?: (event: SelectionResolvedEvent, active: boolean) => void;
 }) {
@@ -33,14 +31,8 @@ export function ResolutionReceipt({
 
   return (
     <button
-      {...stylex.props(
-        transientStyles.notification,
-        transientStyles.receipt,
-        inline && transientStyles.receiptInline,
-      )}
+      {...stylex.props(transientStyles.notification, transientStyles.receipt)}
       type="button"
-      data-marimo-lens-dock-panel
-      data-marimo-lens-dock-scroll-panel
       data-marimo-lens-resolution-receipt
       data-selection-id={selections.length === 1 ? selections[0]!.selectionId : undefined}
       data-selection-count={selections.length}

@@ -14,12 +14,7 @@ const dotWave = stylex.keyframes({
 
 export const transientStyles = stylex.create({
   notification: {
-    position: "absolute",
-    zIndex: 1,
-    bottom: "calc(100% + 8px)",
-    left: "50%",
-    width: "max-content",
-    maxWidth: "min(480px, calc(100vw - 24px))",
+    width: "100%",
     minHeight: 32,
     padding: "7px 10px",
     alignItems: "center",
@@ -32,12 +27,12 @@ export const transientStyles = stylex.create({
     borderColor: { default: colors.border, [media.forcedColors]: "Highlight" },
     borderRadius: radii.control,
     boxShadow: colors.shadow,
-    pointerEvents: "none",
+    pointerEvents: "auto",
     opacity: { default: 1, "@starting-style": 0 },
     transform: {
-      default: "translateX(-50%)",
-      "@starting-style": "translate(-50%, 3px)",
-      [media.reducedMotion]: "translateX(-50%)",
+      default: "none",
+      "@starting-style": "translateY(3px)",
+      [media.reducedMotion]: "none",
     },
     transitionProperty: "opacity, transform",
     transitionDuration: { default: "160ms", [media.reducedMotion]: "120ms" },
@@ -58,20 +53,7 @@ export const transientStyles = stylex.create({
       },
     },
     outline: { ":focus-visible": `2px solid ${colors.focus}` },
-    outlineOffset: { ":focus-visible": 2 },
-  },
-  receiptInline: {
-    position: "static",
-    width: "100%",
-    maxWidth: "none",
-    backgroundColor: {
-      default: colors.surfaceSubtle,
-      [media.hover]: {
-        ":hover": `color-mix(in srgb, ${colors.foreground} 6%, ${colors.surfaceSubtle})`,
-      },
-    },
-    boxShadow: "none",
-    transform: "none",
+    outlineOffset: { ":focus-visible": -2 },
   },
   notificationIcon: {
     gridColumn: 1,
@@ -203,7 +185,6 @@ export const transientStyles = stylex.create({
     fontWeight: 600,
   },
   notice: {
-    zIndex: 3,
     display: "grid",
     gridTemplateColumns: "14px minmax(0, 1fr) auto",
     color: { default: colors.mutedForeground, [media.forcedColors]: "CanvasText" },

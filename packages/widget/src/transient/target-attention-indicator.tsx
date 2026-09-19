@@ -227,8 +227,6 @@ export function TargetAttentionFallback({
         presentation.phase === "exiting" && transientStyles.exiting,
         presentation.phase === "exiting" && transientStyles.exitingNotice,
       )}
-      data-marimo-lens-dock-panel
-      data-marimo-lens-dock-scroll-panel
       data-marimo-lens-target-attention-notice
       data-kind={presentation.kind}
       data-phase={presentation.phase}

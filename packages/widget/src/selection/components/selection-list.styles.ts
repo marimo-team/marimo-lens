@@ -20,13 +20,18 @@ export const selectionListStyles = stylex.create({
     minHeight: 56,
     flexShrink: 0,
     alignItems: "center",
+  },
+  itemNeutral: {
     backgroundColor: {
       default: "transparent",
       ":focus-within": `color-mix(in srgb, ${colors.primary} 9%, transparent)`,
     },
   },
   itemCurrent: {
-    backgroundColor: `color-mix(in srgb, ${colors.primary} 5%, transparent)`,
+    backgroundColor: {
+      default: `color-mix(in srgb, ${colors.primary} 5%, transparent)`,
+      ":focus-within": `color-mix(in srgb, ${colors.primary} 9%, transparent)`,
+    },
     outline: { [media.forcedColors]: "2px solid Highlight" },
     outlineOffset: { [media.forcedColors]: -2 },
   },
@@ -50,20 +55,25 @@ export const selectionListStyles = stylex.create({
     },
     outlineOffset: { [media.forcedColors]: { ":focus-visible": -2 } },
   },
-  label: {
+  labelNeutral: {
     color: {
-      default: null,
+      default: colors.foreground,
       [stylex.when.ancestor(":focus-visible", selectionSummaryMarker)]: colors.onPrimary,
     },
     backgroundColor: {
-      default: null,
+      default: colors.surfaceSubtle,
       [stylex.when.ancestor(":focus-visible", selectionSummaryMarker)]: colors.primarySolid,
     },
   },
   labelCurrent: {
-    color: colors.accentForeground,
-    backgroundColor: `color-mix(in srgb, ${colors.primary} 10%, transparent)`,
-    borderColor: "transparent",
+    color: {
+      default: colors.accentForeground,
+      [stylex.when.ancestor(":focus-visible", selectionSummaryMarker)]: colors.onPrimary,
+    },
+    backgroundColor: {
+      default: `color-mix(in srgb, ${colors.primary} 10%, transparent)`,
+      [stylex.when.ancestor(":focus-visible", selectionSummaryMarker)]: colors.primarySolid,
+    },
   },
   details: {
     display: "grid",
@@ -112,7 +122,5 @@ export const selectionListStyles = stylex.create({
   },
   clear: {
     minHeight: { default: 30, [media.coarsePointer]: 44 },
-    backgroundColor: "transparent",
-    borderWidth: 0,
   },
 });

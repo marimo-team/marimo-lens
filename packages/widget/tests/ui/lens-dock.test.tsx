@@ -533,7 +533,7 @@ describe("Lens dock", () => {
     });
 
     expect(document.querySelector("[data-test-attention-notice]")).not.toBeNull();
-    expect(document.querySelector("[data-test-resolution-receipt]")).toBeNull();
+    expect(document.querySelector("[data-marimo-lens-resolution-receipt]")).toBeNull();
   });
 });
 

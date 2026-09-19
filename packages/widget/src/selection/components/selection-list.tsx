@@ -60,7 +60,7 @@ export function SelectionList({
               key={selection.id}
               {...stylex.props(
                 selectionListStyles.item,
-                current && selectionListStyles.itemCurrent,
+                current ? selectionListStyles.itemCurrent : selectionListStyles.itemNeutral,
               )}
               data-current={current ? "true" : "false"}
               data-marimo-lens-selection-cluster={selection.id}
@@ -86,8 +86,7 @@ export function SelectionList({
                   {...stylex.props(
                     ui.label,
                     ui.borderless,
-                    selectionListStyles.label,
-                    current && selectionListStyles.labelCurrent,
+                    current ? selectionListStyles.labelCurrent : selectionListStyles.labelNeutral,
                   )}
                 >
                   {selection.label}

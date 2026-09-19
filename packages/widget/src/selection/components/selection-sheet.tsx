@@ -156,7 +156,11 @@ export function SelectionSheet({
         </button>
       </div>
 
-      {notice ? <div {...stylex.props(sheetStyles.notice)}>{notice}</div> : null}
+      {notice ? (
+        <div {...stylex.props(sheetStyles.notice)} data-marimo-lens-sheet-notice>
+          {notice}
+        </div>
+      ) : null}
 
       <div
         id="marimo-lens-open-panel"

@@ -49,8 +49,8 @@ pnpm --filter @marimo-lens/python build
 esbuild writes the resources to
 `packages/marimo-lens/src/marimo_lens/static/`. The directory is generated and
 ignored by Git. Edit the component-local StyleX sources in `packages/widget/src/`.
-Keep `packages/widget/src/widget.css` limited to shadow-host and imperative dock
-layout rules, then rebuild the resources.
+Keep `packages/widget/src/widget.css` limited to the shadow-host reset and dock
+panel geometry, then rebuild the resources.
 
 ## Reach first success
 

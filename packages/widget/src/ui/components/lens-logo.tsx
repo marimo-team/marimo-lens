@@ -8,23 +8,13 @@ import { logoStyles } from "./lens-dock.styles";
 export function LensLogo() {
   const theme = useLensTheme();
   return (
-    <span {...stylex.props(logoStyles.root)} aria-hidden="true">
-      <img
-        {...stylex.props(logoStyles.image, theme === "dark" && logoStyles.hidden)}
-        src={lightLogo}
-        width={28}
-        height={28}
-        alt=""
-        draggable={false}
-      />
-      <img
-        {...stylex.props(logoStyles.image, theme === "light" && logoStyles.hidden)}
-        src={darkLogo}
-        width={28}
-        height={28}
-        alt=""
-        draggable={false}
-      />
-    </span>
+    <img
+      {...stylex.props(logoStyles.image)}
+      src={theme === "dark" ? darkLogo : lightLogo}
+      width={28}
+      height={28}
+      alt=""
+      draggable={false}
+    />
   );
 }

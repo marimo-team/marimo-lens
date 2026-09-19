@@ -41,7 +41,7 @@ export const overlayStyles = stylex.create({
     touchAction: "none",
     userSelect: "none",
     opacity: 1,
-    borderColor: { [media.forcedColors]: "Highlight" },
+    borderColor: { default: colors.primary, [media.forcedColors]: "Highlight" },
   },
   markerBlocked: {
     pointerEvents: "none",
@@ -57,7 +57,6 @@ export const overlayStyles = stylex.create({
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderStyle: "solid",
-    borderColor: colors.primary,
     borderRadius: radii.label,
     boxShadow: "0 1px 3px rgb(15 23 42 / 14%)",
     fontFamily: fonts.mono,
@@ -90,7 +89,6 @@ export const overlayStyles = stylex.create({
     backgroundColor: `color-mix(in srgb, ${colors.primary} 3%, transparent)`,
     borderWidth: 1,
     borderStyle: "solid",
-    borderColor: colors.primary,
     borderRadius: radii.label,
   },
   rectCurrent: {

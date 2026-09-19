@@ -108,8 +108,11 @@ export const sheetStyles = stylex.create({
     textAlign: "center",
   },
   notice: {
+    minHeight: 0,
+    maxHeight: "min(168px, 30dvh)",
     padding: "8px 8px 0",
-    flex: "0 0 auto",
+    flex: "0 1 auto",
+    overflow: "auto",
   },
   overflow: {
     position: "relative",

@@ -109,6 +109,7 @@ def _(mo):
         [
             "Inspect context",
             "Start activity",
+            "Start multiline activity",
             "Stop activity",
             "Reveal",
             "Resolve",
@@ -168,11 +169,15 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
                         "buffers": [],
                     }
                 )
-    elif action.value == "Start activity":
+    elif action.value in ("Start activity", "Start multiline activity"):
         activity["handle"] = lens.start_activity(
             _selections[0],
             expected_revision=_references["revision"],
-            message="Checking monthly revenue",
+            message=(
+                "\n".join(f"Step {i}" for i in range(1, 31))
+                if action.value == "Start multiline activity"
+                else "Checking monthly revenue"
+            ),
         )
     elif action.value == "Stop activity":
         lens.stop_activity(activity["handle"])

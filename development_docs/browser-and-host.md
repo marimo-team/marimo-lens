@@ -180,8 +180,9 @@ Document-level keyboard handling reads composed event paths, and focus restorati
 uses the explicitly registered UI root and follows its active element.
 `createLensSurface()` owns the host, shared document styles,
 and disposal. The portal registers that root with `NotebookDomAdapter`.
-`widget.css` contains the host reset and dock geometry that the positioning
-adapter updates between React renders.
+`LensDock` owns one positioned panel for the selection sheet or a transient
+notice. `widget.css` contains the host reset and panel geometry driven by
+`useDockPosition`. The selection sheet owns scrolling for its notice and lists.
 
 The portal host defaults to `z-index: 35`. This places Lens above Marimo's
 notebook and cell affordances, which reach `z-index: 30`, and below application
@@ -190,9 +191,9 @@ page can set `--marimo-lens-z-index` when its overlay scale uses different
 bands. Lens components use local z-index values inside that host stacking
 context.
 
-The dock follows the visible intersection of that surface with its embedding
-page. This keeps it inside VS Code's notebook pane, whose output webview can be
-much taller than the pane. The notebook viewport adapter refreshes that
+`useDockPosition` observes the visible intersection of the portal surface with
+its embedding page. This keeps the dock inside VS Code's notebook pane, whose
+output webview can be much taller than the pane. The notebook viewport adapter refreshes that
 intersection on VS Code's `view-scroll` messages, including translations that
 preserve the intersection ratio.
 

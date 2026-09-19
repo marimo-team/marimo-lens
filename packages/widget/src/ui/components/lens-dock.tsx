@@ -191,6 +191,17 @@ export function LensDock({
     setExpanded(true);
     onOpenHistory(event);
   };
+  const sheetOpen = expanded && listOpen;
+  const notice =
+    targetAttentionFallback ??
+    (resolutionReceipt ? (
+      <ResolutionReceipt
+        key={resolutionReceipt.revision}
+        event={resolutionReceipt}
+        onOpenHistory={openHistory}
+        onInteractionChange={onResolutionReceiptInteractionChange}
+      />
+    ) : null);
 
   return (
     <aside
@@ -205,59 +216,39 @@ export function LensDock({
       <span id="ml-dock-move-help" hidden>
         Drag or use arrow keys to move. Shift moves faster. Home resets position.
       </span>
-      {expanded && listOpen ? (
+      {sheetOpen || notice ? (
         <div
-          {...stylex.props(dockStyles.sheetStack)}
+          {...stylex.props(dockStyles.panel)}
           data-marimo-lens-dock-panel
-          data-marimo-lens-sheet-stack
+          data-content={sheetOpen ? "selections" : "notice"}
         >
-          <SelectionSheet
-            activeTab={sheetTab}
-            selections={selections}
-            history={history}
-            currentSelectionId={currentSelectionId}
-            availableSelectionIds={availableSelectionIds}
-            capturingSelectionIds={capturingSelectionIds}
-            busySelectionIds={busySelectionIds}
-            clearingSelections={clearPending}
-            clearingHistory={historyClearPending}
-            notice={
-              targetAttentionFallback ??
-              (resolutionReceipt ? (
-                <ResolutionReceipt
-                  inline
-                  key={`${resolutionReceipt.revision}:${resolutionReceipt.payload.selections
-                    .map(({ selectionId }) => selectionId)
-                    .join(",")}`}
-                  event={resolutionReceipt}
-                  onOpenHistory={openHistory}
-                  onInteractionChange={onResolutionReceiptInteractionChange}
-                />
-              ) : null)
-            }
-            onTabChange={onSheetTabChange}
-            onClose={closeList}
-            onActivate={onActivateSelection}
-            onEditNote={onEditNote}
-            onDelete={onDeleteSelection}
-            onClearSelections={onClearSelections}
-            onClearHistory={onClearHistory}
-            onReopen={onReopenSelection}
-            snapshotLoader={snapshotLoader}
-          />
+          {sheetOpen ? (
+            <SelectionSheet
+              activeTab={sheetTab}
+              selections={selections}
+              history={history}
+              currentSelectionId={currentSelectionId}
+              availableSelectionIds={availableSelectionIds}
+              capturingSelectionIds={capturingSelectionIds}
+              busySelectionIds={busySelectionIds}
+              clearingSelections={clearPending}
+              clearingHistory={historyClearPending}
+              notice={notice}
+              onTabChange={onSheetTabChange}
+              onClose={closeList}
+              onActivate={onActivateSelection}
+              onEditNote={onEditNote}
+              onDelete={onDeleteSelection}
+              onClearSelections={onClearSelections}
+              onClearHistory={onClearHistory}
+              onReopen={onReopenSelection}
+              snapshotLoader={snapshotLoader}
+            />
+          ) : (
+            notice
+          )}
         </div>
-      ) : (
-        <>
-          {targetAttentionFallback ??
-            (resolutionReceipt ? (
-              <ResolutionReceipt
-                event={resolutionReceipt}
-                onOpenHistory={openHistory}
-                onInteractionChange={onResolutionReceiptInteractionChange}
-              />
-            ) : null)}
-        </>
-      )}
+      ) : null}
 
       {expanded ? (
         <div

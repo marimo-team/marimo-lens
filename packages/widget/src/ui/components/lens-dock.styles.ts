@@ -151,7 +151,8 @@ export const dockStyles = stylex.create({
     width: 44,
     minWidth: 44,
     height: 36,
-    minHeight: 36,
+    minHeight: { default: 36, [media.coarsePointer]: 44 },
+    marginLeft: 15,
     padding: 0,
     justifyContent: "center",
     borderRadius: 4,
@@ -162,12 +163,18 @@ export const dockStyles = stylex.create({
     transitionDuration: { default: "140ms", [media.reducedMotion]: "0ms" },
     "::before": {
       borderColor: {
-        default: "var(--slate-7, #cdced6)",
-        [media.hover]: { ":hover": "var(--grass-7, #97cfaa)" },
+        default: colors.controlBorder,
+        [media.hover]: {
+          ":hover": {
+            default: colors.controlBorderHover,
+            [media.forcedColors]: "Highlight",
+          },
+        },
+        [media.forcedColors]: "Highlight",
       },
       backgroundColor: {
-        default: "var(--background, #ffffff)",
-        [media.hover]: { ":hover": "var(--grass-2, #f2fcf5)" },
+        default: colors.controlSurface,
+        [media.hover]: { ":hover": colors.controlHover },
       },
       boxShadow: {
         default:
@@ -187,7 +194,7 @@ export const dockStyles = stylex.create({
     justifyContent: "center",
     color: {
       default: colors.mutedForeground,
-      [media.hover]: { ":hover": "var(--grass-11, #2a7e3b)" },
+      [media.hover]: { ":hover": colors.controlAccent },
       [media.forcedColors]: "CanvasText",
     },
     opacity: 0.64,
@@ -220,26 +227,17 @@ export const dockStyles = stylex.create({
     fontVariantNumeric: "tabular-nums",
     lineHeight: 1,
   },
-  sheetStack: {
+  panel: {
     zIndex: 2,
-    pointerEvents: "none",
+    overflow: "auto",
+    pointerEvents: "auto",
   },
 });
 
 export const logoStyles = stylex.create({
-  root: {
-    display: "grid",
-    width: 28,
-    height: 28,
-    placeItems: "center",
-  },
   image: {
     display: "block",
-    gridArea: "1 / 1",
     width: 28,
     height: 28,
-  },
-  hidden: {
-    display: "none",
   },
 });

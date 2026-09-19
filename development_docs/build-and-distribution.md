@@ -66,8 +66,8 @@ the esbuild context alive and writes after source changes.
 The static directory is generated and ignored by Git. Component styles belong
 in adjacent `.styles.ts` modules. Shared tokens and primitives live in
 `packages/widget/src/styles/`. `packages/widget/src/widget.css` owns the shadow
-host reset and dock rules driven by imperative layout state. Python tests that
-construct `Lens` need the generated files present locally.
+host reset and dock panel geometry driven by imperative layout state. Python tests
+that construct `Lens` need the generated files present locally.
 
 ## Python build
 

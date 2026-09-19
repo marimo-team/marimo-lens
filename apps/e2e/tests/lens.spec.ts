@@ -706,6 +706,7 @@ test("expanding the pill at every corner keeps controls and long notes inside th
     await page.mouse.down();
     await page.mouse.move(corner.x, corner.y, { steps: 12 });
     await page.mouse.up();
+    await expectInsideViewport(page, pill.locator("[data-marimo-lens-collapsed-grip]"));
     await pill.click();
     await expectInsideViewport(page, dock);
     for (const name of ["Move Lens", "Select a target", "Collapse Lens"]) {

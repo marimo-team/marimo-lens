@@ -32,7 +32,7 @@
   transform: none;
 }
 
-[data-marimo-lens-dock] > [data-marimo-lens-sheet-stack] {
+[data-marimo-lens-dock-panel][data-content="selections"] {
   --ml-panel-width: min(368px, calc(var(--ml-dock-viewport-width, 100vw) - 24px));
 }
 
@@ -45,18 +45,4 @@
   top: var(--ml-dock-panel-top);
   bottom: auto;
   max-height: min(520px, var(--ml-dock-panel-height));
-}
-
-[data-marimo-lens-dock] > [data-marimo-lens-dock-scroll-panel] {
-  overflow: auto;
-}
-
-/* Notices share the sheet's viewport bounds when selections are open. */
-[data-marimo-lens-sheet-stack] [data-marimo-lens-dock-panel] {
-  position: static;
-  width: 100%;
-  max-width: none;
-  max-height: min(160px, 30dvh);
-  overflow: auto;
-  transform: none;
 }
