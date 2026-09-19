@@ -1,0 +1,36 @@
+apps/e2e/fixtures/notebook.py
+  s_1cbc35b5d79f18::t_62faf4dfc8305b 29-31,83-88
+apps/e2e/tests/robustness.spec.ts
+  s_1cbc35b5d79f18::t_b9bfef68ceea07 303-310,314,318,330
+packages/widget/tests/app/lens-view-owner.test.tsx
+  s_1cbc35b5d79f18::t_9170fc65e29bb0 4,19
+  s_1cbc35b5d79f18::t_e2722e2d48a714 26-28
+packages/widget/tests/selection/target-availability.test.tsx
+  s_1cbc35b5d79f18::t_3995140eaa6315 5,7,19-20,25,27,31-35,39-52,164-165,271-272
+packages/widget/tests/selection/components/selection-overlay.test.tsx
+  s_1cbc35b5d79f18::t_3995140eaa6315 5,15-16,23,45,76-77,87-88,97-98,107-108,131-132,161-162
+apps/e2e/tests/style.spec.ts
+  s_1cbc35b5d79f18::t_0d96118ac60fda 32-35,43-45
+  s_1cbc35b5d79f18::t_62faf4dfc8305b 7-9,36-42,46-54,193,225-227,234
+packages/widget/tests/selection/components/selection-snapshot-preview.test.tsx
+  s_1cbc35b5d79f18::t_1b971cefe68ade 46
+apps/e2e/tests/editor.spec.ts
+  s_1cbc35b5d79f18::t_62faf4dfc8305b 33,76-77
+  s_1cbc35b5d79f18::t_1b971cefe68ade 71
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "4f5ed767a794d420ecf4e1177003f9932cf2e367",
+  "prompts": {},
+  "sessions": {
+    "s_1cbc35b5d79f18": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b920-c260-7df0-906f-761f22c54816",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
