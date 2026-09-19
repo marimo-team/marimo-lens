@@ -75,7 +75,8 @@ The workspace config applies:
   sources.
 - `trustPolicy: no-downgrade`, with explicit versioned exceptions for known
   packages.
-- A scoped release-age exception for `@marimo-team/*`.
+- Scoped release-age exceptions for current `@marimo-team/*` integrations and
+  the pinned StyleX compiler packages.
 - Explicit build permission for `@manzt/uv` and `esbuild`.
 
 When pnpm blocks an install, report the package, version, policy, and required
@@ -84,6 +85,10 @@ feature change.
 
 Review `pnpm-lock.yaml` for registry sources, integrity values, peer changes,
 patch resolution, and unexpected dependency growth.
+
+The widget imports `@stylexjs/stylex`. The widget package and Python browser
+bundle use `@stylexjs/unplugin` so Vite+ and esbuild emit the same
+atomic rules into `widget.css`.
 
 ## Patched `html-to-image`
 

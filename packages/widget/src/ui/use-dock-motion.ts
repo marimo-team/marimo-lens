@@ -1,6 +1,7 @@
 import { useLayoutEffect, type RefObject } from "react";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
+import { motion } from "@/styles/tokens.stylex";
 
 // Morph the surface, leaving text and controls at their natural size.
 export function useDockMotion(ref: RefObject<HTMLElement | null>) {
@@ -24,7 +25,7 @@ export function useDockMotion(ref: RefObject<HTMLElement | null>) {
         return;
       if (!(event.target instanceof win.Element) || !event.target.closest("[data-ml-dock-toggle]"))
         return;
-      const surface = dock.querySelector<HTMLElement>(".ml-dockbar, .ml-dock-tab");
+      const surface = dock.querySelector<HTMLElement>("[data-marimo-lens-dock-surface]");
       if (!surface) return;
       const rect = surface.getBoundingClientRect();
       const transform = win.getComputedStyle(surface, "::before").transform;
@@ -39,13 +40,12 @@ export function useDockMotion(ref: RefObject<HTMLElement | null>) {
     };
     const animate = () => {
       if (!from) return;
-      const surface = dock.querySelector<HTMLElement>(".ml-dockbar, .ml-dock-tab");
+      const surface = dock.querySelector<HTMLElement>("[data-marimo-lens-dock-surface]");
       if (!surface) return;
       const rect = surface.getBoundingClientRect();
       const previous = from;
       from = null;
       if (!surface.animate || rect.width === 0 || rect.height === 0) return;
-      const easing = win.getComputedStyle(dock).getPropertyValue("--ml-ease-out").trim();
       animations = [
         surface.animate(
           [
@@ -54,10 +54,13 @@ export function useDockMotion(ref: RefObject<HTMLElement | null>) {
             },
             { transform: "none" },
           ],
-          { duration: 200, easing, pseudoElement: "::before" },
+          { duration: 200, easing: motion.easeOut, pseudoElement: "::before" },
         ),
         ...[...surface.children].map((child) =>
-          child.animate([{ opacity: 0.6 }, { opacity: 1 }], { duration: 125, easing }),
+          child.animate([{ opacity: 0.6 }, { opacity: 1 }], {
+            duration: 125,
+            easing: motion.easeOut,
+          }),
         ),
       ];
     };

@@ -19,12 +19,14 @@
     "@anywidget/react": "catalog:",
     "@marimo-lens/image-capture": "workspace:*",
     "@marimo-lens/protocol": "workspace:*",
+    "@stylexjs/stylex": "catalog:",
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"
   },
   "devDependencies": {
     "@anywidget/types": "catalog:",
+    "@stylexjs/unplugin": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",

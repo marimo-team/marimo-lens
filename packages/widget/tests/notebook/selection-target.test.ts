@@ -117,6 +117,27 @@ describe("selection targets", () => {
     expect(targetFromElement(text, null)?.element).toBe(panel);
   });
 
+  test("discovers nested groups and their picked children", () => {
+    document.body.innerHTML =
+      '<main data-marimo-lens-scope="article"><article id="outer"><p>Text</p><article id="inner"><em>Detail</em></article></article></main>';
+    const outer = visible(document.getElementById("outer")!);
+    const inner = visible(document.getElementById("inner")!);
+    const detail = visible(document.querySelector("em")!);
+    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([
+      outer,
+      inner,
+    ]);
+    expect(targetFromElement(detail, null)?.element).toBe(inner);
+  });
+
+  test("keeps HTML inside SVG visible to fallback scope discovery", () => {
+    document.body.innerHTML =
+      '<main data-marimo-lens-scope=".group"><svg><g class="group"><foreignObject><div id="html">Text</div></foreignObject></g></svg></main>';
+    const target = visible(document.getElementById("html")!);
+    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([target]);
+    expect(targetFromElement(target, null)?.element).toBe(target);
+  });
+
   test("native targets outrank fallback scopes on the same element", () => {
     const output = visible(document.createElement("div"));
     output.id = "output-native";

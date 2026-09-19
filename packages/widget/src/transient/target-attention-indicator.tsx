@@ -1,10 +1,14 @@
+import * as stylex from "@stylexjs/stylex";
 import { LocateFixed, MousePointer2 } from "lucide-react";
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
+import { ui } from "@/styles/primitives";
 import {
   TARGET_ATTENTION_TOP_GUTTER,
   type TargetAttentionPresentation,
 } from "@/transient/target-attention";
+
+import { transientStyles } from "./transient.styles";
 
 const VIEWPORT_MARGIN = 12;
 const LABEL_MIN_HEIGHT = 28;
@@ -148,7 +152,11 @@ export function TargetAttentionIndicator({
 
   return (
     <div
-      className="ml-target-attention"
+      {...stylex.props(
+        transientStyles.attention,
+        presentation.kind === "activity" && transientStyles.activity,
+        presentation.phase === "exiting" && transientStyles.exiting,
+      )}
       data-marimo-lens-target-attention
       data-kind={presentation.kind}
       data-phase={presentation.phase}
@@ -157,17 +165,35 @@ export function TargetAttentionIndicator({
       data-marimo-lens-ui
       aria-hidden={controls ? undefined : true}
     >
-      <div className="ml-target-attention__ring" style={view.ring} />
-      <div ref={labelRef} className="ml-target-attention__label" style={view.label}>
+      <div {...stylex.props(transientStyles.ring)} style={view.ring} />
+      <div
+        ref={labelRef}
+        {...stylex.props(transientStyles.attentionLabel)}
+        data-marimo-lens-target-attention-label
+        style={view.label}
+      >
         {presentation.kind === "activity" ? (
           <WorkingIndicator />
         ) : (
-          <MousePointer2 size={14} strokeWidth={2} aria-hidden="true" />
+          <MousePointer2
+            {...stylex.props(transientStyles.notificationIcon)}
+            size={14}
+            strokeWidth={2}
+            aria-hidden="true"
+          />
         )}
-        <span className="ml-target-attention__status">{status}</span>
-        {!presentation.trail && <span className="ml-target-attention__target">{targetLabel}</span>}
+        <span {...stylex.props(transientStyles.attentionStatus)} data-marimo-lens-attention-status>
+          {status}
+        </span>
+        {!presentation.trail && (
+          <span {...stylex.props(transientStyles.target)}>{targetLabel}</span>
+        )}
         {detail ? (
-          <span key={presentation.sequence} className="ml-target-attention__message">
+          <span
+            key={presentation.sequence}
+            {...stylex.props(transientStyles.attentionMessage)}
+            data-marimo-lens-attention-message
+          >
             {detail}
           </span>
         ) : null}
@@ -193,7 +219,14 @@ export function TargetAttentionFallback({
         : "Not visible");
   return (
     <div
-      className="ml-target-attention-notice"
+      {...stylex.props(
+        transientStyles.notification,
+        transientStyles.notice,
+        presentation.kind === "activity" && transientStyles.activity,
+        presentation.kind === "reveal" && transientStyles.revealNotice,
+        presentation.phase === "exiting" && transientStyles.exiting,
+        presentation.phase === "exiting" && transientStyles.exitingNotice,
+      )}
       data-marimo-lens-target-attention-notice
       data-kind={presentation.kind}
       data-phase={presentation.phase}
@@ -202,12 +235,17 @@ export function TargetAttentionFallback({
       data-marimo-lens-ui
       aria-hidden={controls ? undefined : true}
     >
-      <LocateFixed size={14} strokeWidth={2} aria-hidden="true" />
-      <span className="ml-target-attention-notice__status">{status}</span>
-      {!presentation.trail && (
-        <span className="ml-target-attention-notice__target">{targetLabel}</span>
-      )}
-      {message ? <span className="ml-target-attention-notice__message">{message}</span> : null}
+      <LocateFixed
+        {...stylex.props(transientStyles.notificationIcon)}
+        size={14}
+        strokeWidth={2}
+        aria-hidden="true"
+      />
+      <span {...stylex.props(transientStyles.noticeStatus)} data-marimo-lens-attention-status>
+        {status}
+      </span>
+      {!presentation.trail && <span {...stylex.props(transientStyles.target)}>{targetLabel}</span>}
+      {message ? <span {...stylex.props(transientStyles.noticeMessage)}>{message}</span> : null}
       {controls}
     </div>
   );
@@ -216,7 +254,7 @@ export function TargetAttentionFallback({
 function WorkingIndicator() {
   return (
     <svg
-      className="ml-working-indicator"
+      {...stylex.props(transientStyles.working, transientStyles.notificationIcon)}
       data-marimo-lens-working-indicator
       viewBox="0 0 12 12"
       fill="currentColor"
@@ -224,6 +262,10 @@ function WorkingIndicator() {
     >
       {WORKING_DOTS.map(({ index, row, column }) => (
         <circle
+          {...stylex.props(
+            transientStyles.workingDot,
+            index === 4 && transientStyles.workingDotCenter,
+          )}
           key={index}
           cx={2 + column * 4}
           cy={2 + row * 4}
@@ -242,7 +284,7 @@ export function TargetAttentionAnnouncement({
 }) {
   return (
     <output
-      className="ml-sr-status"
+      {...stylex.props(ui.visuallyHidden)}
       data-marimo-lens-target-attention-status
       aria-live="polite"
       aria-atomic="true"

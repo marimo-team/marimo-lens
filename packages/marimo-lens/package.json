@@ -11,6 +11,7 @@
     "@marimo-lens/widget": "workspace:*"
   },
   "devDependencies": {
+    "@stylexjs/unplugin": "catalog:",
     "esbuild": "catalog:"
   }
 }

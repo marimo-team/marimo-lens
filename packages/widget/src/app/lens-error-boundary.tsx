@@ -1,4 +1,10 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import * as stylex from "@stylexjs/stylex";
+import { Component, type ContextType, type ErrorInfo, type ReactNode } from "react";
+
+import { LensThemeContext } from "@/ui/theme";
+
+import { rootStyles } from "../styles/root";
+import { darkTheme, lightTheme } from "../styles/tokens.stylex";
 
 type LensErrorBoundaryProps = {
   children: ReactNode;
@@ -9,6 +15,8 @@ type LensErrorBoundaryState = {
 };
 
 export class LensErrorBoundary extends Component<LensErrorBoundaryProps, LensErrorBoundaryState> {
+  static contextType = LensThemeContext;
+  declare context: ContextType<typeof LensThemeContext>;
   state: LensErrorBoundaryState = { error: null };
 
   static getDerivedStateFromError(error: Error): LensErrorBoundaryState {
@@ -22,7 +30,15 @@ export class LensErrorBoundary extends Component<LensErrorBoundaryProps, LensErr
   render() {
     if (this.state.error) {
       return (
-        <div className="marimo_lens" data-marimo-lens-error role="alert">
+        <div
+          {...stylex.props(
+            rootStyles.base,
+            rootStyles.error,
+            this.context === "dark" ? darkTheme : lightTheme,
+          )}
+          data-marimo-lens-error
+          role="alert"
+        >
           marimo-lens render failed: {this.state.error.message}
         </div>
       );

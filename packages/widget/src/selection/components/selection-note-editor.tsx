@@ -1,5 +1,6 @@
 import type { Selection, TargetSelector } from "@marimo-lens/protocol";
 
+import * as stylex from "@stylexjs/stylex";
 import { Trash2 } from "lucide-react";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
@@ -7,7 +8,10 @@ import { useNotebookDom } from "@/notebook/notebook-dom";
 import { anchorToViewport } from "@/selection/anchor";
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
 import { selectionTitle } from "@/selection/selection-description";
+import { buttonStyles, iconButtonStyles, ui } from "@/styles/primitives";
 import { useAnchoredSurface, type AnchoredSurfaceAnchor } from "@/ui/anchored-surface";
+
+import { noteEditorStyles } from "./selection-note-editor.styles";
 
 type SelectionNoteEditorProps = {
   selection: Selection;
@@ -75,7 +79,11 @@ export function SelectionNoteEditor({
   return (
     <dialog
       ref={surfaceRef}
-      className="ml-note-editor"
+      {...stylex.props(
+        noteEditorStyles.editor,
+        position.placement === "above" ? noteEditorStyles.above : noteEditorStyles.below,
+        motion === "instant" ? noteEditorStyles.instant : noteEditorStyles.animated,
+      )}
       style={{ inset: "auto", ...position.style }}
       data-placement={position.placement}
       data-instant={motion === "instant" ? "true" : "false"}
@@ -111,22 +119,22 @@ export function SelectionNoteEditor({
         }
       }}
     >
-      <header className="ml-note-editor__header">
-        <span className="ml-note-editor__selection ml-code">{selection.label}</span>
+      <header {...stylex.props(noteEditorStyles.header)}>
+        <span {...stylex.props(ui.mono, noteEditorStyles.selection)}>{selection.label}</span>
         <span aria-hidden="true">·</span>
-        <span className="ml-note-editor__target" title={selectionTitle(selection)}>
-          <span className="ml-code">{selection.description.label}</span>
+        <span {...stylex.props(noteEditorStyles.target)} title={selectionTitle(selection)}>
+          <span {...stylex.props(ui.mono)}>{selection.description.label}</span>
         </span>
-        <SelectionKindMark kind={selection.anchor.kind} />
+        <SelectionKindMark kind={selection.anchor.kind} push />
       </header>
 
-      <label className="ml-visually-hidden" htmlFor={fieldId}>
+      <label {...stylex.props(ui.visuallyHidden)} htmlFor={fieldId}>
         Note for selection {selection.label}
       </label>
       <textarea
         id={fieldId}
         ref={textareaRef}
-        className="ml-note-editor__input"
+        {...stylex.props(noteEditorStyles.input)}
         value={draft}
         maxLength={4_000}
         rows={3}
@@ -138,14 +146,14 @@ export function SelectionNoteEditor({
       />
 
       {saveError ? (
-        <p id={errorId} className="ml-note-editor__error" role="alert">
+        <p {...stylex.props(noteEditorStyles.error)} id={errorId} role="alert">
           {saveError}
         </p>
       ) : null}
 
-      <footer className="ml-note-editor__footer">
+      <footer {...stylex.props(noteEditorStyles.footer)}>
         <button
-          className="ml-icon-button ml-icon-button--danger"
+          {...stylex.props(...iconButtonStyles, ui.danger)}
           type="button"
           onClick={onDelete}
           disabled={mutationPending}
@@ -154,12 +162,17 @@ export function SelectionNoteEditor({
         >
           <Trash2 size={14} aria-hidden="true" />
         </button>
-        <span className="ml-note-editor__actions">
-          <button className="ml-button" type="button" onClick={onCancel} disabled={mutationPending}>
+        <span {...stylex.props(noteEditorStyles.actions)}>
+          <button
+            {...stylex.props(...buttonStyles)}
+            type="button"
+            onClick={onCancel}
+            disabled={mutationPending}
+          >
             Cancel
           </button>
           <button
-            className="ml-button ml-button--primary"
+            {...stylex.props(...buttonStyles, ui.primary)}
             type="button"
             onClick={() => onSave(draft)}
             disabled={mutationPending}

@@ -2,6 +2,7 @@ import { rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { build, context } from "esbuild";
+import stylex from "@stylexjs/unplugin/esbuild";
 
 const packageRoot = fileURLToPath(new URL(".", import.meta.url));
 const outputDirectory = fileURLToPath(
@@ -22,6 +23,7 @@ const options = {
   },
   minify: true,
   outdir: outputDirectory,
+  plugins: [stylex({ useCSSLayers: true })],
   sourcemap: watch ? "inline" : false,
 };
 

@@ -1,9 +1,10 @@
 import type { Selection } from "@marimo-lens/protocol";
 
-import { act } from "react";
+import { act, Profiler } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
+import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import { documentIdentity } from "@/notebook/selection-target";
 import { SelectionList } from "@/selection/components/selection-list";
 import { SelectionOverlay } from "@/selection/components/selection-overlay";
@@ -15,96 +16,44 @@ import { NotebookDomTestProvider } from "../support/notebook-dom";
 
 let root: Root | null = null;
 
+beforeEach(() => vi.useFakeTimers());
+
 afterEach(() => {
   act(() => root?.unmount());
   root = null;
   document.body.replaceChildren();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("target availability", () => {
-  test("observes the document only while selections reference outputs", () => {
-    const NativeMutationObserver = window.MutationObserver;
-    const observe = vi.fn<MutationObserver["observe"]>();
-    const disconnect = vi.fn<MutationObserver["disconnect"]>();
-    const requestAnimationFrame = vi.fn(() => 1);
-    const observers: TestMutationObserver[] = [];
-    class TestMutationObserver implements MutationObserver {
-      readonly callback: MutationCallback;
-
-      constructor(callback: MutationCallback) {
-        this.callback = callback;
-        observers.push(this);
-      }
-
-      observe = observe;
-      disconnect = disconnect;
-
-      takeRecords(): MutationRecord[] {
-        return [];
-      }
-    }
-    const MutationObserverStub = vi.fn(TestMutationObserver);
-    vi.stubGlobal("MutationObserver", MutationObserverStub);
-    vi.stubGlobal("requestAnimationFrame", requestAnimationFrame);
-
+  test("subscribes while selections exist and releases the subscription when cleared", () => {
+    const release = vi.fn();
+    const subscribe = vi
+      .spyOn(NotebookDomAdapter.prototype, "subscribeLayout")
+      .mockReturnValue(release);
     const container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
-
-    act(() =>
-      root?.render(
-        <NotebookDomTestProvider>
-          <AvailabilityProbe selections={[]} />
-        </NotebookDomTestProvider>,
-      ),
-    );
-    expect(MutationObserverStub).not.toHaveBeenCalled();
-
-    act(() =>
-      root?.render(
-        <NotebookDomTestProvider>
-          <AvailabilityProbe selections={[selectionFixture()]} />
-        </NotebookDomTestProvider>,
-      ),
-    );
-    expect(MutationObserverStub).toHaveBeenCalledOnce();
-    expect(observe).toHaveBeenCalledWith(document.body, {
-      attributes: true,
-      childList: true,
-      subtree: true,
-    });
-
-    const recordObserver = new NativeMutationObserver(() => {});
-    recordObserver.observe(document.body, { childList: true });
-    setupOutput("cell-1");
-    const record = recordObserver.takeRecords()[0];
-    recordObserver.disconnect();
-    const activeObserver = observers[0];
-    if (!record || !activeObserver) {
-      throw new Error("Mutation observer fixture must capture the appended output");
-    }
-    act(() => {
-      activeObserver.callback([record], activeObserver);
-      activeObserver.callback([record], activeObserver);
-    });
-    expect(requestAnimationFrame).toHaveBeenCalledOnce();
-
-    act(() =>
-      root?.render(
-        <NotebookDomTestProvider>
-          <AvailabilityProbe selections={[]} />
-        </NotebookDomTestProvider>,
-      ),
-    );
-    expect(disconnect).toHaveBeenCalledOnce();
+    const render = (selections: Selection[]) =>
+      act(() =>
+        root?.render(
+          <NotebookDomTestProvider>
+            <AvailabilityProbe selections={selections} />
+          </NotebookDomTestProvider>,
+        ),
+      );
+    render([]);
+    expect(subscribe).not.toHaveBeenCalled();
+    render([selectionFixture()]);
+    expect(subscribe).toHaveBeenCalledOnce();
+    render([]);
+    expect(release).toHaveBeenCalledOnce();
   });
 
   test("updates all selections on one output while preserving other targets", async () => {
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      return window.setTimeout(() => callback(performance.now()), 0);
-    });
-    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
+    const commit = vi.fn();
     const first = selectionFixture();
     const second = selectionFixture({ id: "second", label: "S2" });
     const other = selectionFixture({
@@ -120,11 +69,18 @@ describe("target availability", () => {
     act(() =>
       root?.render(
         <NotebookDomTestProvider>
-          <AvailabilityProbe selections={[first, second, other]} />
+          <Profiler id="availability" onRender={commit}>
+            <AvailabilityProbe selections={[first, second, other]} />
+          </Profiler>
         </NotebookDomTestProvider>,
       ),
     );
     expect(container.textContent).toBe("3");
+    const commits = commit.mock.calls.length;
+    await mutateDocument(() => {
+      output.textContent = "Streaming output";
+    });
+    expect(commit).toHaveBeenCalledTimes(commits);
     await mutateDocument(() => output.remove());
     expect(container.textContent).toBe("1");
     await mutateDocument(() => document.body.append(output));
@@ -132,11 +88,6 @@ describe("target availability", () => {
   });
 
   test("detaches when its exact output disappears and reattaches only to the same cell id", async () => {
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      return window.setTimeout(() => callback(performance.now()), 0);
-    });
-    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
-
     const selection = selectionFixture();
     const output = setupOutput(selection.target.cellIds[0]!);
     const container = document.createElement("div");
@@ -151,30 +102,26 @@ describe("target availability", () => {
       ),
     );
     expect(marker(selection)).not.toBeNull();
-    expect(document.querySelector(".ml-selection-list__availability")).toBeNull();
+    expect(document.querySelector("[data-marimo-lens-target-unavailable]")).toBeNull();
 
     await mutateDocument(() => output.remove());
     expect(marker(selection)).toBeNull();
-    expect(document.querySelector(".ml-selection-list__availability")?.textContent).toBe(
+    expect(document.querySelector("[data-marimo-lens-target-unavailable]")?.textContent).toBe(
       "Target unavailable",
     );
 
     await mutateDocument(() => setupOutput("another-cell"));
     expect(marker(selection)).toBeNull();
-    expect(document.querySelector(".ml-selection-list__availability")?.textContent).toBe(
+    expect(document.querySelector("[data-marimo-lens-target-unavailable]")?.textContent).toBe(
       "Target unavailable",
     );
 
     await mutateDocument(() => setupOutput(selection.target.cellIds[0]!));
     expect(marker(selection)?.textContent).toBe(selection.label);
-    expect(document.querySelector(".ml-selection-list__availability")).toBeNull();
+    expect(document.querySelector("[data-marimo-lens-target-unavailable]")).toBeNull();
   });
 
   test("reattaches when ResizeObserver reports visible output dimensions", async () => {
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      return window.setTimeout(() => callback(performance.now()), 0);
-    });
-    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
     const resizeObservers: TestResizeObserver[] = [];
     class TestResizeObserver implements ResizeObserver {
       readonly callback: ResizeObserverCallback;
@@ -214,16 +161,13 @@ describe("target availability", () => {
         throw new Error("Resize observer fixture must be connected");
       }
       activeResizeObserver.callback([], activeResizeObserver);
-      await new Promise((resolve) => window.setTimeout(resolve, 5));
+      await Promise.resolve();
+      vi.advanceTimersToNextFrame();
     });
     expect(container.textContent).toBe("1");
   });
 
   test("updates configured target availability after producer metadata changes", async () => {
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      return window.setTimeout(() => callback(performance.now()), 0);
-    });
-    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
     const target = document.createElement("section");
     target.id = "summary";
     target.dataset.marimoLensCellId = "cell-1";
@@ -324,7 +268,8 @@ function setupOutput(outputCellId: string): HTMLElement {
 async function mutateDocument(mutation: () => void): Promise<void> {
   await act(async () => {
     mutation();
-    await new Promise((resolve) => window.setTimeout(resolve, 5));
+    await Promise.resolve();
+    vi.advanceTimersToNextFrame();
   });
 }
 

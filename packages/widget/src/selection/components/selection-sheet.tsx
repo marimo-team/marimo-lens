@@ -1,6 +1,7 @@
 import type { AddressedSelection, Selection } from "@marimo-lens/protocol";
 import type { KeyboardEvent, ReactNode } from "react";
 
+import * as stylex from "@stylexjs/stylex";
 import { LoaderCircle, MoreHorizontal, Trash2, X } from "lucide-react";
 
 import type { RevealMotion } from "@/selection/reveal";
@@ -9,6 +10,9 @@ import type { SelectionSheetTab } from "@/selection/state";
 
 import { HistoryList } from "@/selection/components/history-list";
 import { SelectionList } from "@/selection/components/selection-list";
+import { iconButtonStyles, ui } from "@/styles/primitives";
+
+import { sheetStyles } from "./selection-sheet.styles";
 
 type SelectionSheetProps = {
   activeTab: SelectionSheetTab;
@@ -73,30 +77,35 @@ export function SelectionSheet({
   return (
     <section
       id="marimo-lens-selection-list"
-      className="ml-sheet ml-selection-sheet"
+      {...stylex.props(sheetStyles.sheet)}
       data-marimo-lens-selection-list
       data-marimo-lens-ui
       aria-labelledby="marimo-lens-selection-list-title"
     >
-      <header className="ml-sheet__header">
-        <div className="ml-sheet__identity">
-          <h2 id="marimo-lens-selection-list-title">Selections</h2>
+      <header {...stylex.props(sheetStyles.header)}>
+        <div {...stylex.props(sheetStyles.identity)}>
+          <h2 {...stylex.props(sheetStyles.title)} id="marimo-lens-selection-list-title">
+            Selections
+          </h2>
         </div>
-        <div className="ml-sheet__actions">
+        <div {...stylex.props(sheetStyles.actions)}>
           {history.length > 0 ? (
-            <details className="ml-sheet-overflow">
-              <summary className="ml-icon-button" aria-label="Selection options">
+            <details {...stylex.props(sheetStyles.overflow)}>
+              <summary
+                {...stylex.props(...iconButtonStyles, sheetStyles.overflowSummary)}
+                aria-label="Selection options"
+              >
                 <MoreHorizontal size={16} aria-hidden="true" />
               </summary>
-              <div className="ml-sheet-overflow__menu">
+              <div {...stylex.props(sheetStyles.overflowMenu)}>
                 <button
-                  className="ml-sheet-overflow__action ml-sheet-overflow__action--danger"
+                  {...stylex.props(sheetStyles.overflowAction, sheetStyles.overflowDanger)}
                   type="button"
                   disabled={clearingHistory || busySelectionIds.size > 0}
                   onClick={onClearHistory}
                 >
                   {clearingHistory ? (
-                    <LoaderCircle className="ml-spin" size={14} aria-hidden="true" />
+                    <LoaderCircle {...stylex.props(ui.spin)} size={14} aria-hidden="true" />
                   ) : (
                     <Trash2 size={14} aria-hidden="true" />
                   )}
@@ -106,7 +115,7 @@ export function SelectionSheet({
             </details>
           ) : null}
           <button
-            className="ml-icon-button"
+            {...stylex.props(...iconButtonStyles)}
             type="button"
             onClick={onClose}
             aria-label="Close selections"
@@ -116,10 +125,10 @@ export function SelectionSheet({
         </div>
       </header>
 
-      <div className="ml-selection-sheet__tabs" role="tablist" aria-label="Selection status">
+      <div {...stylex.props(sheetStyles.tabs)} role="tablist" aria-label="Selection status">
         <button
           id="marimo-lens-open-tab"
-          className="ml-selection-sheet__tab"
+          {...stylex.props(sheetStyles.tab, activeTab === "open" && sheetStyles.tabSelected)}
           type="button"
           role="tab"
           aria-selected={activeTab === "open"}
@@ -129,11 +138,11 @@ export function SelectionSheet({
           onClick={() => onTabChange("open")}
           onKeyDown={changeTabFromKeyboard}
         >
-          Open <span>{selections.length}</span>
+          Open <span {...stylex.props(sheetStyles.tabCount)}>{selections.length}</span>
         </button>
         <button
           id="marimo-lens-history-tab"
-          className="ml-selection-sheet__tab"
+          {...stylex.props(sheetStyles.tab, activeTab === "history" && sheetStyles.tabSelected)}
           type="button"
           role="tab"
           aria-selected={activeTab === "history"}
@@ -143,15 +152,19 @@ export function SelectionSheet({
           onClick={() => onTabChange("history")}
           onKeyDown={changeTabFromKeyboard}
         >
-          History <span>{history.length}</span>
+          History <span {...stylex.props(sheetStyles.tabCount)}>{history.length}</span>
         </button>
       </div>
 
-      {notice ? <div className="ml-selection-list__notice">{notice}</div> : null}
+      {notice ? (
+        <div {...stylex.props(sheetStyles.notice)} data-marimo-lens-sheet-notice>
+          {notice}
+        </div>
+      ) : null}
 
       <div
         id="marimo-lens-open-panel"
-        className="ml-selection-sheet__panel"
+        {...stylex.props(sheetStyles.panel)}
         role="tabpanel"
         aria-labelledby="marimo-lens-open-tab"
         hidden={activeTab !== "open"}
@@ -172,7 +185,7 @@ export function SelectionSheet({
       </div>
       <div
         id="marimo-lens-history-panel"
-        className="ml-selection-sheet__panel"
+        {...stylex.props(sheetStyles.panel)}
         role="tabpanel"
         aria-labelledby="marimo-lens-history-tab"
         hidden={activeTab !== "history"}

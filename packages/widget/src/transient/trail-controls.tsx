@@ -1,11 +1,15 @@
 import type { KeyboardEvent } from "react";
 
+import * as stylex from "@stylexjs/stylex";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import type { TrailNavigation } from "@/transient/target-attention";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
+import { iconButtonStyles } from "@/styles/primitives";
 import { focusDock } from "@/ui/focus";
+
+import { transientStyles } from "./transient.styles";
 
 export function TrailControls({ trail }: { trail: TrailNavigation }) {
   const dom = useNotebookDom();
@@ -25,14 +29,18 @@ export function TrailControls({ trail }: { trail: TrailNavigation }) {
   };
   return (
     <nav
-      className="ml-trail-controls"
+      {...stylex.props(transientStyles.trail)}
       aria-label={trail.count > 1 ? "Walkthrough steps" : "Reveal controls"}
       data-marimo-lens-ui
     >
       {trail.count > 1 && (
         <>
           <button
-            className="ml-icon-button"
+            {...stylex.props(
+              ...iconButtonStyles,
+              transientStyles.trailButton,
+              trail.index === 0 && transientStyles.trailButtonDisabled,
+            )}
             type="button"
             aria-label="Previous trail step"
             aria-disabled={trail.index === 0}
@@ -44,11 +52,15 @@ export function TrailControls({ trail }: { trail: TrailNavigation }) {
           >
             <ChevronLeft size={12} aria-hidden="true" />
           </button>
-          <span className="ml-trail-controls__count">
+          <span {...stylex.props(transientStyles.trailCount)}>
             {trail.index + 1} / {trail.count}
           </span>
           <button
-            className="ml-icon-button"
+            {...stylex.props(
+              ...iconButtonStyles,
+              transientStyles.trailButton,
+              trail.index === trail.count - 1 && transientStyles.trailButtonDisabled,
+            )}
             type="button"
             aria-label="Next trail step"
             aria-disabled={trail.index === trail.count - 1}
@@ -63,7 +75,7 @@ export function TrailControls({ trail }: { trail: TrailNavigation }) {
         </>
       )}
       <button
-        className="ml-icon-button"
+        {...stylex.props(...iconButtonStyles, transientStyles.trailButton)}
         type="button"
         aria-label={trail.count > 1 ? "End trail" : "Dismiss reveal"}
         onKeyDown={onKeyDown}

@@ -51,6 +51,8 @@ export class NotebookDomAdapter {
   #selector: TargetSelector = null;
   #uiRoot: ShadowRoot | null = null;
   #stopLayoutObserver: (() => void) | null = null;
+  #contentRevision = 0;
+  readonly #contentRevisions = new WeakMap<HTMLElement, number>();
 
   constructor(ownerDocument: Document) {
     this.document = ownerDocument;
@@ -112,6 +114,11 @@ export class NotebookDomAdapter {
 
   listTargets(selector: TargetSelector): TargetSurface[] {
     return listTargetSurfaces(this.document, selector);
+  }
+
+  contentRevision(target: HTMLElement): number {
+    // Geometry-only updates retain the descendant chosen for a scroll attachment.
+    return this.#contentRevisions.get(target) ?? 0;
   }
 
   getOutputCell(outputCellId: string): OutputCell | null {
@@ -240,8 +247,16 @@ export class NotebookDomAdapter {
       schedule();
     };
 
-    this.window.addEventListener("resize", schedule);
-    this.window.addEventListener("scroll", schedule, true);
+    const resized = () => {
+      invalidateContent();
+      schedule();
+    };
+    const scrolled = (event: Event) => {
+      if (event.target instanceof this.window.Element) invalidateContent([event.target]);
+      schedule();
+    };
+    this.window.addEventListener("resize", resized);
+    this.window.addEventListener("scroll", scrolled, true);
 
     const inDomRegion = (node: Node) => {
       if (!(node instanceof this.window.Element)) return false;
@@ -254,6 +269,19 @@ export class NotebookDomAdapter {
     };
     const observedOutputs = new Set<HTMLElement>();
     const observedShadows = new Set<ShadowRoot>();
+    const invalidateContent = (targets?: readonly Node[]) => {
+      const revision = ++this.#contentRevision;
+      for (const output of observedOutputs) {
+        if (
+          !targets ||
+          targets.some(
+            (target) => containsOpenTree(output, target) || containsOpenTree(target, output),
+          )
+        ) {
+          this.#contentRevisions.set(output, revision);
+        }
+      }
+    };
     const MutationObserverClass = this.window.MutationObserver;
     const mutationObserver = MutationObserverClass
       ? new MutationObserverClass((records) => {
@@ -278,6 +306,7 @@ export class NotebookDomAdapter {
               return currentTargets.some(related);
             });
           if (!affectsTargets) return;
+          invalidateContent(records.length === 0 ? undefined : records.map(({ target }) => target));
           const topologyChanged =
             records.length === 0 ||
             records.some(
@@ -298,30 +327,34 @@ export class NotebookDomAdapter {
       subtree: true,
     } satisfies MutationObserverInit;
     const ResizeObserverClass = this.window.ResizeObserver;
-    const resizeObserver = ResizeObserverClass ? new ResizeObserverClass(schedule) : null;
+    const resizeObserver = ResizeObserverClass
+      ? new ResizeObserverClass((entries) => {
+          invalidateContent(entries.length === 0 ? undefined : entries.map(({ target }) => target));
+          schedule();
+        })
+      : null;
     const syncTopology = () => {
-      if (resizeObserver) {
-        const outputs = new Set([
-          ...listOutputRoots(this.document).map((output) => output.element),
-          ...this.listTargets(this.#selector).map((target) => target.element),
-        ]);
-        for (const output of observedOutputs) {
-          if (outputs.has(output)) continue;
-          resizeObserver.unobserve(output);
-          observedOutputs.delete(output);
-        }
-        for (const output of outputs) {
-          if (observedOutputs.has(output)) continue;
-          observedOutputs.add(output);
-          resizeObserver.observe(output);
-        }
+      const outputs = new Set([
+        ...listOutputRoots(this.document).map((output) => output.element),
+        ...this.listTargets(this.#selector).map((target) => target.element),
+      ]);
+      for (const output of observedOutputs) {
+        if (outputs.has(output)) continue;
+        resizeObserver?.unobserve(output);
+        observedOutputs.delete(output);
+      }
+      for (const output of outputs) {
+        if (observedOutputs.has(output)) continue;
+        observedOutputs.add(output);
+        this.#contentRevisions.set(output, this.#contentRevision);
+        resizeObserver?.observe(output);
       }
 
       const shadows = new Set(listOpenShadowRoots(this.document.body));
       let removedShadow = false;
       for (const shadow of observedShadows) {
         if (shadows.has(shadow)) continue;
-        shadow.removeEventListener("scroll", schedule, true);
+        shadow.removeEventListener("scroll", scrolled, true);
         observedShadows.delete(shadow);
         removedShadow = true;
       }
@@ -330,7 +363,7 @@ export class NotebookDomAdapter {
         if (observedShadows.has(shadow)) continue;
         observedShadows.add(shadow);
         addedShadows.push(shadow);
-        shadow.addEventListener("scroll", schedule, true);
+        shadow.addEventListener("scroll", scrolled, true);
       }
       if (removedShadow) {
         mutationObserver?.disconnect();
@@ -354,11 +387,11 @@ export class NotebookDomAdapter {
       resizeObserver?.disconnect();
       observedOutputs.clear();
       for (const shadow of observedShadows) {
-        shadow.removeEventListener("scroll", schedule, true);
+        shadow.removeEventListener("scroll", scrolled, true);
       }
       observedShadows.clear();
-      this.window.removeEventListener("resize", schedule);
-      this.window.removeEventListener("scroll", schedule, true);
+      this.window.removeEventListener("resize", resized);
+      this.window.removeEventListener("scroll", scrolled, true);
     };
   }
 }

@@ -162,6 +162,10 @@ document:
 One shared layout subscription coordinates document scroll, nested scroll,
 window resize, output resize, target resize, and output-tree changes. Anchored
 surfaces use that subscription for placement and viewport clamping.
+The adapter tracks content revisions per target so markers can reuse hit-test
+attachments during unrelated updates. Scrolling still reprojects each anchor,
+and target content or size changes refresh its attachment. Availability snapshots
+remain stable while the available selection IDs are unchanged.
 
 Keep target discovery in `notebook/selection-target.ts`, canonical output
 discovery in `notebook/output-root*.ts`, and document operations in
@@ -171,17 +175,29 @@ query or ambient global.
 ## UI style isolation
 
 The active UI lives in an open shadow root under the owning document body.
-The shadow stylesheet resets inherited typography and sets the color scheme.
-Lens consumes Marimo's Slate palette tokens, with local light and dark defaults.
-Theme changes on the body and document element update the shadow host.
+Typed StyleX modules own component styles, variants, media queries, and theme
+tokens. The extracted stylesheet resets inherited typography and sets the color
+scheme. Lens consumes Marimo's Slate palette tokens, with local light and dark
+defaults. `LensViewOwner` observes theme changes on the body and document element
+and shares the theme with the portal, conflict notice, and error boundary.
 Document-level keyboard handling reads composed event paths, and focus restoration
 uses the explicitly registered UI root and follows its active element.
-`createLensSurface()` owns the host, theme observer, shared document styles,
+`createLensSurface()` owns the host, shared document styles,
 and disposal. The portal registers that root with `NotebookDomAdapter`.
+`LensDock` owns one positioned panel for the selection sheet or a transient
+notice. `widget.css` contains the host reset and panel geometry driven by
+`useDockPosition`. The selection sheet owns scrolling for its notice and lists.
 
-The dock follows the visible intersection of that surface with its embedding
-page. This keeps it inside VS Code's notebook pane, whose output webview can be
-much taller than the pane. The notebook viewport adapter refreshes that
+The portal host defaults to `z-index: 35`. This places Lens above Marimo's
+notebook and cell affordances, which reach `z-index: 30`, and below application
+panels, dialogs, menus, and toasts. An embedding
+page can set `--marimo-lens-z-index` when its overlay scale uses different
+bands. Lens components use local z-index values inside that host stacking
+context.
+
+`useDockPosition` observes the visible intersection of the portal surface with
+its embedding page. This keeps the dock inside VS Code's notebook pane, whose
+output webview can be much taller than the pane. The notebook viewport adapter refreshes that
 intersection on VS Code's `view-scroll` messages, including translations that
 preserve the intersection ratio.
 

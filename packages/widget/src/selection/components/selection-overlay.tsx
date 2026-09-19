@@ -1,5 +1,6 @@
 import type { RectAnchor, Selection, SelectionAnchor, TargetSelector } from "@marimo-lens/protocol";
 
+import * as stylex from "@stylexjs/stylex";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import type { WorkflowState } from "@/selection/state";
@@ -9,7 +10,7 @@ import { useViewportRevision } from "@/notebook/viewport";
 import {
   anchorToViewport,
   attachToNestedScroll,
-  isAnchorInsideOutputViewport,
+  isViewportAnchorInsideOutput,
   resizeRectAnchor,
   type ScrollAttachment,
   translateAnchor,
@@ -17,6 +18,9 @@ import {
 } from "@/selection/anchor";
 import { previewAnchor } from "@/selection/state";
 import { TargetInfoLabel } from "@/ui/components/target-info";
+
+import { ui } from "../../styles/primitives";
+import { overlayStyles } from "./selection-overlay.styles";
 
 type SelectionOverlayProps = {
   selections: Selection[];
@@ -70,13 +74,18 @@ export function SelectionOverlay({
   const draftAnchor = previewAnchor(workflow);
 
   return (
-    <div className="ml-overlay" data-marimo-lens-ui data-armed={interactionActive}>
+    <div
+      {...stylex.props(overlayStyles.overlay)}
+      data-marimo-lens-ui
+      data-armed={interactionActive}
+    >
       {workflow.mode === "armed" && activeTarget && activeBounds && (
         <TargetInfoLabel target={activeTarget} bounds={activeBounds} />
       )}
       {activeBounds ? (
         <div
-          className="ml-output-highlight"
+          {...stylex.props(overlayStyles.fixedAnchor, overlayStyles.outputHighlight)}
+          data-marimo-lens-output-highlight
           style={{
             left: activeBounds.left,
             top: activeBounds.top,
@@ -119,7 +128,11 @@ function AnchorPreview({ output, anchor }: { output: HTMLElement; anchor: Select
   const viewport = anchorToViewport(output, anchor);
   return (
     <div
-      className="ml-anchor-preview"
+      {...stylex.props(
+        overlayStyles.fixedAnchor,
+        overlayStyles.anchorPreview,
+        anchor.kind === "point" ? overlayStyles.anchorPoint : overlayStyles.anchorRect,
+      )}
       data-kind={anchor.kind}
       style={anchorStyle(viewport)}
       aria-hidden="true"
@@ -188,11 +201,22 @@ function SelectionMarker({
     [releaseAdjustment],
   );
 
-  if (!isAnchorInsideOutputViewport(output, displayedAnchor, attachment)) return null;
+  if (!isViewportAnchorInsideOutput(output, viewport, attachment)) return null;
 
   const marker = (
     <button
-      className="ml-marker"
+      {...stylex.props(
+        ui.interactive,
+        overlayStyles.marker,
+        selection.anchor.kind === "point" ? overlayStyles.point : overlayStyles.rect,
+        current &&
+          (selection.anchor.kind === "point"
+            ? overlayStyles.pointCurrent
+            : overlayStyles.rectCurrent),
+        busy && selection.anchor.kind === "point" && overlayStyles.busy,
+        capturing && overlayStyles.capturing,
+        !interactionEnabled && overlayStyles.markerBlocked,
+      )}
       data-kind={selection.anchor.kind}
       data-current={current ? "true" : "false"}
       data-busy={busy ? "true" : "false"}
@@ -284,7 +308,14 @@ function SelectionMarker({
         setPreview(null);
       }}
     >
-      <span>{selection.label}</span>
+      <span
+        {...stylex.props(
+          selection.anchor.kind === "rect" && overlayStyles.rectLabel,
+          selection.anchor.kind === "rect" && current && overlayStyles.rectLabelCurrent,
+        )}
+      >
+        {selection.label}
+      </span>
     </button>
   );
 
@@ -295,7 +326,8 @@ function SelectionMarker({
 
   return (
     <div
-      className="ml-rect-marker"
+      {...stylex.props(overlayStyles.rectContainer, busy && overlayStyles.busy)}
+      data-marimo-lens-rect-marker
       data-current={current ? "true" : "false"}
       data-busy={busy ? "true" : "false"}
       style={anchorStyle(viewport)}
@@ -324,6 +356,7 @@ function SelectionMarker({
 type ScrollAttachmentState = {
   output: HTMLElement;
   anchor: string;
+  contentRevision: number;
   target: Element | null;
   attachment: ScrollAttachment;
 };
@@ -338,6 +371,7 @@ function createScrollAttachmentState(
   return {
     output,
     anchor: anchorKey,
+    contentRevision: dom.contentRevision(output),
     target,
     attachment: target
       ? attachToNestedScroll(output, target)
@@ -353,11 +387,12 @@ function refreshScrollAttachmentState(
   anchorKey: string,
 ): ScrollAttachmentState {
   const reset = current.output !== output || current.anchor !== anchorKey;
+  const contentRevision = dom.contentRevision(output);
   const target =
     reset ||
     current.target === null ||
     !current.target.isConnected ||
-    current.attachment.frames.length === 0
+    (current.attachment.frames.length === 0 && current.contentRevision !== contentRevision)
       ? attachmentTarget(dom, output, anchor)
       : current.target;
   const attachment = target
@@ -365,6 +400,7 @@ function refreshScrollAttachmentState(
     : { frames: [], ancestorBaselines: [] };
   if (
     !reset &&
+    current.contentRevision === contentRevision &&
     current.target === target &&
     hasSameScrollAttachment(current.attachment, attachment)
   ) {
@@ -373,6 +409,7 @@ function refreshScrollAttachmentState(
   return {
     output,
     anchor: anchorKey,
+    contentRevision,
     target,
     attachment,
   };
@@ -470,7 +507,8 @@ function ResizeHandleButton({
 
   return (
     <button
-      className="ml-resize-handle"
+      {...stylex.props(ui.interactive, overlayStyles.resizeHandle, overlayStyles[handle])}
+      data-marimo-lens-resize-handle
       data-handle={handle}
       type="button"
       disabled={disabled}

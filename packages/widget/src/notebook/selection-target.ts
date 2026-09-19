@@ -99,12 +99,25 @@ export function listTargetSurfaces(
   const scopedRoots = new Set<HTMLElement>();
   const positions = new Map<Element, ScopedPosition | null>();
   for (const scope of ownerDocument.querySelectorAll(TARGET_SCOPE)) {
+    const grouping = scopeSelector(scope);
+    const groups = new Set(
+      grouping
+        ? [...scope.querySelectorAll("*")].filter(
+            (node) => isHTMLElement(node) && matchesSelector(node, grouping),
+          )
+        : [],
+    );
+    for (const group of groups) {
+      const root = scopedDomRoot(group, positions);
+      if (root) scopedRoots.add(root);
+    }
     const walker = ownerDocument.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT, {
       acceptNode: (node) =>
         isElement(node) &&
         (isLensUi(node) ||
           outputCellFromRoot(node) ||
-          matchesSelector(node, DECLARED_TARGET_SELECTOR))
+          matchesSelector(node, DECLARED_TARGET_SELECTOR) ||
+          groups.has(node))
           ? NodeFilter.FILTER_REJECT
           : NodeFilter.FILTER_ACCEPT,
     });
@@ -226,15 +239,7 @@ function scopedDomRoot(
   let position = current ? (positions.get(current) ?? null) : null;
   for (const node of pending.reverse()) {
     if (isHTMLElement(node) && node.hasAttribute("data-marimo-lens-scope")) {
-      let selector = node.getAttribute("data-marimo-lens-scope")?.trim() ?? "";
-      if (selector) {
-        try {
-          node.matches(selector);
-        } catch {
-          selector = "";
-        }
-      }
-      position = { scope: node, selector, group: null, block: null };
+      position = { scope: node, selector: scopeSelector(node), group: null, block: null };
     } else if (
       !position ||
       isLensUi(node) ||
@@ -256,6 +261,17 @@ function scopedDomRoot(
     positions.set(node, position);
   }
   return position ? (position.group ?? position.block ?? position.scope) : null;
+}
+
+function scopeSelector(scope: Element): string {
+  const selector = scope.getAttribute("data-marimo-lens-scope")?.trim() ?? "";
+  if (!selector) return "";
+  try {
+    scope.matches(selector);
+    return selector;
+  } catch {
+    return "";
+  }
 }
 
 function domTarget(

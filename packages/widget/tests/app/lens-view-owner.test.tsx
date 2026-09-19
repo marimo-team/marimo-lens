@@ -16,27 +16,16 @@ afterEach(() => {
 });
 
 describe("Lens view ownership", () => {
-  test("gives the first view ownership and reports every later view as a conflict", () => {
-    renderView("first");
-    renderView("second");
-    renderView("third");
-
-    expect(activeViews()).toEqual(["first"]);
-    expect(document.querySelectorAll("[data-marimo-lens-host]")).toHaveLength(3);
-    const conflicts = document.querySelectorAll("output[data-marimo-lens-view-conflict]");
-    expect(conflicts).toHaveLength(2);
-    expect(conflicts[0]?.textContent).toBe(
-      "Lens is already activeUse the existing Lens instance in this notebook.",
-    );
-  });
-
-  test("hands ownership to the next view and releases it after teardown", () => {
+  test("reports conflicts, transfers ownership, and releases it after teardown", () => {
     const first = renderView("first");
     const second = renderView("second");
     const third = renderView("third");
 
     expect(activeViews()).toEqual(["first"]);
     expect(document.querySelectorAll("[data-marimo-lens-view-conflict]")).toHaveLength(2);
+    const message = document.querySelector("[data-marimo-lens-view-conflict]")?.textContent;
+    expect(message).toContain("Lens is already active");
+    expect(message).toContain("Use the existing Lens instance in this notebook.");
 
     unmount(first);
     expect(activeViews()).toEqual(["second"]);
@@ -73,7 +62,7 @@ describe("Lens view ownership", () => {
     act(() =>
       root.render(
         <LensViewOwner>
-          <LensPortal css=".secondary-lens {}">
+          <LensPortal css=".marimo_lens { color: blue; }">
             <span data-secondary-lens>Lens</span>
           </LensPortal>
         </LensViewOwner>,
@@ -84,7 +73,10 @@ describe("Lens view ownership", () => {
     const shadow = secondaryDocument.querySelector("[data-marimo-lens-portal]")!.shadowRoot!;
     expect(shadow.querySelector("[data-secondary-lens]")?.textContent).toBe("Lens");
     expect(shadow.ownerDocument).toBe(secondaryDocument);
-    expect(shadow.querySelector("style")?.textContent).toBe(".secondary-lens {}");
+    expect(shadow.querySelector("style")?.textContent).toBe(".marimo_lens { color: blue; }");
+    expect(shadow.querySelector(".marimo_lens")).toBe(
+      shadow.querySelector("[data-marimo-lens-root]"),
+    );
 
     unmount(root);
     expect(shadow.host.isConnected).toBe(false);

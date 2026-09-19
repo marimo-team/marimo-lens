@@ -321,10 +321,10 @@ test("custom regions retain symbolic sources through kernel context and reject r
     .evaluate((element) => element.setAttribute("data-marimo-lens-label", "Updated label"));
   await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
   await expect(page.getByRole("button", { name: /Current selection S1,/ })).toBeVisible();
-  await expect(page.locator(".ml-selection-list__details small")).toContainText(
+  await expect(page.locator("[data-marimo-lens-selection-metadata]")).toContainText(
     "Revenue visibility",
   );
-  await expect(page.locator(".ml-selection-list__details small")).toHaveAttribute(
+  await expect(page.locator("[data-marimo-lens-selection-metadata]")).toHaveAttribute(
     "title",
     new RegExp(`show_revenue.value.*Cell ${cellId}`),
   );
@@ -337,9 +337,11 @@ test("custom regions retain symbolic sources through kernel context and reject r
   await page.getByRole("button", { name: "Close selections" }).click();
   await runAction(page, "Resolve");
   await page.getByRole("button", { name: "Open selections, 0 open, 1 in history" }).click();
-  await expect(page.locator(".ml-history-list__target")).toContainText("Revenue visibility");
+  await expect(page.locator("[data-marimo-lens-history-target]")).toContainText(
+    "Revenue visibility",
+  );
   await page.getByRole("button", { name: "Reopen S1", exact: true }).click();
-  await expect(page.locator(".ml-selection-list__details small")).toContainText(
+  await expect(page.locator("[data-marimo-lens-selection-metadata]")).toContainText(
     "Revenue visibility",
   );
   // A changed input signature invalidates the target even when its element stays mounted.
@@ -498,6 +500,45 @@ test("Lens controls retain their appearance and keyboard behavior under page sty
   await expect(editor).toBeHidden();
 });
 
+test("Lens stacks between notebook content and application overlays", async ({ page }) => {
+  const host = page.locator("[data-marimo-lens-portal]");
+  await expect(host).toHaveCSS("z-index", "35");
+
+  const select = page.getByRole("button", { name: "Select a target", exact: true });
+  const bounds = await select.boundingBox();
+  expect(bounds).not.toBeNull();
+  if (!bounds) return;
+
+  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+  const layers = await page.evaluate(({ x, y }) => {
+    const probe = (name: string, zIndex: number) => {
+      const element = document.createElement("div");
+      element.dataset.layerProbe = name;
+      Object.assign(element.style, {
+        position: "fixed",
+        left: `${x - 10}px`,
+        top: `${y - 10}px`,
+        width: "20px",
+        height: "20px",
+        pointerEvents: "auto",
+        zIndex: String(zIndex),
+      });
+      document.body.append(element);
+      return element;
+    };
+
+    const notebook = probe("notebook", 30);
+    const overNotebook = document.elementFromPoint(x, y)?.matches("[data-marimo-lens-portal]");
+    const application = probe("application", 40);
+    const underApplication = document.elementFromPoint(x, y) === application;
+    notebook.remove();
+    application.remove();
+    return { overNotebook, underApplication };
+  }, point);
+
+  expect(layers).toEqual({ overNotebook: true, underApplication: true });
+});
+
 test("dock movement survives reload and keeps click, cancel, and keyboard controls distinct", async ({
   page,
 }, testInfo) => {
@@ -647,6 +688,7 @@ test("expanding the pill at every corner keeps controls and long notes inside th
     await page.mouse.down();
     await page.mouse.move(corner.x, corner.y, { steps: 12 });
     await page.mouse.up();
+    await expectInsideViewport(page, pill.locator("[data-marimo-lens-collapsed-grip]"));
     await pill.click();
     await expectInsideViewport(page, dock);
     for (const name of ["Move Lens", "Select a target", "Collapse Lens"]) {
@@ -654,7 +696,7 @@ test("expanding the pill at every corner keeps controls and long notes inside th
     }
     await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
     await expectInsideViewport(page, page.getByRole("region", { name: "Selections", exact: true }));
-    const label = page.locator(".ml-selection-list__note");
+    const label = page.locator("[data-marimo-lens-selection-note]");
     expect(
       await label.evaluate(
         (element) =>
@@ -707,7 +749,7 @@ test("short viewports keep every item in a full selection panel reachable", asyn
   await expectInsideViewport(page, lastHistory);
   expect(
     await page
-      .locator(".ml-history-list__target")
+      .locator("[data-marimo-lens-history-target]")
       .evaluateAll((elements) =>
         elements.every((element) => element.scrollWidth <= element.clientWidth),
       ),

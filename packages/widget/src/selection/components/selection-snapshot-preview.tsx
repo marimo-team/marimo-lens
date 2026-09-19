@@ -1,6 +1,7 @@
 import type { Selection, StoredSnapshot } from "@marimo-lens/protocol";
 
 import { parseErrorCause } from "@marimo-lens/protocol";
+import * as stylex from "@stylexjs/stylex";
 import { AlertCircle, Clock3, Image as ImageIcon, LoaderCircle, X } from "lucide-react";
 import { useCallback, useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 
@@ -11,11 +12,14 @@ import type {
 } from "@/selection/selection-snapshot-loader";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
+import { iconButtonStyles, ui } from "@/styles/primitives";
 import {
   useAnchoredSurface,
   type AnchoredSurfaceAnchor,
   type AnchoredSurfacePosition,
 } from "@/ui/anchored-surface";
+
+import { snapshotStyles } from "./selection-snapshot-preview.styles";
 
 type SnapshotPreviewButtonProps = {
   selection: Selection;
@@ -161,13 +165,18 @@ export function SnapshotPreviewButton({
     const pending = capturing || snapshot.status === "pending";
     return (
       <output
-        className={`ml-snapshot-trigger ml-snapshot-trigger--${variant}`}
+        {...stylex.props(
+          snapshotStyles.trigger,
+          variant === "icon" && snapshotStyles.triggerIcon,
+          !pending && snapshotStyles.triggerFailed,
+        )}
+        data-marimo-lens-snapshot-trigger
         data-status={pending ? "capturing" : "failed"}
         title={pending ? "Preparing image" : "Image unavailable"}
         aria-label={pending ? "Preparing image" : "Image unavailable"}
       >
         {pending ? (
-          <LoaderCircle className="ml-spin" size={13} aria-hidden="true" />
+          <LoaderCircle {...stylex.props(ui.spin)} size={13} aria-hidden="true" />
         ) : (
           <AlertCircle size={13} aria-hidden="true" />
         )}
@@ -181,7 +190,8 @@ export function SnapshotPreviewButton({
   return (
     <div
       ref={wrapperRef}
-      className={`ml-snapshot-trigger ml-snapshot-trigger--${variant}`}
+      {...stylex.props(snapshotStyles.trigger, variant === "icon" && snapshotStyles.triggerIcon)}
+      data-marimo-lens-snapshot-trigger
       data-status={outdated ? "outdated" : "ready"}
       onBlur={(event) => {
         if (
@@ -195,7 +205,11 @@ export function SnapshotPreviewButton({
     >
       <button
         ref={triggerRef}
-        className={variant === "icon" ? "ml-icon-button" : "ml-snapshot-trigger__button"}
+        {...stylex.props(
+          ...(variant === "icon"
+            ? iconButtonStyles
+            : [ui.interactive, ui.pressable, ui.control, snapshotStyles.triggerButton]),
+        )}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
@@ -299,7 +313,11 @@ function SnapshotPreviewDialog({
     <dialog
       ref={surfaceRef}
       open
-      className="ml-snapshot-preview"
+      {...stylex.props(
+        snapshotStyles.preview,
+        position.placement === "above" ? snapshotStyles.above : snapshotStyles.below,
+        motion === "instant" ? snapshotStyles.instant : snapshotStyles.animated,
+      )}
       style={position.style}
       data-placement={position.placement}
       data-instant={motion === "instant" ? "true" : "false"}
@@ -313,15 +331,15 @@ function SnapshotPreviewDialog({
         onClose();
       }}
     >
-      <header className="ml-snapshot-preview__header">
-        <div>
-          <strong>Selection image</strong>
-          <span>
+      <header {...stylex.props(snapshotStyles.header)}>
+        <div {...stylex.props(snapshotStyles.heading)}>
+          <strong {...stylex.props(snapshotStyles.title)}>Selection image</strong>
+          <span {...stylex.props(snapshotStyles.metadata)}>
             {selectionLabel} · {snapshot.width} × {snapshot.height}
           </span>
         </div>
         <button
-          className="ml-icon-button"
+          {...stylex.props(...iconButtonStyles)}
           type="button"
           onClick={onClose}
           aria-label="Close preview"
@@ -329,28 +347,39 @@ function SnapshotPreviewDialog({
           <X size={15} aria-hidden="true" />
         </button>
       </header>
-      <div className="ml-snapshot-preview__image" aria-busy={loading ? "true" : undefined}>
+      <div
+        {...stylex.props(snapshotStyles.image)}
+        data-marimo-lens-snapshot-image-container
+        aria-busy={loading ? "true" : undefined}
+      >
         {current ? (
           <img
+            {...stylex.props(snapshotStyles.bitmap)}
+            data-marimo-lens-snapshot-image
             src={current.url}
             width={current.asset.snapshot.width}
             height={current.asset.snapshot.height}
             alt={`Captured output for ${selectionLabel}`}
           />
         ) : loading ? (
-          <span>
-            <LoaderCircle className="ml-spin" size={16} aria-hidden="true" /> Loading image…
+          <span {...stylex.props(snapshotStyles.imageStatus)}>
+            <LoaderCircle {...stylex.props(ui.spin)} size={16} aria-hidden="true" /> Loading image…
           </span>
         ) : (
-          <span data-status="failed">
+          <span
+            {...stylex.props(snapshotStyles.imageStatus, snapshotStyles.imageError)}
+            data-status="failed"
+          >
             <AlertCircle size={16} aria-hidden="true" /> {error ?? "Image unavailable"}
           </span>
         )}
       </div>
-      <footer className="ml-snapshot-preview__caption" aria-live="polite">
+      <footer {...stylex.props(snapshotStyles.caption)} aria-live="polite">
         <span>This annotated image is available to vision-capable agents.</span>
         {snapshot.status === "outdated" ? (
-          <strong>Captured before this selection moved.</strong>
+          <strong {...stylex.props(snapshotStyles.captionWarning)}>
+            Captured before this selection moved.
+          </strong>
         ) : null}
       </footer>
     </dialog>

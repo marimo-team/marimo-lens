@@ -178,7 +178,7 @@ describe("target attention presentation", () => {
     const onLabelMeasure = vi.fn();
     vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
       function (this: HTMLElement) {
-        return this.classList.contains("ml-target-attention__label")
+        return this.hasAttribute("data-marimo-lens-target-attention-label")
           ? new DOMRect(0, 0, 320, 226)
           : new DOMRect();
       },
@@ -218,8 +218,10 @@ describe("target attention presentation", () => {
 
     const indicator = document.querySelector<HTMLElement>("[data-marimo-lens-target-attention]");
     expect(indicator?.dataset.marimoLensUi).toBe("true");
-    expect(indicator?.querySelector(".ml-target-attention__status")?.textContent).toBe("Working");
-    expect(indicator?.querySelector(".ml-target-attention__message")?.textContent).toBe(
+    expect(indicator?.querySelector("[data-marimo-lens-attention-status]")?.textContent).toBe(
+      "Working",
+    );
+    expect(indicator?.querySelector("[data-marimo-lens-attention-message]")?.textContent).toBe(
       "Updating the aggregation.",
     );
     expect(indicator?.dataset.targetLabel).toBe("BYtC");
@@ -267,10 +269,16 @@ describe("target attention presentation", () => {
       ),
     );
 
-    expect(document.querySelector(".ml-target-attention__status")?.textContent).toBe("On it");
-    expect(document.querySelector(".ml-target-attention-notice__status")?.textContent).toBe(
-      "On it",
-    );
+    expect(
+      document.querySelector(
+        "[data-marimo-lens-target-attention] [data-marimo-lens-attention-status]",
+      )?.textContent,
+    ).toBe("On it");
+    expect(
+      document.querySelector(
+        "[data-marimo-lens-target-attention-notice] [data-marimo-lens-attention-status]",
+      )?.textContent,
+    ).toBe("On it");
     expect(document.querySelector("[data-marimo-lens-target-attention-status]")?.textContent).toBe(
       "On it in cell BYtC. Updating the aggregation.",
     );
@@ -302,13 +310,19 @@ describe("target attention presentation", () => {
       ),
     );
 
-    expect(document.querySelector(".ml-target-attention__status")?.textContent).toBe(
-      "Updated chart",
+    expect(
+      document.querySelector(
+        "[data-marimo-lens-target-attention] [data-marimo-lens-attention-status]",
+      )?.textContent,
+    ).toBe("Updated chart");
+    expect(
+      document.querySelector(
+        "[data-marimo-lens-target-attention-notice] [data-marimo-lens-attention-status]",
+      )?.textContent,
+    ).toBe("Updated chart");
+    expect(document.querySelector("[data-marimo-lens-attention-message]")?.textContent).toBe(
+      message,
     );
-    expect(document.querySelector(".ml-target-attention-notice__status")?.textContent).toBe(
-      "Updated chart",
-    );
-    expect(document.querySelector(".ml-target-attention__message")?.textContent).toBe(message);
     expect(document.querySelector("[data-marimo-lens-target-attention-status]")?.textContent).toBe(
       `Updated chart in cell BYtC. ${message}`,
     );
@@ -335,7 +349,9 @@ describe("target attention presentation", () => {
       ),
     );
 
-    expect(document.querySelector(".ml-target-attention__status")?.textContent).toBe("Ready");
+    expect(document.querySelector("[data-marimo-lens-attention-status]")?.textContent).toBe(
+      "Ready",
+    );
   });
 
   test("uses a neutral reveal fallback when a visible label cannot fit", () => {
@@ -360,7 +376,7 @@ describe("target attention presentation", () => {
       root?.render(surface.fallback ? <TargetAttentionFallback {...surface.fallback} /> : null),
     );
 
-    expect(document.querySelector(".ml-target-attention-notice__status")?.textContent).toBe(
+    expect(document.querySelector("[data-marimo-lens-attention-status]")?.textContent).toBe(
       "Ready",
     );
   });

@@ -40,8 +40,8 @@ describe("notebook DOM layout subscriptions", () => {
     vi.stubGlobal(
       "ResizeObserver",
       class {
-        constructor(callback: () => void) {
-          resized = callback;
+        constructor(callback: ResizeObserverCallback) {
+          resized = () => callback([], this);
         }
         observe(element: Element) {
           observed.add(element);

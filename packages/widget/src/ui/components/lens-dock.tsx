@@ -5,6 +5,7 @@ import type {
   TargetSelector,
 } from "@marimo-lens/protocol";
 
+import * as stylex from "@stylexjs/stylex";
 import { ChevronDown, GripVertical, List, MousePointer2 } from "lucide-react";
 import {
   Fragment,
@@ -14,6 +15,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from "react";
 
@@ -23,13 +25,19 @@ import type { SelectionSheetTab } from "@/selection/state";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
 import { SelectionSheet } from "@/selection/components/selection-sheet";
+import { ui } from "@/styles/primitives";
 import { ResolutionReceipt } from "@/transient/resolution-receipt";
 import { LensLogo } from "@/ui/components/lens-logo";
 import { useDockMotion } from "@/ui/use-dock-motion";
 import { useDockPosition } from "@/ui/use-dock-position";
 
+import { dockStyles } from "./lens-dock.styles";
+
 const LENS_SELECTION_SHORTCUT = "Alt+L";
 const LENS_SELECTION_SHORTCUT_LABEL = "Option/Alt+L";
+const dockVariables: CSSProperties & Record<`--${string}`, string> = {
+  "--ml-safe-area-bottom": "env(safe-area-inset-bottom, 0px)",
+};
 
 type LensDockProps = {
   selections: Selection[];
@@ -124,13 +132,13 @@ export function LensDock({
         ? focusedHistoryRevision === null
           ? dock?.querySelector<HTMLElement>("#marimo-lens-history-tab")
           : (dock?.querySelector<HTMLElement>(
-              `[data-marimo-lens-history-revision="${focusedHistoryRevision}"] .ml-history-list__reopen`,
+              `[data-marimo-lens-history-revision="${focusedHistoryRevision}"] [data-marimo-lens-history-reopen]`,
             ) ?? dock?.querySelector<HTMLElement>("#marimo-lens-history-tab"))
         : (dock?.querySelector<HTMLElement>(
             '[data-marimo-lens-selection-list] [aria-current="true"]',
           ) ??
           dock?.querySelector<HTMLElement>(
-            "[data-marimo-lens-selection-list] .ml-selection-list__summary",
+            "[data-marimo-lens-selection-list] [data-marimo-lens-selection-summary]",
           ) ??
           dock?.querySelector<HTMLElement>("#marimo-lens-open-tab"));
     target?.focus();
@@ -183,11 +191,23 @@ export function LensDock({
     setExpanded(true);
     onOpenHistory(event);
   };
+  const sheetOpen = expanded && listOpen;
+  const notice =
+    targetAttentionFallback ??
+    (resolutionReceipt ? (
+      <ResolutionReceipt
+        key={resolutionReceipt.revision}
+        event={resolutionReceipt}
+        onOpenHistory={openHistory}
+        onInteractionChange={onResolutionReceiptInteractionChange}
+      />
+    ) : null);
 
   return (
     <aside
       ref={dockRef}
-      className="ml-dock"
+      {...stylex.props(dockStyles.dock)}
+      style={dockVariables}
       data-expanded={expanded ? "true" : "false"}
       data-marimo-lens-dock
       data-marimo-lens-ui
@@ -196,59 +216,54 @@ export function LensDock({
       <span id="ml-dock-move-help" hidden>
         Drag or use arrow keys to move. Shift moves faster. Home resets position.
       </span>
-      {expanded && listOpen ? (
-        <div className="ml-sheet-stack">
-          <SelectionSheet
-            activeTab={sheetTab}
-            selections={selections}
-            history={history}
-            currentSelectionId={currentSelectionId}
-            availableSelectionIds={availableSelectionIds}
-            capturingSelectionIds={capturingSelectionIds}
-            busySelectionIds={busySelectionIds}
-            clearingSelections={clearPending}
-            clearingHistory={historyClearPending}
-            notice={
-              resolutionReceipt ? (
-                <ResolutionReceipt
-                  key={`${resolutionReceipt.revision}:${resolutionReceipt.payload.selections
-                    .map(({ selectionId }) => selectionId)
-                    .join(",")}`}
-                  event={resolutionReceipt}
-                  onOpenHistory={openHistory}
-                  onInteractionChange={onResolutionReceiptInteractionChange}
-                />
-              ) : null
-            }
-            onTabChange={onSheetTabChange}
-            onClose={closeList}
-            onActivate={onActivateSelection}
-            onEditNote={onEditNote}
-            onDelete={onDeleteSelection}
-            onClearSelections={onClearSelections}
-            onClearHistory={onClearHistory}
-            onReopen={onReopenSelection}
-            snapshotLoader={snapshotLoader}
-          />
-          {targetAttentionFallback}
+      {sheetOpen || notice ? (
+        <div
+          {...stylex.props(dockStyles.panel)}
+          data-marimo-lens-dock-panel
+          data-content={sheetOpen ? "selections" : "notice"}
+        >
+          {sheetOpen ? (
+            <SelectionSheet
+              activeTab={sheetTab}
+              selections={selections}
+              history={history}
+              currentSelectionId={currentSelectionId}
+              availableSelectionIds={availableSelectionIds}
+              capturingSelectionIds={capturingSelectionIds}
+              busySelectionIds={busySelectionIds}
+              clearingSelections={clearPending}
+              clearingHistory={historyClearPending}
+              notice={notice}
+              onTabChange={onSheetTabChange}
+              onClose={closeList}
+              onActivate={onActivateSelection}
+              onEditNote={onEditNote}
+              onDelete={onDeleteSelection}
+              onClearSelections={onClearSelections}
+              onClearHistory={onClearHistory}
+              onReopen={onReopenSelection}
+              snapshotLoader={snapshotLoader}
+            />
+          ) : (
+            notice
+          )}
         </div>
-      ) : (
-        <>
-          {targetAttentionFallback ??
-            (resolutionReceipt ? (
-              <ResolutionReceipt
-                event={resolutionReceipt}
-                onOpenHistory={openHistory}
-                onInteractionChange={onResolutionReceiptInteractionChange}
-              />
-            ) : null)}
-        </>
-      )}
+      ) : null}
 
       {expanded ? (
-        <div className="ml-dockbar" data-armed={armed ? "true" : "false"}>
+        <div
+          {...stylex.props(dockStyles.surface, dockStyles.bar)}
+          data-marimo-lens-dockbar
+          data-marimo-lens-dock-surface
+          data-armed={armed ? "true" : "false"}
+        >
           <button
-            className="ml-dockbar__action ml-dockbar__grip"
+            {...stylex.props(
+              ui.interactive,
+              dockStyles.action,
+              dockStyles.dragHandle,
+              dockStyles.grip,
+            )}
             type="button"
             data-ml-dock-drag
             aria-label="Move Lens"
@@ -259,7 +274,12 @@ export function LensDock({
           </button>
           <button
             ref={selectRef}
-            className="ml-dockbar__action ml-dockbar__select"
+            {...stylex.props(
+              ui.interactive,
+              dockStyles.action,
+              dockStyles.select,
+              armed && dockStyles.selectArmed,
+            )}
             type="button"
             aria-pressed={armed}
             aria-keyshortcuts={
@@ -277,17 +297,21 @@ export function LensDock({
                 : `Select a target (${LENS_SELECTION_SHORTCUT_LABEL})`
             }
           >
-            <MousePointer2 size={15} aria-hidden="true" />
+            <MousePointer2
+              {...stylex.props(armed && dockStyles.selectIconArmed)}
+              size={15}
+              aria-hidden="true"
+            />
             <span>{armed ? "Click or drag" : "Select"}</span>
-            {armed ? <kbd>ESC</kbd> : null}
+            {armed ? <kbd {...stylex.props(dockStyles.shortcut)}>ESC</kbd> : null}
           </button>
 
           {hasSelectionSurface ? (
             <Fragment>
-              <span className="ml-dockbar__separator" aria-hidden="true" />
+              <span {...stylex.props(dockStyles.separator)} aria-hidden="true" />
               <button
                 ref={listTriggerRef}
-                className="ml-dockbar__action ml-dockbar__selections"
+                {...stylex.props(ui.interactive, dockStyles.action, dockStyles.selections)}
                 type="button"
                 data-ml-list
                 disabled={commandsDisabled}
@@ -298,14 +322,14 @@ export function LensDock({
                 title="Selections"
               >
                 <List size={15} aria-hidden="true" />
-                <span className="ml-dockbar__count">{selections.length}</span>
+                <span {...stylex.props(dockStyles.count)}>{selections.length}</span>
               </button>
             </Fragment>
           ) : null}
 
-          <span className="ml-dockbar__separator" aria-hidden="true" />
+          <span {...stylex.props(dockStyles.separator)} aria-hidden="true" />
           <button
-            className="ml-dockbar__action ml-dockbar__icon"
+            {...stylex.props(ui.interactive, dockStyles.action, dockStyles.icon)}
             type="button"
             data-ml-dock-toggle
             onClick={collapse}
@@ -318,8 +342,15 @@ export function LensDock({
       ) : (
         <button
           ref={tabRef}
-          className="ml-dock-tab"
+          {...stylex.props(
+            ui.interactive,
+            dockStyles.surface,
+            dockStyles.action,
+            dockStyles.dragHandle,
+            dockStyles.tab,
+          )}
           type="button"
+          data-marimo-lens-dock-surface
           data-ml-dock-tab
           data-ml-dock-toggle
           data-ml-dock-drag
@@ -330,11 +361,18 @@ export function LensDock({
               ? `Open Lens, ${selections.length} open ${selections.length === 1 ? "selection" : "selections"}, ${history.length} in history`
               : "Open Lens"
           }
-          title="Open Lens"
+          title="Open Lens · Drag to move"
         >
-          <LensLogo className="ml-dock-tab__logo" />
+          <span
+            {...stylex.props(dockStyles.collapsedGrip)}
+            data-marimo-lens-collapsed-grip
+            aria-hidden="true"
+          >
+            <GripVertical size={14} />
+          </span>
+          <LensLogo />
           {selections.length > 0 ? (
-            <span className="ml-dock-tab__badge" aria-hidden="true">
+            <span {...stylex.props(dockStyles.badge)} aria-hidden="true">
               {selections.length}
             </span>
           ) : null}

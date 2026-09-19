@@ -1,7 +1,10 @@
 import type { SelectionResolvedEvent } from "@marimo-lens/protocol";
 
+import * as stylex from "@stylexjs/stylex";
 import { Check } from "lucide-react";
 import { useEffect, useRef } from "react";
+
+import { transientStyles } from "./transient.styles";
 
 export function ResolutionReceipt({
   event,
@@ -28,7 +31,7 @@ export function ResolutionReceipt({
 
   return (
     <button
-      className="ml-resolution-receipt"
+      {...stylex.props(transientStyles.notification, transientStyles.receipt)}
       type="button"
       data-marimo-lens-resolution-receipt
       data-selection-id={selections.length === 1 ? selections[0]!.selectionId : undefined}
@@ -42,11 +45,16 @@ export function ResolutionReceipt({
       onBlur={() => updateInteraction("focused", false)}
       aria-label={`Open history for ${label}`}
     >
-      <Check size={14} strokeWidth={2} aria-hidden="true" />
-      <span className="ml-resolution-receipt__label">{label}</span>
-      <span className="ml-resolution-receipt__status">Addressed</span>
+      <Check
+        {...stylex.props(transientStyles.notificationIcon, transientStyles.receiptIcon)}
+        size={14}
+        strokeWidth={2}
+        aria-hidden="true"
+      />
+      <span {...stylex.props(transientStyles.receiptLabel)}>{label}</span>
+      <span {...stylex.props(transientStyles.receiptStatus)}>Addressed</span>
       {event.payload.summary ? (
-        <span className="ml-resolution-receipt__summary">{event.payload.summary}</span>
+        <span {...stylex.props(transientStyles.receiptSummary)}>{event.payload.summary}</span>
       ) : null}
     </button>
   );
