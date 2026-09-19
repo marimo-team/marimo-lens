@@ -150,15 +150,52 @@ export const dockStyles = stylex.create({
   tab: {
     width: 44,
     minWidth: 44,
-    height: 44,
-    minHeight: 44,
+    height: 36,
+    minHeight: 36,
     padding: 0,
     justifyContent: "center",
-    borderRadius: 12,
+    borderRadius: 4,
     fontSize: 13,
     fontWeight: 500,
     lineHeight: 1,
+    transform: "none",
     transitionDuration: { default: "140ms", [media.reducedMotion]: "0ms" },
+    "::before": {
+      borderColor: {
+        default: "var(--slate-7, #cdced6)",
+        [media.hover]: { ":hover": "var(--grass-7, #97cfaa)" },
+      },
+      backgroundColor: {
+        default: "var(--background, #ffffff)",
+        [media.hover]: { ":hover": "var(--grass-2, #f2fcf5)" },
+      },
+      boxShadow: {
+        default:
+          "var(--shadow-xs-solid, 1px 1px 0 0 rgb(128 128 128 / 40%), 0 0 2px rgb(128 128 128 / 20%))",
+        ":active": "none",
+      },
+    },
+  },
+  collapsedGrip: {
+    position: "absolute",
+    top: "50%",
+    left: -15,
+    display: "inline-flex",
+    width: 14,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    color: {
+      default: colors.mutedForeground,
+      [media.hover]: { ":hover": "var(--grass-11, #2a7e3b)" },
+      [media.forcedColors]: "CanvasText",
+    },
+    opacity: 0.64,
+    pointerEvents: "auto",
+    transform: "translateY(-50%)",
+    transitionProperty: "color, opacity",
+    transitionDuration: { default: "140ms", [media.reducedMotion]: "0ms" },
+    transitionTimingFunction: motion.ease,
   },
   badge: {
     position: "absolute",
@@ -201,15 +238,15 @@ export const dockStyles = stylex.create({
 export const logoStyles = stylex.create({
   root: {
     display: "grid",
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
     placeItems: "center",
   },
   image: {
     display: "block",
     gridArea: "1 / 1",
-    width: 30,
-    height: 30,
+    width: 28,
+    height: 28,
   },
   hidden: {
     display: "none",

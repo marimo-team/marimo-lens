@@ -370,8 +370,15 @@ export function LensDock({
               ? `Open Lens, ${selections.length} open ${selections.length === 1 ? "selection" : "selections"}, ${history.length} in history`
               : "Open Lens"
           }
-          title="Open Lens"
+          title="Open Lens · Drag to move"
         >
+          <span
+            {...stylex.props(dockStyles.collapsedGrip)}
+            data-marimo-lens-collapsed-grip
+            aria-hidden="true"
+          >
+            <GripVertical size={14} />
+          </span>
           <LensLogo />
           {selections.length > 0 ? (
             <span {...stylex.props(dockStyles.badge)} aria-hidden="true">

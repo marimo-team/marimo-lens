@@ -12,16 +12,16 @@ export function LensLogo() {
       <img
         {...stylex.props(logoStyles.image, theme === "dark" && logoStyles.hidden)}
         src={lightLogo}
-        width={30}
-        height={30}
+        width={28}
+        height={28}
         alt=""
         draggable={false}
       />
       <img
         {...stylex.props(logoStyles.image, theme === "light" && logoStyles.hidden)}
         src={darkLogo}
-        width={30}
-        height={30}
+        width={28}
+        height={28}
         alt=""
         draggable={false}
       />
