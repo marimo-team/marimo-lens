@@ -1,0 +1,64 @@
+packages/widget/src/styles/tokens.stylex.ts
+  s_1cbc35b5d79f18::t_984f1deb9f4a29 9-13,37-41
+development_docs/browser-and-host.md
+  s_1cbc35b5d79f18::t_04b2b6aa4a15d2 195-196
+  s_1cbc35b5d79f18::t_1bd7bff3ac5b7f 183-185,194
+apps/e2e/tests/style.spec.ts
+  s_1cbc35b5d79f18::t_a05c3c059bbf04 3,36,38-41,57-66,71-76,80-82,95-102,106-130,134-136,140-141,145-151,157,161-165
+  s_1cbc35b5d79f18::t_ecbb56cb51871b 67-70,77-79,83-94,103-105,131-133,137-139,142-144,152-156,158-160
+packages/widget/src/selection/components/selection-list.tsx
+  s_1cbc35b5d79f18::t_9c815d1c90eb1a 63,89
+packages/widget/src/transient/resolution-receipt.tsx
+  s_1cbc35b5d79f18::t_57399ca237cd96 34
+packages/widget/src/selection/components/selection-sheet.styles.ts
+  s_1cbc35b5d79f18::t_614d0b9d57dc5d 111-112,114
+  s_1cbc35b5d79f18::t_57399ca237cd96 115
+packages/widget/src/selection/components/selection-list.styles.ts
+  s_1cbc35b5d79f18::t_9c815d1c90eb1a 23-24,31-34,58,60,64,69-76
+apps/e2e/fixtures/notebook.py
+  s_1cbc35b5d79f18::t_a05c3c059bbf04 112,172,176-180
+apps/e2e/tests/embedded.spec.ts
+  s_1cbc35b5d79f18::t_0a6d47ba833e38 48-63
+development_docs/development.md
+  s_1cbc35b5d79f18::t_1bd7bff3ac5b7f 52-53
+development_docs/build-and-distribution.md
+  s_1cbc35b5d79f18::t_04b2b6aa4a15d2 69-70
+packages/widget/src/widget.css
+  s_1cbc35b5d79f18::t_57399ca237cd96 35
+packages/widget/src/transient/transient.styles.ts
+  s_1cbc35b5d79f18::t_57399ca237cd96 17,30,33-35
+  s_1cbc35b5d79f18::t_7e17160b5e285a 56
+packages/widget/src/selection/components/selection-sheet.tsx
+  s_1cbc35b5d79f18::t_57399ca237cd96 159,162-163
+  s_1cbc35b5d79f18::t_614d0b9d57dc5d 160-161
+packages/widget/src/ui/components/lens-dock.tsx
+  s_1cbc35b5d79f18::t_57399ca237cd96 194,219,221,223,251
+  s_1cbc35b5d79f18::t_3280183adead91 195-204,225-249
+apps/e2e/tests/lens.spec.ts
+  s_1cbc35b5d79f18::t_0a6d47ba833e38 709
+packages/widget/src/selection/components/selection-overlay.styles.ts
+  s_1cbc35b5d79f18::t_9c815d1c90eb1a 44
+packages/widget/src/ui/components/lens-dock.styles.ts
+  s_1cbc35b5d79f18::t_984f1deb9f4a29 154-155,166-173,176-177,197
+  s_1cbc35b5d79f18::t_57399ca237cd96 230,232-233
+packages/widget/src/ui/components/lens-logo.tsx
+  s_1cbc35b5d79f18::t_984f1deb9f4a29 11-18
+packages/widget/tests/ui/lens-dock.test.tsx
+  s_1cbc35b5d79f18::t_614d0b9d57dc5d 536
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6016286de133115a66d3c60473d5e02bfe7c6335",
+  "prompts": {},
+  "sessions": {
+    "s_1cbc35b5d79f18": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b920-c260-7df0-906f-761f22c54816",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
