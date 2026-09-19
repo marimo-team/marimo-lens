@@ -513,7 +513,7 @@ describe("Lens dock", () => {
     expect(onDeleteSelection).toHaveBeenCalledWith(selection);
   });
 
-  test("keeps a transient attention notice outside the selection sheet layout", () => {
+  test("keeps current attention inside the open selection sheet", () => {
     renderDock({
       selections: [selectionFixture()],
       currentSelectionId: "selection-1",
@@ -521,12 +521,9 @@ describe("Lens dock", () => {
       targetAttentionFallback: <div data-test-attention-notice>Cell cell-1</div>,
     });
 
-    const stack = document.querySelector("[data-marimo-lens-sheet-stack]");
     const sheet = document.querySelector("[data-marimo-lens-selection-list]");
     const notice = document.querySelector("[data-test-attention-notice]");
-    expect(stack?.contains(sheet)).toBe(true);
-    expect(notice?.parentElement).toBe(stack);
-    expect(sheet?.contains(notice)).toBe(false);
+    expect(sheet?.contains(notice)).toBe(true);
   });
 
   test("gives the external notice slot to current cell attention", () => {

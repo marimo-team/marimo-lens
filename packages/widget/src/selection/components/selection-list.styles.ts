@@ -57,7 +57,7 @@ export const selectionListStyles = stylex.create({
     },
     backgroundColor: {
       default: null,
-      [stylex.when.ancestor(":focus-visible", selectionSummaryMarker)]: colors.primaryHover,
+      [stylex.when.ancestor(":focus-visible", selectionSummaryMarker)]: colors.primarySolid,
     },
   },
   labelCurrent: {
@@ -111,7 +111,7 @@ export const selectionListStyles = stylex.create({
     justifyContent: "flex-end",
   },
   clear: {
-    minHeight: 30,
+    minHeight: { default: 30, [media.coarsePointer]: 44 },
     backgroundColor: "transparent",
     borderWidth: 0,
   },

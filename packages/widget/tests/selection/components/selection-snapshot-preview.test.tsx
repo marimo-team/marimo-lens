@@ -36,11 +36,14 @@ describe("selection snapshot preview", () => {
 
     renderPreview(loadSnapshot);
     const trigger = document.querySelector<HTMLButtonElement>("button[aria-haspopup='dialog']")!;
+    const wrapper = trigger.closest("[data-marimo-lens-snapshot-trigger]");
+    expect(wrapper?.getAttribute("data-status")).toBe("ready");
     trigger.getBoundingClientRect = () => new DOMRect(900, 500, 40, 20);
     await act(async () => trigger.focus());
 
     expect(loadSnapshot).toHaveBeenCalledWith(selection.id);
     const preview = document.querySelector<HTMLElement>("[data-marimo-lens-snapshot-preview]")!;
+    expect(preview.hasAttribute("data-marimo-lens-snapshot-trigger")).toBe(false);
     expect(preview.dataset.placement).toBe("above");
     expect(preview.style.left).toBe("676px");
     expect(preview.style.bottom).toBe("276px");

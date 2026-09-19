@@ -19,24 +19,11 @@ export const snapshotStyles = stylex.create({
     justifyContent: "center",
   },
   triggerButton: {
-    display: "inline-flex",
     minHeight: { default: 28, [media.coarsePointer]: 44 },
     padding: "0 7px",
-    alignItems: "center",
     gap: 5,
-    color: "inherit",
-    backgroundColor: {
-      default: "transparent",
-      [media.hover]: { ":not(:disabled):hover": colors.hover },
-    },
-    borderRadius: radii.control,
+    fontSize: 11,
     fontWeight: 600,
-    transform: {
-      default: null,
-      ":not(:disabled):active": "scale(0.97)",
-      [media.reducedMotion]: "none",
-    },
-    transitionDuration: { [media.reducedMotion]: "0ms" },
   },
   preview: {
     position: "fixed",

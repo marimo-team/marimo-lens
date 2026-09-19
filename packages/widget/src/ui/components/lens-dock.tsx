@@ -222,7 +222,8 @@ export function LensDock({
             clearingSelections={clearPending}
             clearingHistory={historyClearPending}
             notice={
-              resolutionReceipt ? (
+              targetAttentionFallback ??
+              (resolutionReceipt ? (
                 <ResolutionReceipt
                   inline
                   key={`${resolutionReceipt.revision}:${resolutionReceipt.payload.selections
@@ -232,7 +233,7 @@ export function LensDock({
                   onOpenHistory={openHistory}
                   onInteractionChange={onResolutionReceiptInteractionChange}
                 />
-              ) : null
+              ) : null)
             }
             onTabChange={onSheetTabChange}
             onClose={closeList}
@@ -244,7 +245,6 @@ export function LensDock({
             onReopen={onReopenSelection}
             snapshotLoader={snapshotLoader}
           />
-          {targetAttentionFallback}
         </div>
       ) : (
         <>

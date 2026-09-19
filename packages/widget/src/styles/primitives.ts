@@ -21,8 +21,10 @@ export const ui = stylex.create({
   pressable: {
     transform: {
       default: null,
-      ":not(:disabled):active": "scale(0.97)",
-      [media.reducedMotion]: "none",
+      ":not(:disabled):not([aria-disabled='true']):active": {
+        default: "scale(0.97)",
+        [media.reducedMotion]: "none",
+      },
     },
   },
   control: {
@@ -33,7 +35,7 @@ export const ui = stylex.create({
     gap: 6,
     backgroundColor: {
       default: "transparent",
-      [media.hover]: { ":not(:disabled):hover": colors.hover },
+      [media.hover]: { ":not(:disabled):not([aria-disabled='true']):hover": colors.hover },
     },
     borderRadius: radii.control,
     transitionProperty: "background-color, border-color, color, transform",
@@ -53,12 +55,12 @@ export const ui = stylex.create({
   primary: {
     color: {
       default: colors.onPrimary,
-      [media.hover]: { ":not(:disabled):hover": colors.onPrimary },
+      [media.hover]: { ":not(:disabled):not([aria-disabled='true']):hover": colors.onPrimary },
     },
     backgroundColor: {
-      default: colors.primaryHover,
+      default: colors.primarySolid,
       [media.hover]: {
-        ":not(:disabled):hover": `color-mix(in srgb, ${colors.primaryHover} 88%, black)`,
+        ":not(:disabled):not([aria-disabled='true']):hover": `color-mix(in srgb, ${colors.primarySolid} 88%, black)`,
       },
     },
   },
@@ -73,26 +75,14 @@ export const ui = stylex.create({
     color: {
       default: colors.mutedForeground,
       ":focus-visible": colors.destructive,
-      [media.hover]: { ":not(:disabled):hover": colors.destructive },
+      [media.hover]: { ":not(:disabled):not([aria-disabled='true']):hover": colors.destructive },
     },
     backgroundColor: {
       default: "transparent",
-      [media.hover]: { ":not(:disabled):hover": colors.destructiveSoft },
+      [media.hover]: {
+        ":not(:disabled):not([aria-disabled='true']):hover": colors.destructiveSoft,
+      },
     },
-  },
-  borderedDanger: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: colors.border,
-  },
-  surface: {
-    color: colors.foreground,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: colors.border,
-    boxShadow: colors.shadow,
   },
   label: {
     display: "inline-flex",

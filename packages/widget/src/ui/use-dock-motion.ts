@@ -1,8 +1,7 @@
 import { useLayoutEffect, type RefObject } from "react";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
-
-const DOCK_EASING = "cubic-bezier(0.23, 1, 0.32, 1)";
+import { motion } from "@/styles/tokens.stylex";
 
 // Morph the surface, leaving text and controls at their natural size.
 export function useDockMotion(ref: RefObject<HTMLElement | null>) {
@@ -55,12 +54,12 @@ export function useDockMotion(ref: RefObject<HTMLElement | null>) {
             },
             { transform: "none" },
           ],
-          { duration: 200, easing: DOCK_EASING, pseudoElement: "::before" },
+          { duration: 200, easing: motion.easeOut, pseudoElement: "::before" },
         ),
         ...[...surface.children].map((child) =>
           child.animate([{ opacity: 0.6 }, { opacity: 1 }], {
             duration: 125,
-            easing: DOCK_EASING,
+            easing: motion.easeOut,
           }),
         ),
       ];

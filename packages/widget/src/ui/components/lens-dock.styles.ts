@@ -208,7 +208,7 @@ export const dockStyles = stylex.create({
     alignItems: "center",
     justifyContent: "center",
     color: colors.onPrimary,
-    backgroundColor: colors.primaryHover,
+    backgroundColor: colors.primarySolid,
     borderWidth: 2,
     borderStyle: "solid",
     borderColor: colors.surface,
@@ -221,16 +221,7 @@ export const dockStyles = stylex.create({
     lineHeight: 1,
   },
   sheetStack: {
-    position: { default: "absolute", [media.mobile]: "fixed" },
     zIndex: 2,
-    right: { default: "auto", [media.mobile]: 12 },
-    bottom: {
-      default: "calc(100% + 8px)",
-      [media.mobile]: "max(64px, calc(env(safe-area-inset-bottom) + 56px))",
-    },
-    left: { default: "calc(50% - 184px)", [media.mobile]: 12 },
-    width: { default: "min(368px, calc(100vw - 24px))", [media.mobile]: "auto" },
-    maxHeight: { default: "min(520px, calc(100dvh - 92px))", [media.mobile]: "min(70dvh, 520px)" },
     pointerEvents: "none",
   },
 });

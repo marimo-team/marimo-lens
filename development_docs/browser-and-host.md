@@ -174,18 +174,18 @@ The active UI lives in an open shadow root under the owning document body.
 Typed StyleX modules own component styles, variants, media queries, and theme
 tokens. The extracted stylesheet resets inherited typography and sets the color
 scheme. Lens consumes Marimo's Slate palette tokens, with local light and dark
-defaults. Theme changes on the body and document element update the shadow host
-and the StyleX theme applied to the portal root.
+defaults. `LensViewOwner` observes theme changes on the body and document element
+and shares the theme with the portal, conflict notice, and error boundary.
 Document-level keyboard handling reads composed event paths, and focus restoration
 uses the explicitly registered UI root and follows its active element.
-`createLensSurface()` owns the host, theme observer, shared document styles,
+`createLensSurface()` owns the host, shared document styles,
 and disposal. The portal registers that root with `NotebookDomAdapter`.
 `widget.css` contains the host reset and dock geometry that the positioning
 adapter updates between React renders.
 
 The portal host defaults to `z-index: 35`. This places Lens above Marimo's
 notebook and cell affordances, which reach `z-index: 30`, and below application
-panels, dialogs, menus, and toasts, which begin at `z-index: 40`. An embedding
+panels, dialogs, menus, and toasts. An embedding
 page can set `--marimo-lens-z-index` when its overlay scale uses different
 bands. Lens components use local z-index values inside that host stacking
 context.

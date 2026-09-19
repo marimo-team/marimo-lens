@@ -37,7 +37,7 @@ export const transientStyles = stylex.create({
     transform: {
       default: "translateX(-50%)",
       "@starting-style": "translate(-50%, 3px)",
-      [media.reducedMotion]: "none",
+      [media.reducedMotion]: "translateX(-50%)",
     },
     transitionProperty: "opacity, transform",
     transitionDuration: { default: "160ms", [media.reducedMotion]: "120ms" },
@@ -64,7 +64,12 @@ export const transientStyles = stylex.create({
     position: "static",
     width: "100%",
     maxWidth: "none",
-    backgroundColor: colors.surfaceSubtle,
+    backgroundColor: {
+      default: colors.surfaceSubtle,
+      [media.hover]: {
+        ":hover": `color-mix(in srgb, ${colors.foreground} 6%, ${colors.surfaceSubtle})`,
+      },
+    },
     boxShadow: "none",
     transform: "none",
   },

@@ -213,7 +213,7 @@ function SelectionMarker({
           (selection.anchor.kind === "point"
             ? overlayStyles.pointCurrent
             : overlayStyles.rectCurrent),
-        busy && overlayStyles.busy,
+        busy && selection.anchor.kind === "point" && overlayStyles.busy,
         capturing && overlayStyles.capturing,
         !interactionEnabled && overlayStyles.markerBlocked,
       )}

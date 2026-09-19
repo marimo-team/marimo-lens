@@ -1,11 +1,15 @@
+import * as stylex from "@stylexjs/stylex";
 import { StrictMode } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, test } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
+import { LensErrorBoundary } from "@/app/lens-error-boundary";
 import { LensViewOwner } from "@/app/lens-view-owner";
 import { getOutputCell } from "@/notebook/output-root";
 import { LensPortal } from "@/ui/components/lens-portal";
+
+import { darkTheme, lightTheme } from "../../src/styles/tokens.stylex";
 
 const roots = new Set<Root>();
 
@@ -13,6 +17,7 @@ afterEach(() => {
   for (const root of roots) act(() => root.unmount());
   roots.clear();
   document.body.replaceChildren();
+  document.documentElement.className = "";
 });
 
 describe("Lens view ownership", () => {
@@ -73,7 +78,7 @@ describe("Lens view ownership", () => {
     act(() =>
       root.render(
         <LensViewOwner>
-          <LensPortal css=".secondary-lens {}">
+          <LensPortal css=".marimo_lens { color: blue; }">
             <span data-secondary-lens>Lens</span>
           </LensPortal>
         </LensViewOwner>,
@@ -84,11 +89,54 @@ describe("Lens view ownership", () => {
     const shadow = secondaryDocument.querySelector("[data-marimo-lens-portal]")!.shadowRoot!;
     expect(shadow.querySelector("[data-secondary-lens]")?.textContent).toBe("Lens");
     expect(shadow.ownerDocument).toBe(secondaryDocument);
-    expect(shadow.querySelector("style")?.textContent).toBe(".secondary-lens {}");
+    expect(shadow.querySelector("style")?.textContent).toBe(".marimo_lens { color: blue; }");
+    expect(shadow.querySelector(".marimo_lens")).toBe(
+      shadow.querySelector("[data-marimo-lens-root]"),
+    );
 
     unmount(root);
     expect(shadow.host.isConnected).toBe(false);
     expect(secondaryDocument.getElementById("marimo-lens-global-styles")).toBeNull();
+  });
+
+  test("shares document theme changes with conflict and error notices", async () => {
+    document.documentElement.classList.add("dark");
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    roots.add(root);
+    function FailingContent(): never {
+      throw new Error("test render failure");
+    }
+    try {
+      act(() =>
+        root.render(
+          <LensViewOwner>
+            <LensErrorBoundary>
+              <FailingContent />
+            </LensErrorBoundary>
+          </LensViewOwner>,
+        ),
+      );
+      renderView("conflicting");
+      const notices = document.querySelectorAll(
+        "[data-marimo-lens-error], [data-marimo-lens-view-conflict]",
+      );
+      expect(notices).toHaveLength(2);
+      for (const notice of notices) {
+        expect(notice.className).toContain(stylex.props(darkTheme).className);
+      }
+      await act(async () => {
+        document.documentElement.classList.remove("dark");
+      });
+      for (const notice of notices) {
+        expect(notice.className).toContain(stylex.props(lightTheme).className);
+        expect(notice.className).not.toContain(stylex.props(darkTheme).className);
+      }
+    } finally {
+      consoleError.mockRestore();
+    }
   });
 
   test("registers its owning output across an open shadow root", () => {

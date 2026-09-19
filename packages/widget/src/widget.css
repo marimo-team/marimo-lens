@@ -50,3 +50,13 @@
 [data-marimo-lens-dock] > [data-marimo-lens-dock-scroll-panel] {
   overflow: auto;
 }
+
+/* Notices share the sheet's viewport bounds when selections are open. */
+[data-marimo-lens-sheet-stack] [data-marimo-lens-dock-panel] {
+  position: static;
+  width: 100%;
+  max-width: none;
+  max-height: min(160px, 30dvh);
+  overflow: auto;
+  transform: none;
+}

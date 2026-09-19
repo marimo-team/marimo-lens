@@ -2,9 +2,10 @@ import * as stylex from "@stylexjs/stylex";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { NotebookDomAdapter, NotebookDomProvider } from "@/notebook/notebook-dom";
+import { LensThemeContext, observeLensTheme, useLensTheme, type LensTheme } from "@/ui/theme";
 
 import { rootStyles } from "../styles/root";
-import { lightTheme } from "../styles/tokens.stylex";
+import { darkTheme, lightTheme } from "../styles/tokens.stylex";
 
 // Anywidget can mount views from separate app-module instances into one document.
 // The global symbol lets those instances share one ordered registry.
@@ -26,16 +27,19 @@ export function LensViewOwner({ children }: { children: ReactNode }) {
   const viewId = viewIdRef.current;
   const hostRef = useRef<HTMLSpanElement>(null);
   const [ownedView, setOwnedView] = useState<OwnedView | null>(null);
+  const [theme, setTheme] = useState<LensTheme>("light");
 
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return undefined;
+    const releaseTheme = observeLensTheme(host.ownerDocument, setTheme);
     const adapter = new NotebookDomAdapter(host.ownerDocument);
     const releaseHostOutput = adapter.registerHost(host);
     const releaseView = acquireView(host.ownerDocument, viewId, (ownership) => {
       setOwnedView({ adapter, ownership });
     });
     return () => {
+      releaseTheme();
       releaseView();
       releaseHostOutput();
       adapter.dispose();
@@ -43,13 +47,13 @@ export function LensViewOwner({ children }: { children: ReactNode }) {
   }, [viewId]);
 
   return (
-    <>
+    <LensThemeContext value={theme}>
       <span ref={hostRef} hidden data-marimo-lens-host data-marimo-lens-ui />
       {ownedView?.ownership === "owner" ? (
         <NotebookDomProvider adapter={ownedView.adapter}>{children}</NotebookDomProvider>
       ) : null}
       {ownedView?.ownership === "conflict" ? <LensViewConflict /> : null}
-    </>
+    </LensThemeContext>
   );
 }
 
@@ -98,9 +102,14 @@ function publishOwnership(views: ViewRegistry): void {
 }
 
 function LensViewConflict() {
+  const theme = useLensTheme();
   return (
     <output
-      {...stylex.props(rootStyles.base, rootStyles.conflict, lightTheme)}
+      {...stylex.props(
+        rootStyles.base,
+        rootStyles.conflict,
+        theme === "dark" ? darkTheme : lightTheme,
+      )}
       data-marimo-lens-view-conflict
       data-marimo-lens-ui
     >

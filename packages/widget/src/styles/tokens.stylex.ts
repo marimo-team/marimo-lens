@@ -7,7 +7,7 @@ const light = {
   mutedForeground: "var(--slate-11, #64748b)",
   border: "var(--slate-6, #e2e8f0)",
   primary: "#0880ea",
-  primaryHover: "#0b68cb",
+  primarySolid: "#0b68cb",
   accentForeground: "#095eb8",
   onPrimary: "#f8fafc",
   destructive: "var(--red-9, #ea5d5d)",

@@ -191,6 +191,7 @@ export function SnapshotPreviewButton({
     <div
       ref={wrapperRef}
       {...stylex.props(snapshotStyles.trigger, variant === "icon" && snapshotStyles.triggerIcon)}
+      data-marimo-lens-snapshot-trigger
       data-status={outdated ? "outdated" : "ready"}
       onBlur={(event) => {
         if (
@@ -207,7 +208,7 @@ export function SnapshotPreviewButton({
         {...stylex.props(
           ...(variant === "icon"
             ? iconButtonStyles
-            : [ui.interactive, snapshotStyles.triggerButton]),
+            : [ui.interactive, ui.pressable, ui.control, snapshotStyles.triggerButton]),
         )}
         type="button"
         aria-haspopup="dialog"
@@ -317,7 +318,6 @@ function SnapshotPreviewDialog({
         position.placement === "above" ? snapshotStyles.above : snapshotStyles.below,
         motion === "instant" ? snapshotStyles.instant : snapshotStyles.animated,
       )}
-      data-marimo-lens-snapshot-trigger
       style={position.style}
       data-placement={position.placement}
       data-instant={motion === "instant" ? "true" : "false"}

@@ -24,7 +24,7 @@ export const historyStyles = stylex.create({
   },
   row: {
     display: "grid",
-    minHeight: 42,
+    minHeight: { default: 42, [media.coarsePointer]: 58 },
     padding: { default: "5px 88px 5px 8px", [media.compact]: "5px 8px" },
     alignItems: "center",
     gridTemplateColumns: {
@@ -35,6 +35,7 @@ export const historyStyles = stylex.create({
     cursor: "pointer",
     listStyle: "none",
     backgroundColor: {
+      [media.hover]: { ":hover": colors.hover },
       [stylex.when.ancestor("[open]", historyDisclosureMarker)]: colors.hover,
     },
     outline: {
@@ -106,7 +107,7 @@ export const historyStyles = stylex.create({
     top: 7,
     right: 8,
     minWidth: 64,
-    minHeight: 28,
+    minHeight: { default: 28, [media.coarsePointer]: 44 },
     margin: { [media.compact]: "0 8px 6px" },
     padding: "0 6px",
     justifySelf: { [media.compact]: "end" },

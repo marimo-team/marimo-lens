@@ -87,7 +87,7 @@ Review `pnpm-lock.yaml` for registry sources, integrity values, peer changes,
 patch resolution, and unexpected dependency growth.
 
 The widget imports `@stylexjs/stylex`. The widget package and Python browser
-bundle use `@stylexjs/unplugin` so Vite+, tsdown, and esbuild emit the same
+bundle use `@stylexjs/unplugin` so Vite+ and esbuild emit the same
 atomic rules into `widget.css`.
 
 ## Patched `html-to-image`

@@ -85,4 +85,16 @@ test("collapsed Lens matches Marimo controls while remaining draggable", async (
   expect(lensStyle.shadow).toContain("1px 1px 0px");
   expect(marimoStyle.shadow).toContain("1px 1px 0px");
   await screenshot(page, testInfo, "collapsed-native-control");
+  const dock = page.locator("[data-marimo-lens-dock]");
+  const before = (await dock.boundingBox())!;
+  const handle = (await grip.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 90, handle.y - 100, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(async () => (await dock.boundingBox())!.x).toBeGreaterThan(before.x + 70);
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeLessThan(before.y - 70);
+  await expect(lens).toBeVisible();
+  await lens.click();
+  await expect(page.getByRole("button", { name: "Move Lens", exact: true })).toBeVisible();
 });

@@ -40,7 +40,7 @@ export const overlayStyles = stylex.create({
   marker: {
     touchAction: "none",
     userSelect: "none",
-    opacity: { default: 1, ":disabled": 1 },
+    opacity: 1,
     borderColor: { [media.forcedColors]: "Highlight" },
   },
   markerBlocked: {
@@ -72,7 +72,7 @@ export const overlayStyles = stylex.create({
   },
   pointCurrent: {
     color: colors.onPrimary,
-    backgroundColor: colors.primaryHover,
+    backgroundColor: colors.primarySolid,
     boxShadow: "0 1px 3px rgb(15 23 42 / 18%)",
   },
   rectContainer: {
@@ -115,7 +115,7 @@ export const overlayStyles = stylex.create({
   },
   rectLabelCurrent: {
     color: colors.onPrimary,
-    backgroundColor: colors.primaryHover,
+    backgroundColor: colors.primarySolid,
   },
   busy: {
     opacity: 0.6,
@@ -136,6 +136,7 @@ export const overlayStyles = stylex.create({
     },
   },
   resizeHandle: {
+    opacity: 1,
     position: "absolute",
     zIndex: 2,
     width: 12,
