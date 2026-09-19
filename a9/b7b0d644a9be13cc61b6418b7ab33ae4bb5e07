@@ -1,0 +1,21 @@
+pnpm-lock.yaml
+  ai_agent 1-158
+package.json
+  s_1cbc35b5d79f18::t_07d931b4f58131 31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "a9b7b0d644a9be13cc61b6418b7ab33ae4bb5e07",
+  "prompts": {},
+  "sessions": {
+    "s_1cbc35b5d79f18": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b920-c260-7df0-906f-761f22c54816",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
