@@ -1,2 +1,52 @@
-@import "./styles/tokens.css";
-@import "./styles/lens.css";
+/* StyleX owns component styles. These host rules form the Shadow DOM boundary. */
+:host {
+  all: initial !important;
+  position: fixed !important;
+  z-index: var(--marimo-lens-z-index, 35) !important;
+  inset: 0 !important;
+  pointer-events: none !important;
+}
+
+:host *,
+:host *::before,
+:host *::after {
+  box-sizing: border-box;
+}
+
+/* Dock placement is painted imperatively between React renders. */
+[data-marimo-lens-dock] > [data-marimo-lens-dock-panel] {
+  --ml-panel-width: min(480px, calc(var(--ml-dock-viewport-width, 100vw) - 24px));
+  position: absolute;
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 8px);
+  left: clamp(
+    calc(var(--ml-dock-viewport-left, 0px) + 12px - var(--ml-dock-x, 0px)),
+    calc(50% - var(--ml-panel-width) / 2),
+    calc(
+      var(--ml-dock-viewport-right, 100vw) - 12px - var(--ml-dock-x, 0px) - var(--ml-panel-width)
+    )
+  );
+  width: var(--ml-panel-width);
+  max-height: min(520px, var(--ml-dock-space));
+  transform: none;
+}
+
+[data-marimo-lens-dock] > [data-marimo-lens-sheet-stack] {
+  --ml-panel-width: min(368px, calc(var(--ml-dock-viewport-width, 100vw) - 24px));
+}
+
+[data-marimo-lens-dock][data-placement="below"] > [data-marimo-lens-dock-panel] {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+[data-marimo-lens-dock][data-panel-overlay="true"] > [data-marimo-lens-dock-panel] {
+  top: var(--ml-dock-panel-top);
+  bottom: auto;
+  max-height: min(520px, var(--ml-dock-panel-height));
+}
+
+[data-marimo-lens-dock] > [data-marimo-lens-dock-scroll-panel] {
+  overflow: auto;
+}

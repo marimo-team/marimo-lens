@@ -1,4 +1,8 @@
+import * as stylex from "@stylexjs/stylex";
 import { Component, type ErrorInfo, type ReactNode } from "react";
+
+import { rootStyles } from "../styles/root";
+import { lightTheme } from "../styles/tokens.stylex";
 
 type LensErrorBoundaryProps = {
   children: ReactNode;
@@ -22,7 +26,11 @@ export class LensErrorBoundary extends Component<LensErrorBoundaryProps, LensErr
   render() {
     if (this.state.error) {
       return (
-        <div className="marimo_lens" data-marimo-lens-error role="alert">
+        <div
+          {...stylex.props(rootStyles.base, rootStyles.error, lightTheme)}
+          data-marimo-lens-error
+          role="alert"
+        >
           marimo-lens render failed: {this.state.error.message}
         </div>
       );

@@ -44,7 +44,7 @@ describe("selection snapshot preview", () => {
     expect(preview.dataset.placement).toBe("above");
     expect(preview.style.left).toBe("676px");
     expect(preview.style.bottom).toBe("276px");
-    expect(document.querySelector<HTMLImageElement>(".ml-snapshot-preview__image img")?.src).toBe(
+    expect(document.querySelector<HTMLImageElement>("[data-marimo-lens-snapshot-image]")?.src).toBe(
       "blob:marimo-lens-snapshot",
     );
     expect(document.body.textContent).toContain(
@@ -99,7 +99,7 @@ describe("selection snapshot preview", () => {
     expect(secondaryCreate).toHaveBeenCalledOnce();
     expect(primaryCreate).not.toHaveBeenCalled();
     expect(
-      ownerDocument.querySelector<HTMLImageElement>(".ml-snapshot-preview__image img")?.src,
+      ownerDocument.querySelector<HTMLImageElement>("[data-marimo-lens-snapshot-image]")?.src,
     ).toBe("blob:secondary-snapshot");
 
     act(() => root?.unmount());
@@ -189,7 +189,7 @@ describe("selection snapshot preview", () => {
     );
 
     const iconStatus = document.querySelector<HTMLElement>(
-      ".ml-snapshot-trigger--icon[data-status='capturing']",
+      "[data-marimo-lens-snapshot-trigger][data-status='capturing']",
     );
     expect(iconStatus?.tagName).toBe("OUTPUT");
     expect(iconStatus?.getAttribute("aria-label")).toBe("Preparing image");
@@ -237,12 +237,12 @@ describe("selection snapshot preview", () => {
       await first.promise;
     });
 
-    expect(document.querySelectorAll(".ml-snapshot-preview__image img")).toHaveLength(2);
+    expect(document.querySelectorAll("[data-marimo-lens-snapshot-image]")).toHaveLength(2);
     expect(createObjectURL).toHaveBeenCalledTimes(2);
 
     await act(async () => triggers[2]?.click());
     expect(loadSnapshot).toHaveBeenCalledOnce();
-    expect(document.querySelectorAll(".ml-snapshot-preview__image img")).toHaveLength(3);
+    expect(document.querySelectorAll("[data-marimo-lens-snapshot-image]")).toHaveLength(3);
     expect(createObjectURL).toHaveBeenCalledTimes(3);
 
     const closeButtons = Array.from(
@@ -264,7 +264,7 @@ describe("selection snapshot preview", () => {
       second.resolve(asset);
       await second.promise;
     });
-    expect(document.querySelector<HTMLImageElement>(".ml-snapshot-preview__image img")?.src).toBe(
+    expect(document.querySelector<HTMLImageElement>("[data-marimo-lens-snapshot-image]")?.src).toBe(
       "blob:preview-4",
     );
   });

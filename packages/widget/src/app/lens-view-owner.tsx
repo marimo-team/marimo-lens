@@ -1,6 +1,10 @@
+import * as stylex from "@stylexjs/stylex";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { NotebookDomAdapter, NotebookDomProvider } from "@/notebook/notebook-dom";
+
+import { rootStyles } from "../styles/root";
+import { lightTheme } from "../styles/tokens.stylex";
 
 // Anywidget can mount views from separate app-module instances into one document.
 // The global symbol lets those instances share one ordered registry.
@@ -96,11 +100,11 @@ function publishOwnership(views: ViewRegistry): void {
 function LensViewConflict() {
   return (
     <output
-      className="marimo_lens ml-view-conflict"
+      {...stylex.props(rootStyles.base, rootStyles.conflict, lightTheme)}
       data-marimo-lens-view-conflict
       data-marimo-lens-ui
     >
-      <strong>Lens is already active</strong>
+      <strong {...stylex.props(rootStyles.conflictTitle)}>Lens is already active</strong>
       <span>Use the existing Lens instance in this notebook.</span>
     </output>
   );

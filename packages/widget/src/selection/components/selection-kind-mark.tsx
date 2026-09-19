@@ -1,27 +1,40 @@
 import type { SelectionAnchor } from "@marimo-lens/protocol";
 
-export function SelectionKindMark({ kind }: { kind: SelectionAnchor["kind"] }) {
+import * as stylex from "@stylexjs/stylex";
+
+import { kindMarkStyles } from "./selection-kind-mark.styles";
+
+export function SelectionKindMark({
+  kind,
+  push = false,
+}: {
+  kind: SelectionAnchor["kind"];
+  push?: boolean;
+}) {
   const label = kind === "point" ? "Point selection" : "Region selection";
   return (
-    <span className="ml-selection-kind-mark" data-kind={kind} title={label}>
+    <span
+      {...stylex.props(kindMarkStyles.root, push && kindMarkStyles.push)}
+      data-kind={kind}
+      title={label}
+    >
       {kind === "point" ? (
-        <svg viewBox="0 0 14 14">
+        <svg {...stylex.props(kindMarkStyles.svg)} viewBox="0 0 14 14">
           <title>{label}</title>
-          <circle className="ml-selection-kind-mark__boundary" cx="7" cy="7" r="4.25" />
-          <circle className="ml-selection-kind-mark__point" cx="7" cy="7" r="2" />
+          <circle
+            {...stylex.props(kindMarkStyles.outline, kindMarkStyles.boundary)}
+            cx="7"
+            cy="7"
+            r="4.25"
+          />
+          <circle {...stylex.props(kindMarkStyles.solid)} cx="7" cy="7" r="2" />
         </svg>
       ) : (
-        <svg viewBox="0 0 14 14">
+        <svg {...stylex.props(kindMarkStyles.svg)} viewBox="0 0 14 14">
           <title>{label}</title>
+          <rect {...stylex.props(kindMarkStyles.regionFill)} x="2" y="2.5" width="10" height="9" />
           <rect
-            className="ml-selection-kind-mark__region-fill"
-            x="2"
-            y="2.5"
-            width="10"
-            height="9"
-          />
-          <rect
-            className="ml-selection-kind-mark__region"
+            {...stylex.props(kindMarkStyles.outline)}
             x="2"
             y="2.5"
             width="10"
@@ -29,7 +42,7 @@ export function SelectionKindMark({ kind }: { kind: SelectionAnchor["kind"] }) {
             rx="1"
           />
           <rect
-            className="ml-selection-kind-mark__handle"
+            {...stylex.props(kindMarkStyles.solid)}
             x="1"
             y="1.5"
             width="3"
@@ -37,7 +50,7 @@ export function SelectionKindMark({ kind }: { kind: SelectionAnchor["kind"] }) {
             rx="0.5"
           />
           <rect
-            className="ml-selection-kind-mark__handle"
+            {...stylex.props(kindMarkStyles.solid)}
             x="10"
             y="9.5"
             width="3"

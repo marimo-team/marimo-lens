@@ -6,6 +6,8 @@ distributed resource from repository source and verifies both direct and
 source-distribution builds.
 
 [`esbuild`](https://esbuild.github.io/) creates the browser bundle.
+[`StyleX`](https://stylexjs.com/) compiles typed component styles into the
+bundled stylesheet.
 [`Hatchling`](https://hatch.pypa.io/latest/) builds Python archives, and
 [`agent-plugins`](https://github.com/peter-gy/agent-plugins) extends that build
 with the installed Agent Plugin resources.
@@ -54,15 +56,18 @@ dependencies and scripts used by that package.
 - ESM output.
 - Bundling and minification for normal builds.
 - An inline source map in watch mode.
-- `widget.js` and imported CSS written to
+- StyleX extraction with CSS layers.
+- `widget.js` and the extracted `widget.css` written to
   `packages/marimo-lens/src/marimo_lens/static/`.
 
 The output directory is removed before a normal bundle build. Watch mode keeps
 the esbuild context alive and writes after source changes.
 
-The static directory is generated and ignored by Git. Source changes belong in
-the TypeScript packages and their CSS. Python tests that construct `Lens` need
-the generated files present locally.
+The static directory is generated and ignored by Git. Component styles belong
+in adjacent `.styles.ts` modules. Shared tokens and primitives live in
+`packages/widget/src/styles/`. `packages/widget/src/widget.css` owns the shadow
+host reset and dock rules driven by imperative layout state. Python tests that
+construct `Lens` need the generated files present locally.
 
 ## Python build
 

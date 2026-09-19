@@ -271,9 +271,9 @@ describe("Lens dock", () => {
     });
 
     expect(
-      Array.from(document.querySelectorAll<HTMLButtonElement>(".ml-dockbar button")).map((button) =>
-        button.getAttribute("aria-label"),
-      ),
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>("[data-marimo-lens-dockbar] button"),
+      ).map((button) => button.getAttribute("aria-label")),
     ).toEqual([
       "Move Lens",
       "Select a target",
@@ -339,20 +339,22 @@ describe("Lens dock", () => {
 
     expect(findButton("Open selections, 0 open, 1 in history")?.textContent).toContain("0");
     expect(document.querySelector<HTMLButtonElement>("#marimo-lens-open-tab")?.disabled).toBe(true);
-    expect(document.querySelector(".ml-history-list__target")?.textContent).toContain(
+    expect(document.querySelector("[data-marimo-lens-history-target]")?.textContent).toContain(
       `Cell ${receipt.target.cellIds[0]}`,
     );
-    const disclosure = document.querySelector<HTMLDetailsElement>(".ml-history-list__disclosure")!;
-    const trigger = document.querySelector<HTMLElement>(".ml-history-list__row")!;
+    const disclosure = document.querySelector<HTMLDetailsElement>(
+      "[data-marimo-lens-history-disclosure]",
+    )!;
+    const trigger = document.querySelector<HTMLElement>("[data-marimo-lens-history-summary]")!;
     expect(disclosure.open).toBe(false);
     expect(trigger.textContent).not.toContain(receipt.summary);
     expect(trigger.querySelector("time")?.dateTime).toBe(receipt.addressedAt);
     act(() => trigger.click());
     expect(disclosure.open).toBe(true);
-    expect(document.querySelector(".ml-history-list__details")?.textContent).toContain(
+    expect(document.querySelector("[data-marimo-lens-history-details]")?.textContent).toContain(
       receipt.note,
     );
-    expect(document.querySelector(".ml-history-list__details")?.textContent).toContain(
+    expect(document.querySelector("[data-marimo-lens-history-details]")?.textContent).toContain(
       receipt.summary,
     );
     expect(document.querySelector('[aria-label="Request"]')?.getAttribute("title")).toBe("Request");
@@ -519,7 +521,7 @@ describe("Lens dock", () => {
       targetAttentionFallback: <div data-test-attention-notice>Cell cell-1</div>,
     });
 
-    const stack = document.querySelector(".ml-sheet-stack");
+    const stack = document.querySelector("[data-marimo-lens-sheet-stack]");
     const sheet = document.querySelector("[data-marimo-lens-selection-list]");
     const notice = document.querySelector("[data-test-attention-notice]");
     expect(stack?.contains(sheet)).toBe(true);

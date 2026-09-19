@@ -1,11 +1,16 @@
 import { acquireLensGlobalStyles } from "@/ui/global-styles";
 
+import type { LensTheme } from "./theme";
+
 const DARK_THEME =
   '.dark, .dark-mode, [data-theme="dark"], [data-mode="dark"], [data-vscode-theme-kind="vscode-dark"], [data-vscode-theme-kind="vscode-high-contrast"]';
 const FRAME_STYLES =
   'html[data-marimo-lens-armed="true"] iframe[data-marimo-lens-pointer-boundary="true"] { pointer-events: none !important; }';
 
-export function createLensSurface(ownerDocument: Document) {
+export function createLensSurface(
+  ownerDocument: Document,
+  onThemeChange: (theme: LensTheme) => void = () => {},
+) {
   const ownerWindow = ownerDocument.defaultView;
   if (!ownerWindow) throw new Error("Lens requires a browser window");
   const host = ownerDocument.createElement("div");
@@ -14,11 +19,13 @@ export function createLensSurface(ownerDocument: Document) {
   const shadow = host.attachShadow({ mode: "open" });
   ownerDocument.body.append(host);
   const updateTheme = () => {
-    host.dataset.theme = [ownerDocument.documentElement, ownerDocument.body].some((element) =>
+    const theme = [ownerDocument.documentElement, ownerDocument.body].some((element) =>
       element.matches(DARK_THEME),
     )
       ? "dark"
       : "light";
+    host.dataset.theme = theme;
+    onThemeChange(theme);
   };
   updateTheme();
   const observer = new ownerWindow.MutationObserver(updateTheme);

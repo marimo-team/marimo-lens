@@ -151,23 +151,23 @@ describe("target availability", () => {
       ),
     );
     expect(marker(selection)).not.toBeNull();
-    expect(document.querySelector(".ml-selection-list__availability")).toBeNull();
+    expect(document.querySelector("[data-marimo-lens-target-unavailable]")).toBeNull();
 
     await mutateDocument(() => output.remove());
     expect(marker(selection)).toBeNull();
-    expect(document.querySelector(".ml-selection-list__availability")?.textContent).toBe(
+    expect(document.querySelector("[data-marimo-lens-target-unavailable]")?.textContent).toBe(
       "Target unavailable",
     );
 
     await mutateDocument(() => setupOutput("another-cell"));
     expect(marker(selection)).toBeNull();
-    expect(document.querySelector(".ml-selection-list__availability")?.textContent).toBe(
+    expect(document.querySelector("[data-marimo-lens-target-unavailable]")?.textContent).toBe(
       "Target unavailable",
     );
 
     await mutateDocument(() => setupOutput(selection.target.cellIds[0]!));
     expect(marker(selection)?.textContent).toBe(selection.label);
-    expect(document.querySelector(".ml-selection-list__availability")).toBeNull();
+    expect(document.querySelector("[data-marimo-lens-target-unavailable]")).toBeNull();
   });
 
   test("reattaches when ResizeObserver reports visible output dimensions", async () => {

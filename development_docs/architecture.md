@@ -70,9 +70,10 @@ selection image status or image metadata.
 4. Host access stays behind adapters. marimo runtime access belongs in
    `_marimo_runtime.py` and `_marimo_control_state.py`. Notebook DOM access
    belongs in `packages/widget/src/notebook/`.
-5. Generated resources cross the language boundary through the build. esbuild
-   produces one ESM file and one stylesheet. Hatch packages both resources and
-   the Agent Plugin into the wheel and source distribution.
+5. Generated resources cross the language boundary through the build. StyleX
+   extracts component styles, esbuild produces one ESM file and one stylesheet,
+   and Hatch packages both resources and the Agent Plugin into the wheel and
+   source distribution.
 
 ## Dependency graph
 

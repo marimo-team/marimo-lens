@@ -38,7 +38,7 @@ describe("selection overlay", () => {
       workflow: { mode: "armed", activeTarget: activeTarget! },
     });
 
-    const highlight = document.querySelector<HTMLElement>(".ml-output-highlight");
+    const highlight = document.querySelector<HTMLElement>("[data-marimo-lens-output-highlight]");
     expect(highlight?.style.left).toBe("20px");
     expect(highlight?.style.width).toBe("400px");
   });
@@ -65,12 +65,16 @@ describe("selection overlay", () => {
     });
     const rerender = renderOverlay([selection], selection.id);
 
-    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
+      "100px",
+    );
 
     scroller.scrollLeft = 160;
     rerender();
 
-    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("60px");
+    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
+      "60px",
+    );
   });
 
   test("attaches a marker to nested scroll content rendered after mount", async () => {
@@ -84,28 +88,36 @@ describe("selection overlay", () => {
     });
     renderOverlay([selection], selection.id);
 
-    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
+      "100px",
+    );
     const { scroller } = setupNestedScroller(output);
     scroller.scrollLeft = 120;
     await act(async () => {
       await new Promise((resolve) => window.setTimeout(resolve, 5));
     });
 
-    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
+      "100px",
+    );
     scroller.scrollLeft = 160;
     await act(async () => {
       scroller.dispatchEvent(new Event("scroll"));
       await new Promise((resolve) => window.setTimeout(resolve, 5));
     });
 
-    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("60px");
+    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
+      "60px",
+    );
     scroller.scrollLeft = 180;
     await act(async () => {
       scroller.dispatchEvent(new Event("scroll"));
       await new Promise((resolve) => window.setTimeout(resolve, 5));
     });
 
-    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("40px");
+    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
+      "40px",
+    );
   });
 
   test("moves a marker on the first scroll after its ancestor becomes scrollable", async () => {
@@ -120,7 +132,9 @@ describe("selection overlay", () => {
     });
     renderOverlay([selection], selection.id);
 
-    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("100px");
+    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
+      "100px",
+    );
     Object.defineProperty(scroller, "scrollWidth", { configurable: true, value: 800 });
     scroller.scrollLeft = 40;
     await act(async () => {
@@ -128,7 +142,9 @@ describe("selection overlay", () => {
       await new Promise((resolve) => window.setTimeout(resolve, 5));
     });
 
-    expect(document.querySelector<HTMLElement>(".ml-rect-marker")?.style.left).toBe("60px");
+    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
+      "60px",
+    );
   });
 
   test("marks the current selection and exposes resize handles for its region", () => {
@@ -147,7 +163,9 @@ describe("selection overlay", () => {
       '[data-marimo-lens-selection-id="selection-1"]',
     );
     expect(marker?.getAttribute("aria-current")).toBe("true");
-    const handles = Array.from(document.querySelectorAll<HTMLButtonElement>(".ml-resize-handle"));
+    const handles = Array.from(
+      document.querySelectorAll<HTMLButtonElement>("[data-marimo-lens-resize-handle]"),
+    );
     expect(handles.map((handle) => handle.getAttribute("aria-label"))).toEqual([
       "Resize selection S1 from top left. Use arrow keys.",
       "Resize selection S1 from top right. Use arrow keys.",
@@ -171,7 +189,7 @@ describe("selection overlay", () => {
       document.querySelector<HTMLButtonElement>(`[data-marimo-lens-selection-id="${selection.id}"]`)
         ?.disabled,
     ).toBe(true);
-    expect(document.querySelector(".ml-resize-handle")).toBeNull();
+    expect(document.querySelector("[data-marimo-lens-resize-handle]")).toBeNull();
   });
 
   test("opens note editing when a marker is activated", () => {

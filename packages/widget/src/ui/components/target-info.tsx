@@ -1,9 +1,12 @@
+import * as stylex from "@stylexjs/stylex";
 import { useLayoutEffect, useRef, useState } from "react";
 
 import type { TargetSurface } from "@/notebook/selection-target";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
 import { targetInfo } from "@/notebook/target-info";
+
+import { targetInfoStyles } from "./target-info.styles";
 
 export function TargetInfoLabel({ target, bounds }: { target: TargetSurface; bounds: DOMRect }) {
   const dom = useNotebookDom();
@@ -55,13 +58,13 @@ export function TargetInfoLabel({ target, bounds }: { target: TargetSurface; bou
   return (
     <div
       ref={label}
-      className="ml-target-label"
+      {...stylex.props(targetInfoStyles.label)}
       data-marimo-lens-target-label
       aria-hidden="true"
       style={position}
     >
-      <span className="ml-target-label__name">{info.label}</span>
-      {info.detail && <span className="ml-target-label__detail">{info.detail}</span>}
+      <span {...stylex.props(targetInfoStyles.name)}>{info.label}</span>
+      {info.detail && <span {...stylex.props(targetInfoStyles.detail)}>{info.detail}</span>}
     </div>
   );
 }

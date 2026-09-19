@@ -1,5 +1,6 @@
 import type { Selection } from "@marimo-lens/protocol";
 
+import * as stylex from "@stylexjs/stylex";
 import { LoaderCircle, MessageSquare, Pencil, Trash2 } from "lucide-react";
 
 import type { RevealMotion } from "@/selection/reveal";
@@ -8,7 +9,12 @@ import type { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loa
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
 import { SnapshotPreviewButton } from "@/selection/components/selection-snapshot-preview";
 import { selectionTitle } from "@/selection/selection-description";
+import { buttonStyles, iconButtonStyles, ui } from "@/styles/primitives";
 import { moveSelectionRowFocus } from "@/ui/focus";
+
+import { selectionListStyles } from "./selection-list.styles";
+import { selectionSummaryMarker } from "./selection-markers.stylex";
+import { sheetStyles } from "./selection-sheet.styles";
 
 type SelectionListProps = {
   selections: Selection[];
@@ -38,12 +44,12 @@ export function SelectionList({
   snapshotLoader,
 }: SelectionListProps) {
   if (selections.length === 0) {
-    return <p className="ml-selection-sheet__empty">No open selections.</p>;
+    return <p {...stylex.props(sheetStyles.empty)}>No open selections.</p>;
   }
 
   return (
     <>
-      <ol className="ml-selection-list__items">
+      <ol {...stylex.props(selectionListStyles.items)}>
         {selections.map((selection) => {
           const current = selection.id === currentSelectionId;
           const busy = busySelectionIds.has(selection.id);
@@ -52,12 +58,20 @@ export function SelectionList({
           return (
             <li
               key={selection.id}
-              className="ml-selection-list__item"
+              {...stylex.props(
+                selectionListStyles.item,
+                current && selectionListStyles.itemCurrent,
+              )}
               data-current={current ? "true" : "false"}
               data-marimo-lens-selection-cluster={selection.id}
             >
               <button
-                className="ml-selection-list__summary"
+                {...stylex.props(
+                  ui.interactive,
+                  selectionSummaryMarker,
+                  selectionListStyles.summary,
+                )}
+                data-marimo-lens-selection-summary
                 data-marimo-lens-selection-focus={selection.id}
                 type="button"
                 disabled={busy}
@@ -68,27 +82,49 @@ export function SelectionList({
                 aria-current={current ? "true" : undefined}
                 aria-label={`${current ? "Current selection" : "Activate selection"} ${selection.label}, ${selection.note || "no note added"}, ${label}${targetAvailable ? "" : ", target unavailable"}`}
               >
-                <span className="ml-label">{selection.label}</span>
-                <span className="ml-selection-list__details">
+                <span
+                  {...stylex.props(
+                    ui.label,
+                    ui.borderless,
+                    selectionListStyles.label,
+                    current && selectionListStyles.labelCurrent,
+                  )}
+                >
+                  {selection.label}
+                </span>
+                <span {...stylex.props(selectionListStyles.details)}>
                   <span
-                    className="ml-selection-list__note"
+                    {...stylex.props(
+                      selectionListStyles.note,
+                      !selection.note && selectionListStyles.noteEmpty,
+                    )}
+                    data-marimo-lens-selection-note
                     data-empty={selection.note ? undefined : "true"}
                   >
                     {selection.note || "No note added"}
                   </span>
-                  <small title={selectionTitle(selection)}>
-                    <span className="ml-code">{label}</span>
+                  <small
+                    {...stylex.props(selectionListStyles.metadata)}
+                    data-marimo-lens-selection-metadata
+                    title={selectionTitle(selection)}
+                  >
+                    <span {...stylex.props(ui.mono)}>{label}</span>
                     <SelectionKindMark kind={selection.anchor.kind} />
                     {!targetAvailable ? (
                       <>
                         <span aria-hidden="true"> · </span>
-                        <span className="ml-selection-list__availability">Target unavailable</span>
+                        <span
+                          {...stylex.props(selectionListStyles.availability)}
+                          data-marimo-lens-target-unavailable
+                        >
+                          Target unavailable
+                        </span>
                       </>
                     ) : null}
                   </small>
                 </span>
               </button>
-              <div className="ml-selection-list__actions">
+              <div {...stylex.props(selectionListStyles.actions)}>
                 <SnapshotPreviewButton
                   key={snapshotKey(selection)}
                   selection={selection}
@@ -97,7 +133,7 @@ export function SelectionList({
                   snapshotLoader={snapshotLoader}
                 />
                 <button
-                  className="ml-icon-button"
+                  {...stylex.props(...iconButtonStyles)}
                   type="button"
                   disabled={busy}
                   onClick={(event) =>
@@ -113,7 +149,7 @@ export function SelectionList({
                   )}
                 </button>
                 <button
-                  className="ml-icon-button ml-icon-button--danger"
+                  {...stylex.props(...iconButtonStyles, ui.danger)}
                   type="button"
                   disabled={busy}
                   onClick={() => onDelete(selection)}
@@ -127,15 +163,15 @@ export function SelectionList({
           );
         })}
       </ol>
-      <footer className="ml-selection-list__footer">
+      <footer {...stylex.props(selectionListStyles.footer)}>
         <button
-          className="ml-button ml-button--danger"
+          {...stylex.props(...buttonStyles, ui.danger, selectionListStyles.clear)}
           type="button"
           disabled={clearing || busySelectionIds.size > 0}
           onClick={onClear}
         >
           {clearing ? (
-            <LoaderCircle className="ml-spin" size={14} aria-hidden="true" />
+            <LoaderCircle {...stylex.props(ui.spin)} size={14} aria-hidden="true" />
           ) : (
             <Trash2 size={14} aria-hidden="true" />
           )}

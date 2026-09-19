@@ -1,15 +1,16 @@
+import * as stylex from "@stylexjs/stylex";
+
 import darkLogo from "../assets/marimo-lens-mark-dark.svg";
 import lightLogo from "../assets/marimo-lens-mark-light.svg";
+import { useLensTheme } from "../theme";
+import { logoStyles } from "./lens-dock.styles";
 
-type LensLogoProps = {
-  className?: string;
-};
-
-export function LensLogo({ className }: LensLogoProps) {
+export function LensLogo() {
+  const theme = useLensTheme();
   return (
-    <span className={className} aria-hidden="true">
+    <span {...stylex.props(logoStyles.root)} aria-hidden="true">
       <img
-        className="ml-dock-tab__logo-image ml-dock-tab__logo-image--light"
+        {...stylex.props(logoStyles.image, theme === "dark" && logoStyles.hidden)}
         src={lightLogo}
         width={30}
         height={30}
@@ -17,7 +18,7 @@ export function LensLogo({ className }: LensLogoProps) {
         draggable={false}
       />
       <img
-        className="ml-dock-tab__logo-image ml-dock-tab__logo-image--dark"
+        {...stylex.props(logoStyles.image, theme === "light" && logoStyles.hidden)}
         src={darkLogo}
         width={30}
         height={30}
