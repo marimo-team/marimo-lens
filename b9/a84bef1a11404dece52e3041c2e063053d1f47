@@ -1,0 +1,89 @@
+packages/widget/tests/ui/theme.test.ts
+  s_1cbc35b5d79f18::t_e2b108ea0e5109 1-29
+packages/widget/src/ui/components/lens-portal.tsx
+  s_1cbc35b5d79f18::t_22cddb4ff00038 8,16,18,44
+packages/widget/src/ui/lens-surface.ts
+  s_1cbc35b5d79f18::t_22cddb4ff00038 6
+apps/e2e/tests/style.spec.ts
+  s_1cbc35b5d79f18::t_5c7656e8ba400a 76
+  s_1cbc35b5d79f18::t_592704df1ee502 7-9,15,23-25,61-64,66-70,89
+  s_1cbc35b5d79f18::t_0caa406ab77ec8 1-6,16-22,26-60,65,71-75,77-88,91-94
+  s_1cbc35b5d79f18::t_e10377cc4e0a11 10,14,90
+  s_1cbc35b5d79f18::t_43348f9ec3bf6c 11-13
+packages/widget/src/ui/theme.ts
+  s_1cbc35b5d79f18::t_22cddb4ff00038 10-32
+apps/e2e/playwright.config.ts
+  s_1cbc35b5d79f18::t_0caa406ab77ec8 32
+packages/widget/src/styles/primitives.ts
+  s_1cbc35b5d79f18::t_8134daacb449e9 24-27,38,61
+  s_1cbc35b5d79f18::t_e63596a25f12ec 58,63,78
+  s_1cbc35b5d79f18::t_eda90a32853093 82-84
+packages/widget/src/styles/tokens.stylex.ts
+  s_1cbc35b5d79f18::t_8134daacb449e9 10
+packages/widget/src/transient/transient.styles.ts
+  s_1cbc35b5d79f18::t_e63596a25f12ec 69-71
+  s_1cbc35b5d79f18::t_8134daacb449e9 40,67-68,72
+packages/widget/src/app/lens-error-boundary.tsx
+  s_1cbc35b5d79f18::t_22cddb4ff00038 2-4,7,18-19,34-36,38
+apps/e2e/tests/editor.spec.ts
+  s_1cbc35b5d79f18::t_b39924282fc394 88-99
+packages/widget/src/widget.css
+  s_1cbc35b5d79f18::t_b39924282fc394 53-62
+packages/widget/src/ui/components/lens-dock.styles.ts
+  s_1cbc35b5d79f18::t_5536ab4a74fc1f 211
+packages/widget/src/selection/components/selection-snapshot-preview.styles.ts
+  s_1cbc35b5d79f18::t_8134daacb449e9 25
+packages/widget/src/ui/components/lens-dock.tsx
+  s_1cbc35b5d79f18::t_b39924282fc394 236
+  s_1cbc35b5d79f18::t_2d5a44eab57f0d 225-226
+packages/widget/src/app/lens-view-owner.tsx
+  s_1cbc35b5d79f18::t_22cddb4ff00038 5,8,30,35,42,50,56,105,108-110,112
+packages/widget/tests/selection/components/selection-snapshot-preview.test.tsx
+  s_1cbc35b5d79f18::t_e63596a25f12ec 39-40,46
+packages/widget/src/ui/use-dock-motion.ts
+  s_1cbc35b5d79f18::t_b39924282fc394 4,57,62
+development_docs/browser-and-host.md
+  s_1cbc35b5d79f18::t_22cddb4ff00038 177-178,181,188
+packages/widget/tests/ui/lens-dock.test.tsx
+  s_1cbc35b5d79f18::t_da1c24cdc80b65 516,526
+development_docs/dependencies.md
+  s_1cbc35b5d79f18::t_22cddb4ff00038 90
+packages/widget/vite.config.ts
+  s_1cbc35b5d79f18::t_22cddb4ff00038 1-2,23
+  s_1cbc35b5d79f18::t_3264fce7f45094 6-8,30
+packages/widget/src/selection/components/history-list.styles.ts
+  s_1cbc35b5d79f18::t_e63596a25f12ec 27
+  s_1cbc35b5d79f18::t_8134daacb449e9 38,110
+packages/widget/tests/app/lens-view-owner.test.tsx
+  s_1cbc35b5d79f18::t_e2b108ea0e5109 5,7,12-13,20,81,92-95,102-112,122-129,133-139
+  s_1cbc35b5d79f18::t_6500b79e7b2672 1
+  s_1cbc35b5d79f18::t_26634d6432317f 113-121,130-132
+packages/widget/src/selection/components/selection-snapshot-preview.tsx
+  s_1cbc35b5d79f18::t_8134daacb449e9 194,211
+packages/widget/src/selection/components/selection-overlay.tsx
+  s_1cbc35b5d79f18::t_8134daacb449e9 216
+packages/widget/src/selection/components/selection-list.styles.ts
+  s_1cbc35b5d79f18::t_8134daacb449e9 60,114
+apps/e2e/tests/lens.spec.ts
+  s_1cbc35b5d79f18::t_9edcc39d65b57e 104,120
+  s_1cbc35b5d79f18::t_2d5a44eab57f0d 112-117
+  s_1cbc35b5d79f18::t_5536ab4a74fc1f 103,105-111,118-119
+packages/widget/src/selection/components/selection-overlay.styles.ts
+  s_1cbc35b5d79f18::t_8134daacb449e9 43,75,118,139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b9a84bef1a11404dece52e3041c2e063053d1f47",
+  "prompts": {},
+  "sessions": {
+    "s_1cbc35b5d79f18": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b920-c260-7df0-906f-761f22c54816",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
