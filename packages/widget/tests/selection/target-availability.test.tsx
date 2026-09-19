@@ -1,6 +1,6 @@
 import type { Selection } from "@marimo-lens/protocol";
 
-import { act } from "react";
+import { act, Profiler } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -101,6 +101,7 @@ describe("target availability", () => {
   });
 
   test("updates all selections on one output while preserving other targets", async () => {
+    const commit = vi.fn();
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
       return window.setTimeout(() => callback(performance.now()), 0);
     });
@@ -120,11 +121,18 @@ describe("target availability", () => {
     act(() =>
       root?.render(
         <NotebookDomTestProvider>
-          <AvailabilityProbe selections={[first, second, other]} />
+          <Profiler id="availability" onRender={commit}>
+            <AvailabilityProbe selections={[first, second, other]} />
+          </Profiler>
         </NotebookDomTestProvider>,
       ),
     );
     expect(container.textContent).toBe("3");
+    const commits = commit.mock.calls.length;
+    await mutateDocument(() => {
+      output.textContent = "Streaming output";
+    });
+    expect(commit).toHaveBeenCalledTimes(commits);
     await mutateDocument(() => output.remove());
     expect(container.textContent).toBe("1");
     await mutateDocument(() => document.body.append(output));

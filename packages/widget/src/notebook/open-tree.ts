@@ -1,5 +1,5 @@
-export function containsOpenTree(root: Element, node: Element): boolean {
-  let current: Element | null = node;
+export function containsOpenTree(root: Node, node: Node): boolean {
+  let current: Node | null = node;
   while (current) {
     if (root === current || root.contains(current)) return true;
     const currentRoot = current.getRootNode();

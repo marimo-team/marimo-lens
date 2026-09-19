@@ -44,12 +44,11 @@ export function anchorToViewport(
   };
 }
 
-export function isAnchorInsideOutputViewport(
+export function isViewportAnchorInsideOutput(
   output: HTMLElement,
-  anchor: SelectionAnchor,
+  viewport: ViewportAnchor,
   attachment?: ScrollAttachment,
 ): boolean {
-  const viewport = anchorToViewport(output, anchor, attachment);
   const clipBounds = [
     output.getBoundingClientRect(),
     ...(attachment?.frames.map(({ element }) => element.getBoundingClientRect()) ?? []),

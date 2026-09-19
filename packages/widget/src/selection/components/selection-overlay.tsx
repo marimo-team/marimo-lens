@@ -10,7 +10,7 @@ import { useViewportRevision } from "@/notebook/viewport";
 import {
   anchorToViewport,
   attachToNestedScroll,
-  isAnchorInsideOutputViewport,
+  isViewportAnchorInsideOutput,
   resizeRectAnchor,
   type ScrollAttachment,
   translateAnchor,
@@ -201,7 +201,7 @@ function SelectionMarker({
     [releaseAdjustment],
   );
 
-  if (!isAnchorInsideOutputViewport(output, displayedAnchor, attachment)) return null;
+  if (!isViewportAnchorInsideOutput(output, viewport, attachment)) return null;
 
   const marker = (
     <button
@@ -356,6 +356,7 @@ function SelectionMarker({
 type ScrollAttachmentState = {
   output: HTMLElement;
   anchor: string;
+  contentRevision: number;
   target: Element | null;
   attachment: ScrollAttachment;
 };
@@ -370,6 +371,7 @@ function createScrollAttachmentState(
   return {
     output,
     anchor: anchorKey,
+    contentRevision: dom.contentRevision(output),
     target,
     attachment: target
       ? attachToNestedScroll(output, target)
@@ -385,11 +387,12 @@ function refreshScrollAttachmentState(
   anchorKey: string,
 ): ScrollAttachmentState {
   const reset = current.output !== output || current.anchor !== anchorKey;
+  const contentRevision = dom.contentRevision(output);
   const target =
     reset ||
     current.target === null ||
     !current.target.isConnected ||
-    current.attachment.frames.length === 0
+    (current.attachment.frames.length === 0 && current.contentRevision !== contentRevision)
       ? attachmentTarget(dom, output, anchor)
       : current.target;
   const attachment = target
@@ -397,6 +400,7 @@ function refreshScrollAttachmentState(
     : { frames: [], ancestorBaselines: [] };
   if (
     !reset &&
+    current.contentRevision === contentRevision &&
     current.target === target &&
     hasSameScrollAttachment(current.attachment, attachment)
   ) {
@@ -405,6 +409,7 @@ function refreshScrollAttachmentState(
   return {
     output,
     anchor: anchorKey,
+    contentRevision,
     target,
     attachment,
   };

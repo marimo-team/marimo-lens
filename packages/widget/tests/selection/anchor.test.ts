@@ -3,7 +3,7 @@ import { describe, expect, test } from "vite-plus/test";
 import {
   anchorToViewport,
   attachToNestedScroll,
-  isAnchorInsideOutputViewport,
+  isViewportAnchorInsideOutput,
   resizeRectAnchor,
   translateAnchor,
 } from "@/selection/anchor";
@@ -54,15 +54,15 @@ describe("selection anchor geometry", () => {
   test("keeps saved markers inside the visible output viewport", () => {
     const output = outputElement();
 
-    expect(isAnchorInsideOutputViewport(output, { kind: "point", x: 0.5, y: 0.5 })).toBe(true);
-    expect(isAnchorInsideOutputViewport(output, { kind: "point", x: 0.1, y: 0.05 })).toBe(false);
+    expect(isViewportAnchorInsideOutput(output, { kind: "point", x: 260, y: 170 })).toBe(true);
+    expect(isViewportAnchorInsideOutput(output, { kind: "point", x: 100, y: 35 })).toBe(false);
     expect(
-      isAnchorInsideOutputViewport(output, {
+      isViewportAnchorInsideOutput(output, {
         kind: "rect",
-        x: 0.1,
-        y: 0.05,
-        width: 0.4,
-        height: 0.4,
+        x: 100,
+        y: 35,
+        width: 160,
+        height: 120,
       }),
     ).toBe(false);
   });

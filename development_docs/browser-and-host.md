@@ -162,6 +162,10 @@ document:
 One shared layout subscription coordinates document scroll, nested scroll,
 window resize, output resize, target resize, and output-tree changes. Anchored
 surfaces use that subscription for placement and viewport clamping.
+The adapter tracks content revisions per target so markers can reuse hit-test
+attachments during unrelated updates. Scrolling still reprojects each anchor,
+and target content or size changes refresh its attachment. Availability snapshots
+remain stable while the available selection IDs are unchanged.
 
 Keep target discovery in `notebook/selection-target.ts`, canonical output
 discovery in `notebook/output-root*.ts`, and document operations in

@@ -78,15 +78,26 @@ describe("selection overlay", () => {
   });
 
   test("attaches a marker to nested scroll content rendered after mount", async () => {
+    vi.stubGlobal("ResizeObserver", undefined);
     vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
       window.setTimeout(() => callback(performance.now()), 0),
     );
     vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
     const output = setupOutput();
+    const stream = document.createElement("div");
+    document.body.append(stream);
+    const hitTest = vi.spyOn(document, "elementsFromPoint");
     const selection = selectionFixture({
       anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.2, height: 0.3 },
     });
     renderOverlay([selection], selection.id);
+
+    const reads = hitTest.mock.calls.length;
+    await act(async () => {
+      stream.textContent = "Unrelated output update";
+      await new Promise((resolve) => window.setTimeout(resolve, 5));
+    });
+    expect(hitTest).toHaveBeenCalledTimes(reads);
 
     expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
       "100px",
@@ -145,6 +156,39 @@ describe("selection overlay", () => {
     expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
       "60px",
     );
+  });
+
+  test("discovers newly hittable nested content on scroll", async () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+      window.setTimeout(() => callback(performance.now()), 0),
+    );
+    vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
+    const output = setupOutput();
+    const { scroller } = setupNestedScroller(output);
+    const hitTest = document.elementsFromPoint.bind(document);
+    let hittable = false;
+    Object.defineProperty(document, "elementsFromPoint", {
+      configurable: true,
+      value: (x: number, y: number) => (hittable ? hitTest(x, y) : [output]),
+    });
+    const selection = selectionFixture({
+      anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.2, height: 0.3 },
+    });
+    renderOverlay([selection], selection.id);
+    for (const [scroll, left] of [
+      [40, "100px"],
+      [60, "80px"],
+    ] as const) {
+      await act(async () => {
+        hittable = true;
+        scroller.scrollLeft = scroll;
+        scroller.dispatchEvent(new Event("scroll"));
+        await new Promise((resolve) => window.setTimeout(resolve, 5));
+      });
+      expect(
+        document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left,
+      ).toBe(left);
+    }
   });
 
   test("marks the current selection and exposes resize handles for its region", () => {
