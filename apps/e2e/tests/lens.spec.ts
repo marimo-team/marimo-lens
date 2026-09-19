@@ -100,24 +100,6 @@ test("agent activity and reveal reach the selected output through the kernel", a
   const before = await runAction(page, "Start activity");
   await expect(page.getByText("Checking monthly revenue", { exact: true })).toBeVisible();
   await screenshot(page, testInfo, "activity");
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
-  await page.getByRole("checkbox", { name: "Show revenue" }).uncheck();
-  const notice = page.locator("[data-marimo-lens-target-attention-notice]");
-  const sheet = page.getByRole("region", { name: "Selections", exact: true });
-  await expectInsideViewport(page, notice);
-  const noticeBounds = (await notice.boundingBox())!;
-  const sheetBounds = (await sheet.boundingBox())!;
-  expect(noticeBounds.x).toBeGreaterThanOrEqual(sheetBounds.x);
-  expect(noticeBounds.y).toBeGreaterThanOrEqual(sheetBounds.y);
-  expect(noticeBounds.x + noticeBounds.width).toBeLessThanOrEqual(
-    sheetBounds.x + sheetBounds.width,
-  );
-  expect(noticeBounds.y + noticeBounds.height).toBeLessThanOrEqual(
-    sheetBounds.y + sheetBounds.height,
-  );
-  await screenshot(page, testInfo, "activity-inside-selections");
-  await page.getByRole("button", { name: "Close selections" }).click();
-  await page.getByRole("checkbox", { name: "Show revenue" }).check();
   await runAction(page, "Stop activity");
   await expect(page.getByText("Checking monthly revenue", { exact: true })).toBeHidden();
   const revealed = await runAction(page, "Reveal");

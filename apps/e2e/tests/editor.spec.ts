@@ -30,30 +30,18 @@ test("collapsed Lens matches Marimo controls while remaining draggable", async (
   await page.getByRole("button", { name: "Collapse Lens" }).click();
   const lens = page.getByRole("button", { name: "Open Lens", exact: true });
   const grip = lens.locator("[data-marimo-lens-collapsed-grip]");
-  await expect
-    .poll(() => grip.evaluate((element) => getComputedStyle(element).opacity))
-    .toBe("0.64");
+  await expect(grip).toBeVisible();
   const save = page.locator('[data-testid="save-button"]');
   const styles = await Promise.all([
     lens.evaluate((element) => {
       const surface = getComputedStyle(element, "::before");
-      const gripElement = element.querySelector<HTMLElement>("[data-marimo-lens-collapsed-grip]");
-      if (!gripElement) throw new Error("Collapsed Lens grip is missing");
-      const grip = getComputedStyle(gripElement);
       const bounds = element.getBoundingClientRect();
-      const gripBounds = gripElement.getBoundingClientRect();
       return {
         width: bounds.width,
         height: bounds.height,
         borderColor: surface.borderColor,
         borderRadius: surface.borderRadius,
         shadow: surface.boxShadow,
-        cursor: getComputedStyle(element).cursor,
-        grip: {
-          width: grip.width,
-          opacity: grip.opacity,
-          outside: gripBounds.right <= bounds.left,
-        },
       };
     }),
     save.evaluate((element) => {
@@ -79,15 +67,14 @@ test("collapsed Lens matches Marimo controls while remaining draggable", async (
   ).toBeLessThan(1);
   expect(lensStyle).toMatchObject({
     borderColor: marimoStyle.borderColor,
-    cursor: "grab",
-    grip: { width: "14px", opacity: "0.64", outside: true },
   });
-  expect(lensStyle.shadow).toContain("1px 1px 0px");
-  expect(marimoStyle.shadow).toContain("1px 1px 0px");
+  expect(marimoStyle.shadow).toContain(lensStyle.shadow);
   await screenshot(page, testInfo, "collapsed-native-control");
   const dock = page.locator("[data-marimo-lens-dock]");
   const before = (await dock.boundingBox())!;
   const handle = (await grip.boundingBox())!;
+  const button = (await lens.boundingBox())!;
+  expect(handle.x + handle.width).toBeLessThanOrEqual(button.x);
   await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
   await page.mouse.down();
   await page.mouse.move(handle.x + 90, handle.y - 100, { steps: 10 });

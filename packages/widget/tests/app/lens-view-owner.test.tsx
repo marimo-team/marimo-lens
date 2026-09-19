@@ -1,15 +1,11 @@
-import * as stylex from "@stylexjs/stylex";
 import { StrictMode } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, describe, expect, test } from "vite-plus/test";
 
-import { LensErrorBoundary } from "@/app/lens-error-boundary";
 import { LensViewOwner } from "@/app/lens-view-owner";
 import { getOutputCell } from "@/notebook/output-root";
 import { LensPortal } from "@/ui/components/lens-portal";
-
-import { darkTheme, lightTheme } from "../../src/styles/tokens.stylex";
 
 const roots = new Set<Root>();
 
@@ -17,31 +13,19 @@ afterEach(() => {
   for (const root of roots) act(() => root.unmount());
   roots.clear();
   document.body.replaceChildren();
-  document.documentElement.className = "";
 });
 
 describe("Lens view ownership", () => {
-  test("gives the first view ownership and reports every later view as a conflict", () => {
-    renderView("first");
-    renderView("second");
-    renderView("third");
-
-    expect(activeViews()).toEqual(["first"]);
-    expect(document.querySelectorAll("[data-marimo-lens-host]")).toHaveLength(3);
-    const conflicts = document.querySelectorAll("output[data-marimo-lens-view-conflict]");
-    expect(conflicts).toHaveLength(2);
-    expect(conflicts[0]?.textContent).toBe(
-      "Lens is already activeUse the existing Lens instance in this notebook.",
-    );
-  });
-
-  test("hands ownership to the next view and releases it after teardown", () => {
+  test("reports conflicts, transfers ownership, and releases it after teardown", () => {
     const first = renderView("first");
     const second = renderView("second");
     const third = renderView("third");
 
     expect(activeViews()).toEqual(["first"]);
     expect(document.querySelectorAll("[data-marimo-lens-view-conflict]")).toHaveLength(2);
+    const message = document.querySelector("[data-marimo-lens-view-conflict]")?.textContent;
+    expect(message).toContain("Lens is already active");
+    expect(message).toContain("Use the existing Lens instance in this notebook.");
 
     unmount(first);
     expect(activeViews()).toEqual(["second"]);
@@ -97,46 +81,6 @@ describe("Lens view ownership", () => {
     unmount(root);
     expect(shadow.host.isConnected).toBe(false);
     expect(secondaryDocument.getElementById("marimo-lens-global-styles")).toBeNull();
-  });
-
-  test("shares document theme changes with conflict and error notices", async () => {
-    document.documentElement.classList.add("dark");
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    const root = createRoot(container);
-    roots.add(root);
-    function FailingContent(): never {
-      throw new Error("test render failure");
-    }
-    try {
-      act(() =>
-        root.render(
-          <LensViewOwner>
-            <LensErrorBoundary>
-              <FailingContent />
-            </LensErrorBoundary>
-          </LensViewOwner>,
-        ),
-      );
-      renderView("conflicting");
-      const notices = document.querySelectorAll(
-        "[data-marimo-lens-error], [data-marimo-lens-view-conflict]",
-      );
-      expect(notices).toHaveLength(2);
-      for (const notice of notices) {
-        expect(notice.className).toContain(stylex.props(darkTheme).className);
-      }
-      await act(async () => {
-        document.documentElement.classList.remove("dark");
-      });
-      for (const notice of notices) {
-        expect(notice.className).toContain(stylex.props(lightTheme).className);
-        expect(notice.className).not.toContain(stylex.props(darkTheme).className);
-      }
-    } finally {
-      consoleError.mockRestore();
-    }
   });
 
   test("registers its owning output across an open shadow root", () => {

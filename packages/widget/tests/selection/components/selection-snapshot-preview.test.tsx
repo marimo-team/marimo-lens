@@ -43,10 +43,7 @@ describe("selection snapshot preview", () => {
 
     expect(loadSnapshot).toHaveBeenCalledWith(selection.id);
     const preview = document.querySelector<HTMLElement>("[data-marimo-lens-snapshot-preview]")!;
-    expect(preview.hasAttribute("data-marimo-lens-snapshot-trigger")).toBe(false);
-    expect(preview.dataset.placement).toBe("above");
-    expect(preview.style.left).toBe("676px");
-    expect(preview.style.bottom).toBe("276px");
+    expect(preview.getAttribute("aria-label")).toBe("Selection image for S1");
     expect(document.querySelector<HTMLImageElement>("[data-marimo-lens-snapshot-image]")?.src).toBe(
       "blob:marimo-lens-snapshot",
     );

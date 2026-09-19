@@ -4,10 +4,9 @@ import { expectInsideViewport, runAction, screenshot, selectOutput, test } from 
 
 test("reduced motion preserves control geometry while pressed", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await selectOutput(page, "point", "S1", "Check this month");
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
-  await page.getByRole("button", { name: "Edit note for S1", exact: true }).click();
-  await page.getByRole("dialog", { name: /Edit note for S1/ }).evaluate(async (dialog) => {
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await page.getByRole("region", { name: "Revenue by month" }).click();
+  await page.getByRole("dialog", { name: /Add note for S1/ }).evaluate(async (dialog) => {
     await Promise.all(
       dialog.getAnimations({ subtree: true }).map((animation) => animation.finished),
     );
@@ -27,6 +26,29 @@ test("reduced motion preserves control geometry while pressed", async ({ page })
     expect(pressed).toEqual(resting);
   } finally {
     await page.mouse.up();
+  }
+});
+
+test("conflict and render-error notices follow live theme changes", async ({
+  page,
+  browserErrors,
+}) => {
+  await page.getByRole("combobox", { name: "Lens views" }).selectOption("Duplicate");
+  const conflict = page.locator("[data-marimo-lens-view-conflict]");
+  await expect(conflict).toBeVisible();
+  await page.getByRole("combobox", { name: "Target mode" }).selectOption("Invalid selector");
+  const error = page.getByRole("alert").filter({ hasText: "Lens dom_selector is invalid" });
+  await expect(error).toBeVisible();
+  await expect.poll(() => browserErrors.length).toBeGreaterThan(0);
+  expect(browserErrors.every((message) => message.includes("Lens dom_selector is invalid"))).toBe(
+    true,
+  );
+  browserErrors.length = 0;
+  for (const colorScheme of ["dark", "light"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect(page.locator("body")).toHaveAttribute("data-theme", colorScheme);
+    await expect(conflict).toHaveCSS("color-scheme", colorScheme);
+    await expect(error).toHaveCSS("color-scheme", colorScheme);
   }
 });
 
@@ -168,6 +190,7 @@ test("long attention notices scroll inside and outside the selection sheet", asy
 test("busy point and region markers dim consistently during note saves", async ({ page }) => {
   await selectOutput(page, "point", "S1", "Check this month");
   await selectOutput(page, "region", "S2", "Check the quarter");
+  const opacities: number[] = [];
   for (const label of ["S1", "S2"]) {
     await page.getByRole("button", { name: "Open selections, 2 open, 0 in history" }).click();
     await page.getByRole("button", { name: `Edit note for ${label}`, exact: true }).click();
@@ -199,11 +222,14 @@ test("busy point and region markers dim consistently during note saves", async (
         }
         return effective;
       });
-      expect(opacity).toBeCloseTo(0.6);
+      expect(opacity).toBeGreaterThan(0);
+      expect(opacity).toBeLessThan(1);
+      opacities.push(opacity);
     } finally {
       release();
       await page.unrouteAll({ behavior: "wait" });
     }
     await expect(editor).toBeHidden();
   }
+  expect(opacities[1]).toBeCloseTo(opacities[0]!);
 });

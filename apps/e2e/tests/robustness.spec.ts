@@ -300,16 +300,22 @@ test("touch dragging and cancellation leave the next dock action usable", async 
 });
 
 test("invalid or unavailable position storage preserves dock controls", async ({ page }) => {
+  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+  const views = page.getByRole("combobox", { name: "Lens views" });
+  const remount = async () => {
+    await views.selectOption("Hidden");
+    await expect(grip).toHaveCount(0);
+    await views.selectOption("Single");
+    await expect(grip).toBeVisible();
+  };
   await page.evaluate(() =>
     localStorage.setItem("marimo-lens:dock-position:v1", '{"x":null,"y":1e999}'),
   );
-  await page.reload();
-  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
-  await expect(grip).toBeVisible();
+  await remount();
   const dock = page.locator("[data-marimo-lens-dock]");
   const initial = (await dock.boundingBox())!;
   expect(initial.y + initial.height).toBeLessThan(page.viewportSize()!.height);
-  await page.addInitScript(() => {
+  await page.evaluate(() => {
     const get = Storage.prototype.getItem;
     const set = Storage.prototype.setItem;
     Storage.prototype.getItem = function (key) {
@@ -321,8 +327,7 @@ test("invalid or unavailable position storage preserves dock controls", async ({
       return set.call(this, key, value);
     };
   });
-  await page.reload();
-  await expect(grip).toBeVisible();
+  await remount();
   await grip.press("Shift+ArrowUp");
   await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(initial.y - 40, 0);
   await page.emulateMedia({ reducedMotion: "reduce" });

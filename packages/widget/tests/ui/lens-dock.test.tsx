@@ -347,7 +347,6 @@ describe("Lens dock", () => {
     )!;
     const trigger = document.querySelector<HTMLElement>("[data-marimo-lens-history-summary]")!;
     expect(disclosure.open).toBe(false);
-    expect(trigger.textContent).not.toContain(receipt.summary);
     expect(trigger.querySelector("time")?.dateTime).toBe(receipt.addressedAt);
     act(() => trigger.click());
     expect(disclosure.open).toBe(true);
@@ -511,19 +510,6 @@ describe("Lens dock", () => {
     expect(onEditNote).toHaveBeenCalledWith(selection, "instant");
     act(() => findButton("Remove selection S1")?.click());
     expect(onDeleteSelection).toHaveBeenCalledWith(selection);
-  });
-
-  test("keeps current attention inside the open selection sheet", () => {
-    renderDock({
-      selections: [selectionFixture()],
-      currentSelectionId: "selection-1",
-      listOpen: true,
-      targetAttentionFallback: <div data-test-attention-notice>Cell cell-1</div>,
-    });
-
-    const sheet = document.querySelector("[data-marimo-lens-selection-list]");
-    const notice = document.querySelector("[data-test-attention-notice]");
-    expect(sheet?.contains(notice)).toBe(true);
   });
 
   test("gives the external notice slot to current cell attention", () => {

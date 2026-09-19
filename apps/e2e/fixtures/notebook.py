@@ -26,7 +26,9 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     target_mode = mo.ui.dropdown(
-        ["Notebook outputs", "DOM roots"], value="Notebook outputs", label="Target mode"
+        ["Notebook outputs", "DOM roots", "Invalid selector"],
+        value="Notebook outputs",
+        label="Target mode",
     )
     show_revenue = mo.ui.checkbox(value=True, label="Show revenue")
     mo.hstack([target_mode, show_revenue], justify="start", wrap=True)
@@ -78,11 +80,12 @@ def _(mo, show_revenue):
 
 @app.cell(hide_code=True)
 def _(Lens, target_mode):
-    lens = Lens(
-        dom_selector='[aria-label="Revenue by month"]'
-        if target_mode.value == "DOM roots"
-        else None
-    )
+    _selectors = {
+        "Notebook outputs": None,
+        "DOM roots": '[aria-label="Revenue by month"]',
+        "Invalid selector": "[",
+    }
+    lens = Lens(dom_selector=_selectors[target_mode.value])
     activity = {}
     return activity, lens
 
