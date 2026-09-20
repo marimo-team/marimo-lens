@@ -123,11 +123,18 @@ def test_package_import_defers_reading_agent_resources() -> None:
             "-c",
             (
                 "import agent_plugins as ap\n"
+                "read, locate = ap.read, ap.locate\n"
                 "def unavailable(*args, **kwargs):\n"
                 "    raise AssertionError('Unexpected resource access')\n"
-                "ap.read = unavailable\n"
+                "ap.read = ap.locate = unavailable\n"
                 "import marimo_lens\n"
                 "assert callable(marimo_lens.agent.connect)\n"
+                "ap.read, ap.locate = read, locate\n"
+                "plugin = marimo_lens.agent.plugin()\n"
+                "skill = marimo_lens.agent.skill()\n"
+                "assert plugin.manifest.name == 'marimo-lens'\n"
+                "assert skill == plugin.skill('marimo-lens')\n"
+                "assert skill.source in marimo_lens.agent.__doc__\n"
             ),
         ],
         capture_output=True,
