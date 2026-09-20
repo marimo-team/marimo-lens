@@ -9,6 +9,7 @@ from importlib.metadata import distribution
 from types import SimpleNamespace
 from typing import cast
 
+import agent_plugins as ap
 import marimo as mo
 import marimo._code_mode as code_mode
 import pytest
@@ -36,10 +37,10 @@ def test_agent_module_exports_the_handoff_surface() -> None:
     assert set(agent.__all__) == {
         "MountedLens",
         "add_lens_cell",
-        "agent_plugin",
-        "agent_skill",
         "connect",
         "discover",
+        "plugin",
+        "skill",
     }
 
 
@@ -60,36 +61,51 @@ def test_agent_capability_entry_point_loads_the_instruction_module() -> None:
     assert capabilities[0].load() is agent
 
 
-def test_agent_plugin_exposes_the_packaged_lens_skill() -> None:
-    plugin = agent.agent_plugin()
-    skill = agent.agent_skill()
+def test_agent_resources_resolve_the_packaged_lens_skill() -> None:
+    plugin = agent.plugin()
+    skill = agent.skill()
 
     assert plugin.manifest.name == "marimo-lens"
     assert skill in plugin.skills
     assert skill.path.name == "marimo-lens"
     assert (skill / "SKILL.md").is_file()
     assert (skill / "agents" / "openai.yaml").is_file()
-    assert (skill / "reference" / "workflow.md").is_file()
+    assert skill.file("references/workflow.md").is_file()
     assert skill.frontmatter.splitlines()[0] == "name: marimo-lens"
 
 
-def test_agent_module_help_points_to_installed_resources() -> None:
-    plugin = agent.agent_plugin()
-    skill = agent.agent_skill()
+def test_agent_module_help_contains_the_installed_core_briefing() -> None:
+    plugin = agent.plugin()
+    skill = agent.skill()
     rendered = pydoc.render_doc(agent)
+    briefing = ap.read("marimo-lens")
 
     assert str(plugin.path) in rendered
     assert str(skill / "SKILL.md") in rendered
-    assert "resources = lens_agent.agent_plugin()" in rendered
-    assert "skill = lens_agent.agent_skill()" in rendered
+    assert agent.__doc__ == briefing
+    assert skill.source in briefing
+    assert "## Explain the notebook with a Trail" in rendered
+    assert "references/selections.md" in rendered
 
 
-def test_package_import_exposes_agent_help() -> None:
+@pytest.mark.parametrize(
+    "import_statement", ["import marimo_lens", "import marimo_lens.agent"]
+)
+def test_package_import_exposes_agent_resources_and_help(import_statement: str) -> None:
     result = subprocess.run(
         [
             sys.executable,
             "-c",
-            "import marimo_lens\nhelp(marimo_lens.agent)",
+            (
+                f"{import_statement}\n"
+                "assert 'agent' in marimo_lens.__all__\n"
+                "plugin = marimo_lens.agent.plugin()\n"
+                "skill = marimo_lens.agent.skill()\n"
+                "assert plugin.manifest.name == 'marimo-lens'\n"
+                "assert skill == plugin.skill('marimo-lens')\n"
+                "assert skill.file('references/selections.md').is_file()\n"
+                "help(marimo_lens.agent)\n"
+            ),
         ],
         capture_output=True,
         text=True,
@@ -100,15 +116,25 @@ def test_package_import_exposes_agent_help() -> None:
     assert "marimo_lens.agent" in result.stdout
 
 
-def test_agent_help_defines_the_code_mode_context_for_mounting() -> None:
-    doc = inspect.getdoc(agent)
-
-    assert doc is not None
-    assert "import marimo._code_mode as cm" in doc
-    assert "import marimo_lens.agent as lens_agent" in doc
-    assert "async with cm.get_context() as ctx:" in doc
-    assert "mounted = lens_agent.connect(ctx)" in doc
-    assert "lens_agent.add_lens_cell(ctx)" in doc
+def test_package_import_defers_reading_agent_resources() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import agent_plugins as ap\n"
+                "def unavailable(*args, **kwargs):\n"
+                "    raise AssertionError('Unexpected resource access')\n"
+                "ap.read = unavailable\n"
+                "import marimo_lens\n"
+                "assert callable(marimo_lens.agent.connect)\n"
+            ),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_agent_handoff_matches_documented_signatures() -> None:

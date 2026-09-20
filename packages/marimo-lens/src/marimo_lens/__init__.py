@@ -32,4 +32,5 @@ __all__ = [
     "SelectionReference",
     "SelectionTargetReference",
     "__version__",
+    "agent",
 ]

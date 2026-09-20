@@ -57,9 +57,11 @@ The package registers `marimo_lens.agent` in marimo's
 capability, read the packaged Agent Skill, and call `connect()` inside the live
 kernel.
 
-[marimo Pair](https://github.com/marimo-team/marimo-pair) is one optional code-mode
-integration. Installing its Agent Skill with `npx skills add` requires Node.js,
-the `npx` command, network access, and an agent host that supports Agent Skills.
+[marimo Pair](https://marimo.io/pair) is one optional code-mode integration.
+Read Lens instructions through `agent_plugins.read("marimo-lens")` in the
+notebook's Python environment, or through `help(marimo_lens.agent)`. A terminal
+bootstrap with `uvx --with marimo-lens agent-plugins read marimo-lens` reads an
+isolated installation and requires network access when packages are uncached.
 
 ## Hosted docs and released packages
 

@@ -291,15 +291,18 @@ Later public operations raise `LensError(code="lens_closed")`.
 
 ## Agent adapter
 
-Import the adapter inside the live notebook kernel:
+Read the agent resources from the installed package:
 
 ```python
-import marimo_lens.agent as lens_agent
+import marimo_lens.agent
+
+plugin = marimo_lens.agent.plugin()
+skill = marimo_lens.agent.skill()
 ```
 
-### `agent_plugin`
+### `plugin`
 
-`agent_plugin() -> agent_plugins.Plugin`
+`plugin() -> agent_plugins.Plugin`
 
 Returns the Agent Plugin resource bundle installed with the current
 `marimo-lens` distribution.
@@ -308,15 +311,19 @@ Raises `agent_plugins.AgentPluginError` when distribution metadata or the
 packaged plugin is unavailable. Reinstall the same `marimo-lens` version before
 retrying.
 
-### `agent_skill`
+### `skill`
 
-`agent_skill() -> agent_plugins.Skill`
+`skill() -> agent_plugins.Skill`
 
 Returns the packaged `marimo-lens` Agent Skill.
 
-- `skill / "SKILL.md"` gives the instruction path.
+- `skill.file("SKILL.md")` gives the checked instruction path.
 - `skill.body` gives the Markdown instruction body.
 - `skill.files` gives the packaged resource inventory.
+
+`help(marimo_lens.agent)` includes this core skill through
+`agent_plugins.read("marimo-lens")`. Load linked workflows with
+`skill.file("references/selections.md").read_text(encoding="utf-8")` when needed.
 
 Raises `agent_plugins.AgentPluginError` when the plugin contains no Lens skill.
 

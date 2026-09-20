@@ -157,12 +157,14 @@ environment and import its agent adapter there.
 ```python
 import marimo_lens.agent as lens_agent
 
-print(lens_agent.agent_skill() / "SKILL.md")
+help(lens_agent)
 ```
 
 Lens registers `marimo_lens.agent` in marimo's `marimo.agent.capability`
-entry-point group. Restart the notebook runtime after installing the package so
-marimo can discover the new capability.
+entry-point group. After installing it in the running kernel's environment,
+ask the agent to check `cm.capabilities()` again and import the Lens adapter.
+If the import fails, inspect the kernel's `sys.executable` and install through
+that notebook's package manager.
 
 If the package is installed and no Lens exists, follow [Add Lens when the
 notebook has none](/agents#add-lens-when-the-notebook-has-none). End the kernel
@@ -172,7 +174,7 @@ Lens before calling `connect()` again.
 **Result:** `lens_agent.connect(ctx)` returns a `MountedLens` and
 `mounted.context()` returns the current detached context.
 
-Use [marimo Pair](https://github.com/marimo-team/marimo-pair/tree/main/skills/marimo-pair)
+Use [marimo Pair](https://marimo.io/pair)
 when the agent still needs a live marimo code-mode connection.
 
 ## Cell-output image returns `None`

@@ -17,6 +17,7 @@ from marimo_lens import (
     RevealStep,
     SelectionReference,
     SelectionTargetReference,
+    agent,
 )
 from marimo_lens._runtime import RuntimeSnapshot
 
@@ -34,6 +35,7 @@ def test_package_exports_the_public_api() -> None:
         "SelectionTargetReference": SelectionTargetReference,
         "RevealStep": RevealStep,
         "__version__": pkg.version("marimo-lens"),
+        "agent": agent,
     }
 
     assert set(marimo_lens.__all__) == set(expected)
