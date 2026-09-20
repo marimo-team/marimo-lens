@@ -21,6 +21,21 @@ rendering plus private marimo runtime, control-state, UI-registry, and code-mode
 APIs. Run the Lens checks again after upgrading marimo when your workflow
 depends on agent connection, graph context, control values, or cell-output capture.
 
+## Mounting Lens
+
+Lens is a separate Python package with its own releases. Install it in the
+notebook's environment alongside marimo.
+
+In marimo 0.24.2, display a `Lens()` instance in a notebook cell, ask your
+connected agent to add it, or use a host integration that mounts it.
+Installation alone does not show a dock in that release.
+
+[Automatic mounting](https://github.com/marimo-team/marimo/pull/10814) is merged
+in upstream development builds. Marimo 0.24.2 predates that change. If your
+notebook already shows a Lens dock, reuse it. The
+[quickstart](./getting-started#add-lens-to-your-notebook) includes the explicit mounting step
+for released versions that need it.
+
 ## Browser
 
 Lens requires a browser with JavaScript and current implementations of these

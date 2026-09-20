@@ -1,24 +1,24 @@
 ---
 title: Getting started
-description: Mount Lens in a marimo notebook and create the first selection.
+description: Add Lens to your notebook, follow a guided Trail, or ask an agent to address a selection.
 ---
 
 # Getting started
 
-Mount Lens in [marimo](https://marimo.io/), a reactive Python notebook, create one selection,
-and inspect the context available to a code-mode agent.
+::: info About the demos
 
-## Prerequisites
+These demos run in your browser with scripted actions and no language model.
+They show Lens's interactions and the tools a connected AI agent can use to
+explain your live notebook, work on selections, and return results for review.
 
-Use Python 3.10 through 3.14 and [uv](https://docs.astral.sh/uv/). The first
-`uvx` run downloads marimo and Lens. See [Compatibility](./compatibility) when
-adding Lens to an existing environment.
+:::
 
 <llm-exclude>
 
 ```marimo-config
 requires-python = ">=3.10,<3.15"
 dependencies = [
+    "altair",
     "marimo",
     "marimo-lens",
 ]
@@ -26,50 +26,98 @@ dependencies = [
 
 </llm-exclude>
 
-## Start a notebook
+## Connect your agent
 
-Open a local notebook with Lens installed:
+Use Python 3.10 through 3.14 and [uv](https://docs.astral.sh/uv/).
+Start a notebook with Lens and the chart library used by the sample:
 
 ```sh
-uvx --with marimo-lens marimo edit notebook.py
+uvx --with marimo-lens --with altair marimo edit notebook.py
 ```
 
-This command creates an isolated environment for marimo and Lens, then opens
-the notebook editor.
+In the editor, open **Settings → Pair with an agent**, choose your agent, and
+follow the connection instructions. Ask it:
+
+> Which notebook are you connected to?
+
+Continue when it identifies `notebook.py` and can inspect its live cells.
+If you already use [marimo Pair](https://marimo.io/pair), keep that connection.
+You can also use the built-in AI sidebar with a configured provider and
+**Code Mode (beta)** selected.
 
 ::: details Use an existing uv project
 
-Add Lens to the project, then run marimo in that environment:
+Install Lens in the notebook's Python environment. Altair is needed for the
+sample chart:
 
 ```sh
-uv add marimo-lens
+uv add marimo-lens altair
 uv run marimo edit notebook.py
 ```
 
+For an already-running notebook, ask your connected agent to install Lens in
+its active Python environment and add the dock. Keep using the same session.
+
 :::
 
-## Mount Lens
+::: details Sample notebook: monthly revenue
 
-Render a result in one cell:
+Run each block in a separate notebook cell. The first displays the data:
 
 ```python
+import altair as alt
 import marimo as mo
 
-revenue = {"January": 42, "February": 58, "March": 39}
-rows = [f"| {month} | {value} |" for month, value in revenue.items()]
-mo.md(
-    "\n".join(
-        [
-            "| Month | Revenue |",
-            "| --- | ---: |",
-            *rows,
-        ]
+revenue = [
+    {"month": "January", "revenue": 42},
+    {"month": "February", "revenue": 58},
+    {"month": "March", "revenue": 39},
+]
+mo.ui.table(revenue, selection=None)
+```
+
+The second draws the chart:
+
+```python
+chart = (
+    alt.Chart(alt.Data(values=revenue))
+    .mark_bar(color="#1D7363")
+    .encode(
+        x=alt.X("month:N", sort=None, title="Month"),
+        y=alt.Y("revenue:Q", title="Revenue (USD thousands)"),
+        tooltip=["month:N", "revenue:Q"],
     )
+    .properties(title="Monthly revenue", width="container", height=220)
+)
+mo.ui.altair_chart(chart)
+```
+
+The third states the result:
+
+```python
+peak = max(revenue, key=lambda row: row["revenue"])
+mo.md(
+    f"**{peak['month']} leads with {peak['revenue']} thousand dollars.** "
+    "These are revenue totals, not profit."
 )
 ```
 
-If the notebook already shows a Lens dock, use it. Otherwise mount Lens in
-another cell:
+These three outputs give your agent a route from data to chart to conclusion.
+
+:::
+
+## Add Lens to your notebook
+
+If the dock is missing, tell your connected agent:
+
+> Add Lens to this notebook.
+
+The agent reuses an existing Lens or adds and runs a Lens cell. Continue when
+you can see the dock.
+
+::: details Add it yourself
+
+Run this in a notebook cell and keep it mounted:
 
 ```python
 from marimo_lens import Lens
@@ -78,33 +126,103 @@ lens = Lens()
 lens
 ```
 
-Keep this cell mounted. Lens adds its dock to the bottom of the notebook and
-makes rendered output cells selectable.
+Lens is a separate Python package with its own releases. Marimo 0.24.2 needs
+this explicit mount or one supplied by a host integration. If your notebook
+already shows a Lens dock, reuse it. See [mounting compatibility](./compatibility#mounting-lens).
 
-## Create a selection
+:::
 
-Press **Select**, click one rendered location, and add a note such as “Make
-these values easier to compare.” The new `S<n>` selection appears in **Open**
-with its notebook target and producing cell.
+## Explain the notebook
+
+Ask your agent:
+
+> Use Lens to walk me through this notebook, from the inputs to the main result.
+
+The agent reads the relevant cells and values, then shows a **Trail**: an
+ordered explanation attached to the notebook's outputs. Use **Next** and
+**Previous** to follow it at your own pace, or dismiss it when finished.
+
+You can ask a narrower question, such as:
+
+> Use a Lens Trail to explain how the revenue chart supports the conclusion.
+
+A walkthrough explains the existing notebook and works with no selections.
+
+## Address a selection
+
+Press **Select** in the dock, click a point or drag a region on an output, and
+add a note. For the revenue chart, click February and write:
+
+> Make this bar orange and keep the other bars green.
+
+Then send this in the connected agent chat:
+
+> Use Lens to address my current selection.
+
+Saving a Lens note keeps it in **Open** until an agent reads it. The chat
+request starts the work. The agent loads its installed Lens instructions,
+checks the selected output and producing code, makes the requested change,
+and verifies it.
+
+Review the result when the agent brings it into view. In the sample, February
+should be orange while January and March remain green. The verified request
+moves to **History** with a summary. Reopen it to refine the result. Requests
+the agent cannot verify should remain open with an explanation.
+
+For several requests, ask:
+
+> Use Lens to address all open selections.
+
+::: details The agent cannot find Lens or my selection
+
+Confirm that it is connected to this notebook and that the dock is mounted.
+Ask the agent to check that Lens is installed in that kernel, read
+`help(marimo_lens.agent)`, and add the dock if it is missing.
+
+A terminal can read the packaged briefing with
+`uvx --with marimo-lens agent-plugins read marimo-lens`. That command reads an
+isolated installation. Working with your notebook requires the live connection.
+[Agent integration](./agents) covers discovery and resource access.
+
+:::
+
+## Try a Trail
+
+Press **Show a walkthrough** to visit the data, chart, and conclusion. The
+three steps explain which month leads and what the numbers measure. Use
+**Next**, **Previous**, and dismiss to control the Trail.
+
+You can also press **Select**, mark a bar, and add a note to inspect the captured
+request. In your notebook, the agent chooses its actions from your request,
+code, and live results.
+
+<llm-only>
+
+The demo shows three monthly revenue values: January 42, February 58, and
+March 39, in USD thousands. Its Trail visits the data table, compares the bars,
+then explains that February has the highest revenue and that revenue is not
+profit. The reader controls the steps. Selections and History remain unchanged
+by a walkthrough.
+
+</llm-only>
 
 <llm-exclude>
 
 <div class="lens-doc-demo">
 
-<div class="lens-doc-demo-steps" aria-label="Create a Lens request in four steps">
-  <span><strong>1</strong> Press <strong>Select</strong></span>
-  <span><strong>2</strong> Click a value</span>
-  <span><strong>3</strong> Add a note</span>
-  <span><strong>4</strong> Review the request</span>
-</div>
-
 ```python marimo output=false
 from html import escape
 
+import altair as alt
 import marimo as mo
 from marimo_lens import Lens
 
 get_starter_revision, set_starter_revision = mo.state(0)
+starter_walkthrough = mo.ui.run_button(label="Show a walkthrough")
+```
+
+```python marimo
+starter_walkthrough
 ```
 
 <div class="lens-doc-demo-mount">
@@ -126,26 +244,76 @@ starter_lens
 <div class="lens-doc-demo-output lens-starter-output">
 
 ```python marimo
-_starter_revenue = {
-    "January": 42,
-    "February": 58,
-    "March": 39,
-}
-_starter_rows = [
-    f"| {_month} | {_value} |" for _month, _value in _starter_revenue.items()
+starter_revenue = [
+    {"month": "January", "revenue": 42},
+    {"month": "February", "revenue": 58},
+    {"month": "March", "revenue": 39},
 ]
-mo.md(
-    "\n".join(
-        [
-            "| Month | Revenue |",
-            "| --- | ---: |",
-            *_starter_rows,
-        ]
+mo.ui.table(starter_revenue, selection=None)
+```
+
+```python marimo
+starter_chart = (
+    alt.Chart(alt.Data(values=starter_revenue))
+    .mark_bar(color="#1D7363")
+    .encode(
+        x=alt.X("month:N", sort=None, title="Month"),
+        y=alt.Y("revenue:Q", title="Revenue (USD thousands)"),
+        tooltip=["month:N", "revenue:Q"],
     )
+    .properties(title="Monthly revenue", width="container", height=220)
+)
+mo.ui.altair_chart(starter_chart)
+```
+
+```python marimo
+starter_peak = max(starter_revenue, key=lambda row: row["revenue"])
+mo.md(
+    f"**{starter_peak['month']} leads with "
+    f"{starter_peak['revenue']} thousand dollars.** "
+    "These are revenue totals, not profit."
 )
 ```
 
 </div>
+
+```python marimo output=false
+if starter_walkthrough.value:
+    from marimo_lens._marimo_runtime import (
+        collect_runtime_snapshot as _collect_runtime_snapshot,
+    )
+
+    # The docs demo runs in notebook cells rather than an agent scratchpad.
+    _runtime = _collect_runtime_snapshot()
+    if not _runtime.available:
+        raise RuntimeError(_runtime.reason)
+    _route = [
+        (
+            "starter_revenue",
+            "Three months of revenue",
+            f"Compare {len(starter_revenue)} monthly totals, measured in USD thousands.",
+        ),
+        (
+            "starter_chart",
+            "Compare the bars",
+            f"{starter_peak['month']} is the tallest bar at {starter_peak['revenue']}.",
+        ),
+        (
+            "starter_peak",
+            "What the result means",
+            f"{starter_peak['month']} leads on revenue. Costs are absent, so this does not tell us profit.",
+        ),
+    ]
+    _steps = [
+        {
+            "target": next(cell.id for cell in _runtime.cells if variable in cell.defs),
+            "label": label,
+            "message": message,
+        }
+        for variable, label, message in _route
+    ]
+    starter_lens.reveal(_steps, duration_ms=None)
+```
 
 <div class="lens-doc-demo-status">
 
@@ -159,8 +327,8 @@ if _starter_current is None:
     _starter_state = "empty"
     _starter_title = "No request yet"
     _starter_body = (
-        "Select a revenue value and add a note such as "
-        '"Make these values easier to compare."'
+        "Select a bar and add a note such as "
+        '"Make this bar orange and keep the other bars green."'
     )
 else:
     _starter_state = "ready"
@@ -209,24 +377,5 @@ mo.Html(
 
 </llm-exclude>
 
-Press **Select** again when the request refers to another point or region. An
-agent can resolve those selections together after one verified change.
-
-## Inspect the result
-
-Open **Selections** from the Lens dock. The new selection appears in **Open**
-with a stable `S<n>` label, its note, target, point or region kind, and image
-status. Select the image action when capture succeeded to inspect the marked
-selection image.
-
-## Next: connect an agent
-
-[Connect an agent](./agents) gives a notebook agent live code-mode access,
-reads the current Lens context, verifies a change, reveals the result, and
-resolves the selection. Read [How Lens works](./how-lens-works) first when you
-want the complete collaboration model. The [Selections guide](./selections)
-covers gestures, notes, image status, deletion, History, and reopening.
-
-To name HTML output or select individual cards within it, try
-[Custom labels and metadata](./custom-metadata). The guide includes a complete
-`mo.Html` example and an editable preview.
+Read [Selections](./selections) for gestures, History, and reopening, or
+[Custom labels and metadata](./custom-metadata) for selectable HTML regions.
