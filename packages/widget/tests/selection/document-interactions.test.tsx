@@ -183,8 +183,9 @@ describe("document selection interactions", () => {
     expect(output.style.getPropertyPriority("touch-action")).toBe("");
   });
 
-  test("keeps one interaction surface throughout a pointer gesture", () => {
+  test("keeps one interaction surface and releases mouse capture after a drag", () => {
     const output = visibleOutput();
+    vi.mocked(output.hasPointerCapture).mockReturnValue(true);
     const addEventListener = vi.spyOn(document, "addEventListener");
     const pointerMoveRegistrations = () =>
       addEventListener.mock.calls.filter(([type]) => type === "pointermove").length;
@@ -195,8 +196,11 @@ describe("document selection interactions", () => {
     void act(() => output.dispatchEvent(pointer("pointerdown", 40, 50, 11)));
     void act(() => output.dispatchEvent(pointer("pointermove", 80, 90, 11)));
     void act(() => output.dispatchEvent(pointer("pointermove", 120, 110, 11)));
+    void act(() => output.dispatchEvent(pointer("pointerup", 120, 110, 11)));
 
     expect(pointerMoveRegistrations()).toBe(armedRegistrations);
+    expect(output.setPointerCapture).toHaveBeenCalledWith(11);
+    expect(output.releasePointerCapture).toHaveBeenCalledWith(11);
   });
 
   test("grounds a touch-dragged region at its center", () => {

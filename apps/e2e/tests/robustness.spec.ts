@@ -303,7 +303,12 @@ test("touch dragging creates a region selection", async ({ page }) => {
   const session = await page.context().newCDPSession(page);
   const target = page.getByRole("region", { name: "Revenue by month" });
   await target.scrollIntoViewIfNeeded();
-  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Select a target", exact: true })
+    .click({ noWaitAfter: true });
+  await expect(
+    page.getByRole("button", { name: "Cancel selection mode", exact: true }),
+  ).toBeVisible();
   const bounds = await target.boundingBox();
   if (!bounds) throw new Error("Revenue output is unavailable");
   const x = bounds.x + bounds.width * 0.3;
