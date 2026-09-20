@@ -1,0 +1,88 @@
+packages/marimo-lens/src/marimo_lens/agent.py
+  s_f23caa51f139e7::t_a5601daab30ed5 27,32,34,377-378,387-389
+skills/marimo-lens/references/selections.md
+  s_f23caa51f139e7::t_cc3aec45c150ce 1-36,43-49,54-182,184-337
+  s_f23caa51f139e7::t_279f5b8a6c9be2 37-42,50-53
+  s_f23caa51f139e7::t_6b44ff2664b1c2 183
+docs/api.md
+  s_f23caa51f139e7::t_9f9567e7ca98aa 320,324-326
+  s_f23caa51f139e7::t_967d4fb0094243 294
+  s_f23caa51f139e7::t_a5601daab30ed5 297-300,303,305,314,316
+packages/marimo-lens/tests/test_agent.py
+  s_f23caa51f139e7::t_a5601daab30ed5 42-43,64-66,78-79,91-94,99-108
+  s_f23caa51f139e7::t_6b44ff2664b1c2 87
+  s_f23caa51f139e7::t_4770f34449c2e5 12,73,77,88,119-123,132-137
+  s_f23caa51f139e7::t_2798c7de7fbb67 81,85-86
+  s_f23caa51f139e7::t_d553bc4cedd571 124-131
+docs/troubleshooting.md
+  s_f23caa51f139e7::t_e8d5a1c78d5cb0 160,177
+  s_f23caa51f139e7::t_a7ace24ce72aca 164-167
+scripts/verify_release.py
+  s_f23caa51f139e7::t_a5601daab30ed5 12,53,58-59,74-76,82,86,140-141,156
+  s_f23caa51f139e7::t_4770f34449c2e5 4,10,66-73,78,85,87-95
+docs/compatibility.md
+  s_f23caa51f139e7::t_e8d5a1c78d5cb0 60-64
+packages/marimo-lens/src/marimo_lens/__init__.py
+  s_f23caa51f139e7::t_a5601daab30ed5 35
+packages/marimo-lens/tests/test_skill.py
+  s_f23caa51f139e7::t_ad57e84a89c4b4 174
+  s_f23caa51f139e7::t_9f9567e7ca98aa 13-14,58-62,68-71,75-77,126,168,211,240
+  s_f23caa51f139e7::t_68a873e8612595 221
+  s_f23caa51f139e7::t_6b44ff2664b1c2 63-67,72-74,80-82,86-90,99-100
+  s_f23caa51f139e7::t_79a63dea04993f 141,144-146,150,152,163,175-182
+  s_f23caa51f139e7::t_8a557f518da873 4,7,9,21-23,25,27-30,32-57,142-143,147,154-162,164
+  s_f23caa51f139e7::t_bfc59d29ca6070 6,31
+skills/marimo-lens/SKILL.md
+  s_f23caa51f139e7::t_29c1697e82aaa7 175,178
+  s_f23caa51f139e7::t_6b44ff2664b1c2 4-8,13-14,16,26-28,54,58,68-69,71,79-82,84-85,87,89-91,105-107,109,115-126,129,168-171,179-180
+  s_f23caa51f139e7::t_bfc59d29ca6070 167
+  s_f23caa51f139e7::t_cc3aec45c150ce 15,18,33-36,38-41,55-56,100-103,131-166,184-187
+  s_f23caa51f139e7::t_27157c2ba944d6 20-24,130
+  s_f23caa51f139e7::t_279f5b8a6c9be2 30-31,43,45-47,49-52,60-62,64-65,72-76,93-98
+  s_f23caa51f139e7::t_8a557f518da873 172
+development_docs/build-and-distribution.md
+  s_f23caa51f139e7::t_9f9567e7ca98aa 95-98
+  s_f23caa51f139e7::t_a5601daab30ed5 104
+docs/agents.md
+  s_f23caa51f139e7::t_9f9567e7ca98aa 30-51,96-99,101,107
+  s_f23caa51f139e7::t_00b374984379de 15-17
+  s_f23caa51f139e7::t_d553bc4cedd571 73-76,102,104-106
+  s_f23caa51f139e7::t_a7ace24ce72aca 58-60
+  s_f23caa51f139e7::t_2355e49c4cdc4c 12-14,18-29
+  s_f23caa51f139e7::t_29c1697e82aaa7 100,103
+packages/marimo-lens/tests/test_context_types.py
+  s_f23caa51f139e7::t_29c1697e82aaa7 20,38
+development_docs/agent-integration.md
+  s_f23caa51f139e7::t_9f9567e7ca98aa 41-45,283-286
+  s_f23caa51f139e7::t_a5601daab30ed5 39-40
+skills/marimo-lens/references/targets.md
+  s_f23caa51f139e7::t_cc3aec45c150ce 1-50
+skills/marimo-lens/references/workflow.md
+  s_f23caa51f139e7::t_cc3aec45c150ce 1-10,14,17-19,22-23,26-30,39-40,48-53,57-71,73,77-80,82-102,104-109,114-127,136-138
+  s_f23caa51f139e7::t_9cf78aa21ed936 11-13,15-16,41-42,46-47,54-56,72,74-76
+  s_f23caa51f139e7::t_79a63dea04993f 20-21,24-25,31-38,43-45
+  s_f23caa51f139e7::t_68a873e8612595 81,103,110-113,128-135
+skills/marimo-lens/references/setup.md
+  s_f23caa51f139e7::t_279f5b8a6c9be2 39-40,42-45
+  s_f23caa51f139e7::t_cc3aec45c150ce 1-4,6-7,9-10,16,24-25,30-38,41,68-69,74-94
+  s_f23caa51f139e7::t_55e19d913a4e90 5,17-18
+  s_f23caa51f139e7::t_d553bc4cedd571 8,11-15,19-23,26-29
+  s_f23caa51f139e7::t_a7ace24ce72aca 46-67
+  s_f23caa51f139e7::t_ad7be6d4a30948 70-73
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2c01b1d5e3d3ca2c1c41788639f2d88b4c42e6f7",
+  "prompts": {},
+  "sessions": {
+    "s_f23caa51f139e7": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c007-2a69-76b1-bdae-e9b31a14e205",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
