@@ -299,6 +299,38 @@ test("touch dragging and cancellation leave the next dock action usable", async 
   await session.detach();
 });
 
+test("touch dragging creates a region selection", async ({ page }) => {
+  const session = await page.context().newCDPSession(page);
+  const target = page.getByRole("region", { name: "Revenue by month" });
+  await target.scrollIntoViewIfNeeded();
+  await page
+    .getByRole("button", { name: "Select a target", exact: true })
+    .click({ noWaitAfter: true });
+  await expect(
+    page.getByRole("button", { name: "Cancel selection mode", exact: true }),
+  ).toBeVisible();
+  const bounds = await target.boundingBox();
+  if (!bounds) throw new Error("Revenue output is unavailable");
+  const x = bounds.x + bounds.width * 0.3;
+  const y = bounds.y + bounds.height * 0.35;
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x, y, id: 1 }],
+  });
+  await session.send("Input.dispatchTouchEvent", {
+    type: "touchMove",
+    touchPoints: [{ x: x + bounds.width * 0.35, y: y + bounds.height * 0.45, id: 1 }],
+  });
+  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+  const editor = page.getByRole("dialog", { name: /Add note for S1/ });
+  await expect(editor).toBeVisible();
+  await editor.getByRole("button", { name: "Done", exact: true }).click({ noWaitAfter: true });
+  await expect(editor).toBeHidden();
+  expect((await runAction(page)).references.selections[0].anchor.kind).toBe("rect");
+  await session.detach();
+});
+
 test("invalid or unavailable position storage preserves dock controls", async ({ page }) => {
   const grip = page.getByRole("button", { name: "Move Lens", exact: true });
   const views = page.getByRole("combobox", { name: "Lens views" });

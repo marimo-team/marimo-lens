@@ -87,7 +87,9 @@ export function useDocumentInteractions(options: {
         event.preventDefault();
         event.stopPropagation();
         try {
-          target.element.setPointerCapture(event.pointerId);
+          // Touch pointers already capture their hit element implicitly. Keep that
+          // capture instead of transferring it to an ancestor target on mobile.
+          if (event.pointerType !== "touch") target.element.setPointerCapture(event.pointerId);
         } catch {
           // Cross-document pointers remain tracked by listeners on both documents.
         }

@@ -183,8 +183,9 @@ describe("document selection interactions", () => {
     expect(output.style.getPropertyPriority("touch-action")).toBe("");
   });
 
-  test("keeps one interaction surface throughout a pointer gesture", () => {
+  test("keeps one interaction surface and releases mouse capture after a drag", () => {
     const output = visibleOutput();
+    vi.mocked(output.hasPointerCapture).mockReturnValue(true);
     const addEventListener = vi.spyOn(document, "addEventListener");
     const pointerMoveRegistrations = () =>
       addEventListener.mock.calls.filter(([type]) => type === "pointermove").length;
@@ -195,11 +196,14 @@ describe("document selection interactions", () => {
     void act(() => output.dispatchEvent(pointer("pointerdown", 40, 50, 11)));
     void act(() => output.dispatchEvent(pointer("pointermove", 80, 90, 11)));
     void act(() => output.dispatchEvent(pointer("pointermove", 120, 110, 11)));
+    void act(() => output.dispatchEvent(pointer("pointerup", 120, 110, 11)));
 
     expect(pointerMoveRegistrations()).toBe(armedRegistrations);
+    expect(output.setPointerCapture).toHaveBeenCalledWith(11);
+    expect(output.releasePointerCapture).toHaveBeenCalledWith(11);
   });
 
-  test("grounds a dragged region at its center", () => {
+  test("grounds a touch-dragged region at its center", () => {
     const output = visibleOutput();
     const selectedMark = document.createElement("rect");
     const axisTick = document.createElement("text");
@@ -214,9 +218,10 @@ describe("document selection interactions", () => {
     mount(beginSelection);
     arm();
 
-    void act(() => output.dispatchEvent(pointer("pointerdown", 280, 100, 13)));
-    void act(() => output.dispatchEvent(pointer("pointerup", 292, 180, 13)));
+    void act(() => axisTick.dispatchEvent(pointer("pointerdown", 280, 100, 13, "touch")));
+    void act(() => axisTick.dispatchEvent(pointer("pointerup", 292, 180, 13, "touch")));
 
+    expect(output.setPointerCapture).not.toHaveBeenCalled();
     expect(beginSelection).toHaveBeenCalledWith(
       {
         kind: "notebook",
@@ -348,7 +353,13 @@ function announcement(): string {
   return document.querySelector("[data-marimo-lens-status]")?.textContent ?? "";
 }
 
-function pointer(type: string, clientX: number, clientY: number, pointerId: number): PointerEvent {
+function pointer(
+  type: string,
+  clientX: number,
+  clientY: number,
+  pointerId: number,
+  pointerType = "mouse",
+): PointerEvent {
   return new PointerEvent(type, {
     bubbles: true,
     cancelable: true,
@@ -356,6 +367,7 @@ function pointer(type: string, clientX: number, clientY: number, pointerId: numb
     clientX,
     clientY,
     pointerId,
+    pointerType,
   });
 }
 
