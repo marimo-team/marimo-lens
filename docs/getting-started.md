@@ -277,7 +277,8 @@ mo.md(
 
 </div>
 
-```python marimo output=false
+```python marimo
+_starter_feedback = None
 if starter_walkthrough.value:
     from marimo_lens._marimo_runtime import (
         collect_runtime_snapshot as _collect_runtime_snapshot,
@@ -304,15 +305,24 @@ if starter_walkthrough.value:
             f"{starter_peak['month']} leads on revenue. Costs are absent, so this does not tell us profit.",
         ),
     ]
-    _steps = [
-        {
-            "target": next(cell.id for cell in _runtime.cells if variable in cell.defs),
-            "label": label,
-            "message": message,
-        }
-        for variable, label, message in _route
-    ]
-    starter_lens.reveal(_steps, duration_ms=None)
+    _targets = {
+        definition: cell.id for cell in _runtime.cells for definition in cell.defs
+    }
+    _missing = [variable for variable, _, _ in _route if variable not in _targets]
+    if _missing:
+        _starter_feedback = mo.callout(
+            "Cannot show the walkthrough: missing demo cells for "
+            + ", ".join(_missing)
+            + ". Reload the demo and try again.",
+            kind="warn",
+        )
+    else:
+        _steps = [
+            {"target": _targets[variable], "label": label, "message": message}
+            for variable, label, message in _route
+        ]
+        starter_lens.reveal(_steps, duration_ms=None)
+_starter_feedback
 ```
 
 <div class="lens-doc-demo-status">
