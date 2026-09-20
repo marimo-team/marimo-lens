@@ -199,7 +199,7 @@ describe("document selection interactions", () => {
     expect(pointerMoveRegistrations()).toBe(armedRegistrations);
   });
 
-  test("grounds a dragged region at its center", () => {
+  test("grounds a touch-dragged region at its center", () => {
     const output = visibleOutput();
     const selectedMark = document.createElement("rect");
     const axisTick = document.createElement("text");
@@ -214,9 +214,10 @@ describe("document selection interactions", () => {
     mount(beginSelection);
     arm();
 
-    void act(() => output.dispatchEvent(pointer("pointerdown", 280, 100, 13)));
-    void act(() => output.dispatchEvent(pointer("pointerup", 292, 180, 13)));
+    void act(() => axisTick.dispatchEvent(pointer("pointerdown", 280, 100, 13, "touch")));
+    void act(() => axisTick.dispatchEvent(pointer("pointerup", 292, 180, 13, "touch")));
 
+    expect(output.setPointerCapture).not.toHaveBeenCalled();
     expect(beginSelection).toHaveBeenCalledWith(
       {
         kind: "notebook",
@@ -348,7 +349,13 @@ function announcement(): string {
   return document.querySelector("[data-marimo-lens-status]")?.textContent ?? "";
 }
 
-function pointer(type: string, clientX: number, clientY: number, pointerId: number): PointerEvent {
+function pointer(
+  type: string,
+  clientX: number,
+  clientY: number,
+  pointerId: number,
+  pointerType = "mouse",
+): PointerEvent {
   return new PointerEvent(type, {
     bubbles: true,
     cancelable: true,
@@ -356,6 +363,7 @@ function pointer(type: string, clientX: number, clientY: number, pointerId: numb
     clientX,
     clientY,
     pointerId,
+    pointerType,
   });
 }
 
