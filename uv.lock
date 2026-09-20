@@ -31,14 +31,14 @@ dev = [
 
 [[package]]
 name = "agent-plugins"
-version = "0.2.2"
+version = "0.2.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/7a/72/2a896a48dc5f386c793f69786b8d0480e3372e523196912565f4910366d3/agent_plugins-0.2.2.tar.gz", hash = "sha256:9449a674c9e99c0693f2e48d794b909e3f32b86f258150cd5747602b37d87c9e", size = 33400, upload-time = "2026-09-13T16:01:35.859Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/73/a7/f0a0f42623958323c466f8208793d500642e3653440cc43676a021f97c94/agent_plugins-0.2.4.tar.gz", hash = "sha256:cde29a40ba26dfa0fe7a978d18abb2cb724168efefb03423fcae93b06258c4bf", size = 40913, upload-time = "2026-09-20T18:59:06.636Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/a1/05/560c1b7b0aecc1885d4ea837739aa70c850f5c5c26e221c5bae7878efb2d/agent_plugins-0.2.2-py3-none-any.whl", hash = "sha256:4d02146f9397b035c2d88fc93ab1f582331c855d7f365589786f86cfe85a9e0a", size = 49688, upload-time = "2026-09-13T16:01:34.693Z" },
+    { url = "https://files.pythonhosted.org/packages/8b/e0/fce035140da2730aaf0816dd49b6660d9feb91c6fe5cad7485517c80affd/agent_plugins-0.2.4-py3-none-any.whl", hash = "sha256:67f5255df2229823f22f2b0eb5e16f7f5828c6d72968eadebb6b3d1099a0ebc8", size = 61017, upload-time = "2026-09-20T18:59:05.125Z" },
 ]
 
 [[package]]
@@ -562,7 +562,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "agent-plugins", specifier = ">=0.2" },
+    { name = "agent-plugins", specifier = ">=0.2.4" },
     { name = "anywidget", specifier = ">=0.9" },
     { name = "marimo", specifier = ">=0.24" },
     { name = "pydantic", specifier = ">=2" },
