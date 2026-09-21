@@ -24,6 +24,36 @@ test("editor output selections expose notes, producing cells, and PNGs to the ke
   await screenshot(page, testInfo, "editor-selection");
 });
 
+test("Marimo dialogs cover Lens selection markers", async ({ page }, testInfo) => {
+  await selectOutput(page, "point", "S1", "Check dialog stacking");
+  await page.getByRole("region", { name: "Revenue by month" }).evaluate((target) => {
+    target.scrollIntoView({ block: "center" });
+  });
+  await page.getByTestId("notebook-menu-dropdown").click();
+  await page.getByTestId("notebook-menu-dropdown-Pair with an agent").click();
+
+  const dialog = page.getByRole("dialog", { name: "Pair with an agent" });
+  const marker = page.locator("[data-marimo-lens-selection-id]");
+  await expect(dialog).toBeVisible();
+  await expect(marker).toBeVisible();
+
+  const dialogBounds = (await dialog.boundingBox())!;
+  const markerBounds = (await marker.boundingBox())!;
+  const x = markerBounds.x + markerBounds.width / 2;
+  const y = markerBounds.y + markerBounds.height / 2;
+  expect(x).toBeGreaterThan(dialogBounds.x);
+  expect(x).toBeLessThan(dialogBounds.x + dialogBounds.width);
+  expect(y).toBeGreaterThan(dialogBounds.y);
+  expect(y).toBeLessThan(dialogBounds.y + dialogBounds.height);
+  expect(
+    await page.evaluate(
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="dialog"]') !== null,
+      { x, y },
+    ),
+  ).toBe(true);
+  await screenshot(page, testInfo, "dialog-over-selection");
+});
+
 test("collapsed Lens matches Marimo controls while remaining draggable", async ({
   page,
 }, testInfo) => {
