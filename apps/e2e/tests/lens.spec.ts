@@ -355,7 +355,12 @@ test("custom regions retain symbolic sources through kernel context and reject r
 
 test("selecting a link inside an output does not follow the link", async ({ page }) => {
   const link = page.getByRole("link", { name: "Read the methodology" });
+  const heading = page.getByRole("heading", { name: "Methodology" });
   await expect(link).toHaveAttribute("href", /#methodology$/);
+  await link.click();
+  await expect(page).toHaveURL(/#methodology$/);
+  await expect(heading).toBeInViewport();
+  await page.evaluate(() => history.replaceState(null, "", location.pathname + location.search));
   await link.scrollIntoViewIfNeeded();
   const url = page.url();
   await page

@@ -1,6 +1,6 @@
 import type { SelectionAnchor, SelectionTarget, TargetSelector } from "@marimo-lens/protocol";
 
-import { useEffect, type Dispatch, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type Dispatch, type RefObject } from "react";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import type { TargetSurface } from "@/notebook/selection-target";
@@ -43,6 +43,37 @@ export function useDocumentInteractions(options: {
     cancelAdjustment,
   } = options;
   const interactionActive = workflow.mode === "armed" || workflow.mode === "dragging";
+  const clickGuardCleanup = useRef<(() => void) | null>(null);
+  const clearClickGuard = useCallback(() => {
+    clickGuardCleanup.current?.();
+    clickGuardCleanup.current = null;
+  }, []);
+  const guardNextClick = useCallback(
+    (document: Document) => {
+      clearClickGuard();
+      const window = document.defaultView;
+      let fallback: number | null = null;
+      const onClick = (event: Event) => {
+        clearClickGuard();
+        event.preventDefault();
+        event.stopPropagation();
+      };
+      const clickTarget = window ?? document;
+      clickTarget.addEventListener("click", onClick, true);
+      window?.addEventListener("blur", clearClickGuard, { once: true });
+      clickGuardCleanup.current = () => {
+        clickTarget.removeEventListener("click", onClick, true);
+        window?.removeEventListener("blur", clearClickGuard);
+        if (fallback !== null) window?.clearTimeout(fallback);
+      };
+      // A completed pointer sequence normally dispatches click before the next
+      // task. Expire the guard if the browser synthesizes no click.
+      fallback = window?.setTimeout(clearClickGuard, 0) ?? null;
+    },
+    [clearClickGuard],
+  );
+
+  useEffect(() => () => clearClickGuard(), [clearClickGuard]);
 
   useEffect(() => {
     if (interactionActive) dom.document.documentElement.dataset.marimoLensArmed = "true";
@@ -61,10 +92,6 @@ export function useDocumentInteractions(options: {
 
       const setCursor = createSelectionCursor();
       let cursorElement: Element | null = null;
-      // A selection gesture owns the pointer sequence it started. The browser
-      // still dispatches the trailing click, which would follow links or press
-      // buttons inside the selected target, so that click is swallowed once.
-      let suppressNextClick = false;
       const clearCursor = () => {
         cursorElement = null;
         setCursor(null);
@@ -88,7 +115,6 @@ export function useDocumentInteractions(options: {
         setCursor(cursorElement);
         const point = parentViewportPoint(event, surface.frame);
         canceledPointerIds.current.delete(event.pointerId);
-        suppressNextClick = true;
         event.preventDefault();
         event.stopPropagation();
         try {
@@ -145,21 +171,17 @@ export function useDocumentInteractions(options: {
             : surface.frame
               ? surface.frame
               : deepestElementFromEvent(event, workflow.target.element);
+        // This hook-owned listener survives the state update in beginSelection(),
+        // which deactivates and tears down the active-interaction effect before
+        // the browser dispatches the trailing click.
+        guardNextClick(surface.document);
         beginSelection(workflow.target.target, workflow.target.element, anchor, detail);
         if (workflow.target.element.hasPointerCapture(event.pointerId)) {
           workflow.target.element.releasePointerCapture(event.pointerId);
         }
       };
 
-      const onClick = (event: MouseEvent) => {
-        if (!suppressNextClick) return;
-        suppressNextClick = false;
-        event.preventDefault();
-        event.stopPropagation();
-      };
-
       const onPointerCancel = (event: PointerEvent) => {
-        suppressNextClick = false;
         canceledPointerIds.current.delete(event.pointerId);
         const workflow = uiRef.current.workflow;
         if (workflow.mode !== "dragging" || workflow.pointerId !== event.pointerId) return;
@@ -205,7 +227,6 @@ export function useDocumentInteractions(options: {
       surface.document.addEventListener("pointerdown", onPointerDown, true);
       surface.document.addEventListener("pointermove", onPointerMove, true);
       surface.document.addEventListener("pointerup", onPointerUp, true);
-      surface.document.addEventListener("click", onClick, true);
       surface.document.addEventListener("pointercancel", onPointerCancel, true);
       surface.document.addEventListener("keydown", onKeyDown, true);
       return () => {
@@ -216,7 +237,6 @@ export function useDocumentInteractions(options: {
         surface.document.removeEventListener("pointerdown", onPointerDown, true);
         surface.document.removeEventListener("pointermove", onPointerMove, true);
         surface.document.removeEventListener("pointerup", onPointerUp, true);
-        surface.document.removeEventListener("click", onClick, true);
         surface.document.removeEventListener("pointercancel", onPointerCancel, true);
         surface.document.removeEventListener("keydown", onKeyDown, true);
       };
@@ -230,8 +250,10 @@ export function useDocumentInteractions(options: {
     beginSelection,
     canceledPointerIds,
     cancelAdjustment,
+    clearClickGuard,
     dispatch,
     dom,
+    guardNextClick,
     interactionActive,
     selector,
     uiRef,

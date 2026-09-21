@@ -22,6 +22,10 @@ def _(mo):
     # Regional revenue
 
     Method notes: [Read the methodology](#methodology).
+
+    ### Methodology
+
+    Monthly totals are fixed fixture values for interaction tests.
     """)
 
 
