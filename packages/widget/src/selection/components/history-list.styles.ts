@@ -46,7 +46,10 @@ export const historyStyles = stylex.create({
     "::-webkit-details-marker": { display: "none" },
   },
   target: {
+    display: "flex",
     minWidth: 0,
+    alignItems: "center",
+    gap: 3,
     color: colors.mutedForeground,
     fontSize: 11,
     overflowWrap: "anywhere",

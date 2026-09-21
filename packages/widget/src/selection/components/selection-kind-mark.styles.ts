@@ -13,6 +13,9 @@ export const kindMarkStyles = stylex.create({
     justifyContent: "center",
     color: colors.primary,
   },
+  noLeadingMargin: {
+    marginLeft: 0,
+  },
   push: {
     marginLeft: "auto",
   },
