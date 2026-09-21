@@ -1,0 +1,23 @@
+packages/widget/src/selection/components/history-list.tsx
+  s_ac034be5dc8ee5::t_8b3bdd6f9623c0 65
+packages/widget/src/selection/components/selection-kind-mark.tsx
+  s_ac034be5dc8ee5::t_8b3bdd6f9623c0 10,14,19-23
+packages/widget/src/selection/components/selection-kind-mark.styles.ts
+  s_ac034be5dc8ee5::t_8b3bdd6f9623c0 16-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2a9e19b4c6c4d51c11e3a08e666aafd9bff1fb16",
+  "prompts": {},
+  "sessions": {
+    "s_ac034be5dc8ee5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c46a-874e-7e41-9511-521f5b2285de",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
