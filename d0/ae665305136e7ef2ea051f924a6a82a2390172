@@ -1,0 +1,13 @@
+docs/index.md
+  ai_agent 25,29,33,37,110-123,125-131,291-305
+docs/getting-started.md
+  ai_agent 277-300,303-304,309
+apps/docs/.vitepress/theme/custom.css
+  ai_agent 370-393,846-874
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d0ae665305136e7ef2ea051f924a6a82a2390172",
+  "prompts": {}
+}
