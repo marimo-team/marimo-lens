@@ -62,7 +62,7 @@ export function HistoryList({
                   title={selectionTitle(receipt)}
                 >
                   <span {...stylex.props(ui.mono)}>{receipt.description.label}</span>
-                  <SelectionKindMark kind={receipt.anchor.kind} />
+                  <SelectionKindMark kind={receipt.anchor.kind} noLeadingMargin />
                 </span>
                 <time
                   {...stylex.props(historyStyles.date)}

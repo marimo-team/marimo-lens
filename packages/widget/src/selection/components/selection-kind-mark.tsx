@@ -7,14 +7,20 @@ import { kindMarkStyles } from "./selection-kind-mark.styles";
 export function SelectionKindMark({
   kind,
   push = false,
+  noLeadingMargin = false,
 }: {
   kind: SelectionAnchor["kind"];
   push?: boolean;
+  noLeadingMargin?: boolean;
 }) {
   const label = kind === "point" ? "Point selection" : "Region selection";
   return (
     <span
-      {...stylex.props(kindMarkStyles.root, push && kindMarkStyles.push)}
+      {...stylex.props(
+        kindMarkStyles.root,
+        noLeadingMargin && kindMarkStyles.noLeadingMargin,
+        push && kindMarkStyles.push,
+      )}
       data-kind={kind}
       title={label}
     >
