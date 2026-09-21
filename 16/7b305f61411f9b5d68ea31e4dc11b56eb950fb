@@ -1,0 +1,17 @@
+apps/docs/.vitepress/config.mts
+  ai_agent 84-98
+docs/how-lens-works.md
+  ai_agent 168,413
+docs/index.md
+  ai_agent 93-97,170-174,184-185,192,239-240
+docs/selections.md
+  ai_agent 54-55,158,163,167
+apps/docs/.vitepress/theme/custom.css
+  ai_agent 615
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "167b305f61411f9b5d68ea31e4dc11b56eb950fb",
+  "prompts": {}
+}
