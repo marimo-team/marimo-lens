@@ -1,0 +1,13 @@
+packages/widget/src/selection/document-interactions.ts
+  ai_agent 64-67,91,154-160,162,208,219
+apps/e2e/fixtures/notebook.py
+  ai_agent 23-24
+apps/e2e/tests/lens.spec.ts
+  ai_agent 356-375
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "00723fc2546e885acb117a40cf86c9c32c9d7004",
+  "prompts": {}
+}
