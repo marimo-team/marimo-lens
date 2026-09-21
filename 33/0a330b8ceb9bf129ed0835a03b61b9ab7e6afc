@@ -1,0 +1,11 @@
+docs/getting-started.md
+  ai_agent 96,125,139
+docs/agents.md
+  ai_agent 14-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "330a330b8ceb9bf129ed0835a03b61b9ab7e6afc",
+  "prompts": {}
+}
