@@ -5,7 +5,7 @@ description: Python, marimo, browser, code-mode, and documentation-version requi
 
 # Compatibility
 
-Use this page before adding Lens to an existing environment or following an
+Check this page before adding Lens to an existing environment or following an
 agent API from the hosted documentation.
 
 ## Python and marimo
@@ -33,7 +33,7 @@ Installation alone does not show a dock in that release.
 [Automatic mounting](https://github.com/marimo-team/marimo/pull/10814) is merged
 in upstream development builds. Marimo 0.24.2 predates that change. If your
 notebook already shows a Lens dock, reuse it. The
-[quickstart](./getting-started#add-lens-to-your-notebook) includes the explicit mounting step
+[quickstart](./getting-started#add-lens) includes the explicit mounting step
 for released versions that need it.
 
 ## Browser

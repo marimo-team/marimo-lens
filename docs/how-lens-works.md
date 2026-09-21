@@ -1,19 +1,16 @@
 ---
 title: How Lens works
-description: Follow one selection from a rendered target through agent context, verification, review, and History.
+description: Follow one selection from a rendered target through agent context, activity, verification, reveal, and History.
 ---
 
 # How Lens works
 
-A Lens workflow keeps human attention, notebook code, and the returned result
-connected through one selection. The selection records a point or region on a
-target. Lens links that target to its producing cells, builds bounded notebook
-context, and attempts to capture a selection image. A code-mode agent
-uses those forms of evidence to inspect, change, and verify the notebook.
-
-The agent then reveals the selected target for review and resolves the
-selection. Resolution moves it from **Open** to **History**. Reopening restores
-the selection as current.
+Every Lens workflow revolves around one **selection**: a point or region on a
+rendered **target**, with an optional note. Lens links the target to its
+producing cells, builds bounded notebook context, and captures an annotated
+image. A code-mode agent uses that evidence to inspect, change, and verify the
+notebook, then shows its work back in the notebook. This page follows the
+selection through that lifecycle.
 
 <llm-exclude>
 
@@ -157,7 +154,7 @@ overview_resolve_button = mo.ui.run_button(
 
 </llm-only>
 
-## Try the collaboration loop
+## Try the loop
 
 Press **Select**, mark one bar, and add a note such as "Make this blue." The
 panel reads the same Lens state available to a code-mode agent. Click the API
@@ -168,7 +165,7 @@ cards in order to send activity and review feedback back to the notebook.
 <div class="lens-doc-demo lens-overview-demo">
 
 <div class="lens-doc-demo-steps" aria-label="Try the Lens collaboration loop">
-  <span><strong>1</strong> Press <strong>Select</strong></span>
+  <span><strong>1</strong> Press <strong class='lens-select'>Select</strong></span>
   <span><strong>2</strong> Mark a bar</span>
   <span><strong>3</strong> Try the API cards</span>
   <span><strong>4</strong> Watch the notebook respond</span>
@@ -413,7 +410,7 @@ if _overview_current is not None:
 
 if _overview_kind == "empty":
     _overview_title = "Mark the chart"
-    _overview_body = "Press <strong>Select</strong>, mark one bar, and add a note."
+    _overview_body = "Press <strong class='lens-select'>Select</strong>, mark one bar, and add a note."
 elif _overview_kind == "missing":
     _overview_missing_method = escape(str(_overview_action["method"]))
     if _overview_missing_method == "stop_activity":
@@ -496,47 +493,134 @@ result for review, and `resolve()` moves the selection to History.
 Each card calls the method printed on it. A real agent keeps the activity handle
 while code mode inspects, edits, runs, and verifies the producing cells.
 
-## Lens context keeps three forms of evidence together
+## Targets and selections
 
-Lens returns three connected forms of evidence:
+A **target** is the selectable unit. By default every rendered notebook output
+is a target, identified by its cell ID. Authors can also declare regions of
+their own HTML as targets, with or without notebook inputs. [Custom
+targets](./custom-targets) shows how.
 
-| Context property | Agent use                                                                  |
-| ---------------- | -------------------------------------------------------------------------- |
-| `references`     | Identifies each point or region, target, note, and producing cells.        |
-| `text`           | Supplies bounded source, graph relationships, and eligible control values. |
-| `images`         | Supplies selection images when browser capture succeeded.                  |
+A **point** or **region** narrows attention inside the target. Lens stores the
+geometry normalized to the target, so the selection survives resizing and
+reconnects when the same output renders again in the same browser document.
 
-The graph determines computational relevance. A selection image preserves
-capture-time visual focus. The selection remains usable when image capture is
-pending or fails because its reference, note, and available notebook context
-are independent evidence.
+Each selection has a stable `S<n>` label that is never reused during the Lens
+instance, an optional note, producing-cell references, and image status. Open
+selections live in **Open**. The **current selection** is the one most recently
+created or activated. It is the likely referent when a person says "this" or
+"here." One request to an agent can refer to several selections.
 
-## Code mode carries the notebook work
+## What the agent receives
 
-`marimo_lens.agent` connects to an existing Lens from code-mode globals or the
-active runtime's browser-ready registry. Its stable handle reads Lens state and
-sends notebook feedback across kernel calls. Code mode owns cell inspection,
-edits, execution, and runtime verification.
+`Lens.context()` returns a detached `LensContext`. It describes one
+selection-state **revision** and does not change when the notebook or Lens
+state changes afterwards. Mutating calls take that revision as
+`expected_revision`, so an agent cannot act on stale attention by accident.
 
-Follow the [Agent workflow](./agents) to connect a compatible agent. Read
-[Context and evidence](./concepts/evidence) for the data boundary. The
-[Python API reference](./api) defines method signatures.
+| Evidence            | Question it answers                                            | Where          |
+| ------------------- | -------------------------------------------------------------- | -------------- |
+| Selection reference | What did the person select and ask for?                        | `references`   |
+| Target description  | What name and rendering reference did the author supply?       | `references`   |
+| DOM hint            | Which rendered element sat under the point or region?          | `references`   |
+| Graph context       | Which cells and control values produced the target?            | `text`         |
+| Selection image     | What did the target look like when the selection was captured? | `images`       |
+| Cell-output image   | What does the producing cell's output look like now?           | `cell_image()` |
 
-## Browser and Python responsibilities
+`references` is JSON-safe and builds immediately. `text` renders on first read
+and is cached. It lists producing cells and their nearest upstream dependencies
+in dependency order, keeps at most 64 cells inside a shared 24,000-character
+source budget, and reports what it omitted. Safely displayable native marimo
+control values appear inline. Passwords, file payloads, custom controls, and
+opaque state appear as `[redacted]` or `[unavailable]`.
 
-Lens uses [anywidget](https://anywidget.dev/) to connect its browser interface
-to a Python model in the notebook kernel.
+The graph decides computational relevance. The image preserves capture-time
+visual focus. The DOM hint distinguishes nearby labels, rows, and containers.
+The agent still interprets what a chart mark or application object means.
+[`LensContext`](./reference/context) defines every field and bound.
 
-| Browser                                                      | Python                                                        |
-| ------------------------------------------------------------ | ------------------------------------------------------------- |
-| Finds rendered outputs and handles pointer or keyboard input | Stores Open selections and History entries                    |
-| Positions markers, selection UI, and agent feedback          | Reads the live marimo graph and builds `LensContext`          |
-| Captures selection images of selected targets                | Validates selection changes, activity, reveal, and resolution |
+## Selection images
 
-The two sides exchange compact selection records and explicit commands through
-the widget connection. PNG bytes travel separately from ordinary selection
-state.
+Lens starts image capture after it stores a selection. The image is an
+annotated PNG of the whole target with the `S<n>` marker drawn on it. Large or
+scrolled targets add a detail view at readable scale, and small targets include
+nearby context. The selection stays usable while capture is pending or after it
+fails.
 
-Start with [Getting started](./getting-started) to mount Lens and create one
-selection. The [Selections guide](./selections) covers point and region
-gestures, multiple selections, History, and reopening.
+| Status      | Meaning                                                    | Bytes in `images`   |
+| ----------- | ---------------------------------------------------------- | ------------------- |
+| `pending`   | Lens stored the selection and is preparing its image.      | No                  |
+| `available` | The stored image matches the current point or region.      | Yes                 |
+| `outdated`  | The marker moved after the image was captured.             | Yes, prior position |
+| `failed`    | Lens could not produce an image for the current selection. | No                  |
+
+Moving or resizing a marker starts replacement capture and keeps the previous
+image as `outdated` until the new one succeeds. Deleting or resolving a
+selection releases its bytes.
+
+A **cell-output image** is different: a fresh, unannotated PNG of one current
+notebook output that an agent requests through `cell_image()` after changing
+and running a cell. It is a one-use transfer for verification. [Connect an
+agent](./agents#verify-with-a-cell-output-image) shows the polling loop.
+
+## Activity, reveal, and resolve
+
+Lens gives an agent three ways to show work in the notebook. Each serves a
+different stage and has a different lifetime.
+
+| Stage      | Operation          | Visible result                                                | State change                    |
+| ---------- | ------------------ | ------------------------------------------------------------- | ------------------------------- |
+| Work       | `start_activity()` | Marks the selected target or cell the agent is working on.    | None                            |
+| Review     | `reveal()`         | Brings the target or cell into view with a label and message. | None                            |
+| Resolution | `resolve()`        | Shows an **Addressed** receipt.                               | Open selections become History. |
+
+**Activity** is transient. `start_activity()` returns an `ActivityHandle`, and
+`stop_activity(handle)` clears it only while that handle still owns the
+presentation, so a delayed stop cannot erase newer work. Activity also ends
+when its duration expires, a later activity or reveal replaces it, or the Lens
+view tears down.
+
+**Reveal** brings a result into view after verification. A single-step reveal
+holds for `duration_ms` or until dismissed. A sequence of 1–16 steps is a
+**Trail**: an ordered explanation attached to notebook cells that the person
+pages through at their own pace. Trails work without any selection, which makes
+them the tool for "walk me through this notebook." Reveals are transient and
+end when a referenced cell or its upstream inputs change.
+
+**Resolve** is the revision-checked state change. It validates the whole batch
+of selection IDs, releases their images, appends one History entry per
+selection, and returns the new revision. A summary of what changed and how it
+was verified appears beside the original request. When a reveal precedes
+resolution, Lens shows the receipt after the reveal hold ends, so the person
+sees the result first and the acknowledgement second.
+
+## History and reopen
+
+A **History entry** keeps metadata for one resolved selection: label, target,
+geometry, note, timestamps, resolution revision, and summary. It carries no
+image bytes. History holds the newest 64 entries within 64,000 bytes and lives
+as long as the Lens instance.
+
+**Addressed** records that the agent returned the request for review. It does
+not claim the answer is right. Press **Reopen** on a History entry to restore
+the selection as current in **Open**, with a fresh image captured from the
+current target. The reopened selection carries `previousResolution` so the
+agent can see the earlier outcome. Reopen requires the target to be available
+in the same browser document.
+
+## Browser and Python
+
+Lens uses [anywidget](https://anywidget.dev/) to connect a browser view to a
+Python model in the kernel. Each side owns what it can see.
+
+| Browser                                                       | Python                                                |
+| ------------------------------------------------------------- | ----------------------------------------------------- |
+| Finds rendered outputs and handles pointer and keyboard input | Stores Open selections and History                    |
+| Positions markers, the dock, and agent feedback               | Reads the live marimo graph and builds `LensContext`  |
+| Captures selection and cell-output images                     | Validates revisions, activity, reveal, and resolution |
+
+Compact selection records and explicit commands cross the widget connection.
+PNG bytes travel separately and never enter trait state, JSON references, or
+the standalone text.
+
+Continue with [Selections](./selections) for the person's controls, or
+[Connect an agent](./agents) for the agent's side of the loop.

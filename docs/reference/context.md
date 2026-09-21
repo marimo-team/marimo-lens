@@ -198,8 +198,8 @@ separate from runtime-derived notebook provenance. History and reopen retain
 the creation-time description. Compact context may omit descriptions to fit its
 byte budget, and standalone text reports truncation within its own budget.
 
-See [Custom labels and metadata](../custom-metadata) for runnable examples and
-[Client metadata](../concepts/targets#client-metadata) for the DOM contract.
+See [Custom targets](../custom-targets) for runnable examples and [HTML
+attributes](./attributes) for the DOM contract.
 
 ## Selection image status
 

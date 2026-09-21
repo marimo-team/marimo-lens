@@ -1,6 +1,6 @@
 import type { SelectionAnchor, SelectionTarget, TargetSelector } from "@marimo-lens/protocol";
 
-import { useEffect, type Dispatch, type RefObject } from "react";
+import { useCallback, useEffect, useRef, type Dispatch, type RefObject } from "react";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import type { TargetSurface } from "@/notebook/selection-target";
@@ -43,6 +43,37 @@ export function useDocumentInteractions(options: {
     cancelAdjustment,
   } = options;
   const interactionActive = workflow.mode === "armed" || workflow.mode === "dragging";
+  const clickGuardCleanup = useRef<(() => void) | null>(null);
+  const clearClickGuard = useCallback(() => {
+    clickGuardCleanup.current?.();
+    clickGuardCleanup.current = null;
+  }, []);
+  const guardNextClick = useCallback(
+    (document: Document) => {
+      clearClickGuard();
+      const window = document.defaultView;
+      let fallback: number | null = null;
+      const onClick = (event: Event) => {
+        clearClickGuard();
+        event.preventDefault();
+        event.stopPropagation();
+      };
+      const clickTarget = window ?? document;
+      clickTarget.addEventListener("click", onClick, true);
+      window?.addEventListener("blur", clearClickGuard, { once: true });
+      clickGuardCleanup.current = () => {
+        clickTarget.removeEventListener("click", onClick, true);
+        window?.removeEventListener("blur", clearClickGuard);
+        if (fallback !== null) window?.clearTimeout(fallback);
+      };
+      // A completed pointer sequence normally dispatches click before the next
+      // task. Expire the guard if the browser synthesizes no click.
+      fallback = window?.setTimeout(clearClickGuard, 0) ?? null;
+    },
+    [clearClickGuard],
+  );
+
+  useEffect(() => () => clearClickGuard(), [clearClickGuard]);
 
   useEffect(() => {
     if (interactionActive) dom.document.documentElement.dataset.marimoLensArmed = "true";
@@ -140,6 +171,10 @@ export function useDocumentInteractions(options: {
             : surface.frame
               ? surface.frame
               : deepestElementFromEvent(event, workflow.target.element);
+        // This hook-owned listener survives the state update in beginSelection(),
+        // which deactivates and tears down the active-interaction effect before
+        // the browser dispatches the trailing click.
+        guardNextClick(surface.document);
         beginSelection(workflow.target.target, workflow.target.element, anchor, detail);
         if (workflow.target.element.hasPointerCapture(event.pointerId)) {
           workflow.target.element.releasePointerCapture(event.pointerId);
@@ -215,8 +250,10 @@ export function useDocumentInteractions(options: {
     beginSelection,
     canceledPointerIds,
     cancelAdjustment,
+    clearClickGuard,
     dispatch,
     dom,
+    guardNextClick,
     interactionActive,
     selector,
     uiRef,

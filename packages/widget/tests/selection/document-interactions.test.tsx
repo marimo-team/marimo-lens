@@ -13,6 +13,7 @@ import { LensStatus } from "@/ui/components/lens-status";
 let root: Root | null = null;
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root?.unmount());
   root = null;
   document.body.replaceChildren();
@@ -203,6 +204,58 @@ describe("document selection interactions", () => {
     expect(output.releasePointerCapture).toHaveBeenCalledWith(11);
   });
 
+  test("suppresses the trailing click after selection mode deactivates", () => {
+    const output = visibleOutput();
+    const link = document.createElement("a");
+    link.href = "#methodology";
+    output.appendChild(link);
+    const earlierDocumentHandler = vi.fn();
+    const listener = new AbortController();
+    document.addEventListener("click", earlierDocumentHandler, {
+      capture: true,
+      signal: listener.signal,
+    });
+    mount(vi.fn<BeginSelection>(), { deactivateAfterSelection: true });
+    arm();
+    earlierDocumentHandler.mockClear();
+
+    try {
+      void act(() => link.dispatchEvent(pointer("pointerdown", 40, 50, 12)));
+      void act(() => link.dispatchEvent(pointer("pointerup", 40, 50, 12)));
+      const trailingClick = new MouseEvent("click", { bubbles: true, cancelable: true });
+      const nextClick = new MouseEvent("click", { bubbles: true, cancelable: true });
+
+      void act(() => link.dispatchEvent(trailingClick));
+      expect(trailingClick.defaultPrevented).toBe(true);
+      expect(earlierDocumentHandler).not.toHaveBeenCalled();
+
+      void act(() => link.dispatchEvent(nextClick));
+      expect(nextClick.defaultPrevented).toBe(false);
+      expect(earlierDocumentHandler).toHaveBeenCalledOnce();
+    } finally {
+      listener.abort();
+    }
+  });
+
+  test("expires the trailing click guard when the browser dispatches no click", () => {
+    vi.useFakeTimers();
+    const output = visibleOutput();
+    const link = document.createElement("a");
+    link.href = "#methodology";
+    output.appendChild(link);
+    mount(vi.fn<BeginSelection>(), { deactivateAfterSelection: true });
+    arm();
+
+    void act(() => link.dispatchEvent(pointer("pointerdown", 40, 50, 12)));
+    void act(() => link.dispatchEvent(pointer("pointerup", 40, 50, 12)));
+    void act(() => vi.runAllTimers());
+    const laterClick = new MouseEvent("click", { bubbles: true, cancelable: true });
+
+    void act(() => link.dispatchEvent(laterClick));
+
+    expect(laterClick.defaultPrevented).toBe(false);
+  });
+
   test("grounds a touch-dragged region at its center", () => {
     const output = visibleOutput();
     const selectedMark = document.createElement("rect");
@@ -257,14 +310,31 @@ describe("document selection interactions", () => {
   });
 });
 
-function mount(beginSelection: BeginSelection): void {
+type MountOptions = {
+  deactivateAfterSelection?: boolean;
+};
+
+function mount(beginSelection: BeginSelection, options: MountOptions = {}): void {
   const container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  act(() => root?.render(<Harness beginSelection={beginSelection} />));
+  act(() =>
+    root?.render(
+      <Harness
+        beginSelection={beginSelection}
+        deactivateAfterSelection={options.deactivateAfterSelection ?? false}
+      />,
+    ),
+  );
 }
 
-function Harness({ beginSelection }: { beginSelection: BeginSelection }) {
+function Harness({
+  beginSelection,
+  deactivateAfterSelection,
+}: {
+  beginSelection: BeginSelection;
+  deactivateAfterSelection: boolean;
+}) {
   const [ui, dispatch] = useReducer(uiReducer, INITIAL_STATE);
   const uiRef = useRef(ui);
   const canceledPointerIds = useRef(new Set<number>());
@@ -273,13 +343,20 @@ function Harness({ beginSelection }: { beginSelection: BeginSelection }) {
   useLayoutEffect(() => {
     uiRef.current = ui;
   }, [ui]);
+  const handleSelection = useCallback<BeginSelection>(
+    (...args) => {
+      beginSelection(...args);
+      if (deactivateAfterSelection) dispatch({ type: "disarm" });
+    },
+    [beginSelection, deactivateAfterSelection],
+  );
   useDocumentInteractions({
     workflow: ui.workflow,
     uiRef,
     dispatch,
     dom,
     selector: null,
-    beginSelection,
+    beginSelection: handleSelection,
     canceledPointerIds,
     cancelAdjustment,
   });

@@ -353,6 +353,31 @@ test("custom regions retain symbolic sources through kernel context and reject r
   ).toBeVisible();
 });
 
+test("selecting a link inside an output does not follow the link", async ({ page }) => {
+  const link = page.getByRole("link", { name: "Read the methodology" });
+  const heading = page.getByRole("heading", { name: "Methodology" });
+  await expect(link).toHaveAttribute("href", /#methodology$/);
+  await link.click();
+  await expect(page).toHaveURL(/#methodology$/);
+  await expect(heading).toBeInViewport();
+  await page.evaluate(() => history.replaceState(null, "", location.pathname + location.search));
+  await link.scrollIntoViewIfNeeded();
+  const url = page.url();
+  await page
+    .getByRole("button", { name: "Select a target", exact: true })
+    .click({ noWaitAfter: true });
+  await expect(
+    page.getByRole("button", { name: "Cancel selection mode", exact: true }),
+  ).toBeVisible();
+  await link.click({ noWaitAfter: true });
+  const editor = page.getByRole("dialog", { name: /Add note for S1/ });
+  await expect(editor).toBeVisible();
+  expect(page.url()).toBe(url);
+  await editor.getByRole("button", { name: "Done", exact: true }).click({ noWaitAfter: true });
+  await expect(editor).toBeHidden();
+  expect(page.url()).toBe(url);
+});
+
 test("target picking shows consumer labels at the element edge without intercepting selection", async ({
   page,
 }, testInfo) => {

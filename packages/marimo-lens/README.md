@@ -42,7 +42,7 @@ lens
 
 Press **Select**, click a point or drag a region, then add a note.
 
-Custom pages can publish [Lens client metadata](https://marimo-team.github.io/marimo-lens/concepts/targets#client-metadata)
+Custom pages can publish [Lens target metadata](https://marimo-team.github.io/marimo-lens/custom-targets)
 for notebook inputs, labels, rendering references, and image context. Lens
 recognizes these source regions automatically. Add `data-marimo-lens-target`
 to select authored copy or layout without notebook inputs. Each view controls
@@ -93,11 +93,11 @@ and the inspection, verification, and review workflow.
 
 ## Documentation
 
+[What is Lens?](https://marimo-team.github.io/marimo-lens/overview) ·
 [Getting started](https://marimo-team.github.io/marimo-lens/getting-started) ·
-[Concepts](https://marimo-team.github.io/marimo-lens/overview) ·
-[Custom labels](https://marimo-team.github.io/marimo-lens/custom-metadata) ·
+[Connect an agent](https://marimo-team.github.io/marimo-lens/agents) ·
+[Custom targets](https://marimo-team.github.io/marimo-lens/custom-targets) ·
 [Python API](https://marimo-team.github.io/marimo-lens/api) ·
-[Compatibility](https://marimo-team.github.io/marimo-lens/compatibility) ·
 [Data and trust](https://marimo-team.github.io/marimo-lens/data-and-trust)
 
 Source, issue tracking, and contributor documentation live in the

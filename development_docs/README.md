@@ -31,6 +31,7 @@ page.
 | Public Python methods and agent adapter | [`docs/api.md`](../docs/api.md)                                 |
 | Public context shapes                   | [`docs/reference/context.md`](../docs/reference/context.md)     |
 | Public errors and limits                | [`docs/reference/errors.md`](../docs/reference/errors.md)       |
+| Public target attributes                | [`docs/reference/attributes.md`](../docs/reference/attributes.md) |
 | Public product model                    | [`docs/overview.md`](../docs/overview.md)                       |
 | Public selection behavior               | [`docs/selections.md`](../docs/selections.md)                   |
 | Public agent workflow                   | [`docs/agents.md`](../docs/agents.md)                           |
