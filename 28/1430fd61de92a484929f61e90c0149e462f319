@@ -1,0 +1,19 @@
+packages/widget/src/selection/components/history-list.styles.ts
+  s_ac034be5dc8ee5::t_53473811383749 49,51-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "281430fd61de92a484929f61e90c0149e462f319",
+  "prompts": {},
+  "sessions": {
+    "s_ac034be5dc8ee5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c46a-874e-7e41-9511-521f5b2285de",
+        "model": "gpt-5.6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
