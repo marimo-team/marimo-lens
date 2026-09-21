@@ -1,0 +1,9 @@
+apps/docs/.vitepress/theme/custom.css
+  ai_agent 296-307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "2c64443695021f5295e9c1b010afa956419a4565",
+  "prompts": {}
+}
