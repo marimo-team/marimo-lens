@@ -1,0 +1,19 @@
+apps/docs/.vitepress/theme/custom.css
+  s_ab2db1db31b4ec::t_a7ac5ad39c7e18 296-307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "37e5d31d86084ee33774e65c9f2bf27f7f847713",
+  "prompts": {},
+  "sessions": {
+    "s_ab2db1db31b4ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c5eea5e5-60fc-4cc8-8a65-8ef93fdbc4a0",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
