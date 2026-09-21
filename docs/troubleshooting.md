@@ -8,9 +8,9 @@ description: Recover unavailable targets, failed image capture, stale revisions,
 Start from the visible symptom or `LensError.code`. Each recovery names the
 action to take and the result that confirms Lens is ready again.
 
-The [error reference](/reference/errors) lists every public error code. The
-[Target model](/concepts/targets) and [Evidence model](/concepts/evidence)
-explain the identities and lifecycle states used in these recoveries.
+[Errors and limits](./reference/errors) lists every public error code. [How
+Lens works](./how-lens-works) and [Custom targets](./custom-targets) explain
+the identities and lifecycle states used in these recoveries.
 
 ## Target is unavailable
 
@@ -72,7 +72,8 @@ own the selection.
 the person hovers it or cycles through targets with the keyboard.
 
 When a selector is valid but one root is missing, give that root a stable unique
-ID and check its producing-cell metadata against the [host contract](/concepts/targets#host-contract).
+ID and check its producing-cell metadata against the [host
+checklist](./custom-targets#host-checklist).
 
 ## Iframe or resource content blocks image capture
 
@@ -115,7 +116,8 @@ can find several Python Lens instances even when one browser view owns the dock.
 
 **Action:** Reconnect with the `MountedLens.identity` saved from the intended
 Lens. If you have no saved identity, use `lens_agent.discover(ctx)` to inspect
-available handles and their current selections. See [Find an existing instance](./agents#find-an-existing-instance).
+available handles and their current selections. See [Several or no
+instances](./agents#several-or-no-instances).
 
 ```python
 mounted = lens_agent.connect(ctx, identity=saved_identity)
@@ -166,10 +168,10 @@ ask the agent to check `cm.capabilities()` again and import the Lens adapter.
 If the import fails, inspect the kernel's `sys.executable` and install through
 that notebook's package manager.
 
-If the package is installed and no Lens exists, follow [Add Lens when the
-notebook has none](/agents#add-lens-when-the-notebook-has-none). End the kernel
-call after `add_lens_cell(ctx)` so the browser can render and register the new
-Lens before calling `connect()` again.
+If the package is installed and no Lens exists, follow [Several or no
+instances](./agents#several-or-no-instances). End the kernel call after
+`add_lens_cell(ctx)` so the browser can render and register the new Lens before
+calling `connect()` again.
 
 **Result:** `lens_agent.connect(ctx)` returns a `MountedLens` and
 `mounted.context()` returns the current detached context.
@@ -204,6 +206,6 @@ Use the code to choose the recovery:
 | `capture_failed`      | Remove inaccessible iframe or resource content, keep the output stable, and retry when current pixels are required. | The new capture returns PNG bytes.                    |
 | `lens_closed`         | Reconnect to another mounted Lens or render a new Lens.                                                             | The new handle accepts context and feedback calls.    |
 
-Read [Inspect current cell-output pixels](/agents#inspect-current-cell-output-pixels) for the
-polling workflow and [Errors](/reference/errors) for argument validation,
-revision fields, and the complete error catalog.
+Read [Verify with a cell-output image](./agents#verify-with-a-cell-output-image)
+for the polling workflow and [Errors and limits](./reference/errors) for
+argument validation, revision fields, and the complete error catalog.

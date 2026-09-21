@@ -61,6 +61,10 @@ export function useDocumentInteractions(options: {
 
       const setCursor = createSelectionCursor();
       let cursorElement: Element | null = null;
+      // A selection gesture owns the pointer sequence it started. The browser
+      // still dispatches the trailing click, which would follow links or press
+      // buttons inside the selected target, so that click is swallowed once.
+      let suppressNextClick = false;
       const clearCursor = () => {
         cursorElement = null;
         setCursor(null);
@@ -84,6 +88,7 @@ export function useDocumentInteractions(options: {
         setCursor(cursorElement);
         const point = parentViewportPoint(event, surface.frame);
         canceledPointerIds.current.delete(event.pointerId);
+        suppressNextClick = true;
         event.preventDefault();
         event.stopPropagation();
         try {
@@ -146,7 +151,15 @@ export function useDocumentInteractions(options: {
         }
       };
 
+      const onClick = (event: MouseEvent) => {
+        if (!suppressNextClick) return;
+        suppressNextClick = false;
+        event.preventDefault();
+        event.stopPropagation();
+      };
+
       const onPointerCancel = (event: PointerEvent) => {
+        suppressNextClick = false;
         canceledPointerIds.current.delete(event.pointerId);
         const workflow = uiRef.current.workflow;
         if (workflow.mode !== "dragging" || workflow.pointerId !== event.pointerId) return;
@@ -192,6 +205,7 @@ export function useDocumentInteractions(options: {
       surface.document.addEventListener("pointerdown", onPointerDown, true);
       surface.document.addEventListener("pointermove", onPointerMove, true);
       surface.document.addEventListener("pointerup", onPointerUp, true);
+      surface.document.addEventListener("click", onClick, true);
       surface.document.addEventListener("pointercancel", onPointerCancel, true);
       surface.document.addEventListener("keydown", onKeyDown, true);
       return () => {
@@ -202,6 +216,7 @@ export function useDocumentInteractions(options: {
         surface.document.removeEventListener("pointerdown", onPointerDown, true);
         surface.document.removeEventListener("pointermove", onPointerMove, true);
         surface.document.removeEventListener("pointerup", onPointerUp, true);
+        surface.document.removeEventListener("click", onClick, true);
         surface.document.removeEventListener("pointercancel", onPointerCancel, true);
         surface.document.removeEventListener("keydown", onKeyDown, true);
       };

@@ -27,43 +27,26 @@ const llmsPlugins = llmstxt({
   excludeIndexPage: false,
 }) as [Plugin, Plugin];
 
-const navigation = [
-  {
-    text: "Start here",
-    items: [
-      { text: "What is Lens?", link: "/overview" },
-      { text: "Why Lens?", link: "/why-lens" },
-      { text: "Getting started", link: "/getting-started" },
-      { text: "How Lens works", link: "/how-lens-works" },
-    ],
-  },
-  {
-    text: "Concepts",
-    items: [
-      { text: "Targets", link: "/concepts/targets" },
-      { text: "Context and evidence", link: "/concepts/evidence" },
-      { text: "Feedback and History", link: "/concepts/feedback" },
-    ],
-  },
-  {
-    text: "Guides",
-    items: [
-      { text: "Selections", link: "/selections" },
-      { text: "Custom labels and metadata", link: "/custom-metadata" },
-      { text: "Connect an agent", link: "/agents" },
-      { text: "Data and trust", link: "/data-and-trust" },
-      { text: "Compatibility", link: "/compatibility" },
-      { text: "Troubleshooting", link: "/troubleshooting" },
-    ],
-  },
-  {
-    text: "Reference",
-    items: [
-      { text: "Python API", link: "/api" },
-      { text: "LensContext", link: "/reference/context" },
-      { text: "Errors and limits", link: "/reference/errors" },
-    ],
-  },
+const gettingStarted = { text: "Getting started", link: "/getting-started" };
+const connectAnAgent = { text: "Connect an agent", link: "/agents" };
+const guideTasks = [
+  { text: "Selections", link: "/selections" },
+  { text: "Custom targets", link: "/custom-targets" },
+  { text: "Data and trust", link: "/data-and-trust" },
+  { text: "Troubleshooting", link: "/troubleshooting" },
+];
+const introduction = [
+  { text: "What is Lens?", link: "/overview" },
+  gettingStarted,
+  { text: "How Lens works", link: "/how-lens-works" },
+];
+const guide = [guideTasks[0], connectAnAgent, ...guideTasks.slice(1)];
+const reference = [
+  { text: "Python API", link: "/api" },
+  { text: "LensContext", link: "/reference/context" },
+  { text: "HTML attributes", link: "/reference/attributes" },
+  { text: "Errors and limits", link: "/reference/errors" },
+  { text: "Compatibility", link: "/compatibility" },
 ];
 
 export default defineConfig({
@@ -98,6 +81,21 @@ export default defineConfig({
   ],
   lastUpdated: true,
   markdown: {
+    config(md) {
+      // "**Select**" names the dock control. Rendered pages show it with the
+      // dock's pointer icon; authored Markdown and generated text views stay plain.
+      const renderStrongOpen =
+        md.renderer.rules.strong_open ??
+        ((tokens, index, options, _env, self) => self.renderToken(tokens, index, options));
+      md.renderer.rules.strong_open = (tokens, index, options, env, self) => {
+        const text = tokens[index + 1];
+        const close = tokens[index + 2];
+        if (text?.type === "text" && text.content === "Select" && close?.type === "strong_close") {
+          tokens[index]?.attrJoin("class", "lens-select");
+        }
+        return renderStrongOpen(tokens, index, options, env, self);
+      };
+    },
     languageAlias: {
       "marimo-config": "toml",
     },
@@ -112,8 +110,10 @@ export default defineConfig({
       text: "Edit this page on GitHub",
     },
     footer: {
-      message:
+      message: [
         'marimo-lens is a collaboration of <a href="https://marimo.io/" target="_blank" rel="noopener noreferrer">Marimo Team</a>, <a href="https://ivia.ethz.ch/" target="_blank" rel="noopener noreferrer">ETH Zurich IVIA Lab</a>, and <a href="https://dig.cmu.edu/team" target="_blank" rel="noopener noreferrer">CMU Data Interaction Group</a>.',
+        `<a href="${repository}/issues" target="_blank" rel="noopener noreferrer">Issues and support</a> · <a href="${repository}/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">Contributing</a> · <a href="${repository}/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">Security policy</a>`,
+      ].join("<br>"),
       copyright:
         "Released under the Apache 2.0 License. Copyright © 2026-Present marimo-lens maintainers.",
     },
@@ -123,19 +123,18 @@ export default defineConfig({
       light: "/brand/marimo-lens-lockup-horizontal-light.svg",
     },
     nav: [
-      ...navigation,
-      {
-        text: "Project",
-        items: [
-          { text: "Issues and support", link: `${repository}/issues` },
-          { text: "Security policy", link: `${repository}/blob/main/SECURITY.md` },
-          { text: "Contributing", link: `${repository}/blob/main/CONTRIBUTING.md` },
-        ],
-      },
+      { text: "Overview", link: "/overview" },
+      { text: "Guide", items: [gettingStarted, ...guideTasks] },
+      { text: "Agents", link: connectAnAgent.link },
+      { text: "Reference", items: reference },
     ],
     outline: [2, 3],
     search: { provider: "local" },
-    sidebar: navigation,
+    sidebar: [
+      { text: "Introduction", items: introduction },
+      { text: "Guide", items: guide },
+      { text: "Reference", items: reference },
+    ],
     siteTitle: false,
     socialLinks: [{ icon: "github", link: repository }],
   },

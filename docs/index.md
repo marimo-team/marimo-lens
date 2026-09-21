@@ -12,26 +12,29 @@ hero:
     alt: marimo-lens
   actions:
     - theme: brand
-      text: Try Lens
+      text: Get started
+      link: ./getting-started
+    - theme: alt
+      text: Try the demo
       link: "#try-lens"
     - theme: alt
-      text: Understand Lens
+      text: What is Lens?
       link: ./overview
 
 features:
-  - icon: 🎯
+  - icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-icon="lucide:square-dashed-mouse-pointer"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.034 12.681a.498.498 0 0 1 .647-.647l9 3.5a.5.5 0 0 1-.033.943l-3.444 1.068a1 1 0 0 0-.66.66l-1.067 3.443a.5.5 0 0 1-.943.033zM5 3a2 2 0 0 0-2 2m16-2a2 2 0 0 1 2 2M5 21a2 2 0 0 1-2-2M9 3h1M9 21h2m3-18h1M3 9v1m18-1v2M3 14v1"/></svg>'
     title: Mark what you mean
     details: Click a location or drag across a region. Add a note with what you noticed or want changed.
 
-  - icon: 🔗
+  - icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-icon="lucide:workflow"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></g></svg>'
     title: Ground the agent's work
     details: Lens links your selection to the code, controls, and visual context behind the result.
 
-  - icon: 🔍
+  - icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-icon="lucide:eye"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M2.062 12.348a1 1 0 0 1 0-.696a10.75 10.75 0 0 1 19.876 0a1 1 0 0 1 0 .696a10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></g></svg>'
     title: Review the result
     details: See where your agent is working, review the result it brings into view, and reopen the selection for another pass.
 
-  - icon: 🔌
+  - icon: '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true" focusable="false" data-icon="lucide:bot"><g fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2m16 0h2m-7-1v2m-6-2v2"/></g></svg>'
     title: Connect your notebook agent
     details: Use Lens with a code-mode agent that can inspect, edit, run, and verify cells in the live marimo kernel.
 ---
@@ -56,9 +59,9 @@ marimo-lens connects a point or region on rendered notebook output to the cells
 and context behind it. A live notebook agent can inspect that selection, show
 where it is working, and return the result for review.
 
-Start with [Getting started](./getting-started), then read [What is
-Lens?](./overview), [Why Lens?](./why-lens), and [How Lens
-works](./how-lens-works).
+Start with [What is Lens?](./overview), then follow [Getting
+started](./getting-started). [How Lens works](./how-lens-works) explains the
+selection lifecycle and what an agent receives.
 
 </llm-only>
 
@@ -84,14 +87,14 @@ Mark a chart region, hand the request to a notebook agent, and review the result
 
 ## Try Lens on this chart
 
-Select part of the chart, add a note, and see what your notebook agent receives.
+Select part of the chart, add a note, and hand it to a scripted agent. Everything
+runs in your browser with no language model.
 
-<div class="lens-demo-steps" aria-label="Try Lens in four steps">
-  <span><strong>1</strong> Press <strong>Select</strong></span>
-  <span><strong>2</strong> Click a bar</span>
-  <span><strong>3</strong> Add "Make bars blue"</span>
-  <span><strong>4</strong> Hand off to agent</span>
-</div>
+<ol class="lens-demo-steps" aria-label="Try Lens in three steps">
+  <li>Press <strong class='lens-select'>Select</strong>, then click a bar.</li>
+  <li>Add the note “Make bars blue”.</li>
+  <li>Hand off and review the result.</li>
+</ol>
 
 ```python marimo output=false
 import asyncio
@@ -104,14 +107,49 @@ get_lens_revision, set_lens_revision = mo.state(0)
 get_response_request, set_response_request = mo.state(None)
 get_response_completion, set_response_completion = mo.state(None)
 get_bar_color, set_bar_color = mo.state(None)
+_button_style = (
+    "<style>button[data-testid='marimo-plugin-button']{display:inline-flex;"
+    "align-items:center;gap:8px;height:34px;padding:0 14px;"
+    "border:1px solid var(--vp-c-divider,#e2e8f0);border-radius:6px;"
+    "background:var(--vp-c-bg-elv,#fff);color:var(--vp-c-text-1,#0f172a);"
+    "font-family:var(--vp-font-family-base,'PT Sans',sans-serif);font-size:14px;"
+    "font-weight:600;line-height:1;box-shadow:none}"
+    "button[data-testid='marimo-plugin-button']:hover{"
+    "border-color:var(--vp-c-text-3,#94a3b8);background:var(--vp-c-bg-soft,#f1f5f9)}"
+    "button[data-testid='marimo-plugin-button'] :is(.markdown,.paragraph,p)"
+    "{display:contents}"
+    "button[data-testid='marimo-plugin-button'] svg{flex:none;color:var(--vp-c-text-2,#64748b)}"
+    "</style>"
+)
 handoff_to_agent = mo.ui.run_button(
-    label=(
-        "<span style='display:block;padding:0.25rem 0.625rem;"
-        "line-height:1.25rem'>"
-        "Hand off to agent"
-        "</span>"
+    label=_button_style
+    + (
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"16\" "
+        "height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" "
+        "stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">"
+        "<path d=\"M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904zM6 12h16\"/>"
+        "</svg>Hand off to agent"
     ),
 )
+
+
+def find_css_color(note):
+    """Return the last word of the note that the browser accepts as a CSS color."""
+    from js import OffscreenCanvas
+
+    for word in reversed(str(note).split()):
+        candidate = word.strip(".,!?;:'\"“”‘’")[:64]
+        if not candidate:
+            continue
+        probe_a = OffscreenCanvas.new(1, 1).getContext("2d")
+        probe_b = OffscreenCanvas.new(1, 1).getContext("2d")
+        probe_a.fillStyle = "#010203"
+        probe_b.fillStyle = "#040506"
+        probe_a.fillStyle = candidate
+        probe_b.fillStyle = candidate
+        if str(probe_a.fillStyle) == str(probe_b.fillStyle):
+            return candidate
+    return None
 ```
 
 <div class="lens-demo-mount">
@@ -133,11 +171,8 @@ lens
 <div class="lens-demo-output">
 
 ```python marimo
-_response_request = get_response_request()
 _applied_color = get_bar_color()
-_bar_fill = (
-    escape(str(_applied_color)) if _applied_color else "light-dark(#1d7363,#cad996)"
-)
+_bar_style = f"background:{escape(str(_applied_color))};" if _applied_color else ""
 _monthly_revenue = [
     ("Jan", 42),
     ("Feb", 58),
@@ -148,48 +183,29 @@ _monthly_revenue = [
 ]
 _rows = "".join(
     f"""
-    <div
-      role="listitem"
-      aria-label="{_month}, {_value} thousand dollars"
-      data-demo-month="{_month}"
-      style="display:grid;grid-template-columns:2.75rem minmax(4rem,1fr) 2.5rem;align-items:center;gap:0.75rem;min-width:0"
-    >
-      <span style="font-size:0.875rem;font-weight:500">{_month}</span>
-      <span
-        aria-hidden="true"
-        style="display:block;height:1.125rem;overflow:hidden;border-radius:2px;background:color-mix(in srgb,currentColor 8%,transparent)"
-      >
-        <span
-          data-demo-bar
-          style="display:block;width:{_value / 80 * 100:.1f}%;height:100%;background:{_bar_fill}"
-        ></span>
+    <div class="lens-selection-demo-row" role="listitem"
+      aria-label="{_month}, {_value} thousand dollars" data-demo-month="{_month}">
+      <span>{_month}</span>
+      <span class="lens-selection-demo-track" aria-hidden="true">
+        <span data-demo-bar style="width:{_value / 80 * 100:.1f}%;{_bar_style}"></span>
       </span>
-      <span style="font-family:'Fira Mono',monospace;font-size:0.75rem;text-align:right">{_value}</span>
+      <span>{_value}</span>
     </div>
     """
     for _month, _value in _monthly_revenue
 )
-chart_result = {
-    "request": _response_request,
-    "color": _applied_color,
-}
+chart_result = {"request": get_response_request(), "color": _applied_color}
 mo.Html(
     f"""
-    <figure
-      aria-labelledby="lens-demo-chart-title"
-      data-demo-bar-color="{_bar_fill}"
-      style="margin:0;border:1px solid var(--marimo-island-border,#e2e8f0);border-radius:8px;background:var(--marimo-island-surface,#fff);color:var(--marimo-island-foreground,#0f172a);font-family:'PT Sans',sans-serif"
-    >
-      <figcaption style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:1.25rem 1.25rem 1rem">
+    <figure class="lens-selection-demo-chart" aria-labelledby="lens-demo-chart-title">
+      <figcaption>
         <span>
-          <strong id="lens-demo-chart-title" style="display:block;font-size:1rem">Monthly revenue</strong>
-          <span style="display:block;margin-top:0.125rem;color:var(--marimo-island-muted-foreground,#64748b);font-size:0.8125rem">USD thousands</span>
+          <strong id="lens-demo-chart-title">Monthly revenue</strong>
+          <small>USD thousands</small>
         </span>
-        <span style="color:var(--marimo-island-muted-foreground,#64748b);font-size:0.8125rem">Jan–Jun 2026</span>
+        <small>Jan–Jun 2026</small>
       </figcaption>
-      <div role="list" style="display:grid;gap:0.75rem;padding:0 1.25rem 1.25rem">
-        {_rows}
-      </div>
+      <div class="lens-selection-demo-rows" role="list">{_rows}</div>
     </figure>
     """
 )
@@ -200,353 +216,177 @@ mo.Html(
 ```python marimo output=false
 _lens_revision = get_lens_revision()
 _agent_context = lens.context()
-_agent_selections = _agent_context.references["selections"]
 _agent_items = []
-for _selection in _agent_selections:
-    _selection_id = _selection["id"]
-    _snapshot = _selection["snapshot"]
+for _selection in _agent_context.references["selections"]:
     _agent_items.append(
         {
-            "id": _selection_id,
             "label": _selection["label"],
             "note": _selection["note"].strip(),
             "cellId": _selection["cells"][0]["id"],
             "imageStatus": (
-                "Ready"
-                if _selection_id in _agent_context.images
-                else str(_snapshot.get("status", "pending")).title()
+                "image ready"
+                if _selection["id"] in _agent_context.images
+                else f"image {_selection['snapshot'].get('status', 'pending')}"
             ),
-            "reopened": isinstance(
-                _selection.get("previousResolution"),
-                dict,
-            ),
+            "reopened": isinstance(_selection.get("previousResolution"), dict),
         }
     )
-_response_request = get_response_request()
 _response_completion = get_response_completion()
 
-if not _agent_items:
-    agent_handoff = (
-        {
-            "state": "complete",
-            "summary": str(_response_completion["summary"]),
-            "count": int(_response_completion["count"]),
-        }
-        if _response_completion is not None
-        else {"state": "empty"}
-    )
-else:
+if _agent_items:
     agent_handoff = {
-        "state": (
-            "ready" if any(_item["note"] for _item in _agent_items) else "selected"
-        ),
+        "state": "ready" if any(_item["note"] for _item in _agent_items) else "selected",
         "items": _agent_items,
         "reopened": any(_item["reopened"] for _item in _agent_items),
     }
+elif _response_completion is not None:
+    agent_handoff = {"state": "complete", **_response_completion}
+else:
+    agent_handoff = {"state": "empty"}
 ```
 
 <div class="lens-demo-handoff">
 
 ```python marimo
-_view = agent_handoff
-_state = _view["state"]
-_panel_open = """
-<aside
-  aria-labelledby="lens-demo-handoff-title"
-  style="border:1px solid var(--marimo-island-border,#e2e8f0);border-left:3px solid #0880ea;border-radius:6px;padding:1rem 1.125rem;background:var(--marimo-island-muted-surface,#f1f5f9);color:var(--marimo-island-foreground,#0f172a);font-family:'PT Sans',sans-serif"
->
-  <span id="lens-demo-handoff-title" style="display:block;margin-bottom:0.75rem;color:var(--marimo-island-muted-foreground,#64748b);font-family:'Fira Mono',monospace;font-size:0.6875rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">
-    What the agent receives
-  </span>
-"""
-_panel_close = "</aside>"
+_state = agent_handoff["state"]
+_eyebrow = "Addressed" if _state == "complete" else "What the agent receives"
 
 if _state == "empty":
-    _handoff_html = f"""
-    {_panel_open}
-      <div data-demo-handoff-state="empty">
-        <strong style="display:block;font-size:0.9375rem">No request yet</strong>
-        <span style="display:block;margin-top:0.25rem;color:var(--marimo-island-muted-foreground,#64748b);font-size:0.8125rem">
-          Select part of the chart and add a note.
-        </span>
-      </div>
-    {_panel_close}
-    """
-    _handoff_output = mo.Html(_handoff_html)
+    _title = "No selection yet"
+    _body = "<p>Press <strong class='lens-select'>Select</strong> and click a bar.</p>"
 elif _state == "complete":
-    _completed_summary = escape(_view["summary"])
-    _completed_noun = "selection" if int(_view["count"]) == 1 else "selections"
-    _handoff_html = f"""
-    <aside
-      aria-labelledby="lens-demo-complete-title"
-      data-demo-handoff-state="complete"
-      style="border:1px solid color-mix(in srgb,light-dark(#1d7363,#cad996) 45%,var(--marimo-island-border,#e2e8f0));border-left:3px solid light-dark(#1d7363,#cad996);border-radius:6px;padding:1rem 1.125rem;background:var(--marimo-island-surface,#fff);color:var(--marimo-island-foreground,#0f172a);font-family:'PT Sans',sans-serif"
-    >
-      <span id="lens-demo-complete-title" style="display:block;color:light-dark(#1d7363,#cad996);font-family:'Fira Mono',monospace;font-size:0.6875rem;font-weight:600;letter-spacing:0.04em;text-transform:uppercase">
-        Ready for review
-      </span>
-      <strong style="display:block;margin-top:0.625rem;font-size:0.9375rem">{_completed_summary}</strong>
-      <p style="margin:0.5rem 0 0;color:var(--marimo-island-muted-foreground,#64748b);font-size:0.8125rem">
-        Lens moved the {_completed_noun} to History and brought the chart back
-        into view. Reopen one for another pass.
-      </p>
-    </aside>
-    """
-    _handoff_output = mo.Html(_handoff_html)
+    _title = escape(agent_handoff["summary"])
+    _body = (
+        "<p>The selection moved to <strong>History</strong> and the chart came back "
+        "into view. Reopen it from the dock to try another color.</p>"
+    )
 else:
-    _reopened_notice = (
+    _items = "".join(
+        f"""
+        <li>
+          <strong>{escape(_item["label"])}</strong>
+          <span>{escape(_item["note"]) or "No note yet"}</span>
+          <small>Cell <code>{escape(_item["cellId"])}</code> · {escape(_item["imageStatus"])}</small>
+        </li>
         """
-        <p data-demo-reopened="true" style="margin:0 0 0.75rem;border-left:2px solid light-dark(#1d7363,#cad996);padding-left:0.625rem;color:light-dark(#1d7363,#cad996);font-size:0.8125rem;font-weight:600">
-          Reopened from History. Update the note or hand it off again.
-        </p>
-        """
-        if _view["reopened"]
+        for _item in agent_handoff["items"]
+    )
+    _reopened = (
+        "<p>Reopened from History. Update the note or hand it off again.</p>"
+        if agent_handoff["reopened"]
         else ""
     )
-    _selection_rows = []
-    for _item in _view["items"]:
-        _item_id = escape(_item["id"])
-        _item_label = escape(_item["label"])
-        _item_note = escape(_item["note"]) or "No note added"
-        _item_cell = escape(_item["cellId"])
-        _item_image_status = escape(_item["imageStatus"])
-        _selection_rows.append(
-            f"""
-            <li
-              data-demo-selection-id="{_item_id}"
-              style="display:grid;gap:0.375rem;border:1px solid var(--marimo-island-border,#e2e8f0);border-radius:5px;padding:0.75rem;background:var(--marimo-island-surface,#fff)"
-            >
-              <strong style="font-size:0.8125rem">{_item_label}</strong>
-              <span data-demo-request style="min-width:0;overflow-wrap:anywhere;font-size:0.8125rem">
-                {_item_note}
-              </span>
-              <span style="color:var(--marimo-island-muted-foreground,#64748b);font-size:0.75rem">
-                Cell <code data-demo-cell>{_item_cell}</code>
-                · Selection image
-                <span data-demo-image-status>{_item_image_status}</span>
-              </span>
-            </li>
-            """
-        )
-    _selection_list = f"""
-    <ol
-      data-demo-selection-count="{len(_view["items"])}"
-      style="display:grid;gap:0.625rem;margin:0;padding:0;list-style:none"
-    >
-      {"".join(_selection_rows)}
-    </ol>
-    """
-
     if _state == "selected":
-        _handoff_body = f"""
-        {_reopened_notice}
-        <div data-demo-handoff-state="selected">
-          {_selection_list}
-          <span style="display:block;margin-top:0.75rem;color:var(--marimo-island-muted-foreground,#64748b);font-size:0.8125rem">
-            Add a note with what you want the agent to change.
-          </span>
-        </div>
-        """
-        _handoff_output = mo.Html(f"{_panel_open}{_handoff_body}{_panel_close}")
+        _title = "Selection captured"
+        _body = f"{_reopened}<ol>{_items}</ol><p>Add a note describing the change.</p>"
     else:
-        _selection_noun = "selection" if len(_view["items"]) == 1 else "selections"
-        _handoff_button = mo.md(
-            f"""
-            <span data-demo-handoff-button style="display:inline-flex;overflow:hidden;align-items:center;border:1px solid #0880ea;border-radius:6px;background:light-dark(#edf6ff,#1d5b6a);line-height:1;cursor:pointer">
-              {handoff_to_agent}
-            </span>
-            """
-        )
-        _handoff_html = f"""
-        {_panel_open}
-          {_reopened_notice}
-          <div data-demo-handoff-state="ready">
-            {_selection_list}
-            <div style="margin-top:0.75rem;font-size:0.8125rem">
-              <span style="display:block;color:var(--marimo-island-muted-foreground,#64748b)">
-                Related notebook context
-              </span>
-              <span data-demo-context style="display:block;margin-top:0.25rem">
-                Cell code, upstream cells, and current controls
-              </span>
-            </div>
-          </div>
-          <div style="margin-top:1rem;border-top:1px solid var(--marimo-island-border,#e2e8f0);padding-top:0.875rem">
-            <strong style="display:block;font-size:0.875rem">Hand off to the demo agent</strong>
-            <span style="display:block;margin-top:0.25rem;color:var(--marimo-island-muted-foreground,#64748b);font-size:0.8125rem;line-height:1.45">
-              It will use the {_selection_noun} to recolor the bars, show where
-              it is working, and return the updated chart for review.
-            </span>
-          </div>
-        {_panel_close}
-        """
-        _handoff_output = mo.vstack(
-            [mo.Html(_handoff_html), _handoff_button],
-            gap=0.75,
+        _title = "Request ready"
+        _body = (
+            f"{_reopened}<ol>{_items}</ol>"
+            "<p>The agent also receives the chart cell's source, its upstream data, "
+            "and the current control values. It will recolor the bars, show where it "
+            "is working, and bring the chart back for review.</p>"
         )
 
-_handoff_output
+_actions = (
+    f'<div class="lens-demo-panel-actions">{handoff_to_agent}</div>'
+    if _state == "ready"
+    else ""
+)
+mo.Html(
+    f"""
+    <aside class="lens-demo-panel" data-demo-handoff-state="{_state}" aria-live="polite">
+      <span class="lens-doc-demo-eyebrow">{_eyebrow}</span>
+      <strong>{_title}</strong>
+      {_body}
+      {_actions}
+    </aside>
+    """
+)
 ```
 
 </div>
 
 ```python marimo output=false
 if handoff_to_agent.value:
-    _handoff_context = lens.context()
-    _handoff_selections = _handoff_context.references["selections"]
-    _handoff_current = _handoff_context.current
-    _noted_selections = [
-        _selection for _selection in _handoff_selections if _selection["note"].strip()
-    ]
-    if _handoff_current is not None and _noted_selections:
-        _handoff_current_id = _handoff_current["id"]
-        _ordered_notes = sorted(
-            _noted_selections,
-            key=lambda _selection: _selection["id"] != _handoff_current_id,
+    _context = lens.context()
+    _selections = _context.references["selections"]
+    _current = _context.current
+    _noted = [_s for _s in _selections if _s["note"].strip()]
+    if _current is not None and _noted:
+        _noted.sort(key=lambda _s: _s["id"] != _current["id"])
+        _color = next(
+            (_c for _c in (find_css_color(_s["note"]) for _s in _noted) if _c), None
         )
-        _color_candidate = ""
-        _color_supported = False
-        from js import OffscreenCanvas as _offscreen_canvas
-
-        for _selection in _ordered_notes:
-            _candidate = (
-                str(_selection["note"]).rsplit(maxsplit=1)[-1].strip(".,!?;:'\"")
-            )[:64]
-            _color_context_a = _offscreen_canvas.new(
-                1,
-                1,
-            ).getContext("2d")
-            _color_context_b = _offscreen_canvas.new(
-                1,
-                1,
-            ).getContext("2d")
-            _color_context_a.fillStyle = "#010203"
-            _color_context_b.fillStyle = "#040506"
-            _color_context_a.fillStyle = _candidate
-            _color_context_b.fillStyle = _candidate
-            if str(_color_context_a.fillStyle) == str(_color_context_b.fillStyle):
-                _color_candidate = _candidate
-                _color_supported = True
-                break
-
-        _selection_count = len(_handoff_selections)
-        _activity_message = (
-            _ordered_notes[0]["note"][:120]
-            if _selection_count == 1
-            else f"Working through {_selection_count} selections"
-        )
+        _count = len(_selections)
         set_response_completion(None)
-        _activity_handle = lens.start_activity(
-            _handoff_current,
-            expected_revision=_handoff_context.revision,
-            label="Reviewing chart request",
-            message=_activity_message,
+        _activity = lens.start_activity(
+            _current,
+            expected_revision=_context.revision,
+            label="Reading the request",
+            message=(
+                _noted[0]["note"][:120]
+                if _count == 1
+                else f"Working through {_count} selections"
+            ),
         )
-        await asyncio.sleep(5)
-        if _color_supported:
-            set_bar_color(_color_candidate)
-        lens.stop_activity(_activity_handle)
+        await asyncio.sleep(2.5)
+        if _color:
+            set_bar_color(_color)
+        lens.stop_activity(_activity)
         set_response_request(
             {
-                "selectionIds": [
-                    _selection["id"] for _selection in _handoff_selections
-                ],
-                "revision": _handoff_context.revision,
-                "color": _color_candidate,
-                "colorSupported": _color_supported,
-                "count": _selection_count,
+                "selectionIds": [_s["id"] for _s in _selections],
+                "revision": _context.revision,
+                "color": _color,
+                "count": _count,
             }
         )
 ```
 
 ```python marimo output=false
-_verified_request = chart_result["request"]
-if _verified_request is not None:
-    _verified_context = lens.context()
-    _verified_selection_ids = _verified_request["selectionIds"]
-    _verified_current = _verified_context.current
-    _open_selection_ids = {
-        _selection["id"] for _selection in _verified_context.references["selections"]
-    }
+_request = chart_result["request"]
+if _request is not None:
+    _context = lens.context()
+    _current = _context.current
+    _open_ids = {_s["id"] for _s in _context.references["selections"]}
     if (
-        _verified_current is not None
-        and _verified_selection_ids
-        and _verified_context.revision == _verified_request["revision"]
-        and all(
-            _selection_id in _open_selection_ids
-            for _selection_id in _verified_selection_ids
-        )
+        _current is not None
+        and _context.revision == _request["revision"]
+        and all(_id in _open_ids for _id in _request["selectionIds"])
     ):
-        _verified_color = _verified_request["color"]
-        _verified_count = _verified_request["count"]
-        if _verified_request["colorSupported"]:
-            if _verified_count == 1:
-                _verified_summary = (
-                    f"Changed the bars to {_verified_color} and checked the result."
-                )
-            elif _verified_count == 2:
-                _verified_summary = (
-                    f"Changed the bars to {_verified_color} "
-                    "and checked the result for both selections."
-                )
-            else:
-                _verified_summary = (
-                    f"Changed the bars to {_verified_color} "
-                    f"and checked the result for all {_verified_count} "
-                    "selections."
-                )
+        _color = _request["color"]
+        _count = _request["count"]
+        if _color:
+            _scope = "" if _count == 1 else f" for all {_count} selections"
+            _summary = f"Changed the bars to {_color} and checked the result{_scope}."
         else:
-            _verified_summary = (
-                "This demo can recolor the bars. "
-                "Add a color to a selection note, such as "
-                '"Make bars blue."'
-            )
-        _verification_message = (
-            "Checking the updated chart before returning it."
-            if _verified_request["colorSupported"]
-            else "Checking what this demo can change."
+            _summary = 'This demo can recolor the bars. Add a color to your note, such as "Make the bars blue."'
+        _activity = lens.start_activity(
+            _current,
+            expected_revision=_context.revision,
+            label="Checking the chart" if _color else "Checking the request",
+            message="Comparing the updated chart with the request.",
         )
-        _verification_activity = lens.start_activity(
-            _verified_current,
-            expected_revision=_verified_context.revision,
-            label=(
-                "Checking updated chart"
-                if _verified_request["colorSupported"]
-                else "Checking request"
-            ),
-            message=_verification_message,
-        )
-        await asyncio.sleep(5)
-        lens.stop_activity(_verification_activity)
-        if lens.context().revision == _verified_context.revision:
-            _reveal_hold_ms = 10_000
+        await asyncio.sleep(2)
+        lens.stop_activity(_activity)
+        if lens.context().revision == _context.revision:
+            _hold_ms = 5_000
             lens.reveal(
-                _verified_current,
-                expected_revision=_verified_context.revision,
-                duration_ms=_reveal_hold_ms,
-                label=(
-                    "Updated chart"
-                    if _verified_request["colorSupported"]
-                    else "Try a color"
-                ),
-                message=_verified_summary,
+                _current,
+                expected_revision=_context.revision,
+                duration_ms=_hold_ms,
+                label="Updated chart" if _color else "Try a color",
+                message=_summary,
             )
-            await asyncio.sleep(_reveal_hold_ms / 1_000)
-            if (
-                _verified_request["colorSupported"]
-                and lens.context().revision == _verified_context.revision
-            ):
+            await asyncio.sleep(_hold_ms / 1_000)
+            if _color and lens.context().revision == _context.revision:
                 lens.resolve(
-                    _verified_selection_ids,
-                    expected_revision=_verified_context.revision,
-                    summary=_verified_summary,
+                    _request["selectionIds"],
+                    expected_revision=_context.revision,
+                    summary=_summary,
                 )
-                set_response_completion(
-                    {
-                        "summary": _verified_summary,
-                        "count": _verified_count,
-                    }
-                )
+                set_response_completion({"summary": _summary, "count": _count})
 ```
 
 </section>
@@ -555,6 +395,6 @@ if _verified_request is not None:
 
 ## Continue
 
-- [Get started](./getting-started) with one notebook and one selection.
-- [Understand Lens](./overview) through its targets, selections, context, and review loop.
+- [What is Lens?](./overview) explains visual and computational grounding.
+- [Get started](./getting-started) with one notebook, one selection, and one reviewed change.
 - [Connect an agent](./agents) to inspect, change, verify, and return notebook work.

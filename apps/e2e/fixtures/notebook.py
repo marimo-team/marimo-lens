@@ -20,6 +20,8 @@ def _():
 def _(mo):
     mo.md("""
     # Regional revenue
+
+    Method notes: [Read the methodology](#methodology).
     """)
 
 

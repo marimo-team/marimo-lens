@@ -1,91 +1,32 @@
 ---
 title: Connect an agent
-description: Give a live notebook agent Lens context and return verified work for review.
+description: Give a code-mode agent Lens context, show its work in the notebook, and return verified results for review.
 ---
 
 # Connect an agent
 
-Lens works with agents that can run Python inside the live marimo kernel. The
-agent reads the current selection, inspects and edits its producing cells, then
-returns the verified result to the same target for review.
+Lens works with agents that can run Python inside the live marimo kernel. Lens
+calls that environment **code mode**. The agent reads the current selection,
+inspects and edits its producing cells, verifies the result, and returns it to
+the same target for review. This page is for agents and integration authors.
+Run its Python examples through the notebook's code-mode execution channel.
 
-## Use Lens with your agent
-
-Connect your agent to the notebook through **Settings → Pair with an agent**,
-or use the editor's **Code Mode (beta)** chat mode. Ask it to add Lens if the
-dock is missing, or ask for a Lens Trail to explain the notebook's results.
-For a specific change, select a result in Lens, add a note, then tell the agent:
+Notebook users need none of this. Use marimo's AI sidebar in **Code Mode
+(beta)**, or connect your own agent through **Settings → Pair with an agent**.
+Then select a result, add a note, and say:
 
 > Use Lens to address my current selection.
 
-For several requests, ask it to address all open selections. The agent loads
-the Lens instructions that match the notebook's installation. A Lens note
-remains open until an agent reads and addresses it.
-
-The [quickstart](./getting-started) walks through connection, a chart example,
-and the first verified change. The Python examples on this page are for agents
-and integration authors. Run them through the notebook's code-mode execution
-channel, where they can access its live kernel.
+[Getting started](./getting-started) walks through that path.
 
 ## Read the packaged briefing
 
-From a terminal, read the Lens instructions with:
+The `marimo-lens` package ships its own Agent Skill inside an **Agent Plugin**,
+so the instructions always match the installed version. It also registers
+`marimo_lens.agent` as marimo's `lens` **capability**, which code-mode hosts
+advertise to agents.
 
-```console
-uvx --with marimo-lens agent-plugins read marimo-lens
-```
-
-The command identifies its Python environment and prints the complete core
-skill. It uses an isolated tool environment. To work in an existing notebook,
-read the briefing from that kernel's Lens installation using module help or:
-
-```python
-import agent_plugins as ap
-
-print(ap.read("marimo-lens"))
-```
-
-Reuse instructions already loaded for the same environment and installation.
-The core covers connection and walkthroughs, with references for selections,
-setup, target authoring, and operations across kernel calls.
-
-## Before connecting
-
-Install `marimo-lens` in the notebook environment and connect the agent to its
-live kernel. The Lens instance may come from a notebook cell, a host integration,
-or automatic mounting. It need not be assigned to a notebook variable.
-
-An already-connected agent can install Lens through the notebook's package
-API and continue in the same session. Ask it to install Lens and add the dock.
-
-Try [Connect to Lens](#connect-to-lens) before adding a widget. If the dock is
-already visible, use it to mark an output and add a note. [Getting started](./getting-started)
-covers installation and manual mounting.
-
-## Enter code mode
-
-**Code mode** is a live connection to the notebook kernel. It lets an agent read
-cells, run scratch code, apply cell edits, and inspect runtime results.
-
-If your agent already has code-mode access, continue to
-[Connect to Lens](#connect-to-lens).
-
-Use the host's notebook connection workflow, such as
-[marimo Pair](https://marimo.io/pair), to reach the live kernel. Read the Lens
-briefing in that kernel through `ap.read("marimo-lens")` or module help so the
-instructions match its installed Python package.
-
-Pair owns notebook connection, inspection, edits, and execution. Lens owns
-selection grounding, visual evidence, activity, reveal, and resolution.
-
-## Connect to Lens
-
-The `marimo-lens` Python package includes the matching Lens Agent Skill inside
-an **Agent Plugin**, the installed resource bundle that keeps the workflow and
-Python version together. It also registers `marimo_lens.agent` as marimo's
-`lens` **capability**, the Python module marimo advertises to code-mode agents.
-
-Discover the installed API and read its packaged workflow in the notebook kernel:
+In the notebook kernel, read the core skill with either form:
 
 ```python
 import marimo_lens.agent
@@ -93,8 +34,13 @@ import marimo_lens.agent
 help(marimo_lens.agent)
 ```
 
-Help already contains the complete core skill. Read a reference when its
-workflow applies, through Python in the notebook if its filesystem is remote:
+```python
+import agent_plugins as ap
+
+print(ap.read("marimo-lens"))
+```
+
+Read a reference only when its workflow applies:
 
 ```python
 import marimo_lens.agent
@@ -106,7 +52,17 @@ print(
 )
 ```
 
-Run this inside one live code-mode kernel call:
+From a terminal, `uvx --with marimo-lens agent-plugins read marimo-lens` prints
+the same core skill from an isolated installation. It does not connect to a
+notebook. Working with a notebook requires the live connection and that
+installation's guidance.
+
+## Connect to Lens
+
+`connect()` reuses an available Lens. It never creates a widget or a notebook
+cell. It finds browser-ready instances in the active runtime, including
+automatically mounted ones, plus Lens objects in the supplied code-mode
+globals. Run this inside one code-mode kernel call:
 
 ```python
 import marimo._code_mode as cm
@@ -120,20 +76,23 @@ print(lens_context.current)
 ```
 
 `connect()` returns a **mounted Lens**, the agent-facing handle for one live
-`Lens` instance. Its opaque `identity` lets the agent reconnect to that same
-instance in a later kernel call.
+`Lens` instance. `lens_context.current` is the current selection and the likely
+referent for "this" or "here." The person's current instruction takes priority
+over an older selection note.
 
-`lens_context.current` is the current selection and the likely referent for
-“this” or “here.” The current user instruction takes priority over an older
-selection note.
+Each kernel call has a fresh scratchpad. Save `mounted.identity` in your
+working state and pass it back to select the same Lens later:
 
-## Find an existing instance
+```python
+mounted = lens_agent.connect(cm.get_context(), identity=saved_identity)
+```
 
-`connect()` reuses an available Lens. It never creates a widget or notebook cell.
-It finds browser-ready instances in the active runtime, including automatically
-mounted ones, and Lens objects in the supplied code-mode globals.
+The identity belongs to one live Lens instance and lasts for that runtime. When
+it is gone, retry once without it and read fresh context before continuing.
 
-Use `discover()` to check availability or inspect several candidates:
+### Several or no instances
+
+Use `discover()` to check availability or inspect candidates:
 
 ```python
 import marimo._code_mode as cm
@@ -144,29 +103,40 @@ for candidate in available:
     print(candidate.identity, candidate.context().current)
 ```
 
-| Result          | Next action                                                                                                   |
-| --------------- | ------------------------------------------------------------------------------------------------------------- |
-| One handle      | Use it directly, or call `connect()` to select it.                                                            |
-| Several handles | Inspect their current selections, then reconnect with the intended handle's `identity`.                       |
-| Empty tuple     | Let any pending mount finish rendering and retry in a fresh kernel call. Add Lens when the notebook has none. |
+| Result          | Next action                                                                                     |
+| --------------- | ----------------------------------------------------------------------------------------------- |
+| One handle      | Use it, or call `connect()` to select it.                                                       |
+| Several handles | Inspect their current selections and reconnect with the intended `identity`.                    |
+| Empty tuple     | Let a pending mount finish rendering and retry in a fresh call. Add Lens only when none exists. |
 
-Discovery order does not indicate which instance owns the visible dock. Avoid
-choosing the first candidate arbitrarily or deleting another instance's selections
-to resolve ambiguity. Save the intended identity in the agent's working state:
+Discovery order does not indicate which instance owns the visible dock. Do not
+pick the first candidate arbitrarily or delete another instance's selections to
+resolve ambiguity. An automatically mounted Lens appears after its browser view
+reports ready, so an empty result during startup does not prove that the
+notebook needs another Lens.
+
+When discovery stays empty after the notebook has rendered, queue one collapsed
+Lens cell:
 
 ```python
-mounted = lens_agent.connect(cm.get_context(), identity=saved_identity)
+import marimo._code_mode as cm
+import marimo_lens.agent as lens_agent
+
+async with cm.get_context() as context:
+    cell_id = lens_agent.add_lens_cell(context)
+    print(cell_id)
 ```
 
-An automatically mounted Lens appears in discovery after its browser view reports
-ready. An empty result during startup is not proof that the notebook needs another
-Lens. An existing object found in globals can be discovered before it is rendered.
-Rerunning the mounting cell can replace its Lens. Rediscover and read fresh
-context when the saved identity is no longer available.
+End that kernel call so the cell can run and the browser can render the dock,
+then connect in a fresh call. `add_lens_cell()` reuses one agent-managed Lens
+cell and raises `lens_ambiguous` when it finds several. A host that mounts Lens
+with its own `dom_selector` policy owns mounting. Follow the host integration
+instead.
 
-## Address the current selection
+## Address a selection
 
-Start activity against the selection before inspecting its code:
+Start activity on the selection before inspecting its code, so the person sees
+where you are working:
 
 ```python
 selection = lens_context.current
@@ -181,41 +151,51 @@ activity = mounted.start_activity(
 )
 ```
 
-Keep the returned `activity` handle. Read the selection's note, target, and
-producing cells. Inspect the relevant upstream cells before changing notebook
-logic. Use the selection image when the request depends on the marked pixels.
+Keep the returned handle. Read the note, target, DOM hint, and producing cells
+from the reference. Read `lens_context.text` for the producing cells and their
+relevant upstream source and control values. Inspect
+`lens_context.images.get(selection["id"])` before making a claim about the
+marked pixels. Then apply the change through code mode, run the affected cells,
+and verify the result from fresh runtime evidence.
 
-Apply the change through code mode, run the affected cells, and verify the
-result from fresh runtime and browser evidence.
+Producing cells are provenance and edit locations, not necessarily where the
+fix belongs. A change to a chart often belongs in the data or an earlier step.
+A configured DOM target can have zero or several producing cells.
 
-## Guide a notebook with a Trail
+## Verify with a cell-output image
 
-Prepare a short route through the notebook's question, evidence, main result,
-and next step in authored order. Call `mounted.reveal(steps, duration_ms=None)` with
-cell IDs, labels, and short explanations. Users control the reading pace with
-small previous/next arrows in the popover header. Nothing is saved.
-
-Changing or rerunning referenced cells or their upstream inputs ends the
-Trail. The packaged Lens skill includes a complete recipe.
-
-## Return verified work
-
-Save the Lens identity, selection ID, and activity handle in the agent's working
-state before ending a kernel call. After verification, reconnect and find the
-same selection ID in a fresh context. Reassess a changed note or mark before
-returning the result. Reveal the selected target to replace activity, then
-resolve with the same captured revision in that kernel call.
+After changing and running a cell, request a fresh, unannotated PNG of its
+current output:
 
 ```python
-identity = mounted.identity
-selection_id = selection["id"]
+if not selection["cells"]:
+    raise RuntimeError("The selection has no producing cell")
+
+cell_id = selection["cells"][0]["id"]
+png = mounted.cell_image(cell_id, expected_revision=lens_context.revision)
+print("ready" if png is not None else "capture_pending")
+```
+
+The first call starts browser capture and returns `None`. End the kernel call,
+reconnect with the saved identity, and repeat the same cell ID and revision
+until the call returns bytes or raises a terminal `LensError`. One Lens has one
+capture slot, so finish the pending cell before requesting another. The bytes
+are consumed on return and are not stored by Lens.
+
+## Return the result
+
+Save the identity, selection ID, and activity handle before the kernel call
+ends. After verification, reconnect, find the same selection in fresh context,
+and reassess a changed note or mark. Then reveal the target and resolve with
+the same captured revision in one call:
+
+```python
 fresh_context = mounted.context()
 fresh_selection = next(
     item
     for item in fresh_context.references["selections"]
     if item["id"] == selection_id
 )
-verified_revision = fresh_context.revision
 
 mounted.reveal(
     fresh_selection,
@@ -226,106 +206,70 @@ mounted.reveal(
 )
 revision = mounted.resolve(
     selection_id,
-    expected_revision=verified_revision,
+    expected_revision=fresh_context.revision,
     summary="Updated the result and verified the affected cells.",
 )
-print(revision)
 ```
 
-End the kernel call so the browser can present the result. On a revision
-conflict, reassess the request in fresh context before resolving.
+Reveal replaces your activity. Resolution moves the selection to **History**
+immediately, and the browser shows the **Addressed** receipt after the reveal
+ends. Write the summary as a colleague would: what changed or what you found,
+and how you checked it. On `revision_conflict`, read fresh context and reassess
+before resolving. Keep ambiguous, blocked, or unverified selections Open and
+report what remains.
 
-Resolution moves the selection to **History** immediately. The browser shows
-the **Addressed** receipt after the reveal ends. Use the remaining hold for
-independent reading or planning before starting the next activity. A person
-can reopen the History entry for another pass.
-
-## Add Lens when the notebook has none
-
-When discovery remains empty after notebook rendering, queue one collapsed Lens
-cell through the code-mode context. `add_lens_cell()` reuses an agent-managed
-cell, but does not replace discovery of authored or automatically mounted widgets:
-
-```python
-import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
-
-async with cm.get_context() as context:
-    cell_id = lens_agent.add_lens_cell(context)
-    print(cell_id)
-```
-
-End that kernel call. Connect in a fresh call after the browser renders Lens.
-`add_lens_cell()` reuses one existing agent-managed Lens cell and raises
-`lens_ambiguous` when it finds several.
-
-Host applications can require an authored Lens mount with a specific
-`dom_selector`. Follow the host integration instead of adding a default Lens
-cell in that case.
-
-## Reconnect across kernel calls
-
-Save `mounted.identity` in the agent's working state:
-
-```python
-mounted = lens_agent.connect(cm.get_context(), identity=saved_identity)
-```
-
-The identity belongs to one live Lens instance and lasts for that runtime. It
-is not a notebook-persistent ID. Retry once without the saved identity when
-that instance is gone, then read a fresh context before continuing.
-
-When several Lens instances are available, use `discover()` to inspect their
-handles. `connect()` requires an identity to select one.
-The first displayed Lens view in each browser document owns interaction. Other
-views show **Lens is already active** until ownership changes.
-
-## Inspect current cell-output pixels
-
-A selection image preserves the marked target at selection time. After an
-agent change, `cell_image()` requests a fresh, unmarked image of one current
-cell output.
-
-```python
-selection = lens_context.current
-if selection is None or not selection["cells"]:
-    raise RuntimeError("The selection has no producing cell")
-
-cell_id = selection["cells"][0]["id"]
-png = mounted.cell_image(
-    cell_id,
-    expected_revision=lens_context.revision,
-)
-print("ready" if png is not None else "capture_pending")
-```
-
-The first call starts browser capture and returns `None`. End the kernel call,
-reconnect with the same Lens identity, and repeat the same cell ID and revision
-until the call returns PNG bytes or raises a terminal `LensError`.
-
-One Lens has one cell-output capture slot. Finish its pending cell before requesting
-another. Read [Context and evidence](./concepts/evidence) for image ownership
-and [Troubleshooting](./troubleshooting) for capture failures.
-
-## Work with several selections
+### Several selections
 
 Read every item in `lens_context.references["selections"]` when the person asks
-to address all Open selections. Several selections can point to one target
-while marking different visual evidence.
+to address all Open selections. Several selections can mark different evidence
+on one target. Resolve them together when one verified change addresses them
+all. Resolve separately with distinct summaries when the outcomes differ,
+passing the returned revision to the next call.
 
-Resolve selections together when one verified change addresses them. Use
-separate guarded calls when the changes or summaries differ. Keep ambiguous,
-blocked, or unverified selections Open and report what remains.
+## Explain the notebook with a Trail
 
-## Walk through a notebook with no selection
+A **Trail** is a multi-step reveal: an ordered explanation attached to notebook
+cells that the person pages through at their own pace. It needs no selection,
+which makes it the right tool for "walk me through this notebook" or "explain
+these results."
 
-An empty selection list describes the current Lens attention state. It does not
-cancel an explicit request for a notebook overview or walkthrough.
+Inspect the relevant cells and values first. Then choose a short route through
+the question, evidence, main result, and next step, and put the explanation in
+each step's message:
 
-Use the code-mode context's ordered cells and graph to choose graph-member cell
-IDs. Pass those IDs to `start_activity()` and `reveal()`. Cell-addressed
-feedback guides the walkthrough without creating or resolving a selection.
+```python
+steps = [
+    {
+        "target": "BYtC",
+        "label": "Inputs",
+        "message": "Start with the values used by this notebook.",
+    },
+    {
+        "target": "rAqT",
+        "label": "Calculation",
+        "message": "Follow how the inputs become a result.",
+    },
+    {
+        "target": "mNwP",
+        "label": "Conclusion",
+        "message": "Review the result and what it supports.",
+    },
+]
+mounted.reveal(steps, duration_ms=None)
+```
 
-Read [Feedback and History](./concepts/feedback) for the presentation lifecycle.
-The [Python API reference](./api) defines the exact methods. [Errors and
-limits](./reference/errors) covers recovery and bounds.
+Each target must be a current graph member. Verify that the cell is idle and
+free of relevant errors before presenting its result. Trails accept 1–16 steps
+and are transient: dismissal, another attention event, or a change to a
+referenced cell or its upstream inputs ends the route. Return control after
+showing it. A walkthrough request is not permission to edit or resolve
+existing selections.
+
+Cell-addressed `start_activity()` works the same way when you want to show work
+on a cell that has no selection.
+
+## Next
+
+- [How Lens works](./how-lens-works) explains the lifecycle behind these calls.
+- [Python API](./api) defines every signature, and [`LensContext`](./reference/context) defines the returned shapes.
+- [Errors and limits](./reference/errors) lists error codes and bounds, and [Troubleshooting](./troubleshooting) maps symptoms to recovery.

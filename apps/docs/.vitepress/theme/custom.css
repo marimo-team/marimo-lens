@@ -293,6 +293,18 @@ llm-only {
   line-height: 1.5;
 }
 
+.VPFeature .icon {
+  border: 1px solid var(--vp-c-divider);
+  background: var(--vp-c-brand-soft);
+  color: var(--vp-c-brand-1);
+}
+
+.VPFeature .icon svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
 .VPHome .vp-doc {
   max-width: 820px;
   margin: 0 auto;
@@ -355,6 +367,30 @@ llm-only {
   border-radius: 6px;
 }
 
+/* "Select" names the dock control and carries the dock's pointer icon. */
+.lens-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 4px;
+  padding: 0 0.4em;
+  background: var(--vp-c-bg-elv);
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.lens-select::before {
+  display: inline-block;
+  flex: none;
+  width: 0.85em;
+  height: 0.85em;
+  background: currentcolor;
+  content: "";
+  mask: url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22black%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M4.037 4.688a.495.495 0 0 1 .651-.651l16 6.5a.5.5 0 0 1-.063.947l-6.124 1.58a2 2 0 0 0-1.438 1.435l-1.579 6.126a.5.5 0 0 1-.947.063z%22/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
 .lens-context-flow {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -363,39 +399,6 @@ llm-only {
   margin: 28px 0 32px !important;
   padding: 0 !important;
   list-style: none !important;
-}
-
-.lens-mental-model {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  align-items: stretch;
-  gap: 10px;
-  margin: 24px 0 32px;
-}
-
-.lens-mental-model > div {
-  display: grid;
-  align-content: start;
-  gap: 6px;
-  min-width: 0;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
-  padding: 14px;
-  background: var(--vp-c-bg-elv);
-}
-
-.lens-mental-model > span {
-  display: none;
-}
-
-.lens-mental-model strong {
-  font-size: 14px;
-}
-
-.lens-mental-model div span {
-  color: var(--vp-c-text-2);
-  font-size: 13px;
-  line-height: 1.45;
 }
 
 .lens-context-flow li {
@@ -453,10 +456,6 @@ llm-only {
 
 .lens-doc-demo {
   margin: 24px 0 40px;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 8px;
-  padding: 20px;
-  background: var(--vp-c-bg-elv);
 }
 
 .lens-doc-demo-steps {
@@ -635,10 +634,9 @@ llm-only {
 
 .lens-doc-demo-status aside {
   border: 1px solid var(--vp-c-divider);
-  border-left: 3px solid var(--lens-selection-color);
   border-radius: 6px;
   padding: 15px 16px;
-  background: var(--vp-c-bg-soft);
+  background: var(--vp-c-bg-elv);
   color: var(--vp-c-text-1);
   font-family: var(--vp-font-family-base);
 }
@@ -740,29 +738,34 @@ llm-only {
 }
 
 .lens-demo-steps {
-  display: grid;
-  grid-template-columns: repeat(4, max-content);
-  justify-content: space-between;
-  gap: 16px;
-  margin-top: 24px;
-  border: 1px solid var(--vp-c-divider);
-  border-radius: 8px;
-  padding: 14px 16px;
-  background: var(--vp-c-bg-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 24px 0 0 !important;
+  padding: 0 !important;
   color: var(--vp-c-text-2);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.5;
+  list-style: none !important;
+  counter-reset: lens-demo-step;
 }
 
-.lens-demo-steps span {
-  min-width: 0;
+.lens-demo-steps li {
+  position: relative;
+  margin: 0 !important;
+  padding-left: 22px;
+  white-space: nowrap;
 }
 
-.lens-demo-steps strong {
-  margin-right: 6px;
+.lens-demo-steps li::before {
+  position: absolute;
+  left: 0;
   color: var(--lens-index-color);
   font-family: var(--vp-font-family-mono);
   font-size: 12px;
+  font-weight: 600;
+  content: counter(lens-demo-step);
+  counter-increment: lens-demo-step;
 }
 
 .lens-demo-mount {
@@ -791,55 +794,83 @@ llm-only {
   margin: 0;
 }
 
-.lens-demo-handoff + p {
-  max-width: 680px;
-  margin: 20px 0 0;
-  color: var(--vp-c-text-2);
-  font-size: 15px;
-  line-height: 1.6;
-}
-
-.lens-demo-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 24px;
-}
-
-.lens-demo-action {
-  display: inline-flex;
-  align-items: center;
-  min-height: 38px;
+.lens-demo-panel {
   border: 1px solid var(--vp-c-divider);
-  border-radius: 6px;
-  padding: 0 16px;
-  color: var(--vp-c-text-1) !important;
-  font-size: 14px;
-  font-weight: 500;
-  text-decoration: none !important;
+  border-radius: 8px;
+  padding: 16px 18px;
+  background: var(--vp-c-bg-elv);
+  color: var(--vp-c-text-1);
+  font-family: var(--vp-font-family-base);
 }
 
-.lens-demo-action:hover {
-  border-color: var(--vp-c-brand-2);
-  background: var(--vp-c-bg-soft);
+.lens-demo-panel > strong {
+  display: block;
+  font-size: 15px;
 }
 
-.lens-demo-action-primary {
-  border-color: var(--vp-button-brand-border);
-  background: var(--vp-button-brand-bg);
-  color: var(--vp-button-brand-text) !important;
+.lens-demo-panel p {
+  margin: 6px 0 0;
+  color: var(--vp-c-text-2);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
-.lens-demo-action-primary:hover {
-  border-color: var(--vp-button-brand-hover-border);
-  background: var(--vp-button-brand-hover-bg);
+.lens-demo-panel ol {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lens-demo-panel li {
+  display: grid;
+  gap: 2px;
+  border-top: 1px solid var(--vp-c-divider);
+  padding: 10px 0;
+  font-size: 13px;
+}
+
+.lens-demo-panel li:last-child {
+  border-bottom: 1px solid var(--vp-c-divider);
+}
+
+.lens-demo-panel li strong {
+  font-family: var(--vp-font-family-mono);
+  font-size: 12px;
+}
+
+.lens-demo-panel li span {
+  overflow-wrap: anywhere;
+}
+
+.lens-demo-panel li small {
+  color: var(--vp-c-text-2);
+  font-size: 12px;
+}
+
+.lens-demo-panel li code {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+}
+
+.lens-demo-panel-actions {
+  display: flex;
+  margin-top: 14px;
+}
+
+.lens-demo-panel-actions marimo-ui-element,
+.lens-demo-panel-actions marimo-button,
+.lens-demo-button marimo-ui-element,
+.lens-demo-button marimo-button {
+  display: block;
+}
+
+.lens-demo-button [data-marimo-docs-cell] {
+  margin: 0 0 14px;
 }
 
 @media (max-width: 959px) {
-  .lens-mental-model {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .lens-context-flow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -869,16 +900,8 @@ llm-only {
 }
 
 @media (max-width: 639px) {
-  .lens-mental-model {
-    grid-template-columns: 1fr;
-  }
-
   .lens-context-flow {
     grid-template-columns: 1fr;
-  }
-
-  .lens-doc-demo {
-    padding: 16px;
   }
 
   .lens-doc-demo-steps {
@@ -954,11 +977,6 @@ llm-only {
 
   .lens-demo h2 {
     padding-top: 0;
-  }
-
-  .lens-demo-steps {
-    grid-template-columns: 1fr;
-    gap: 8px;
   }
 
   .lens-demo-output {

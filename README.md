@@ -36,7 +36,10 @@ Use Lens with an agent connected to your notebook through
 separate Python package, installed in the notebook's environment.
 
 [Follow the quickstart](https://marimo-team.github.io/marimo-lens/getting-started)
-to connect an agent, select a chart, and review your first change.
+to connect an agent, select a chart, and review your first change, or open the
+sample notebook in molab:
+
+[![Open in molab](https://molab.marimo.io/molab-shield.svg)](https://molab.marimo.io/notebooks/nb_MimGXwYTcvjfb1sdUdaTyn)
 
 ## For agents
 
@@ -48,14 +51,15 @@ uvx --with marimo-lens agent-plugins read marimo-lens
 
 In a connected notebook kernel, use `import agent_plugins as ap` followed by
 `print(ap.read("marimo-lens"))` to read that environment's installed guidance.
-[Agent integration](https://marimo-team.github.io/marimo-lens/agents) covers
+[Connect an agent](https://marimo-team.github.io/marimo-lens/agents) covers
 connection and resource access.
 
 ## Documentation
 
-[Try the demo](https://marimo-team.github.io/marimo-lens/#try-lens) ·
+[What is Lens?](https://marimo-team.github.io/marimo-lens/overview) ·
 [Getting started](https://marimo-team.github.io/marimo-lens/getting-started) ·
-[Agent integration](https://marimo-team.github.io/marimo-lens/agents) ·
+[Try the demo](https://marimo-team.github.io/marimo-lens/#try-lens) ·
+[Connect an agent](https://marimo-team.github.io/marimo-lens/agents) ·
 [Python API](https://marimo-team.github.io/marimo-lens/api)
 
 [Contributing](CONTRIBUTING.md) ·

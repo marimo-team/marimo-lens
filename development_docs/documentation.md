@@ -26,30 +26,49 @@ resource bounds. README API sections remain concise and route to these pages.
 
 ## Public information architecture
 
-The current site routes readers through:
+The site has three sidebar groups. Introduction explains the product and gets a
+reader to a first success. Guide covers one task per page. Reference holds
+exact contracts.
 
-- `docs/index.md`: landing page and interactive product proof.
-- `docs/overview.md`: product model and rationale.
-- `docs/why-lens.md`: visual grounding, computational grounding, role
-  allocation, and the human review loop.
-- `docs/getting-started.md`: agent connection, a chart selection, and the first reviewed change.
-- `docs/how-lens-works.md`: end-to-end collaboration loop and interactive API proof.
-- `docs/concepts/`: targets, context and evidence, feedback, and History.
-- `docs/selections.md`: point and region interaction, notes, images, Open, and History.
-- `docs/custom-metadata.md`: runnable HTML metadata examples and a live captured-description inspector.
-- `docs/agents.md`: code-mode and Agent Skill workflow.
-- `docs/data-and-trust.md`: data exposure, redaction, lifetime, and transfer boundaries.
-- `docs/compatibility.md`: Python, marimo, browser, agent-host, and release-channel contracts.
+Introduction:
+
+- `docs/index.md`: landing page, demo video, and interactive product proof.
+- `docs/overview.md`: what Lens is, visual and computational grounding, the
+  point-revise-review loop, and the division of work between Lens and the agent.
+- `docs/getting-started.md`: install, agent connection, a Trail, a chart
+  selection, and the first reviewed change.
+- `docs/how-lens-works.md`: the selection lifecycle, what an agent receives,
+  selection and cell-output images, activity, reveal, resolve, History, and the
+  browser and Python split, with the interactive API loop.
+
+Guide:
+
+- `docs/selections.md`: point and region interaction, notes, images, Open,
+  History, and keyboard access.
+- `docs/agents.md`: the agent's workflow, from briefing and connection through
+  verification, reveal, resolve, and Trails.
+- `docs/custom-targets.md`: labels, `dom_selector`, declared regions, scope,
+  published notebook sources, image context, identity, and the host checklist,
+  with a live captured-description inspector.
+- `docs/data-and-trust.md`: data exposure, redaction, lifetime, and transfer
+  boundaries.
 - `docs/troubleshooting.md`: symptom-oriented recovery.
+
+Reference:
+
 - `docs/api.md`: exact Python methods and agent-adapter contracts.
 - `docs/reference/context.md`: exact `LensContext` and reference shapes.
+- `docs/reference/attributes.md`: every `data-marimo-lens-*` attribute, target
+  precedence, source resolution, and identity rules.
 - `docs/reference/errors.md`: errors, recovery actions, and resource limits.
+- `docs/compatibility.md`: Python, marimo, browser, agent-host, and
+  release-channel contracts.
 
-`apps/docs/.vitepress/config.mts` shares one page inventory between top
-navigation and the sidebar. It also owns
-search, metadata, base path, edit links, theme registration, and build plugins.
-Add every public guide or reference page to intentional navigation. The landing
-page remains reachable at the site root.
+`apps/docs/.vitepress/config.mts` declares the three groups once and derives
+both the sidebar and the top navigation from them. The top navigation shows
+Overview, Guide, Agents, and Reference. It also owns search, metadata, base
+path, edit links, theme registration, and build plugins. Add every public page
+to one group. The landing page remains reachable at the site root.
 
 ## Write a public page
 
@@ -133,12 +152,20 @@ Use one page-level graph for related steps. Avoid hidden dependencies on cells
 from another page or an unstated local file. Keep demonstration variables
 private when they should not become public notebook definitions.
 
-The docs examples consume the locally built Python browser resources. The
-Vite+ build task in `apps/docs/vite.config.ts` declares that dependency, so
-`make docs`, `pnpm docs:build`, and recursive builds run it before VitePress.
-`make docs-serve` builds the same resources before starting the dev server.
-The build task forwards `BASE_PATH` and includes it in its cache key. Pull
-requests build under `/marimo-lens` to exercise repository-path deployment.
+The compiler pre-renders each page's cells at build time with the workspace
+`marimo-lens` package, so the Vite+ build task in `apps/docs/vite.config.ts`
+depends on the Python browser-resource build. `make docs`, `pnpm docs:build`,
+and recursive builds run it before VitePress, and `make docs-serve` builds the
+same resources before starting the dev server. The build task forwards
+`BASE_PATH` and includes it in its cache key. Pull requests build under
+`/marimo-lens` to exercise repository-path deployment.
+
+Interactivity is different. In the browser, the marimo islands runtime loads
+Pyodide and installs each page's declared `dependencies` with micropip from
+PyPI. The live demos therefore run the latest released `marimo-lens`, not the
+working tree. A widget or Python change reaches the published demos after the
+next release, so verify such changes in a live notebook or the e2e suite rather
+than on the docs site.
 
 ## Assets and theme
 
@@ -258,8 +285,9 @@ For internal-page changes:
 | Public context type or returned field        | `docs/reference/context.md`, examples and context tests                                |
 | Public error, recovery action, or limit      | `docs/reference/errors.md`, troubleshooting, boundary tests                            |
 | Selection behavior                           | `docs/selections.md`, relevant interactive example, selection-state maintainer page    |
+| Target attributes or DOM target identity     | `docs/reference/attributes.md`, `docs/custom-targets.md`, browser-and-host page        |
 | Agent workflow or capability                 | `docs/agents.md`, Agent Skill, package README route, agent-integration maintainer page |
-| Product mental model                         | `docs/overview.md`, landing proof, root and package README summaries                   |
+| Product mental model                         | `docs/overview.md`, `docs/how-lens-works.md`, landing proof, README summaries          |
 | Browser or host compatibility                | Public caveat beside first affected use, browser-and-host maintainer page              |
 | Build, test, dependency, or release workflow | Owning maintainer page and concise repository entry route                              |
 

@@ -84,7 +84,8 @@ Image failure does not discard the selection. Target identity, geometry, note,
 DOM hint, producing-cell references, and available graph context remain
 independent inputs.
 
-Read [Context and evidence](./concepts/evidence) for exact context forms and
-image states. Read [Targets](./concepts/targets) before widening the
+Read [How Lens works](./how-lens-works#what-the-agent-receives) for the
+context forms and image states, and [`LensContext`](./reference/context) for
+their exact shapes. Read [Custom targets](./custom-targets) before widening the
 `dom_selector` policy. Report security vulnerabilities through the
 [security policy](https://github.com/marimo-team/marimo-lens/security/policy).

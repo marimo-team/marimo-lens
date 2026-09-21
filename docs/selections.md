@@ -5,14 +5,12 @@ description: Mark points and regions in notebook outputs or configured DOM roots
 
 # Selections
 
-A selection stores one point or region inside one rendered target. It also
-stores a stable label, optional note, target identity, producing-cell IDs, a
-bounded DOM hint, and selection-image status. A request is the task given to an
-agent and can refer to several selections.
-
-Notebook output targets are available by default. `dom_selector` adds
-configured DOM targets through a host-owned CSS policy. Read [Targets](./concepts/targets)
-for target priority, producing-cell metadata, documents, and reattachment.
+A selection is one point or region inside one rendered target, with a stable
+`S<n>` label and an optional note. This page covers the controls a person uses
+in the Lens dock: creating and adjusting selections, inspecting their images,
+managing **Open** and **History**, and keyboard access. [How Lens
+works](./how-lens-works) explains what a selection carries and how an agent
+uses it.
 
 To use these controls in your own notebook, install `marimo-lens` and keep this
 cell displayed:
@@ -53,8 +51,8 @@ Try both gestures on the chart:
 <div class="lens-doc-demo">
 
 <div class="lens-doc-demo-steps lens-doc-demo-steps-two" aria-label="Create point and region selections">
-  <span><strong>1</strong> Press <strong>Select</strong>, then click a bar</span>
-  <span><strong>2</strong> Press <strong>Select</strong>, then drag across bars</span>
+  <span><strong>1</strong> Press <strong class='lens-select'>Select</strong>, then click a bar</span>
+  <span><strong>2</strong> Press <strong class='lens-select'>Select</strong>, then drag across bars</span>
 </div>
 
 ```python marimo output=false
@@ -157,16 +155,16 @@ elif _selection_demo_has_point:
     _selection_demo_state = "point"
     _selection_demo_title = "Point added. Now create a region."
     _selection_demo_body = (
-        "Press <strong>Select</strong> again, then drag across two or more bars."
+        "Press <strong class='lens-select'>Select</strong> again, then drag across two or more bars."
     )
 elif _selection_demo_has_region:
     _selection_demo_state = "region"
     _selection_demo_title = "Region added. Now create a point."
-    _selection_demo_body = "Press <strong>Select</strong> again, then click one bar."
+    _selection_demo_body = "Press <strong class='lens-select'>Select</strong> again, then click one bar."
 else:
     _selection_demo_state = "empty"
     _selection_demo_title = "Create a point"
-    _selection_demo_body = "Press <strong>Select</strong>, then click one bar."
+    _selection_demo_body = "Press <strong class='lens-select'>Select</strong>, then click one bar."
 
 _selection_demo_point_status = "Added" if _selection_demo_has_point else "Not yet"
 _selection_demo_region_status = "Added" if _selection_demo_has_region else "Not yet"
@@ -224,8 +222,8 @@ available when capture is pending or fails.
 
 The preview reports its pixel dimensions. A previous image is marked
 `outdated` in the API because its point or region no longer matches the current
-marker. Read [Context and evidence](./concepts/evidence) for capture composition,
-image limits, and the separate cell-output image used after an agent change.
+marker. Read [How Lens works](./how-lens-works#selection-images) for image
+states and the separate cell-output image used after an agent change.
 
 ## Work with open selections
 
@@ -271,7 +269,8 @@ the same browser document:
 A full document replacement creates a new opaque document identity. The old
 selection then remains Open with **Target unavailable** until it is removed or
 resolved. Cross-origin images and inaccessible iframes can block image capture.
-The selection details remain available.
+The selection details remain available. [Custom
+targets](./custom-targets#keep-targets-stable) explains DOM target identity.
 
 ## Resolve or reopen a selection
 
@@ -346,6 +345,6 @@ The first displayed Lens in a document owns interaction. Additional Lens views
 show **Lens is already active** until the owner closes. A Lens in another
 same-origin document has its own owner.
 
-The [Feedback and History](./concepts/feedback) concept page distinguishes
+[How Lens works](./how-lens-works#activity-reveal-and-resolve) distinguishes
 activity, reveal, resolution, History entries, and resolution receipts. The
-[Python API reference](./api) defines the agent-facing operations.
+[Python API](./api) defines the agent-facing operations.

@@ -72,8 +72,8 @@ Creates the Python widget and browser UI that own one Lens instance.
 
 - `dom_selector: str | None` adds configured DOM targets to the default
   notebook outputs and regions declared with Lens target or source attributes.
-  See [Targets](./concepts/targets). The string is stripped and accepts at most 1,024
-  UTF-16 code units.
+  See [Custom targets](./custom-targets). The string is stripped and accepts at
+  most 1,024 UTF-16 code units.
 - Returns a renderable `Lens` instance.
 - Raises `TypeError` for a non-string selector.
 - Raises `ValueError` for an empty or oversized selector.
@@ -87,7 +87,8 @@ lens
 ```
 
 Keep the value mounted while people create selections and agents call its
-methods. Read [Targets](./concepts/targets) before configuring host DOM targets.
+methods. Read [Custom targets](./custom-targets) before configuring host DOM
+targets.
 
 ### `Lens.context`
 
@@ -440,8 +441,8 @@ cell. A stale revision raises `revision_conflict`. A different cell while
 capture is pending raises `capture_busy`. A terminal result consumes the
 capture slot, so another call starts a new capture. Browser capture has a
 15-second deadline and the Python request expires after 20 seconds. The operation requires a current graph member and a browser-ready Lens
-view. Read [Context and evidence](./concepts/evidence) for the difference
-between a selection image and a cell-output image.
+view. Read [How Lens works](./how-lens-works#selection-images) for the
+difference between a selection image and a cell-output image.
 
 ## `LensError`
 
