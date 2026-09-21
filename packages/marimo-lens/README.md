@@ -51,6 +51,28 @@ Marimo outputs remain selectable through their existing output cells.
 
 ## Connect an agent
 
+Connect through [marimo Pair](https://marimo.io/pair) or the editor's code-mode
+sidebar, select a result in Lens, and tell the agent:
+
+> Use Lens to address my current selection.
+
+The [quickstart](https://marimo-team.github.io/marimo-lens/getting-started)
+covers the complete path from connection to a reviewed chart change.
+
+Read the packaged briefing from a terminal:
+
+```console
+uvx --with marimo-lens agent-plugins read marimo-lens
+```
+
+In an existing notebook kernel, run `import marimo_lens.agent` followed by
+`help(marimo_lens.agent)`. The help includes the same core skill and references
+from that installation. The terminal command uses an isolated tool environment
+and does not connect to the notebook.
+
+Use `marimo_lens.agent.skill()` to read individual skill resources and
+`marimo_lens.agent.plugin()` to inspect the installed plugin bundle.
+
 Agents call `marimo_lens.agent.connect()` to reuse an existing Lens, including
 automatically mounted instances. `discover()` lists available handles when an
 agent needs to check availability or choose between instances.

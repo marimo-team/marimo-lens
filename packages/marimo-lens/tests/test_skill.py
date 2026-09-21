@@ -1,29 +1,93 @@
 from __future__ import annotations
 
 import ast
+import asyncio
 import re
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
+from textwrap import indent
 from types import SimpleNamespace
 from typing import Any, cast
 
+import marimo._code_mode as code_mode
+import marimo_lens.agent as lens_agent
 import pytest
 from marimo_lens.context import LensContext
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
 
-def test_primary_skill_reads_the_packaged_workflow(
+@pytest.mark.parametrize("already_mounted", [False, True])
+def test_primary_skill_mounts_only_when_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    already_mounted: bool,
 ) -> None:
+    ctx = object()
+    added: list[object] = []
+
+    @asynccontextmanager
+    async def context() -> AsyncGenerator[object, None]:
+        yield ctx
+
+    def discover(context: object) -> tuple[SimpleNamespace, ...]:
+        assert context is ctx
+        return (SimpleNamespace(identity="existing"),) if already_mounted else ()
+
+    def add(context: object) -> str:
+        added.append(context)
+        return "lens-cell"
+
+    monkeypatch.setattr(code_mode, "get_context", context)
+    monkeypatch.setattr(lens_agent, "discover", discover)
+    monkeypatch.setattr(lens_agent, "add_lens_cell", add)
+    code = _python_block("skills/marimo-lens/SKILL.md", "## Add Lens when missing")
     namespace: dict[str, Any] = {}
     exec(  # noqa: S102 - Exercise the repository-owned skill example.
-        _python_block("skills/marimo-lens/SKILL.md", "## Load the installed workflow"),
+        "async def run():\n" + indent(code, "    "), namespace
+    )
+    asyncio.run(namespace["run"]())
+
+    assert added == ([] if already_mounted else [ctx])
+    assert ast.literal_eval(capsys.readouterr().out) == (
+        {"identities": ["existing"]} if already_mounted else {"cell_id": "lens-cell"}
+    )
+
+
+def test_primary_skill_walkthrough_runs_with_fresh_bindings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[object] = []
+    context = SimpleNamespace(
+        cells={
+            name: SimpleNamespace(id=name, status="idle", errors=[])
+            for name in ("inputs", "analysis", "summary")
+        },
+        graph=SimpleNamespace(cells=dict.fromkeys(("inputs", "analysis", "summary"))),
+    )
+
+    def connect(ctx: object) -> SimpleNamespace:
+        assert ctx is context
+        return SimpleNamespace(
+            reveal=lambda steps, **kwargs: calls.append((steps, kwargs))
+        )
+
+    monkeypatch.setattr(code_mode, "get_context", lambda: context)
+    monkeypatch.setattr(lens_agent, "connect", connect)
+    namespace: dict[str, Any] = {}
+    exec(  # noqa: S102 - Exercise the repository-owned skill example.
+        _python_block(
+            "skills/marimo-lens/SKILL.md", "## Explain the notebook with a Trail"
+        ),
         namespace,
     )
 
-    skill = namespace["skill"]
-    assert skill.body in capsys.readouterr().out
-    assert (skill / "reference/workflow.md").is_file()
+    assert len(calls) == 1
+    steps, options = cast(tuple[list[dict[str, str]], dict[str, object]], calls[0])
+    assert [step["target"] for step in steps] == ["inputs", "analysis", "summary"]
+    assert all(step["label"] and step["message"] for step in steps)
+    assert options == {"duration_ms": None}
 
 
 def test_primary_skill_image_snippet_reads_selection_evidence() -> None:
@@ -32,7 +96,8 @@ def test_primary_skill_image_snippet_reads_selection_evidence() -> None:
 
     exec(  # noqa: S102 - Exercise the repository-owned skill example.
         _python_block(
-            "skills/marimo-lens/SKILL.md", "## Inspect the required evidence"
+            "skills/marimo-lens/references/selections.md",
+            "## Inspect the required evidence",
         ),
         namespace,
     )
@@ -58,7 +123,7 @@ def test_primary_skill_starts_activity_against_the_selection() -> None:
     namespace: dict[str, object] = {"mounted": mounted}
     exec(  # noqa: S102 - Exercise the canonical skill example.
         _code_mode_block(
-            "skills/marimo-lens/SKILL.md",
+            "skills/marimo-lens/references/selections.md",
             "## Start meaningful activity",
         ),
         namespace,
@@ -73,29 +138,48 @@ def test_primary_skill_starts_activity_against_the_selection() -> None:
     assert isinstance(kwargs["message"], str) and kwargs["message"]
 
 
-def test_code_mode_reference_requests_cell_image_with_saved_revision() -> None:
+@pytest.mark.parametrize("ready", [False, True])
+def test_code_mode_reference_requests_cell_image_with_saved_revision(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    ready: bool,
+) -> None:
     calls: list[tuple[str, int]] = []
 
-    def cell_image(cell_id: str, *, expected_revision: int) -> bytes:
+    def cell_image(cell_id: str, *, expected_revision: int) -> bytes | None:
         calls.append((cell_id, expected_revision))
-        return b"cell-png"
+        return b"cell-png" if ready else None
 
-    namespace: dict[str, object] = {
-        "mounted": SimpleNamespace(cell_image=cell_image),
-        "cell_id": "cell-view",
-        "revision": 4,
-    }
+    ctx = object()
+
+    def connect(context: object, *, identity: str) -> SimpleNamespace:
+        assert context is ctx
+        assert identity == "F3n..."
+        return SimpleNamespace(cell_image=cell_image)
+
+    monkeypatch.setattr(code_mode, "get_context", lambda: ctx)
+    monkeypatch.setattr(lens_agent, "connect", connect)
+    monkeypatch.setattr("tempfile.tempdir", str(tmp_path))
+    namespace: dict[str, object] = {}
 
     exec(  # noqa: S102 - Exercise the repository-owned reference example.
         _python_block(
-            "skills/marimo-lens/reference/workflow.md",
+            "skills/marimo-lens/references/workflow.md",
             "## Capture a current cell image",
         ),
         namespace,
     )
 
-    assert namespace["cell_png"] == b"cell-png"
-    assert calls == [("cell-view", 4)]
+    assert calls == [("BYtC", 8)]
+    output = capsys.readouterr().out.strip()
+    if ready:
+        image_path = Path(output)
+        assert image_path.parent == tmp_path
+        assert image_path.read_bytes() == b"cell-png"
+    else:
+        assert output == "capture_pending"
+        assert list(tmp_path.iterdir()) == []
 
 
 def test_code_mode_reference_resolves_after_reveal_with_captured_revision(
@@ -124,7 +208,7 @@ def test_code_mode_reference_resolves_after_reveal_with_captured_revision(
     namespace: dict[str, object] = {"mounted": mounted}
     exec(  # noqa: S102 - Exercise the repository-owned reference example.
         _code_mode_block(
-            "skills/marimo-lens/reference/workflow.md",
+            "skills/marimo-lens/references/workflow.md",
             "## Present and resolve across calls",
         ),
         namespace,
@@ -134,7 +218,7 @@ def test_code_mode_reference_resolves_after_reveal_with_captured_revision(
     assert calls[0][:2] == ("reveal", selection)
     reveal_kwargs = cast(dict[str, object], calls[0][2])
     assert reveal_kwargs["expected_revision"] == 8
-    assert calls[1][:2] == ("resolve", ["243110...", "8b20f4..."])
+    assert calls[1][:2] == ("resolve", [selection["id"]])
     resolve_kwargs = cast(dict[str, object], calls[1][2])
     assert resolve_kwargs["expected_revision"] == reveal_kwargs["expected_revision"]
     summary = resolve_kwargs["summary"]
@@ -153,7 +237,7 @@ def test_address_mode_builds_evidence_workset_for_every_selection() -> None:
 
     exec(  # noqa: S102 - Exercise the canonical skill example.
         _python_block(
-            "skills/marimo-lens/SKILL.md",
+            "skills/marimo-lens/references/selections.md",
             "### Address every open selection",
         ),
         namespace,

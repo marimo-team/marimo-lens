@@ -32,7 +32,7 @@ The current site routes readers through:
 - `docs/overview.md`: product model and rationale.
 - `docs/why-lens.md`: visual grounding, computational grounding, role
   allocation, and the human review loop.
-- `docs/getting-started.md`: installation and first working selection.
+- `docs/getting-started.md`: agent connection, a chart selection, and the first reviewed change.
 - `docs/how-lens-works.md`: end-to-end collaboration loop and interactive API proof.
 - `docs/concepts/`: targets, context and evidence, feedback, and History.
 - `docs/selections.md`: point and region interaction, notes, images, Open, and History.

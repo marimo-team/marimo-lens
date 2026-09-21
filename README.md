@@ -24,48 +24,42 @@ https://github.com/user-attachments/assets/e1975ba6-3087-485e-9360-43a99adc8795
 
 - **Point and ask.** Mark a point or region on a chart, table, or other output.
   Lens keeps the mark, note, image, and relevant notebook context together.
-- **Follow the work.** See where the agent is working and the result it brings
-  into view.
+- **Follow the work.** See where the agent is working, or ask for a guided trail
+  through the notebook's inputs and results.
 - **Review and continue.** Reopen an addressed selection from History to refine
   the request against the current output.
 
-## Try it
+## Get started
 
-Open a notebook with [uv](https://docs.astral.sh/uv/), a Python environment and
-package manager:
+Use Lens with an agent connected to your notebook through
+[marimo Pair](https://marimo.io/pair) or marimo's code-mode sidebar. Lens is a
+separate Python package, installed in the notebook's environment.
 
-```sh
-uvx --with marimo-lens marimo edit notebook.py
+[Follow the quickstart](https://marimo-team.github.io/marimo-lens/getting-started)
+to connect an agent, select a chart, and review your first change.
+
+## For agents
+
+Read the packaged Lens briefing:
+
+```console
+uvx --with marimo-lens agent-plugins read marimo-lens
 ```
 
-Mount Lens in one notebook cell:
-
-```python
-from marimo_lens import Lens
-
-lens = Lens()
-lens
-```
-
-Press **Select**, click a point or drag a region, and add a note. Keep the Lens
-cell mounted. Requires Python 3.10–3.14 and marimo 0.24.0 or newer.
-
-Lens works with agents that can run code in the live notebook kernel, including
-[marimo Pair](https://marimo.io/pair). Follow the
-[agent guide](https://marimo-team.github.io/marimo-lens/agents) to connect one.
+In a connected notebook kernel, use `import agent_plugins as ap` followed by
+`print(ap.read("marimo-lens"))` to read that environment's installed guidance.
+[Agent integration](https://marimo-team.github.io/marimo-lens/agents) covers
+connection and resource access.
 
 ## Documentation
 
+[Try the demo](https://marimo-team.github.io/marimo-lens/#try-lens) ·
 [Getting started](https://marimo-team.github.io/marimo-lens/getting-started) ·
-[Concepts](https://marimo-team.github.io/marimo-lens/overview) ·
-[Selections](https://marimo-team.github.io/marimo-lens/selections) ·
-[Custom labels](https://marimo-team.github.io/marimo-lens/custom-metadata) ·
-[Python API](https://marimo-team.github.io/marimo-lens/api) ·
-[Troubleshooting](https://marimo-team.github.io/marimo-lens/troubleshooting)
+[Agent integration](https://marimo-team.github.io/marimo-lens/agents) ·
+[Python API](https://marimo-team.github.io/marimo-lens/api)
 
-For development, start with [Contributing](CONTRIBUTING.md) and the
-[architecture guide](development_docs/architecture.md).
-[Report a bug](https://github.com/marimo-team/marimo-lens/issues) or follow the
-[security policy](SECURITY.md) for a vulnerability.
+[Contributing](CONTRIBUTING.md) ·
+[Report a bug](https://github.com/marimo-team/marimo-lens/issues) ·
+[Apache 2.0](LICENSE)
 
-[Apache 2.0](LICENSE). Inspired by [Agentation](https://github.com/benjitaylor/agentation).
+Inspired by [Agentation](https://github.com/benjitaylor/agentation).

@@ -92,13 +92,16 @@ The authored Agent Plugin contract consists of:
 - `plugin.json`
 - `skills/marimo-lens/SKILL.md`
 - `skills/marimo-lens/agents/openai.yaml`
-- `skills/marimo-lens/reference/workflow.md`
+- `skills/marimo-lens/references/setup.md`
+- `skills/marimo-lens/references/selections.md`
+- `skills/marimo-lens/references/targets.md`
+- `skills/marimo-lens/references/workflow.md`
 
 The package manifest points `[tool.agent-plugins].root` to the repository root.
 The build backend packages the plugin tree and records its installed location
 in distribution metadata.
 
-`marimo_lens.agent.agent_plugin()` and `agent_skill()` resolve these installed
+`marimo_lens.agent.plugin()` and `marimo_lens.agent.skill()` resolve these installed
 resources. Their returned paths must identify the same distribution version as
 the imported Python API.
 

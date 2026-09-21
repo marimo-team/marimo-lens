@@ -9,11 +9,54 @@ Lens works with agents that can run Python inside the live marimo kernel. The
 agent reads the current selection, inspects and edits its producing cells, then
 returns the verified result to the same target for review.
 
+## Use Lens with your agent
+
+Connect your agent to the notebook through **Settings → Pair with an agent**,
+or use the editor's **Code Mode (beta)** chat mode. Ask it to add Lens if the
+dock is missing, or ask for a Lens Trail to explain the notebook's results.
+For a specific change, select a result in Lens, add a note, then tell the agent:
+
+> Use Lens to address my current selection.
+
+For several requests, ask it to address all open selections. The agent loads
+the Lens instructions that match the notebook's installation. A Lens note
+remains open until an agent reads and addresses it.
+
+The [quickstart](./getting-started) walks through connection, a chart example,
+and the first verified change. The Python examples on this page are for agents
+and integration authors. Run them through the notebook's code-mode execution
+channel, where they can access its live kernel.
+
+## Read the packaged briefing
+
+From a terminal, read the Lens instructions with:
+
+```console
+uvx --with marimo-lens agent-plugins read marimo-lens
+```
+
+The command identifies its Python environment and prints the complete core
+skill. It uses an isolated tool environment. To work in an existing notebook,
+read the briefing from that kernel's Lens installation using module help or:
+
+```python
+import agent_plugins as ap
+
+print(ap.read("marimo-lens"))
+```
+
+Reuse instructions already loaded for the same environment and installation.
+The core covers connection and walkthroughs, with references for selections,
+setup, target authoring, and operations across kernel calls.
+
 ## Before connecting
 
 Install `marimo-lens` in the notebook environment and connect the agent to its
 live kernel. The Lens instance may come from a notebook cell, a host integration,
 or automatic mounting. It need not be assigned to a notebook variable.
+
+An already-connected agent can install Lens through the notebook's package
+API and continue in the same session. Ask it to install Lens and add the dock.
 
 Try [Connect to Lens](#connect-to-lens) before adding a widget. If the dock is
 already visible, use it to mark an output and add a note. [Getting started](./getting-started)
@@ -27,23 +70,10 @@ cells, run scratch code, apply cell edits, and inspect runtime results.
 If your agent already has code-mode access, continue to
 [Connect to Lens](#connect-to-lens).
 
-[marimo Pair](https://github.com/marimo-team/marimo-pair) can provide this
-connection. Ask the agent to run:
-
-```console
-npx skills use "https://github.com/marimo-team/marimo-pair" --skill "marimo-pair"
-```
-
-If `npx` is unavailable, use Deno through `uvx`:
-
-```console
-uvx deno x -y skills use "https://github.com/marimo-team/marimo-pair" --skill "marimo-pair"
-```
-
-These commands require network access and return an [Agent Skill](https://agentskills.io/home),
-a set of workflow instructions. Have the agent read the complete output and
-follow it now, redirecting it to a temporary file first if necessary. Resolve
-relative paths from the supporting-files directory it provides.
+Use the host's notebook connection workflow, such as
+[marimo Pair](https://marimo.io/pair), to reach the live kernel. Read the Lens
+briefing in that kernel through `ap.read("marimo-lens")` or module help so the
+instructions match its installed Python package.
 
 Pair owns notebook connection, inspection, edits, and execution. Lens owns
 selection grounding, visual evidence, activity, reveal, and resolution.
@@ -61,12 +91,20 @@ Discover the installed API and read its packaged workflow in the notebook kernel
 import marimo_lens.agent
 
 help(marimo_lens.agent)
-skill = marimo_lens.agent.agent_skill()
-print(skill.body)
 ```
 
-Follow the complete skill output. Access supporting files through `skill`, for
-example `skill / "reference/workflow.md"`.
+Help already contains the complete core skill. Read a reference when its
+workflow applies, through Python in the notebook if its filesystem is remote:
+
+```python
+import marimo_lens.agent
+
+print(
+    marimo_lens.agent.skill()
+    .file("references/selections.md")
+    .read_text(encoding="utf-8")
+)
+```
 
 Run this inside one live code-mode kernel call:
 

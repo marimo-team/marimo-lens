@@ -36,10 +36,13 @@ value: marimo_lens.agent
 The entry point lives in `packages/marimo-lens/pyproject.toml`. marimo code mode
 can discover the installed module through its capability registry.
 
-`agent_plugin()` locates the Agent Plugin installed with the active
-`marimo-lens` distribution. `agent_skill()` selects its `marimo-lens` skill.
-Module help locates and prints the installed resource paths, so instructions
-and Python methods come from the same package version.
+`marimo_lens.agent.plugin()` locates the Agent Plugin installed with the active
+`marimo-lens` distribution. `marimo_lens.agent.skill()` selects its `marimo-lens` skill.
+Module help lazily calls `agent_plugins.read("marimo-lens")`, delivering the
+same core skill as the CLI briefing with installation identity and resource
+guidance. Ordinary imports do not read plugin resources. The core skill owns
+connection and walkthroughs, and routes selection work, setup, and target
+authoring to focused references. API docstrings describe individual operations.
 
 The authored resources live at repository root in `plugin.json` and
 `skills/marimo-lens/`. The distribution path is explained in
@@ -277,4 +280,7 @@ History entry and releases the selection image.
 | Capability entry point and build backend | `packages/marimo-lens/pyproject.toml`                     |
 | Agent Plugin manifest                    | `plugin.json`                                             |
 | Agent policy                             | `skills/marimo-lens/SKILL.md`                             |
-| Cross-call recipes                       | `skills/marimo-lens/reference/workflow.md`                |
+| Selection workflow                       | `skills/marimo-lens/references/selections.md`             |
+| Setup and mounting                       | `skills/marimo-lens/references/setup.md`                  |
+| Target authoring                         | `skills/marimo-lens/references/targets.md`                |
+| Cross-call recipes                       | `skills/marimo-lens/references/workflow.md`               |

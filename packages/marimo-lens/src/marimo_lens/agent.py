@@ -7,7 +7,6 @@ import sys
 import threading
 import weakref
 from collections.abc import Mapping, Sequence
-from textwrap import indent
 from types import ModuleType
 from typing import Protocol, cast
 
@@ -25,102 +24,14 @@ _DISTRIBUTION_NAME = "marimo-lens"
 _SKILL_NAME = "marimo-lens"
 
 
-def agent_plugin() -> agent_plugins.Plugin:
+def plugin() -> agent_plugins.Plugin:
     """Return the Agent Plugin installed with this Lens version."""
     return agent_plugins.locate(_DISTRIBUTION_NAME)
 
 
-def agent_skill() -> agent_plugins.Skill:
+def skill() -> agent_plugins.Skill:
     """Return Lens's packaged Agent Skill."""
-    return agent_plugin().skill(_SKILL_NAME)
-
-
-def _module_help(summary: str) -> str:
-    plugin = agent_plugin()
-    skill = plugin.skill(_SKILL_NAME)
-    tree = indent(plugin.tree(max_depth=3, max_files=50), "    ")
-    return f"""{summary}
-
-Connect to Lens inside a live marimo code-mode kernel call:
-
-    import marimo._code_mode as cm
-    import marimo_lens.agent as lens_agent
-
-    ctx = cm.get_context()
-    mounted = lens_agent.connect(ctx)
-
-connect() reuses authored and automatically mounted Lens instances. Call
-lens_agent.discover(ctx) to inspect available handles and choose an identity
-when several exist.
-
-Default to a colleague's voice in chat, activity, popovers, and summaries:
-show what you changed or found, why it matters, and what we could look at next.
-Use "I" for work you actually did and "let's" for shared exploration. On a
-read-only tour, describe existing findings without claiming you changed them.
-Keep labels concrete ("Duplicates removed", "Growth exceeds capacity") and
-messages conversational ("This case exceeds capacity. Let's look at the trial
-next."). Assume the user's competence; use a teaching tone when requested.
-Avoid lesson framing, quizzes, and "Now you will learn" phrasing.
-
-Quick notebook walkthrough (complete workflow):
-- Reuse this loaded capability. No additional Lens skill, recipe, context(),
-  selection, or image calls are needed for a text/data walkthrough.
-- If the route is unknown, inspect a compact outline of ctx.cells (id, name,
-  status, and first code line). Batch-read only 3-5 useful landmark cells,
-  their errors, and the relevant live values in ctx.globals. Reuse verified
-  context already available in the conversation.
-- Explain the question, evidence, main result, and next step in reading order.
-  Show it as soon as those landmarks are verified; don't audit the whole notebook.
-
-    mounted.reveal([
-        {{"target": "<verified cell ID>", "label": "What we're checking",
-          "message": "<what you changed or found, and why it matters>"}},
-        # Add the other verified landmarks in reading order.
-    ], duration_ms=None)
-
-reveal(steps, duration_ms=None) returns None. It accepts 1-16 steps with target,
-optional label (up to 40 UTF-16 units), and optional message (up to 1,000).
-Targets are cell IDs or selection references; selections require the captured
-expected_revision for the whole sequence. A finite duration_ms limits the whole
-reveal, and navigation never resets the timer. The small popover
-stepper holds until the user navigates or dismisses it. Nothing is saved.
-Changing referenced cells or their inputs ends the walkthrough. Return control
-after showing it; no sleeps, captures, polling, or timing loops are needed.
-Do not edit or rerun cells for a walkthrough unless the user asks.
-
-For selection work, read snapshot = mounted.context() and the full skill below.
-After verifying an addressed request, pass summary= to mounted.resolve() with
-what changed and what you checked. Lens displays it beside the original request
-in History. One batch shares a summary; resolve separately when outcomes differ.
-Keep activity visible through verification; reveal replaces it directly.
-Call reveal() then resolve() in the same kernel call with the captured revision.
-The browser shows the reveal before the receipt while History updates immediately.
-
-If Lens is still rendering, end the kernel call and retry after it is ready.
-When no Lens exists, queue a Lens cell in a fresh kernel call:
-
-    import marimo._code_mode as cm
-    import marimo_lens.agent as lens_agent
-
-    async with cm.get_context() as ctx:
-        lens_agent.add_lens_cell(ctx)
-
-The installed Agent Plugin carries the complete Lens workflow and the resources
-that match this package version:
-
-{tree}
-
-For selection work, images, or authoring Lens targets, read the skill at:
-
-    {skill / "SKILL.md"}
-
-Traverse the same resources programmatically:
-
-    resources = lens_agent.agent_plugin()
-    skill = lens_agent.agent_skill()
-    print(resources)
-    print(skill.body)
-"""
+    return plugin().skill(_SKILL_NAME)
 
 
 class _CodeModeCell(Protocol):
@@ -461,10 +372,10 @@ def _identity(lens: Lens) -> str:
 __all__ = [
     "MountedLens",
     "add_lens_cell",
-    "agent_plugin",
-    "agent_skill",
     "connect",
     "discover",
+    "plugin",
+    "skill",
 ]
 
 
@@ -473,7 +384,9 @@ class _AgentModule(ModuleType):
     @property
     def __doc__(self) -> str | None:  # pyrefly: ignore [bad-override]
         summary = self.__dict__.get("__doc__")
-        return _module_help(summary) if isinstance(summary, str) else None
+        return (
+            agent_plugins.read(_DISTRIBUTION_NAME) if isinstance(summary, str) else None
+        )
 
     @__doc__.setter
     def __doc__(self, value: str | None) -> None:  # pyright: ignore[reportIncompatibleVariableOverride]
