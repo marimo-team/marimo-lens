@@ -281,27 +281,12 @@ import marimo as mo
 from marimo_lens import Lens
 
 get_starter_revision, set_starter_revision = mo.state(0)
-_button_style = (
-    "<style>button[data-testid='marimo-plugin-button']{display:inline-flex;"
-    "align-items:center;gap:8px;height:34px;padding:0 14px;"
-    "border:1px solid var(--vp-c-divider,#e2e8f0);border-radius:6px;"
-    "background:var(--vp-c-bg-elv,#fff);color:var(--vp-c-text-1,#0f172a);"
-    "font-family:var(--vp-font-family-base,'PT Sans',sans-serif);font-size:14px;"
-    "font-weight:600;line-height:1;box-shadow:none}"
-    "button[data-testid='marimo-plugin-button']:hover{"
-    "border-color:var(--vp-c-text-3,#94a3b8);background:var(--vp-c-bg-soft,#f1f5f9)}"
-    "button[data-testid='marimo-plugin-button'] :is(.markdown,.paragraph,p)"
-    "{display:contents}"
-    "button[data-testid='marimo-plugin-button'] svg{flex:none;color:var(--vp-c-text-2,#64748b)}"
-    "</style>"
-)
 starter_walkthrough = mo.ui.run_button(
-    label=_button_style
-    + (
-        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" width=\"16\" "
-        "height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" "
-        "stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\">"
-        "<circle cx=\"6\" cy=\"19\" r=\"3\"/><path d=\"M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15\"/><circle cx=\"18\" cy=\"5\" r=\"3\"/>"
+    label=(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" '
+        'height="16" fill="none" stroke="currentColor" stroke-width="2" '
+        'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+        '<circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/>'
         "</svg>Show a walkthrough"
     ),
 )

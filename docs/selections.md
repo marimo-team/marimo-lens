@@ -154,17 +154,19 @@ if _selection_demo_has_point and _selection_demo_has_region:
 elif _selection_demo_has_point:
     _selection_demo_state = "point"
     _selection_demo_title = "Point added. Now create a region."
-    _selection_demo_body = (
-        "Press <strong class='lens-select'>Select</strong> again, then drag across two or more bars."
-    )
+    _selection_demo_body = "Press <strong class='lens-select'>Select</strong> again, then drag across two or more bars."
 elif _selection_demo_has_region:
     _selection_demo_state = "region"
     _selection_demo_title = "Region added. Now create a point."
-    _selection_demo_body = "Press <strong class='lens-select'>Select</strong> again, then click one bar."
+    _selection_demo_body = (
+        "Press <strong class='lens-select'>Select</strong> again, then click one bar."
+    )
 else:
     _selection_demo_state = "empty"
     _selection_demo_title = "Create a point"
-    _selection_demo_body = "Press <strong class='lens-select'>Select</strong>, then click one bar."
+    _selection_demo_body = (
+        "Press <strong class='lens-select'>Select</strong>, then click one bar."
+    )
 
 _selection_demo_point_status = "Added" if _selection_demo_has_point else "Not yet"
 _selection_demo_region_status = "Added" if _selection_demo_has_region else "Not yet"

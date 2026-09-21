@@ -143,6 +143,8 @@ selection = lens_context.current
 if selection is None:
     raise RuntimeError("Lens has no current selection")
 
+identity = mounted.identity
+selection_id = selection["id"]
 activity = mounted.start_activity(
     selection,
     expected_revision=lens_context.revision,
@@ -190,6 +192,13 @@ and reassess a changed note or mark. Then reveal the target and resolve with
 the same captured revision in one call:
 
 ```python
+import marimo._code_mode as cm
+import marimo_lens.agent as lens_agent
+
+# Replace these with the strings saved in agent working state from the earlier call.
+identity = "<saved Lens identity>"
+selection_id = "<saved selection ID>"
+mounted = lens_agent.connect(cm.get_context(), identity=identity)
 fresh_context = mounted.context()
 fresh_selection = next(
     item

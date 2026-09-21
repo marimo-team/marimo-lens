@@ -904,6 +904,11 @@ llm-only {
     grid-template-columns: 1fr;
   }
 
+  .lens-demo-steps li {
+    flex-basis: 100%;
+    white-space: normal;
+  }
+
   .lens-doc-demo-steps {
     grid-template-columns: 1fr 1fr;
     gap: 8px 12px;
