@@ -1,0 +1,41 @@
+docs/why-lens.md
+  s_b5ba5c6bda83dc::t_cd83c54814f265 1-12
+docs/reference/attributes.md
+  s_b5ba5c6bda83dc::t_cd83c54814f265 18
+docs/concepts/targets.md
+  s_b5ba5c6bda83dc::t_cd83c54814f265 1-13
+docs/selections.md
+  s_b5ba5c6bda83dc::t_f6ce6112386cd2 157,161-163,167-169
+apps/docs/.vitepress/theme/custom.css
+  s_b5ba5c6bda83dc::t_8c33c86c15e7fe 907-909
+docs/agents.md
+  s_b5ba5c6bda83dc::t_cd83c54814f265 146-147,195-201
+docs/custom-metadata.md
+  s_b5ba5c6bda83dc::t_cd83c54814f265 1-12
+docs/concepts/evidence.md
+  s_b5ba5c6bda83dc::t_cd83c54814f265 1-11
+docs/concepts/feedback.md
+  s_b5ba5c6bda83dc::t_cd83c54814f265 1-12
+docs/getting-started.md
+  s_b5ba5c6bda83dc::t_f6ce6112386cd2 286-289
+  s_b5ba5c6bda83dc::t_8c33c86c15e7fe 285
+docs/index.md
+  s_b5ba5c6bda83dc::t_8c33c86c15e7fe 111
+  s_b5ba5c6bda83dc::t_f6ce6112386cd2 112-115,223-225
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "e6ef774955c72666b725121e017aae4f7a5f6499",
+  "prompts": {},
+  "sessions": {
+    "s_b5ba5c6bda83dc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c472-c4bd-7ec3-be73-8dbfbc90b766",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
