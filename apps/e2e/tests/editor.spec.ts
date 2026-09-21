@@ -36,6 +36,11 @@ test("Marimo dialogs cover Lens selection markers", async ({ page }, testInfo) =
   const marker = page.locator("[data-marimo-lens-selection-id]");
   await expect(dialog).toBeVisible();
   await expect(marker).toBeVisible();
+  await dialog.evaluate(async (surface) => {
+    await Promise.all(
+      surface.getAnimations({ subtree: true }).map((animation) => animation.finished),
+    );
+  });
 
   const dialogBounds = (await dialog.boundingBox())!;
   const markerBounds = (await marker.boundingBox())!;
@@ -47,7 +52,7 @@ test("Marimo dialogs cover Lens selection markers", async ({ page }, testInfo) =
   expect(y).toBeLessThan(dialogBounds.y + dialogBounds.height);
   expect(
     await page.evaluate(
-      ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="dialog"]') !== null,
+      ({ x, y }) => document.elementFromPoint(x, y)?.closest('[role="dialog"]') != null,
       { x, y },
     ),
   ).toBe(true);
