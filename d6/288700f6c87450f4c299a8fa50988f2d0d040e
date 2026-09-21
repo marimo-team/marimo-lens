@@ -1,0 +1,45 @@
+docs/selections.md
+  ai_agent 8-13,225-226,272-273,348,350
+development_docs/README.md
+  ai_agent 34
+docs/reference/context.md
+  ai_agent 201-202
+apps/docs/.vitepress/config.mts
+  ai_agent 30-49,98,100-101,111-114,118-122
+docs/getting-started.md
+  ai_agent 3,29,50-51,63,77,107,133,187-195,201-203,217-229,409-413
+docs/agents.md
+  ai_agent 109-119,133-138,140-142,144-145,147,149,160-170,172-173,176-181,184-188,190,192-193,208-213,215-217,219,221-222,224-237,239,241-244,263,268-273,275,277-281,283,285-288,290-292,295-312,315-320,322-323,325,327-329
+README.md
+  ai_agent 51,56,58-59
+docs/custom-targets.md
+  ai_agent 2-3,6,8-11,13-30,69-108,110,141-142,144-146,150-152,154-156,187,226,253-254,257-271,274,277,304,329-466
+skills/marimo-lens/references/targets.md
+  ai_agent 49
+docs/reference/attributes.md
+  ai_agent 2-3,6-97
+docs/how-lens-works.md
+  ai_agent 3,8-13,157,496-626
+docs/data-and-trust.md
+  ai_agent 87-89
+packages/marimo-lens/README.md
+  ai_agent 45,96,98-99
+docs/api.md
+  ai_agent 75-76,90-91,444-445
+docs/troubleshooting.md
+  ai_agent 11-13,75-76,119-120,171-174,209-211
+development_docs/documentation.md
+  ai_agent 261,263
+docs/compatibility.md
+  ai_agent 8,36
+docs/overview.md
+  ai_agent 3,11-14,16-22,24,26-30,32-35,37,39-45,47,49-52,54-56,60-77,80,82-83,85-86,88-90,92-106
+docs/index.md
+  ai_agent 15-18,21,62-64,561-562
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "d6288700f6c87450f4c299a8fa50988f2d0d040e",
+  "prompts": {}
+}
