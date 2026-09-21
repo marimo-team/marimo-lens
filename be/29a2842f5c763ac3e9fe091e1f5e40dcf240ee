@@ -1,0 +1,21 @@
+docs/index.md
+  ai_agent 25,29,33,37,321,345-346,348-354,364-371,374-382,384-387,390-393,399-403,405-407,409-413,415-420,422-425,427-431,433-434,436-438
+apps/docs/.vitepress/theme/custom.css
+  s_ab2db1db31b4ec::t_a7ac5ad39c7e18 296-307
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "be29a2842f5c763ac3e9fe091e1f5e40dcf240ee",
+  "prompts": {},
+  "sessions": {
+    "s_ab2db1db31b4ec": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c5eea5e5-60fc-4cc8-8a65-8ef93fdbc4a0",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
