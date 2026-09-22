@@ -1,0 +1,141 @@
+packages/widget/src/selection/components/selection-overlay.tsx
+  s_5f814b98163354::t_5d50931721832e 9
+packages/widget/src/transient/target-attention.ts
+  s_e029a7951a64dc::t_c05f91dee4fb41 57
+  s_5f814b98163354::t_0e186b0ba11f22 247,250-251,445-448
+  s_5f814b98163354::t_46bf972b8724a4 443
+  s_e029a7951a64dc::t_150f2d07d4170d 10-11,32,227,246,341,349,359
+packages/widget/src/ui/lens-surface.ts
+  s_e029a7951a64dc::t_f906b63097e409 12-13
+development_docs/browser-and-host.md
+  s_e029a7951a64dc::t_5aa959061e51e9 177-178,187-188,195-200,205-212
+  s_5f814b98163354::t_3074a2ac753794 193-194
+  s_e029a7951a64dc::t_a52bcd692aa60c 201-204
+packages/widget/src/ui/use-dock-position.ts
+  s_e029a7951a64dc::t_136f69d788ebbe 213,228
+  s_5f814b98163354::t_cbd85c56736e15 83-86
+  s_5f814b98163354::t_46a45b8dc81301 81
+packages/widget/tests/notebook/viewport.test.tsx
+  s_e029a7951a64dc::t_0ed9f84a8442fc 6,48-49,58
+  s_5f814b98163354::t_a23fbcb592fd6e 47,50-57
+  s_5f814b98163354::t_5d50931721832e 5
+packages/widget/src/ui/components/target-info.tsx
+  s_5f814b98163354::t_2c272345adff1a 69
+  s_5f814b98163354::t_f96e729700b03c 8,22
+  s_e029a7951a64dc::t_136f69d788ebbe 17
+  s_5f814b98163354::t_46a45b8dc81301 28-31,34-38,54-57
+packages/widget/tests/notebook/notebook-dom.test.ts
+  s_e029a7951a64dc::t_6ad87db4647348 116-117,121-123,128
+  s_5f814b98163354::t_d7c5b58e2e9c49 98-101
+  s_e029a7951a64dc::t_405b339a8dd3fa 57,65-68,71-74,76-82
+  s_5f814b98163354::t_f6f55b823f5f4b 30-32,40,70,110
+  s_e029a7951a64dc::t_331a13b40002b6 75
+  s_5f814b98163354::t_81554b879de7a7 18-29,33-39,41-56
+  s_5f814b98163354::t_48a1c586fcf199 83-86,102-109
+  s_5f814b98163354::t_368c6745525e94 87-97
+  s_5f814b98163354::t_57c99914f4a743 58-64,69,112-113
+  s_5f814b98163354::t_b13bdb6a387094 111
+  s_5f814b98163354::t_ad96b0f475c0ab 114-115,118-120,124-127,129-150,376-384
+packages/widget/tests/selection/components/selection-note-editor.test.tsx
+  s_5f814b98163354::t_e33b4516e1d5c2 76,84
+apps/e2e/tests/editor.spec.ts
+  s_5f814b98163354::t_c1efaf2314a1ce 62-77,85-88
+  s_e029a7951a64dc::t_78147c020ae596 211,215-216,227,234-237,247
+  s_5f814b98163354::t_93dbea7a6da6fd 176-184
+  s_5f814b98163354::t_a9b14d4204391e 78-84
+  s_5f814b98163354::t_7742d1ff31b794 196
+  s_5f814b98163354::t_3b5b7aaddafa45 91,98,165-168
+  s_5f814b98163354::t_849c122e94b850 89,92,94-97,99-100,164,169-175,185,187-190,210,241,243-245,249
+  s_5f814b98163354::t_0cb6eaf88b3cf6 90,93,101-102,186,191-195,208-209,219,221,238-240,250
+  s_e029a7951a64dc::t_65f44b5cb82e6d 201-207,217,228-233,246
+  s_e029a7951a64dc::t_2f3517e68e84c0 197-200,212-214,218,222-226,248
+  s_5f814b98163354::t_647dd2a03881da 220,242
+packages/widget/tests/selection/document-interactions.test.tsx
+  s_e029a7951a64dc::t_a8c59d56b051f8 71-79,82-90,335,347,356,360,362
+  s_e029a7951a64dc::t_2f3517e68e84c0 80-81
+packages/widget/src/widget.css
+  s_e029a7951a64dc::t_f906b63097e409 7
+  s_e029a7951a64dc::t_17870679889e2a 11-16
+apps/e2e/tests/performance.spec.ts
+  s_e029a7951a64dc::t_80665ef49730c1 289-290
+packages/widget/src/transient/target-attention-indicator.tsx
+  s_e029a7951a64dc::t_2f3517e68e84c0 96
+  s_5f814b98163354::t_0e186b0ba11f22 98
+  s_e029a7951a64dc::t_17359276e236f7 5,67,82,84,86-89,91,95,114,316-318
+packages/widget/tests/transient/target-attention.test.ts
+  s_e029a7951a64dc::t_6c3efbbd2c66fe 204,210
+  s_5f814b98163354::t_65dda83ec21b23 258-284
+  s_5f814b98163354::t_3cb06ab89090ab 188-203,205-209,211-214
+packages/widget/src/notebook/notebook-dom.tsx
+  s_5f814b98163354::t_4fba5d91b283ec 35
+  s_e029a7951a64dc::t_17870679889e2a 78
+  s_e029a7951a64dc::t_60463e714eb06b 77,80-81,83-84,89-92,102
+  s_e029a7951a64dc::t_4e682e4be8af8c 17,51,79,93-101,111-112,114-115,119-120,124,342-345,479
+  s_5f814b98163354::t_ebe6f248fe6711 53,113,121-123,125,265-266,268-272,281,286-287
+  s_e029a7951a64dc::t_adf900383d4033 297-300
+  s_5f814b98163354::t_46a45b8dc81301 116-117
+  s_5f814b98163354::t_06782d68be5baf 57,267,273-275,284-285,288-296,301-310
+packages/widget/src/notebook/use-viewport-revision.ts
+  s_5f814b98163354::t_5d50931721832e 1-20
+packages/widget/src/selection/components/selection-snapshot-preview.tsx
+  s_e029a7951a64dc::t_9e2398cd1b5653 83
+packages/widget/src/notebook/viewport.ts
+  s_5f814b98163354::t_f05af4417eb5bc 1-4,6-26,29-38
+  s_5f814b98163354::t_4fba5d91b283ec 28
+packages/widget/src/ui/anchored-surface.ts
+  s_5f814b98163354::t_46a45b8dc81301 86,92-93,97-98,107-108,114
+  s_e029a7951a64dc::t_9e2398cd1b5653 17-22,34,48,72-76,81-84,121,125-127
+  s_e029a7951a64dc::t_489427186e881f 77-80,134-135
+packages/widget/src/notebook/open-tree.ts
+  s_e029a7951a64dc::t_4e682e4be8af8c 14-24
+packages/widget/src/selection/reveal.ts
+  s_e029a7951a64dc::t_136f69d788ebbe 4,15-17,29-35
+packages/widget/src/selection/components/selection-note-editor.tsx
+  s_5f814b98163354::t_e33b4516e1d5c2 5,73
+  s_e029a7951a64dc::t_9e2398cd1b5653 59
+packages/widget/src/selection/document-interactions.ts
+  s_e029a7951a64dc::t_9ac7fa90d9d973 203-212
+packages/widget/src/selection/components/selection-note-editor.styles.ts
+  s_5f814b98163354::t_2c272345adff1a 9
+apps/e2e/tests/lens.spec.ts
+  s_e029a7951a64dc::t_1e5e556789cb33 539-540,552,556,558
+  s_e029a7951a64dc::t_331a13b40002b6 530
+packages/widget/tests/ui/anchored-surface.test.tsx
+  s_e029a7951a64dc::t_aa4cf42e25a5f8 115,123,125,127-131,136,161,165,169,173
+  s_e029a7951a64dc::t_59e9ba81945b81 143
+  s_e029a7951a64dc::t_2f3517e68e84c0 150
+  s_5f814b98163354::t_f6f55b823f5f4b 12,17-18,144
+  s_5f814b98163354::t_12150e2062b9d8 82-85,99,102-112,139,156-160,162-164,172
+  s_5f814b98163354::t_81554b879de7a7 81,86-98,100-101,113,135,137-138,140
+  s_5f814b98163354::t_25ca23b854c882 114,116-122,124,126,132
+packages/widget/tests/selection/reveal.test.ts
+  s_5f814b98163354::t_45ebd5bf48e5f1 53-73
+packages/widget/tests/transient/target-attention-indicator.test.tsx
+  s_e029a7951a64dc::t_b997c068b9c994 5,46,78,143,155,157,179,191,199,396,419-426,433
+  s_5f814b98163354::t_81554b879de7a7 136-142,144-154,156,158-162
+  s_e029a7951a64dc::t_2f3517e68e84c0 62-65,126-129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "fec48054b5b71987e23fd445ab94f5cdefe12da0",
+  "prompts": {},
+  "sessions": {
+    "s_5f814b98163354": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c9eb-a077-7a21-8589-37a8cc4e8536",
+        "model": "gpt-5.6-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_e029a7951a64dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c3d6b1de-f5a1-465a-94f9-729c199089cc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
