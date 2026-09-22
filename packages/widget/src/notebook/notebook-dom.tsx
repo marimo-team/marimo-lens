@@ -112,7 +112,12 @@ export class NotebookDomAdapter {
   viewportBounds(): ViewportBounds {
     const windowBounds = windowViewportBounds(this.window);
     const pane = this.#pane?.getBoundingClientRect();
-    return (pane && intersectBounds(windowBounds, pane)) ?? windowBounds;
+    if (!pane) return windowBounds;
+    // A collapsed or offscreen pane leaves no area for Lens UI.
+    return (
+      intersectBounds(windowBounds, pane) ??
+      new this.window.DOMRect(windowBounds.left, windowBounds.top, 0, 0)
+    );
   }
 
   registerHost(host: Element): () => void {
@@ -329,18 +334,18 @@ export class NotebookDomAdapter {
       schedule();
     };
 
-    const resized = () => {
-      invalidateContent();
-      schedule();
-    };
+    // The viewport subscription publishes the geometry change.
+    const resized = () => invalidateContent();
     const scrolled = (event: Event) => {
       if (event.target instanceof this.window.Element) invalidateContent([event.target]);
       schedule();
     };
     this.window.addEventListener("resize", resized);
     this.window.addEventListener("scroll", scrolled, true);
-    // Pane geometry moves every target without changing target content.
+    // Pane geometry moves every target without changing target content. A
+    // pending layout frame already publishes the change.
     const stopViewport = this.subscribeViewport(() => {
+      if (frame) return;
       for (const listener of this.#layoutListeners) listener();
     });
 

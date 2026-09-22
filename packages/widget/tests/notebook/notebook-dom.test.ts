@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
 afterEach(() => {
+  Reflect.deleteProperty(window, "visualViewport");
   document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -37,6 +38,20 @@ describe("notebook DOM layout subscriptions", () => {
       width: 900,
       height: 640,
     });
+    release();
+  });
+
+  test("reports no visible area for a collapsed marimo app pane", () => {
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(320, 24, 0, 640);
+    const host = document.createElement("span");
+    app.append(host);
+    document.body.append(app);
+
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.registerHost(host);
+    expect(dom.viewportBounds()).toMatchObject({ width: 0, height: 0 });
     release();
   });
 
@@ -108,7 +123,6 @@ describe("notebook DOM layout subscriptions", () => {
 
     expect(listener).toHaveBeenCalledOnce();
     release();
-    Reflect.deleteProperty(window, "visualViewport");
   });
 
   test("treats marimo pane resizing as geometry instead of output content", async () => {

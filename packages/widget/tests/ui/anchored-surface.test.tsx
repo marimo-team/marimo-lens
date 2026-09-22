@@ -96,19 +96,20 @@ describe("anchored surfaces", () => {
     app.append(widget);
     document.body.append(app);
 
-    renderProbe(anchor, () => anchorRect, host, 120);
+    const surfaceHeight = 120;
+    renderProbe(anchor, () => anchorRect, host, surfaceHeight);
 
     const surface = document.querySelector<HTMLOutputElement>("[data-test-surface]")!;
     const left = Number.parseFloat(surface.style.left);
     const width = Number.parseFloat(surface.style.width);
     const top = surface.style.top
       ? Number.parseFloat(surface.style.top)
-      : window.innerHeight - Number.parseFloat(surface.style.bottom) - 120;
+      : window.innerHeight - Number.parseFloat(surface.style.bottom) - surfaceHeight;
     expect({
       left: left >= 332,
       right: left + width <= 1_208,
       top: top >= 52,
-      bottom: top + 120 <= 668,
+      bottom: top + surfaceHeight <= 668,
     }).toEqual({ left: true, right: true, top: true, bottom: true });
   });
 

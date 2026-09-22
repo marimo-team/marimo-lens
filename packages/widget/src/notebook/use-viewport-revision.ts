@@ -1,6 +1,6 @@
 import type { TargetSelector } from "@marimo-lens/protocol";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
 
@@ -8,7 +8,8 @@ export function useViewportRevision(active = true, selector?: TargetSelector): n
   const dom = useNotebookDom();
   const [revision, setRevision] = useState(0);
 
-  useEffect(
+  // Subscribe before paint so layout changes after commit reach the next render.
+  useLayoutEffect(
     () =>
       active
         ? dom.subscribeLayout(() => setRevision((current) => current + 1), selector)

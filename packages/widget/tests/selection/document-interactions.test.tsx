@@ -82,10 +82,12 @@ describe("document selection interactions", () => {
 
     const fromNotebook = escape();
     void act(() => cell.dispatchEvent(fromNotebook));
+    expect(workflowMode()).toBe("editingNote");
     const fromLens = pressSelectKey("Escape");
 
     expect(fromNotebook.defaultPrevented).toBe(false);
     expect(fromLens.defaultPrevented).toBe(true);
+    expect(workflowMode()).toBe("idle");
   });
 
   test("cycles outputs with vertical keys while keeping Select focused", () => {
@@ -398,6 +400,7 @@ function Harness({
         Select
       </button>
       <LensStatus message={ui.announcement} />
+      <output data-workflow-mode={ui.workflow.mode} />
     </>
   );
 }
@@ -448,6 +451,10 @@ function pressSelectKey(key: string): KeyboardEvent {
     document.querySelector<HTMLButtonElement>("[data-ml-select]")?.dispatchEvent(event),
   );
   return event;
+}
+
+function workflowMode(): string | undefined {
+  return document.querySelector<HTMLElement>("[data-workflow-mode]")?.dataset.workflowMode;
 }
 
 function announcement(): string {

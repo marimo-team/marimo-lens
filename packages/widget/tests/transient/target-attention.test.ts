@@ -185,8 +185,18 @@ describe("target attention", () => {
     }
   });
 
-  test("publishes a changed marimo viewport when target bounds stay fixed", () => {
+  test("publishes a resized marimo pane when target bounds stay fixed", () => {
     vi.useFakeTimers();
+    const resizeObservers = new Map<Element, () => void>();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class implements ResizeObserver {
+        constructor(readonly callback: ResizeObserverCallback) {}
+        observe = (target: Element) => resizeObservers.set(target, () => this.callback([], this));
+        unobserve = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
     const onChange = vi.fn();
     const cell = setupCell("pane-cell");
     cell.getBoundingClientRect = () => new DOMRect(320, 100, 400, 300);
@@ -204,7 +214,7 @@ describe("target attention", () => {
     expect(onChange.mock.lastCall?.[0]?.viewport).toMatchObject({ left: 300 });
 
     pane = new DOMRect(400, 0, 800, 680);
-    window.dispatchEvent(new Event("resize"));
+    resizeObservers.get(app)?.();
     vi.advanceTimersToNextFrame();
 
     expect(onChange.mock.lastCall?.[0]?.viewport).toMatchObject({ left: 400 });
