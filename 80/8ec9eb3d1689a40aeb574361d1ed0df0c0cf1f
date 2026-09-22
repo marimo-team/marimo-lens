@@ -1,0 +1,39 @@
+packages/widget/tests/transient/target-attention.test.ts
+  s_e029a7951a64dc::t_fe42609691480d 188,190-199,217
+apps/e2e/tests/performance.spec.ts
+  s_e029a7951a64dc::t_71e09100764452 290-292
+development_docs/browser-and-host.md
+  s_e029a7951a64dc::t_9a8c9cf76ab79a 193-206,208-213
+  s_e029a7951a64dc::t_71e09100764452 207
+packages/widget/src/ui/lens-surface.ts
+  s_e029a7951a64dc::t_6c18bbd787b7d3 12
+packages/widget/tests/notebook/notebook-dom.test.ts
+  s_e029a7951a64dc::t_a3526a688f02d0 44-57
+  s_e029a7951a64dc::t_71e09100764452 6
+packages/widget/tests/selection/document-interactions.test.tsx
+  s_e029a7951a64dc::t_4299c8094ec6d3 85,90,403,456-457
+packages/widget/tests/ui/anchored-surface.test.tsx
+  s_e029a7951a64dc::t_4299c8094ec6d3 99-100,107,112
+packages/widget/src/notebook/notebook-dom.tsx
+  s_e029a7951a64dc::t_6c18bbd787b7d3 115-120,337-338,345-346,348
+packages/widget/src/widget.css
+  s_e029a7951a64dc::t_6c18bbd787b7d3 12-13,18-22
+packages/widget/src/notebook/use-viewport-revision.ts
+  s_e029a7951a64dc::t_6c18bbd787b7d3 3,11-12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "808ec9eb3d1689a40aeb574361d1ed0df0c0cf1f",
+  "prompts": {},
+  "sessions": {
+    "s_e029a7951a64dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c3d6b1de-f5a1-465a-94f9-729c199089cc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
