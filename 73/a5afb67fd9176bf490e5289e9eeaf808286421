@@ -1,0 +1,19 @@
+apps/e2e/tests/support.ts
+  s_e029a7951a64dc::t_9aa10cd749926d 114-121
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "73a5afb67fd9176bf490e5289e9eeaf808286421",
+  "prompts": {},
+  "sessions": {
+    "s_e029a7951a64dc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c3d6b1de-f5a1-465a-94f9-729c199089cc",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
