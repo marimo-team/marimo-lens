@@ -80,7 +80,7 @@ export function SnapshotPreviewButton({
     gap: 8,
     width: 336,
     surfaceRef,
-    fallback: { style: { left: 12, bottom: 64 }, placement: "above" },
+    fallback: { inset: { left: 12, bottom: 64 }, placement: "above" },
   });
 
   const clearTimers = useCallback(() => {

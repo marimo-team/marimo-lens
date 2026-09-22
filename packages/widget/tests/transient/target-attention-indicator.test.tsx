@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
+import type { ViewportBounds } from "@/notebook/viewport";
 import type { TargetAttentionPresentation } from "@/transient/target-attention";
 
 import {
@@ -42,7 +43,7 @@ describe("target attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
     document.body.appendChild(target);
-    const presentation = activityPresentation(target);
+    const presentation = activityPresentation(target, undefined, NARROW_PANE);
     const ownerWindow = viewport(480, 720);
 
     const surface = projectTargetAttentionSurface(presentation, ownerWindow, {
@@ -58,7 +59,10 @@ describe("target attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 740, 400, 240);
     document.body.appendChild(target);
-    const presentation = { ...activityPresentation(target), framing: "pending" as const };
+    const presentation = {
+      ...activityPresentation(target, undefined, NARROW_PANE),
+      framing: "pending" as const,
+    };
     const ownerWindow = viewport(480, 720);
 
     expect(projectTargetAttentionSurface(presentation, ownerWindow)).toEqual({
@@ -71,7 +75,7 @@ describe("target attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 740, 400, 240);
     document.body.appendChild(target);
-    const presentation = activityPresentation(target);
+    const presentation = activityPresentation(target, undefined, NARROW_PANE);
     const ownerWindow = viewport(480, 720);
 
     expect(projectTargetAttentionSurface(presentation, ownerWindow)).toEqual({
@@ -119,11 +123,41 @@ describe("target attention presentation", () => {
     document.body.appendChild(target);
     const narrowWindow = viewport(480, 720);
 
-    const view = projectTargetAttention(activityPresentation(target), narrowWindow);
+    const view = projectTargetAttention(
+      activityPresentation(target, undefined, NARROW_PANE),
+      narrowWindow,
+    );
 
     expect(view?.label.right).toBe(218);
     expect(view?.label.left).toBeUndefined();
     expect(view?.label.maxWidth).toBe(250);
+  });
+
+  test("keeps the label inside the visible notebook pane", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(450, 100, 200, 160);
+    document.body.appendChild(target);
+    const ownerWindow = viewport(1_280, 720);
+
+    const view = projectTargetAttention(
+      activityPresentation(target, undefined, new DOMRect(500, 0, 700, 680)),
+      ownerWindow,
+    );
+
+    expect(view?.label.right).toBe(638);
+    expect(view?.label.maxWidth).toBe(130);
+  });
+
+  test("uses fallback when the target is hidden behind application chrome", () => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(100, 100, 200, 160);
+    document.body.appendChild(target);
+    const presentation = activityPresentation(target, undefined, new DOMRect(500, 0, 700, 680));
+
+    expect(projectTargetAttentionSurface(presentation, viewport(1_280, 720))).toEqual({
+      view: null,
+      fallback: { presentation, reason: "offscreen" },
+    });
   });
 
   test("waits for the controller to create room above the target", () => {
@@ -142,7 +176,7 @@ describe("target attention presentation", () => {
     const ownerWindow = viewport(480, 720);
 
     expect(
-      projectTargetAttention(activityPresentation(target), ownerWindow, {
+      projectTargetAttention(activityPresentation(target, undefined, NARROW_PANE), ownerWindow, {
         height: 226,
         maxWidth: 400,
       }),
@@ -154,7 +188,7 @@ describe("target attention presentation", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 160, targetWidth, 240);
     document.body.appendChild(target);
-    const presentation = activityPresentation(target);
+    const presentation = activityPresentation(target, undefined, NARROW_PANE);
     const measurement = { height: 226, maxWidth: 400 };
 
     expect(projectTargetAttention(presentation, viewport(480, 720), measurement)).toBeNull();
@@ -162,7 +196,7 @@ describe("target attention presentation", () => {
     targetWidth = 900;
     expect(
       projectTargetAttention(
-        { ...presentation, bounds: target.getBoundingClientRect() },
+        { ...presentation, bounds: target.getBoundingClientRect(), viewport: WIDE_PANE },
         viewport(1_280, 720),
         measurement,
       )?.labelMaxWidth,
@@ -359,7 +393,7 @@ describe("target attention presentation", () => {
     target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
     document.body.appendChild(target);
     const presentation: TargetAttentionPresentation = {
-      ...activityPresentation(target),
+      ...activityPresentation(target, undefined, NARROW_PANE),
       kind: "reveal",
       label: null,
       message: null,
@@ -382,13 +416,21 @@ describe("target attention presentation", () => {
   });
 });
 
-function activityPresentation(target: HTMLElement, label?: string): TargetAttentionPresentation {
+const WIDE_PANE = new DOMRect(0, 0, 1_280, 720);
+const NARROW_PANE = new DOMRect(0, 0, 480, 720);
+
+function activityPresentation(
+  target: HTMLElement,
+  label?: string,
+  pane: ViewportBounds = WIDE_PANE,
+): TargetAttentionPresentation {
   return {
     kind: "activity",
     sequence: 1,
     locator: { kind: "cell", label: "BYtC", resolve: () => target },
     target,
     bounds: target.getBoundingClientRect(),
+    viewport: pane,
     expiresAt: null,
     framing: "settled",
     phase: "active",

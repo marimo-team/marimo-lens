@@ -7,6 +7,8 @@ import type {
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
+import { sameBounds, type ViewportBounds } from "@/notebook/viewport";
+
 const ACTIVITY_EXIT_MS = 120;
 const REVEAL_EXIT_MS = 180;
 const FRAMING_SETTLE_MS = 600;
@@ -27,6 +29,7 @@ export type TargetAttentionPresentation = {
   kind: TargetAttentionKind;
   target: HTMLElement | null;
   bounds: DOMRectReadOnly | null;
+  viewport: ViewportBounds;
   expiresAt: number | null;
   framing: "pending" | "settled";
   phase: TargetAttentionPhase;
@@ -51,7 +54,7 @@ type ActiveTrail = {
   expiresAt: number | null;
 };
 
-type ActiveAttention = Omit<TargetAttentionPresentation, "bounds"> & {
+type ActiveAttention = Omit<TargetAttentionPresentation, "bounds" | "viewport"> & {
   activityId: string | null;
   exitDuration: number;
   framingTimeout: number;
@@ -86,8 +89,6 @@ export class TargetAttentionController {
   #stopLayout: (() => void) | null = null;
   #cancelScroll: (() => void) | null = null;
   #lastPresentation: TargetAttentionPresentation | null = null;
-  #lastViewportWidth = 0;
-  #lastViewportHeight = 0;
 
   constructor(
     dom: NotebookDomAdapter,
@@ -223,7 +224,7 @@ export class TargetAttentionController {
       active.framing === "pending" &&
       !(this.#trail && this.#trail.route.steps.length > 1) &&
       target !== null &&
-      isFullyVisible(this.#dom.window, target.getBoundingClientRect())
+      isFullyVisible(this.#dom.viewportBounds(), target.getBoundingClientRect())
     ) {
       this.#finishFraming(active);
     }
@@ -242,11 +243,12 @@ export class TargetAttentionController {
   #reframe(kind: TargetAttentionKind, target: HTMLElement | null): boolean {
     if (!target) return false;
     const rect = target.getBoundingClientRect();
-    if (kind !== "reveal" && isFullyVisible(this.#dom.window, rect)) {
+    const viewport = this.#dom.viewportBounds();
+    if (kind !== "reveal" && isFullyVisible(viewport, rect)) {
       return false;
     }
-    const viewportHeight = this.#dom.window.innerHeight;
-    const distant = rect.bottom < -viewportHeight || rect.top > 2 * viewportHeight;
+    const distant =
+      rect.bottom < viewport.top - viewport.height || rect.top > viewport.bottom + viewport.height;
     target.scrollIntoView({
       block: "center",
       inline: "nearest",
@@ -336,7 +338,7 @@ export class TargetAttentionController {
   #emit(active: ActiveAttention): void {
     const { sequence, locator, kind, target, expiresAt, framing, phase, label, message } = active;
     const bounds = target?.getBoundingClientRect() ?? null;
-    const { innerWidth, innerHeight } = this.#dom.window;
+    const viewport = this.#dom.viewportBounds();
     const previous = this.#lastPresentation;
     if (
       previous?.sequence === sequence &&
@@ -344,8 +346,7 @@ export class TargetAttentionController {
       previous.phase === phase &&
       previous.framing === framing &&
       sameBounds(previous.bounds, bounds) &&
-      this.#lastViewportWidth === innerWidth &&
-      this.#lastViewportHeight === innerHeight
+      sameBounds(previous.viewport, viewport)
     )
       return;
     const trail = this.#trail;
@@ -355,6 +356,7 @@ export class TargetAttentionController {
       kind,
       target,
       bounds,
+      viewport,
       expiresAt,
       framing,
       phase,
@@ -374,8 +376,6 @@ export class TargetAttentionController {
       };
     }
     this.#lastPresentation = presentation;
-    this.#lastViewportWidth = innerWidth;
-    this.#lastViewportHeight = innerHeight;
     this.#onChange(presentation);
   }
 
@@ -440,12 +440,12 @@ function isRendered(ownerWindow: Window, element: HTMLElement): boolean {
   );
 }
 
-function isFullyVisible(ownerWindow: Window, rect: DOMRect): boolean {
+function isFullyVisible(viewport: ViewportBounds, rect: DOMRect): boolean {
   return (
-    rect.top >= TARGET_ATTENTION_TOP_GUTTER &&
-    rect.bottom <= ownerWindow.innerHeight &&
-    rect.left >= 0 &&
-    rect.right <= ownerWindow.innerWidth
+    rect.top >= viewport.top + TARGET_ATTENTION_TOP_GUTTER &&
+    rect.bottom <= viewport.bottom &&
+    rect.left >= viewport.left &&
+    rect.right <= viewport.right
   );
 }
 
@@ -456,17 +456,6 @@ function targetSize(target: HTMLElement): ElementSize {
 
 function sameSize(left: ElementSize | null, right: ElementSize): boolean {
   return left?.width === right.width && left.height === right.height;
-}
-
-function sameBounds(left: DOMRectReadOnly | null, right: DOMRectReadOnly | null): boolean {
-  return (
-    left === right ||
-    (left !== null &&
-      right !== null &&
-      left.x === right.x &&
-      left.y === right.y &&
-      sameSize(left, right))
-  );
 }
 
 function prefersReducedMotion(ownerWindow: Window): boolean {

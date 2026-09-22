@@ -59,6 +59,47 @@ test("Marimo dialogs cover Lens selection markers", async ({ page }, testInfo) =
   await screenshot(page, testInfo, "dialog-over-selection");
 });
 
+test("in-pane Marimo chrome covers Lens markers", async ({ page }, testInfo) => {
+  await selectOutput(page, "point", "S1", "Check in-pane stacking");
+  const marker = page.locator("[data-marimo-lens-selection-id]");
+  const bounds = await marker.boundingBox();
+  if (!bounds) throw new Error("Selection marker is unavailable");
+  await page.evaluate(({ x, y, width, height }) => {
+    const app = document.getElementById("App");
+    if (!app) throw new Error("Marimo app pane is unavailable");
+    const chrome = document.createElement("div");
+    chrome.dataset.testid = "in-pane-chrome";
+    chrome.textContent = "Marimo chrome";
+    chrome.style.cssText = `position:fixed;z-index:1000;left:${x}px;top:${y}px;width:${width}px;height:${height}px;background:white`;
+    app.append(chrome);
+  }, bounds);
+
+  expect(
+    await page.evaluate(
+      ({ x, y, width, height }) =>
+        document
+          .elementFromPoint(x + width / 2, y + height / 2)
+          ?.closest('[data-testid="in-pane-chrome"]') !== null,
+      bounds,
+    ),
+  ).toBe(true);
+  await screenshot(page, testInfo, "in-pane-chrome-over-selection");
+});
+
+test("Marimo sidebar clips a straddling region and its handles", async ({ page }, testInfo) => {
+  await selectOutput(page, "region", "S1", "Check application chrome");
+  await openSidebarAndStraddleSelection(page, "rect");
+  await expectLensClippedByApp(page, "rect");
+  await screenshot(page, testInfo, "sidebar-bounds-lens");
+});
+
+test("Marimo sidebar clips a point marker at the pane edge", async ({ page }, testInfo) => {
+  await selectOutput(page, "point", "S1", "Check point clipping");
+  await openSidebarAndStraddleSelection(page, "point");
+  await expectLensClippedByApp(page, "point");
+  await screenshot(page, testInfo, "sidebar-bounds-point");
+});
+
 test("collapsed Lens matches Marimo controls while remaining draggable", async ({
   page,
 }, testInfo) => {
@@ -120,3 +161,90 @@ test("collapsed Lens matches Marimo controls while remaining draggable", async (
   await lens.click();
   await expect(page.getByRole("button", { name: "Move Lens", exact: true })).toBeVisible();
 });
+
+async function openSidebarAndStraddleSelection(
+  page: import("@playwright/test").Page,
+  kind: "point" | "rect",
+) {
+  await page
+    .locator('[aria-label="Sidebar panels"] [role="option"]')
+    .first()
+    .click({ noWaitAfter: true });
+  await expect
+    .poll(async () => (await page.getByTestId("helper").boundingBox())?.width ?? 0)
+    .toBeGreaterThan(200);
+  await page.getByRole("region", { name: "Revenue by month" }).evaluate(
+    (target, shift) => {
+      const output = target.closest<HTMLElement>('[id^="output-"]');
+      if (!output) throw new Error("Revenue output root is unavailable");
+      output.style.width = `calc(100% + ${shift}px)`;
+      output.style.transform = `translateX(-${shift}px)`;
+    },
+    kind === "rect" ? 450 : 410,
+  );
+}
+
+async function expectLensClippedByApp(
+  page: import("@playwright/test").Page,
+  kind: "point" | "rect",
+) {
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const app = document.getElementById("App");
+        const portal = document.querySelector<HTMLElement>("[data-marimo-lens-portal]");
+        const shadow = portal?.shadowRoot;
+        const dock = shadow?.querySelector<HTMLElement>("[data-marimo-lens-dock]");
+        const marker = shadow?.querySelector<HTMLElement>("[data-marimo-lens-selection-id]");
+        if (!app || !portal || !shadow || !dock || !marker) return null;
+        const pane = app.getBoundingClientRect();
+        const sameInsets = (clipPath: string, expected: number[]) => {
+          const insets = /^inset\((.*)\)$/.exec(clipPath)?.[1]?.split(" ").map(Number.parseFloat);
+          return (
+            insets?.length === 4 &&
+            insets.every((inset, index) => Math.abs(inset - expected[index]!) < 1)
+          );
+        };
+        const dockBounds = dock.getBoundingClientRect();
+        const markerBounds = marker.getBoundingClientRect();
+        const y = markerBounds.top + markerBounds.height / 2;
+        const lensOwns = (x: number, atY: number) =>
+          document.elementFromPoint(x, atY)?.closest("[data-marimo-lens-ui]") != null;
+        const handles = [...shadow.querySelectorAll<HTMLElement>("[data-handle]")].map((handle) => {
+          const bounds = handle.getBoundingClientRect();
+          const x = bounds.left + bounds.width / 2;
+          const handleY = bounds.top + bounds.height / 2;
+          return { x, y: handleY, inPane: x > pane.left && x < pane.right };
+        });
+        return {
+          portalInApp: portal.parentElement === app,
+          dockInside:
+            dockBounds.left >= pane.left &&
+            dockBounds.right <= pane.right &&
+            dockBounds.top >= pane.top &&
+            dockBounds.bottom <= pane.bottom,
+          straddles: markerBounds.left < pane.left && markerBounds.right > pane.left,
+          chromeOwnsHiddenSide: !lensOwns(pane.left - 4, y),
+          clipMatchesPane: sameInsets(getComputedStyle(portal).clipPath, [
+            pane.top,
+            window.innerWidth - pane.right,
+            window.innerHeight - pane.bottom,
+            pane.left,
+          ]),
+          hiddenHandlesClipped: handles
+            .filter(({ inPane }) => !inPane)
+            .every(({ x, y: handleY }) => !lensOwns(x, handleY)),
+          hiddenHandles: handles.filter(({ inPane }) => !inPane).length,
+        };
+      }),
+    )
+    .toEqual({
+      portalInApp: true,
+      dockInside: true,
+      straddles: true,
+      chromeOwnsHiddenSide: true,
+      clipMatchesPane: true,
+      hiddenHandlesClipped: true,
+      hiddenHandles: kind === "rect" ? 2 : 0,
+    });
+}

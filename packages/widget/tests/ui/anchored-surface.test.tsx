@@ -9,10 +9,13 @@ import { useAnchoredSurface } from "@/ui/anchored-surface";
 
 let root: Root | null = null;
 const adapters = new Set<NotebookDomAdapter>();
+const releases = new Set<() => void>();
 
 afterEach(() => {
   act(() => root?.unmount());
   root = null;
+  for (const release of releases) release();
+  releases.clear();
   for (const adapter of adapters) adapter.dispose();
   adapters.clear();
   document.body.replaceChildren();
@@ -75,31 +78,99 @@ describe("anchored surfaces", () => {
     expect(ownerRemove).toHaveBeenCalledWith("resize", expect.any(Function));
     expect(ownerRemove).toHaveBeenCalledWith("scroll", expect.any(Function), true);
   });
+
+  test.each([
+    ["top-left", new DOMRect(300, 20, 20, 20)],
+    ["bottom-right", new DOMRect(1_250, 670, 20, 20)],
+  ])("keeps an anchored surface inside the marimo app pane at %s", (_, anchorRect) => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_280);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(720);
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(320, 40, 900, 640);
+    const widget = document.createElement("marimo-anywidget");
+    const shadow = widget.attachShadow({ mode: "open" });
+    const host = document.createElement("span");
+    const anchor = document.createElement("button");
+    shadow.append(host, anchor);
+    app.append(widget);
+    document.body.append(app);
+
+    renderProbe(anchor, () => anchorRect, host, 120);
+
+    const surface = document.querySelector<HTMLOutputElement>("[data-test-surface]")!;
+    const left = Number.parseFloat(surface.style.left);
+    const width = Number.parseFloat(surface.style.width);
+    const top = surface.style.top
+      ? Number.parseFloat(surface.style.top)
+      : window.innerHeight - Number.parseFloat(surface.style.bottom) - 120;
+    expect({
+      left: left >= 332,
+      right: left + width <= 1_208,
+      top: top >= 52,
+      bottom: top + 120 <= 668,
+    }).toEqual({ left: true, right: true, top: true, bottom: true });
+  });
+
+  test("places an unanchored surface relative to the marimo app pane", () => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_280);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(720);
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(320, 40, 900, 640);
+    const host = document.createElement("span");
+    app.append(host);
+    document.body.append(app);
+
+    renderProbe(null, () => new DOMRect(), host);
+
+    const surface = document.querySelector<HTMLOutputElement>("[data-test-surface]")!;
+    expect({ right: surface.style.right, bottom: surface.style.bottom }).toEqual({
+      right: "76px",
+      bottom: "112px",
+    });
+  });
 });
 
-function renderProbe(element: Element, getRect: () => DOMRectReadOnly): void {
+function renderProbe(
+  element: Element | null,
+  getRect: () => DOMRectReadOnly,
+  host: Element | null = null,
+  surfaceHeight?: number,
+): void {
   const container = document.createElement("div");
   document.body.appendChild(container);
-  const adapter = new NotebookDomAdapter(element.ownerDocument);
+  const adapter = new NotebookDomAdapter(element?.ownerDocument ?? document);
+  if (host) releases.add(adapter.registerHost(host));
   adapters.add(adapter);
   root = createRoot(container);
   act(() =>
     root?.render(
       <NotebookDomProvider adapter={adapter}>
-        <SurfaceProbe element={element} getRect={getRect} />
+        <SurfaceProbe element={element} getRect={getRect} surfaceHeight={surfaceHeight} />
       </NotebookDomProvider>,
     ),
   );
 }
 
-function SurfaceProbe({ element, getRect }: { element: Element; getRect: () => DOMRectReadOnly }) {
-  const anchor: AnchoredSurfaceAnchor = { element, rect: getRect() };
+function SurfaceProbe({
+  element,
+  getRect,
+  surfaceHeight,
+}: {
+  element: Element | null;
+  getRect: () => DOMRectReadOnly;
+  surfaceHeight?: number;
+}) {
+  const anchor: AnchoredSurfaceAnchor | null = element && { element, rect: getRect() };
   const position = useAnchoredSurface({
     anchor,
     open: true,
-    preferredPlacement: anchor.rect.top < 160 ? "below" : "above",
+    preferredPlacement: anchor && anchor.rect.top < 160 ? "below" : "above",
     gap: 10,
     width: 264,
+    surfaceHeight,
+    fallback: { inset: { right: 16, bottom: 72 }, placement: "above" },
   });
   return <output data-test-surface data-placement={position.placement} style={position.style} />;
 }

@@ -200,6 +200,16 @@ export function useDocumentInteractions(options: {
         ) {
           return;
         }
+        // The note editor is non-modal, so notebook controls keep their own Escape.
+        if (
+          event.key === "Escape" &&
+          workflow.mode === "editingNote" &&
+          target &&
+          target !== surface.document.body &&
+          !target.closest("[data-marimo-lens-ui]")
+        ) {
+          return;
+        }
         handleLensEscape(event, {
           state: uiRef.current,
           dispatch,

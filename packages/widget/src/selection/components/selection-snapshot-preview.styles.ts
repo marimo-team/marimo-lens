@@ -28,10 +28,7 @@ export const snapshotStyles = stylex.create({
   preview: {
     position: "fixed",
     zIndex: 14,
-    right: { [media.mobile]: "12px !important" },
-    left: { [media.mobile]: "12px !important" },
     display: "block",
-    width: { [media.mobile]: "auto !important" },
     maxWidth: "calc(100vw - 24px)",
     maxHeight: "calc(100dvh - 24px)",
     margin: 0,

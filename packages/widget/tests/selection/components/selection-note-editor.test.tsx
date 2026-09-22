@@ -73,32 +73,15 @@ describe("selection note editor", () => {
     expect(textarea.selectionStart).toBe(selection.note.length);
   });
 
-  test("uses the native modal lifecycle", () => {
-    const showModal = vi.spyOn(HTMLDialogElement.prototype, "showModal");
-    const closeDialog = vi.spyOn(HTMLDialogElement.prototype, "close");
+  test("renders as a nonmodal dialog", () => {
     renderEditor(selectionFixture(), () => {});
     const editor = document.querySelector<HTMLDialogElement>("[data-marimo-lens-note-editor]")!;
 
-    expect(showModal).toHaveBeenCalledOnce();
     expect(editor.open).toBe(true);
 
     act(() => root?.unmount());
     root = null;
-    expect(closeDialog).toHaveBeenCalledOnce();
-  });
-
-  test("routes native dialog cancellation through the note workflow", () => {
-    const onCancel = vi.fn();
-    renderEditor(selectionFixture(), () => {}, { onCancel });
-    const editor = document.querySelector<HTMLDialogElement>("[data-marimo-lens-note-editor]")!;
-    const cancel = new Event("cancel", { cancelable: true });
-
-    act(() => {
-      editor.dispatchEvent(cancel);
-    });
-
-    expect(cancel.defaultPrevented).toBe(true);
-    expect(onCancel).toHaveBeenCalledOnce();
+    expect(document.querySelector("[data-marimo-lens-note-editor]")).toBeNull();
   });
 
   test("keeps Tab within the note editor", () => {

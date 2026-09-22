@@ -5,6 +5,7 @@ import type { TargetSurface } from "@/notebook/selection-target";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
 import { targetInfo } from "@/notebook/target-info";
+import { intersectBounds } from "@/notebook/viewport";
 
 import { targetInfoStyles } from "./target-info.styles";
 
@@ -13,26 +14,28 @@ export function TargetInfoLabel({ target, bounds }: { target: TargetSurface; bou
   const info = targetInfo(target);
   const label = useRef<HTMLDivElement>(null);
   const [position, setPosition] = useState({ left: 0, top: 0 });
-  const viewportWidth = dom.window.innerWidth;
-  const viewportHeight = dom.window.innerHeight;
+  const viewport = dom.viewportBounds();
   const visible =
     target.element.isConnected &&
     bounds.width > 0 &&
     bounds.height > 0 &&
-    bounds.bottom > 0 &&
-    bounds.right > 0 &&
-    bounds.top < viewportHeight &&
-    bounds.left < viewportWidth;
+    intersectBounds(bounds, viewport) !== null;
   useLayoutEffect(() => {
     if (!visible || !label.current) return;
     const place = () => {
       if (!label.current) return;
       const rect = label.current.getBoundingClientRect();
-      const left = Math.max(8, Math.min(bounds.left, viewportWidth - rect.width - 8));
+      const left = Math.max(
+        viewport.left + 8,
+        Math.min(bounds.left, viewport.right - rect.width - 8),
+      );
       const above = bounds.top - rect.height - 6;
       const top = Math.max(
-        8,
-        Math.min(above >= 8 ? above : bounds.top + 6, viewportHeight - rect.height - 8),
+        viewport.top + 8,
+        Math.min(
+          above >= viewport.top + 8 ? above : bounds.top + 6,
+          viewport.bottom - rect.height - 8,
+        ),
       );
       setPosition((previous) =>
         previous.left === left && previous.top === top ? previous : { left, top },
@@ -48,8 +51,10 @@ export function TargetInfoLabel({ target, bounds }: { target: TargetSurface; bou
     dom,
     info.label,
     info.detail,
-    viewportWidth,
-    viewportHeight,
+    viewport.left,
+    viewport.top,
+    viewport.right,
+    viewport.bottom,
     visible,
   ]);
 
@@ -61,7 +66,7 @@ export function TargetInfoLabel({ target, bounds }: { target: TargetSurface; bou
       {...stylex.props(targetInfoStyles.label)}
       data-marimo-lens-target-label
       aria-hidden="true"
-      style={position}
+      style={{ ...position, maxWidth: Math.max(0, viewport.width - 16) }}
     >
       <span {...stylex.props(targetInfoStyles.name)}>{info.label}</span>
       {info.detail && <span {...stylex.props(targetInfoStyles.detail)}>{info.detail}</span>}

@@ -2,7 +2,7 @@ import type { Selection, TargetSelector } from "@marimo-lens/protocol";
 
 import * as stylex from "@stylexjs/stylex";
 import { Trash2 } from "lucide-react";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { useNotebookDom } from "@/notebook/notebook-dom";
 import { anchorToViewport } from "@/selection/anchor";
@@ -56,17 +56,8 @@ export function SelectionNoteEditor({
     width: 320,
     surfaceHeight: 190,
     surfaceRef,
-    fallback: { style: { right: 16, bottom: 72 }, placement: "above" },
+    fallback: { inset: { right: 16, bottom: 72 }, placement: "above" },
   });
-
-  useLayoutEffect(() => {
-    const surface = surfaceRef.current;
-    if (!surface) return;
-    if (!surface.open) surface.showModal();
-    return () => {
-      if (surface.open) surface.close();
-    };
-  }, []);
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -79,6 +70,7 @@ export function SelectionNoteEditor({
   return (
     <dialog
       ref={surfaceRef}
+      open
       {...stylex.props(
         noteEditorStyles.editor,
         position.placement === "above" ? noteEditorStyles.above : noteEditorStyles.below,
@@ -91,10 +83,6 @@ export function SelectionNoteEditor({
       data-marimo-lens-selection-cluster={selection.id}
       data-marimo-lens-ui
       aria-label={`${title} for ${selection.label}, ${selection.description.label}`}
-      onCancel={(event) => {
-        event.preventDefault();
-        onCancel();
-      }}
       onPointerDown={(event) => {
         if (event.target !== event.currentTarget) return;
         event.preventDefault();

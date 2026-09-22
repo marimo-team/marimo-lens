@@ -9,8 +9,9 @@ export function createLensSurface(ownerDocument: Document) {
   const host = ownerDocument.createElement("div");
   host.setAttribute("data-marimo-lens-portal", "");
   host.setAttribute("data-marimo-lens-ui", "");
+  // marimo's PNG export skips print-hidden nodes.
+  host.className = "print:hidden";
   const shadow = host.attachShadow({ mode: "open" });
-  ownerDocument.body.append(host);
   const releaseStyles = acquireLensGlobalStyles(ownerDocument, FRAME_STYLES);
   return {
     host,

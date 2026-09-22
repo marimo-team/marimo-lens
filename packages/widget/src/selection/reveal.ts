@@ -1,6 +1,7 @@
 import type { Selection, TargetSelector } from "@marimo-lens/protocol";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
+import type { ViewportBounds } from "@/notebook/viewport";
 
 export type RevealMotion = "smooth" | "instant";
 
@@ -11,7 +12,9 @@ export function revealSelection(
   selector: TargetSelector,
 ): boolean {
   const output = dom.getTarget(selection.target, selector)?.element;
-  if (!output || isSubstantiallyVisible(dom, output)) return false;
+  if (!output || isSubstantiallyVisible(output.getBoundingClientRect(), dom.viewportBounds())) {
+    return false;
+  }
 
   const reducedMotion =
     dom.window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
@@ -23,10 +26,11 @@ export function revealSelection(
   return true;
 }
 
-function isSubstantiallyVisible(dom: NotebookDomAdapter, element: HTMLElement): boolean {
-  const rect = element.getBoundingClientRect();
-  const viewportHeight = dom.window.innerHeight || dom.document.documentElement.clientHeight;
-  const visibleHeight = Math.max(0, Math.min(rect.bottom, viewportHeight) - Math.max(rect.top, 0));
-  const requiredHeight = Math.min(rect.height, viewportHeight) * 0.6;
-  return visibleHeight >= requiredHeight;
+function isSubstantiallyVisible(rect: DOMRectReadOnly, viewport: ViewportBounds): boolean {
+  const visibleWidth = Math.min(rect.right, viewport.right) - Math.max(rect.left, viewport.left);
+  const visibleHeight = Math.min(rect.bottom, viewport.bottom) - Math.max(rect.top, viewport.top);
+  return (
+    visibleWidth >= Math.min(rect.width, viewport.width) * 0.6 &&
+    visibleHeight >= Math.min(rect.height, viewport.height) * 0.6
+  );
 }

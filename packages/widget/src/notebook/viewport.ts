@@ -1,8 +1,41 @@
-import type { TargetSelector } from "@marimo-lens/protocol";
+export type ViewportBounds = Pick<
+  DOMRectReadOnly,
+  "left" | "top" | "right" | "bottom" | "width" | "height"
+>;
 
-import { useEffect, useState } from "react";
+export function windowViewportBounds(ownerWindow: Window): ViewportBounds {
+  const viewport = ownerWindow.visualViewport;
+  const left = viewport?.offsetLeft ?? 0;
+  const top = viewport?.offsetTop ?? 0;
+  const width = viewport?.width ?? ownerWindow.innerWidth;
+  const height = viewport?.height ?? ownerWindow.innerHeight;
+  return { left, top, right: left + width, bottom: top + height, width, height };
+}
 
-import { useNotebookDom } from "@/notebook/notebook-dom";
+export function intersectBounds(
+  first: Pick<DOMRectReadOnly, "left" | "top" | "right" | "bottom">,
+  second: Pick<DOMRectReadOnly, "left" | "top" | "right" | "bottom">,
+): ViewportBounds | null {
+  const left = Math.max(first.left, second.left);
+  const top = Math.max(first.top, second.top);
+  const right = Math.min(first.right, second.right);
+  const bottom = Math.min(first.bottom, second.bottom);
+  return right > left && bottom > top
+    ? { left, top, right, bottom, width: right - left, height: bottom - top }
+    : null;
+}
+
+export function sameBounds(first: ViewportBounds | null, second: ViewportBounds | null): boolean {
+  return (
+    first === second ||
+    (first !== null &&
+      second !== null &&
+      first.left === second.left &&
+      first.top === second.top &&
+      first.right === second.right &&
+      first.bottom === second.bottom)
+  );
+}
 
 export function observeVisibleViewport(
   surface: Element,
@@ -43,19 +76,4 @@ export function observeVisibleViewport(
     ownerWindow.removeEventListener("message", onMessage);
     ownerWindow.removeEventListener("resize", refresh);
   };
-}
-
-export function useViewportRevision(active = true, selector?: TargetSelector): number {
-  const dom = useNotebookDom();
-  const [revision, setRevision] = useState(0);
-
-  useEffect(
-    () =>
-      active
-        ? dom.subscribeLayout(() => setRevision((current) => current + 1), selector)
-        : undefined,
-    [active, dom, selector],
-  );
-
-  return revision;
 }

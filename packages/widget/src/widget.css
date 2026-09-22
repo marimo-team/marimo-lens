@@ -4,7 +4,14 @@
   position: fixed !important;
   z-index: var(--marimo-lens-z-index, 35) !important;
   inset: 0 !important;
+  clip-path: var(--marimo-lens-pane-clip, none) !important;
   pointer-events: none !important;
+}
+
+/* Inside marimo's app pane, Lens sits above persistent pane controls (z-index 50)
+   and below pane alerts, editor tooltips, and the floating outline (z-index 100+). */
+:host([data-marimo-lens-pane]) {
+  z-index: var(--marimo-lens-z-index, 60) !important;
 }
 
 :host *,
