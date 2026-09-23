@@ -1,0 +1,23 @@
+packages/widget/src/notebook/output-root.ts
+  s_3ccfa07f77605d::t_a198c1e88638fc 77-80,87,96-101,104
+packages/widget/src/notebook/selection-target.ts
+  s_3ccfa07f77605d::t_a198c1e88638fc 5-6,141-147,209-213
+packages/widget/tests/notebook/selection-target.test.ts
+  s_3ccfa07f77605d::t_ba37b2b015a83e 417-439
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "bbea41311a9de0210a925f5d83c892cd06f9b72b",
+  "prompts": {},
+  "sessions": {
+    "s_3ccfa07f77605d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f514fcd0-4fc9-4f47-b674-84375b53ebb6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
