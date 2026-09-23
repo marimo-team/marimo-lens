@@ -10,6 +10,7 @@ import {
 
 import type { TargetSurface } from "@/notebook/selection-target";
 
+import { outputlessCellFromRoot } from "@/notebook/output-root";
 import { referencedSources } from "@/notebook/projection-sources";
 
 function readInfo(element: Element): TargetInfo | null {
@@ -69,9 +70,10 @@ function targetPresentation(target: TargetSurface): TargetInfo {
   const labelled = target.element.matches("[aria-label]")
     ? target.element
     : target.element.querySelector("[aria-label]");
-  const descriptive = (heading?.textContent ?? labelled?.getAttribute("aria-label"))
-    ?.replace(/\s+/g, " ")
-    .trim();
+  // An output-less cell surface is editor chrome, whose labels name controls.
+  const descriptive = outputlessCellFromRoot(target.element)
+    ? undefined
+    : (heading?.textContent ?? labelled?.getAttribute("aria-label"))?.replace(/\s+/g, " ").trim();
   const cells = target.target.cellIds.length
     ? `Cell ${target.target.cellIds.join(", ")}`
     : undefined;

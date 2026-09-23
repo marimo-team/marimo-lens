@@ -6,8 +6,11 @@ import { indexDocumentIds } from "@/notebook/document-ids";
 import {
   containsLensHost,
   getOutputCell,
+  getOutputlessCell,
+  listOutputlessCells,
   listOutputRoots,
   outputCellFromRoot,
+  outputlessCellFromRoot,
 } from "@/notebook/output-root";
 import { notebookSources } from "@/notebook/projection-sources";
 
@@ -62,8 +65,9 @@ export function getTargetSurface(
 ): TargetSurface | null {
   if (!targetBelongsToDocument(target, ownerDocument)) return null;
   if (target.kind === "notebook") {
-    const output = getOutputCell(ownerDocument, target.cellIds[0]!);
-    return output ? surface(target, output.element) : null;
+    const cellId = target.cellIds[0]!;
+    const cell = getOutputCell(ownerDocument, cellId) ?? getOutputlessCell(ownerDocument, cellId);
+    return cell ? surface(target, cell.element) : null;
   }
   const element = queryTarget(ownerDocument, target.domSelector);
   if (!element) return null;
@@ -132,10 +136,10 @@ export function listTargetSurfaces(
     const candidate = domTarget(root, (ids ??= indexDocumentIds(ownerDocument)));
     if (candidate) strongest.set(root, { priority: 0, surface: candidate });
   }
-  for (const output of listOutputRoots(ownerDocument)) {
-    if ((strongest.get(output.element)?.priority ?? -1) >= 1) continue;
-    const candidate = notebookTarget(output.element);
-    if (candidate) strongest.set(output.element, { priority: 1, surface: candidate });
+  for (const cell of [...listOutputRoots(ownerDocument), ...listOutputlessCells(ownerDocument)]) {
+    if ((strongest.get(cell.element)?.priority ?? -1) >= 1) continue;
+    const candidate = notebookTarget(cell.element);
+    if (candidate) strongest.set(cell.element, { priority: 1, surface: candidate });
   }
 
   return [...strongest.values()]
@@ -196,16 +200,16 @@ function bestTarget(elements: Element[], selector: TargetSelector): TargetSurfac
 }
 
 function notebookTarget(element: Element): TargetSurface | null {
-  const output = outputCellFromRoot(element);
-  if (!output || !isVisible(output.element)) return null;
+  const cell = outputCellFromRoot(element) ?? outputlessCellFromRoot(element);
+  if (!cell || !isVisible(cell.element)) return null;
   return surface(
     {
       kind: "notebook",
-      cellIds: [output.id],
-      documentId: documentIdentity(output.element.ownerDocument),
-      documentPath: documentPath(output.element.ownerDocument),
+      cellIds: [cell.id],
+      documentId: documentIdentity(cell.element.ownerDocument),
+      documentPath: documentPath(cell.element.ownerDocument),
     },
-    output.element,
+    cell.element,
   );
 }
 

@@ -379,6 +379,53 @@ describe("selection targets", () => {
     expect(target?.element).toBe(output);
   });
 
+  test("an output-less cell is a notebook target until its output renders", () => {
+    document.body.innerHTML =
+      '<div id="cell-rates" data-cell-id="rates"><div class="cm-line">discount_rate = 0.07</div></div>';
+    const cell = visible(document.getElementById("cell-rates")!);
+    const line = cell.querySelector(".cm-line")!;
+    const picked = targetFromElement(line, null)!;
+
+    expect(picked.target).toEqual({
+      kind: "notebook",
+      cellIds: ["rates"],
+      documentId: documentIdentity(document),
+      documentPath: "/",
+    });
+    expect(picked.element).toBe(cell);
+    expect(listTargetSurfaces(document, null)).toEqual([picked]);
+    expect(getTargetSurface(document, picked.target, null)?.element).toBe(cell);
+
+    const output = visible(document.createElement("div"));
+    output.id = "output-rates";
+    cell.appendChild(output);
+
+    expect(targetFromElement(line, null)).toBeNull();
+    expect(getTargetSurface(document, picked.target, null)?.element).toBe(output);
+    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([output]);
+  });
+
+  test("a cell whose output root has no box keeps its code unselectable", () => {
+    document.body.innerHTML =
+      '<div id="output-slide" style="display:contents"></div><div id="cell-slide" data-cell-id="slide"><div class="cm-line">chart</div></div>';
+    const cell = visible(document.getElementById("cell-slide")!);
+
+    expect(targetFromElement(cell.querySelector(".cm-line"), null)).toBeNull();
+    expect(listTargetSurfaces(document, null)).toEqual([]);
+  });
+
+  test("the cell that renders Lens stays unselectable", () => {
+    document.body.innerHTML =
+      '<div id="cell-lens" data-cell-id="lens"><div class="cm-line">lens</div><div id="output-lens"><span></span></div></div>';
+    const cell = visible(document.getElementById("cell-lens")!);
+    visible(document.getElementById("output-lens")!);
+    const release = registerLensHostOutput(cell.querySelector("span")!);
+
+    expect(targetFromElement(cell.querySelector(".cm-line"), null)).toBeNull();
+    expect(listTargetSurfaces(document, null)).toEqual([]);
+    release();
+  });
+
   test("lists notebook outputs mounted in an open shadow root", () => {
     const host = document.createElement("div");
     const shadow = host.attachShadow({ mode: "open" });

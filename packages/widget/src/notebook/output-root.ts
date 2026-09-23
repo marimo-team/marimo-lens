@@ -73,6 +73,31 @@ export function getOutputCell(ownerDocument: Document, outputCellId: string): Ou
   return null;
 }
 
+// marimo renders no output root for a cell without output. Its cell container
+// stands in as the cell's notebook surface until an output root appears.
+export function outputlessCellFromRoot(element: Element): OutputCell | null {
+  const id = element.getAttribute("data-cell-id");
+  if (!id || element.id !== `cell-${id}` || !isHTMLElement(element)) return null;
+  if (element.ownerDocument.getElementById(`output-${id}`)) return null;
+  if (!outputRoots(element).next().done) return null;
+  return { id, element };
+}
+
+export function getOutputlessCell(ownerDocument: Document, cellId: string): OutputCell | null {
+  const element = ownerDocument.getElementById(`cell-${cellId}`);
+  const cell = element ? outputlessCellFromRoot(element) : null;
+  return cell && isVisible(cell.element) ? cell : null;
+}
+
+export function listOutputlessCells(ownerDocument: Document): OutputCell[] {
+  const cells: OutputCell[] = [];
+  for (const element of ownerDocument.querySelectorAll('[id^="cell-"][data-cell-id]')) {
+    const cell = outputlessCellFromRoot(element);
+    if (cell) cells.push(cell);
+  }
+  return cells;
+}
+
 export function listOutputCells(ownerDocument: Document): OutputCell[] {
   return listOutputRoots(ownerDocument).filter((cell) => isVisible(cell.element));
 }
@@ -195,6 +220,11 @@ function isVisible(element: HTMLElement): boolean {
   return (
     style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
   );
+}
+
+function isHTMLElement(element: Element): element is HTMLElement {
+  const ownerWindow = element.ownerDocument.defaultView;
+  return ownerWindow !== null && element instanceof ownerWindow.HTMLElement;
 }
 
 function isElement(value: EventTarget | null): value is Element {

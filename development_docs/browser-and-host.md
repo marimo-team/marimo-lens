@@ -25,6 +25,14 @@ The current rules recognize:
 It also tracks the output containing a Lens host so the widget does not make its
 own output selectable.
 
+marimo renders no output root for a cell without output. `output-root.ts` then
+resolves the `cell-<cell-id>` container as that cell's notebook surface. A cell
+with any output root keeps the output as its only surface. The target identity
+stays the same, so a stored selection moves between the container and the
+output when the output appears or clears. Its normalized anchor is reapplied to
+the new surface. Target labels use the cell ID because the container's own
+labels name editor controls.
+
 A notebook target records exactly one producing cell ID, the browser-document
 identity, and the document pathname.
 
