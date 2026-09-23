@@ -414,6 +414,18 @@ describe("selection targets", () => {
     expect(listTargetSurfaces(document, null)).toEqual([]);
   });
 
+  test("an output-less cell in an open shadow root is not a target", () => {
+    const host = document.createElement("div");
+    const shadow = host.attachShadow({ mode: "open" });
+    shadow.innerHTML =
+      '<div id="cell-shadow" data-cell-id="shadow"><div class="cm-line">rate = 0.07</div></div>';
+    document.body.appendChild(host);
+    const cell = visible(shadow.getElementById("cell-shadow")!);
+
+    expect(targetFromElement(cell.querySelector(".cm-line"), null)).toBeNull();
+    expect(listTargetSurfaces(document, null)).toEqual([]);
+  });
+
   test("the cell that renders Lens stays unselectable", () => {
     document.body.innerHTML =
       '<div id="cell-lens" data-cell-id="lens"><div class="cm-line">lens</div><div id="output-lens"><span></span></div></div>';

@@ -74,13 +74,15 @@ export function getOutputCell(ownerDocument: Document, outputCellId: string): Ou
 }
 
 // marimo renders no output root for a cell without output. Its cell container
-// stands in as the cell's notebook surface until an output root appears.
+// stands in as the cell's notebook surface until an output root appears. Only
+// document-tree containers qualify, so lookup by ID finds every picked cell.
 export function outputlessCellFromRoot(element: Element): OutputCell | null {
   const id = element.getAttribute("data-cell-id");
   if (!id || element.id !== `cell-${id}` || !isHTMLElement(element)) return null;
-  if (element.ownerDocument.getElementById(`output-${id}`)) return null;
-  if (!outputRoots(element).next().done) return null;
-  return { id, element };
+  const ownerDocument = element.ownerDocument;
+  if (element.getRootNode() !== ownerDocument) return null;
+  if (ownerDocument.getElementById(`output-${id}`)) return null;
+  return element.querySelector(OUTPUT_ROOT_SELECTOR) ? null : { id, element };
 }
 
 export function getOutputlessCell(ownerDocument: Document, cellId: string): OutputCell | null {

@@ -26,7 +26,8 @@ It also tracks the output containing a Lens host so the widget does not make its
 own output selectable.
 
 marimo renders no output root for a cell without output. `output-root.ts` then
-resolves the `cell-<cell-id>` container as that cell's notebook surface. A cell
+resolves the document's `cell-<cell-id>` container as that cell's notebook
+surface. A cell
 with any output root keeps the output as its only surface. The target identity
 stays the same, so a stored selection moves between the container and the
 output when the output appears or clears. Its normalized anchor is reapplied to

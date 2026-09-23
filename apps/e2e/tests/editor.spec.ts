@@ -30,7 +30,9 @@ test("editor selections reference a cell without output through its code", async
   const report = await runAction(page);
   const selection = report.references.selections[0];
   expect(selection).toMatchObject({
+    label: "S1",
     target: { kind: "notebook" },
+    anchor: { kind: "point" },
     snapshot: { status: "available" },
   });
   expect(selection.cells).toEqual([{ id: selection.target.cellIds[0], status: "available" }]);
