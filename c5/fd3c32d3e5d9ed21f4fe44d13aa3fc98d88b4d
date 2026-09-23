@@ -1,0 +1,19 @@
+packages/marimo-lens/pyproject.toml
+  s_b21b46153d101c::t_7a8cb0d9e71e07 7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c5fd3c32d3e5d9ed21f4fe44d13aa3fc98d88b4d",
+  "prompts": {},
+  "sessions": {
+    "s_b21b46153d101c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0ce4b-3489-7913-b908-ea080f55edcd",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
