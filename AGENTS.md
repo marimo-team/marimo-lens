@@ -83,7 +83,8 @@ Unqualified Python filenames in this table live in
 
 ## Key invariants
 
-- A target is the selectable unit. Notebook targets identify one output cell.
+- A target is the selectable unit. Notebook targets identify one cell through
+  its output, or through its cell container when it renders no output.
   DOM targets keep a document-scoped selector and producing cell IDs inferred
   from generic runtime metadata. Both variants keep the owning document ID and
   path. A point or region narrows attention inside the target.

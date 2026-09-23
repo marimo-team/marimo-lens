@@ -36,7 +36,7 @@ becomes authoritative.
 | Term               | Meaning                                                                                                                           |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | Document           | One browser `Document` that displays Lens and selectable content. Each document has an opaque identity and a pathname.            |
-| Target             | The rendered unit a person can select. A target is one notebook output or one configured DOM root.                                |
+| Target             | The rendered unit a person can select. A target is one notebook cell or one configured DOM root.                                  |
 | Surface            | The current browser element found for a stored target. A target can remain stored while its surface is temporarily unavailable.   |
 | Selection          | A target plus an anchor, optional note, DOM hint, stable ID and label, creation time, and selection image state.                  |
 | Anchor             | Normalized point or rectangle geometry inside a target.                                                                           |
@@ -154,7 +154,8 @@ See [Selection state](selection-state.md).
 
 ### Targets identify rendered ownership
 
-A notebook target identifies one canonical output cell. A configured DOM target
+A notebook target identifies one cell. Its surface is the canonical output, or
+the cell container when the cell renders no output. A configured DOM target
 keeps a document-scoped selector and zero or more producing cells inferred from
 published source records or nested `data-marimo-lens-cell-id` metadata. Value
 references distinguish selectors from the same cell. Both retain the owning document identity

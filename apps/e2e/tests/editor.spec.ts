@@ -24,6 +24,22 @@ test("editor output selections expose notes, producing cells, and PNGs to the ke
   await screenshot(page, testInfo, "editor-selection");
 });
 
+test("editor selections reference a cell without output through its code", async ({ page }) => {
+  const line = page.locator(".cm-line", { hasText: "reporting_months = " });
+  await selectOutput(page, "point", "S1", "In this cell, add April", line);
+  const report = await runAction(page);
+  const selection = report.references.selections[0];
+  expect(selection).toMatchObject({
+    label: "S1",
+    target: { kind: "notebook" },
+    anchor: { kind: "point" },
+    snapshot: { status: "available" },
+  });
+  expect(selection.cells).toEqual([{ id: selection.target.cellIds[0], status: "available" }]);
+  expect(report.text).toContain("In this cell, add April");
+  expect(report.text).toContain('reporting_months = ["January", "February", "March"]');
+});
+
 test("Marimo dialogs cover Lens selection markers", async ({ page }, testInfo) => {
   await selectOutput(page, "point", "S1", "Check dialog stacking");
   await page.getByRole("region", { name: "Revenue by month" }).evaluate((target) => {

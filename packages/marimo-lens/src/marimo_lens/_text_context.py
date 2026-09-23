@@ -264,7 +264,7 @@ def _target_text(value: object) -> str:
         return "unknown target"
     kind = value.get("kind")
     if kind == "notebook":
-        return "notebook output"
+        return "notebook cell"
     if kind == "dom":
         sources = value.get("sources", [])
         if not isinstance(sources, Sequence) or isinstance(sources, (str, bytes)):

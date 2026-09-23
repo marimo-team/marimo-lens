@@ -134,8 +134,8 @@ export async function selectOutput(
   kind: "point" | "region",
   label: string,
   note: string,
+  target = page.getByRole("region", { name: "Revenue by month" }),
 ) {
-  const target = page.getByRole("region", { name: "Revenue by month" });
   await target.scrollIntoViewIfNeeded();
   await page
     .getByRole("button", { name: "Select a target", exact: true })
@@ -144,7 +144,7 @@ export async function selectOutput(
     page.getByRole("button", { name: "Cancel selection mode", exact: true }),
   ).toBeVisible();
   const bounds = await target.boundingBox();
-  if (!bounds) throw new Error("Revenue output is not rendered");
+  if (!bounds) throw new Error("Selection target is not rendered");
   const x = bounds.x + bounds.width * 0.3;
   const y = bounds.y + bounds.height * 0.35;
   if (kind === "point") {

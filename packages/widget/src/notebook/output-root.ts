@@ -73,6 +73,41 @@ export function getOutputCell(ownerDocument: Document, outputCellId: string): Ou
   return null;
 }
 
+// marimo renders no output root for a cell without output. Its cell container
+// stands in as the cell's notebook surface until an output root appears. Like
+// getOutputCell, the check reads the canonical root and the container's open
+// tree. Only document-tree containers qualify, so lookup by ID finds every
+// picked cell.
+export function outputlessCellFromRoot(element: Element): OutputCell | null {
+  const id = element.getAttribute("data-cell-id");
+  if (!id || element.id !== `cell-${id}` || !isHTMLElement(element)) return null;
+  const ownerDocument = element.ownerDocument;
+  if (element.getRootNode() !== ownerDocument) return null;
+  if (ownerDocument.getElementById(`output-${id}`)) return null;
+  return outputRoots(element).next().done ? { id, element } : null;
+}
+
+export function getOutputlessCell(ownerDocument: Document, cellId: string): OutputCell | null {
+  const element = ownerDocument.getElementById(`cell-${cellId}`);
+  const cell = element ? outputlessCellFromRoot(element) : null;
+  return cell && isVisible(cell.element) ? cell : null;
+}
+
+/** Skips cells with a listed output root, wherever that root renders. */
+export function listOutputlessCells(
+  ownerDocument: Document,
+  outputs: readonly OutputCell[],
+): OutputCell[] {
+  const listed = new Set(outputs.map(({ id }) => id));
+  const cells: OutputCell[] = [];
+  for (const element of ownerDocument.querySelectorAll('[id^="cell-"][data-cell-id]')) {
+    if (listed.has(element.getAttribute("data-cell-id")!)) continue;
+    const cell = outputlessCellFromRoot(element);
+    if (cell) cells.push(cell);
+  }
+  return cells;
+}
+
 export function listOutputCells(ownerDocument: Document): OutputCell[] {
   return listOutputRoots(ownerDocument).filter((cell) => isVisible(cell.element));
 }
@@ -195,6 +230,11 @@ function isVisible(element: HTMLElement): boolean {
   return (
     style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
   );
+}
+
+function isHTMLElement(element: Element): element is HTMLElement {
+  const ownerWindow = element.ownerDocument.defaultView;
+  return ownerWindow !== null && element instanceof ownerWindow.HTMLElement;
 }
 
 function isElement(value: EventTarget | null): value is Element {

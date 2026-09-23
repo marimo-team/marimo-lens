@@ -12,7 +12,7 @@ export function selectionTitle(selection: DescribedSelection): string {
       `Render source: ${source.path}${source.line ? `:${source.line}` : ""}${source.symbol ? ` (${source.symbol})` : ""}`,
     );
   }
-  if (target.kind === "notebook") lines.push(`Notebook output cell ${target.cellIds[0]}`);
+  if (target.kind === "notebook") lines.push(`Notebook cell ${target.cellIds[0]}`);
   else {
     lines.push(
       ...target.sources.map((source) => `${source.selector ?? "Output"} · Cell ${source.cellId}`),

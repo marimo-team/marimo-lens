@@ -21,3 +21,16 @@ test("composed source labels respect the name and detail bounds", () => {
     detail: `${"c".repeat(300)} · ${"d".repeat(209)}`,
   });
 });
+
+test("an output-less cell is labeled by its cell ID over editor chrome labels", () => {
+  document.body.innerHTML = `
+    <div id="cell-rates" data-cell-id="rates">
+      <button aria-label="Run cell"></button>
+      <div class="cm-line">discount_rate = 0.07</div>
+    </div>
+  `;
+  const cell = document.getElementById("cell-rates")!;
+  cell.getBoundingClientRect = () => new DOMRect(0, 0, 400, 60);
+  const target = targetFromElement(cell.querySelector(".cm-line"), null)!;
+  expect(targetInfo(target)).toEqual({ label: "Cell rates" });
+});

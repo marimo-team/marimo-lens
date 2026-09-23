@@ -41,7 +41,8 @@ dependencies = [
 
 Press **Select**, or use `Option+L` on macOS and `Alt+L` elsewhere. Click once
 for a point or drag at least five pixels along both axes for a region. Smaller
-gestures become points. Lens exits selection mode after it creates the
+gestures become points. Click the code of a cell without output to select that
+cell. Lens exits selection mode after it creates the
 selection and opens the optional note editor.
 
 Try both gestures on the chart:

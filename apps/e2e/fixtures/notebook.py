@@ -16,6 +16,12 @@ def _():
     return Lens, LensError, html, json, mo, time
 
 
+@app.cell
+def _():
+    reporting_months = ["January", "February", "March"]
+    return (reporting_months,)
+
+
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""

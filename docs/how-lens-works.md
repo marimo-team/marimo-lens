@@ -496,7 +496,9 @@ while code mode inspects, edits, runs, and verifies the producing cells.
 ## Targets and selections
 
 A **target** is the selectable unit. By default every rendered notebook output
-is a target, identified by its cell ID. Authors can also declare regions of
+is a target, identified by its cell ID. A cell that shows its code but renders
+no output is a target through that code, so a person can select the cell itself
+and ask for a change "in this cell." Authors can also declare regions of
 their own HTML as targets, with or without notebook inputs. [Custom
 targets](./custom-targets) shows how.
 
