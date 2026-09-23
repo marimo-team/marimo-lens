@@ -20,7 +20,7 @@ Point to a chart, table, or other result in [marimo](https://marimo.io/), a
 reactive Python notebook. Lens gives your agent the selection, your note, and
 the code behind it, then brings the agent's work back into view for your review.
 
-https://github.com/user-attachments/assets/e1975ba6-3087-485e-9360-43a99adc8795
+https://github.com/user-attachments/assets/7845c3b6-3ead-469f-8910-b688feb6a284
 
 - **Point and ask.** Mark a point or region on a chart, table, or other output.
   Lens keeps the mark, note, image, and relevant notebook context together.
