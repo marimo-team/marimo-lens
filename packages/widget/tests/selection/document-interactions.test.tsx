@@ -68,6 +68,28 @@ describe("document selection interactions", () => {
     expect(output.scrollIntoView).not.toHaveBeenCalled();
   });
 
+  test("leaves Escape to notebook controls while the note editor is open", () => {
+    const cell = document.createElement("textarea");
+    document.body.appendChild(cell);
+    mount(vi.fn<BeginSelection>(), {
+      initialState: {
+        ...INITIAL_STATE,
+        workflow: { mode: "editingNote", selectionId: "selection-1", motion: "instant" },
+      },
+    });
+    const escape = () =>
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+
+    const fromNotebook = escape();
+    void act(() => cell.dispatchEvent(fromNotebook));
+    expect(workflowMode()).toBe("editingNote");
+    const fromLens = pressSelectKey("Escape");
+
+    expect(fromNotebook.defaultPrevented).toBe(false);
+    expect(fromLens.defaultPrevented).toBe(true);
+    expect(workflowMode()).toBe("idle");
+  });
+
   test("cycles outputs with vertical keys while keeping Select focused", () => {
     const first = visibleOutput({ id: "cell-1", title: "Regional revenue" });
     const second = visibleOutput({ id: "cell-2", title: "Region" });
@@ -312,6 +334,7 @@ describe("document selection interactions", () => {
 
 type MountOptions = {
   deactivateAfterSelection?: boolean;
+  initialState?: UiState;
 };
 
 function mount(beginSelection: BeginSelection, options: MountOptions = {}): void {
@@ -323,6 +346,7 @@ function mount(beginSelection: BeginSelection, options: MountOptions = {}): void
       <Harness
         beginSelection={beginSelection}
         deactivateAfterSelection={options.deactivateAfterSelection ?? false}
+        initialState={options.initialState ?? INITIAL_STATE}
       />,
     ),
   );
@@ -331,11 +355,13 @@ function mount(beginSelection: BeginSelection, options: MountOptions = {}): void
 function Harness({
   beginSelection,
   deactivateAfterSelection,
+  initialState,
 }: {
   beginSelection: BeginSelection;
   deactivateAfterSelection: boolean;
+  initialState: UiState;
 }) {
-  const [ui, dispatch] = useReducer(uiReducer, INITIAL_STATE);
+  const [ui, dispatch] = useReducer(uiReducer, initialState);
   const uiRef = useRef(ui);
   const canceledPointerIds = useRef(new Set<number>());
   const cancelAdjustment = useCallback(() => false, []);
@@ -374,6 +400,7 @@ function Harness({
         Select
       </button>
       <LensStatus message={ui.announcement} />
+      <output data-workflow-mode={ui.workflow.mode} />
     </>
   );
 }
@@ -424,6 +451,10 @@ function pressSelectKey(key: string): KeyboardEvent {
     document.querySelector<HTMLButtonElement>("[data-ml-select]")?.dispatchEvent(event),
   );
   return event;
+}
+
+function workflowMode(): string | undefined {
+  return document.querySelector<HTMLElement>("[data-workflow-mode]")?.dataset.workflowMode;
 }
 
 function announcement(): string {

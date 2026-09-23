@@ -78,18 +78,12 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
       }
     };
     const layout = () => {
-      const viewport = win.visualViewport;
+      const notebook = dom.viewportBounds();
       bounds = {
-        left: Math.max(visibleBounds.left, viewport?.offsetLeft ?? 0),
-        top: Math.max(visibleBounds.top, viewport?.offsetTop ?? 0),
-        right: Math.min(
-          visibleBounds.right,
-          (viewport?.offsetLeft ?? 0) + (viewport?.width ?? win.innerWidth),
-        ),
-        bottom: Math.min(
-          visibleBounds.bottom,
-          (viewport?.offsetTop ?? 0) + (viewport?.height ?? win.innerHeight),
-        ),
+        left: Math.max(visibleBounds.left, notebook.left),
+        top: Math.max(visibleBounds.top, notebook.top),
+        right: Math.min(visibleBounds.right, notebook.right),
+        bottom: Math.min(visibleBounds.bottom, notebook.bottom),
       };
       edge = win.innerWidth <= 640 ? 12 : 16;
       const safeBottom =
@@ -216,6 +210,7 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
             layout();
           })
         : () => {};
+    const stopPane = dom.subscribeViewport(layout);
     dock.addEventListener("pointerdown", down);
     // Keep tracking outside the dock even if the host releases pointer capture.
     win.addEventListener("pointermove", pointerMove, true);
@@ -225,13 +220,12 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
     dock.addEventListener("keydown", keydown, true);
     win.addEventListener("blur", blur);
     win.addEventListener("resize", resize);
-    win.visualViewport?.addEventListener("resize", layout);
-    win.visualViewport?.addEventListener("scroll", layout);
     return () => {
       finish(true);
       if (frame) win.cancelAnimationFrame(frame);
       observer?.disconnect();
       stopViewport();
+      stopPane();
       dock.removeEventListener("pointerdown", down);
       win.removeEventListener("pointermove", pointerMove, true);
       win.removeEventListener("pointerup", up, true);
@@ -240,8 +234,6 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
       dock.removeEventListener("keydown", keydown, true);
       win.removeEventListener("blur", blur);
       win.removeEventListener("resize", resize);
-      win.visualViewport?.removeEventListener("resize", layout);
-      win.visualViewport?.removeEventListener("scroll", layout);
     };
   }, [dom, ref]);
 }

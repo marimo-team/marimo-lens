@@ -6,13 +6,7 @@ export const noteEditorStyles = stylex.create({
   editor: {
     position: "fixed",
     zIndex: 12,
-    top: { [media.mobile]: "auto !important" },
-    right: { [media.mobile]: "12px !important" },
-    bottom: {
-      [media.mobile]: "max(64px, calc(env(safe-area-inset-bottom) + 56px)) !important",
-    },
-    left: { [media.mobile]: "12px !important" },
-    width: { default: "min(320px, calc(100vw - 24px))", [media.mobile]: "auto !important" },
+    width: "min(320px, calc(100vw - 24px))",
     maxHeight: { default: "calc(100dvh - 24px)", [media.mobile]: "min(70dvh, 520px)" },
     margin: 0,
     padding: 10,
@@ -29,10 +23,6 @@ export const noteEditorStyles = stylex.create({
     transitionDuration: { default: "170ms", [media.reducedMotion]: "120ms" },
     transitionTimingFunction: { default: motion.easeOut, [media.reducedMotion]: "linear" },
     transform: { [media.reducedMotion]: "none" },
-    transformOrigin: { [media.mobile]: "center bottom" },
-    "::backdrop": {
-      backgroundColor: "rgb(15 23 42 / 10%)",
-    },
   },
   animated: {
     opacity: { default: 1, "@starting-style": 0 },

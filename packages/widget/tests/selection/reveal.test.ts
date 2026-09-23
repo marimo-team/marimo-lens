@@ -50,6 +50,27 @@ describe("selection reveal", () => {
       behavior: "auto",
     });
   });
+
+  test("scrolls a window-visible output hidden behind marimo chrome", () => {
+    const scrollIntoView = vi.fn<HTMLElement["scrollIntoView"]>();
+    const output = setupOutput(new DOMRect(50, 100, 300, 200), scrollIntoView);
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(320, 0, 900, 680);
+    const host = document.createElement("span");
+    app.append(output, host);
+    document.body.append(app);
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.registerHost(host);
+
+    expect(revealSelection(dom, selectionFixture(), "smooth", null)).toBe(true);
+    expect(scrollIntoView).toHaveBeenCalledWith({
+      block: "center",
+      inline: "nearest",
+      behavior: "smooth",
+    });
+    release();
+  });
 });
 
 function setupOutput(rect: DOMRect, scrollIntoView: HTMLElement["scrollIntoView"]): HTMLElement {

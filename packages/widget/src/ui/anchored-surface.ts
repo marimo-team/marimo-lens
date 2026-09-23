@@ -14,6 +14,12 @@ export type AnchoredSurfacePosition = {
   placement: AnchoredSurfacePlacement;
 };
 
+type AnchoredSurfaceFallback = {
+  /** Offsets from the notebook pane edges. */
+  inset: Partial<Record<"left" | "top" | "right" | "bottom", number>>;
+  placement: AnchoredSurfacePlacement;
+};
+
 type AnchoredSurfaceOptions = {
   anchor: AnchoredSurfaceAnchor | null;
   open: boolean;
@@ -25,7 +31,7 @@ type AnchoredSurfaceOptions = {
   edgePadding?: number;
   surfaceHeight?: number;
   surfaceRef?: RefObject<HTMLElement | null>;
-  fallback?: AnchoredSurfacePosition;
+  fallback?: AnchoredSurfaceFallback;
 };
 
 export function useAnchoredSurface({
@@ -39,7 +45,7 @@ export function useAnchoredSurface({
   edgePadding = 12,
   surfaceHeight,
   surfaceRef,
-  fallback = { style: {}, placement: preferredPlacement },
+  fallback = { inset: {}, placement: preferredPlacement },
 }: AnchoredSurfaceOptions): AnchoredSurfacePosition {
   const dom = useNotebookDom();
   const [, refresh] = useReducer((revision: number) => revision + 1, 0);
@@ -63,23 +69,33 @@ export function useAnchoredSurface({
     return () => observer?.disconnect();
   }, [open, ownerWindow, surfaceRef]);
 
-  if (!anchor) return fallback;
+  const viewport = dom.viewportBounds();
+  if (!anchor) {
+    const { inset, placement } = fallback;
+    return {
+      style: {
+        left: offset(viewport.left, inset.left),
+        top: offset(viewport.top, inset.top),
+        right: offset(ownerWindow.innerWidth - viewport.right, inset.right),
+        bottom: offset(ownerWindow.innerHeight - viewport.bottom, inset.bottom),
+      },
+      placement,
+    };
+  }
 
-  const viewportWidth = ownerWindow.innerWidth;
-  const viewportHeight = ownerWindow.innerHeight;
-  const width = Math.min(requestedWidth, Math.max(0, viewportWidth - edgePadding * 2));
+  const width = Math.min(requestedWidth, Math.max(0, viewport.width - edgePadding * 2));
   const alignedLeft =
     (align === "center" ? anchor.rect.left + anchor.rect.width / 2 - width / 2 : anchor.rect.left) +
     horizontalOffset;
   const left = clamp(
     alignedLeft,
-    edgePadding,
-    Math.max(edgePadding, viewportWidth - width - edgePadding),
+    viewport.left + edgePadding,
+    Math.max(viewport.left + edgePadding, viewport.right - width - edgePadding),
   );
 
   const height = measuredHeight || surfaceHeight;
-  const spaceAbove = anchor.rect.top - gap - edgePadding;
-  const spaceBelow = viewportHeight - anchor.rect.bottom - gap - edgePadding;
+  const spaceAbove = anchor.rect.top - viewport.top - gap - edgePadding;
+  const spaceBelow = viewport.bottom - anchor.rect.bottom - gap - edgePadding;
   let placement = preferredPlacement;
   if (height) {
     if (placement === "above" && height > spaceAbove && spaceBelow > spaceAbove) {
@@ -88,30 +104,35 @@ export function useAnchoredSurface({
       placement = "above";
     }
   }
-  const maximumTop = Math.max(edgePadding, viewportHeight - (height ?? 0) - edgePadding);
+  const minimumTop = viewport.top + edgePadding;
+  const maximumTop = Math.max(minimumTop, viewport.bottom - (height ?? 0) - edgePadding);
 
   if (placement === "below") {
     return {
       style: {
         left,
-        top: clamp(anchor.rect.bottom + gap, edgePadding, maximumTop),
+        top: clamp(anchor.rect.bottom + gap, minimumTop, maximumTop),
         width,
       },
       placement,
     };
   }
 
-  const bottom = viewportHeight - anchor.rect.top + gap;
+  const edge = anchor.rect.top - gap;
   return {
     style: {
       left,
-      bottom: height
-        ? clamp(bottom, edgePadding, Math.max(edgePadding, viewportHeight - height - edgePadding))
-        : bottom,
+      bottom:
+        ownerWindow.innerHeight -
+        (height ? clamp(edge, minimumTop + height, viewport.bottom - edgePadding) : edge),
       width,
     },
     placement,
   };
+}
+
+function offset(edge: number, inset: number | undefined): number | undefined {
+  return inset === undefined ? undefined : edge + inset;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

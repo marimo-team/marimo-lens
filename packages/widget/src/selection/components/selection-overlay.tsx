@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { WorkflowState } from "@/selection/state";
 
 import { useNotebookDom, type NotebookDomAdapter } from "@/notebook/notebook-dom";
-import { useViewportRevision } from "@/notebook/viewport";
+import { useViewportRevision } from "@/notebook/use-viewport-revision";
 import {
   anchorToViewport,
   attachToNestedScroll,

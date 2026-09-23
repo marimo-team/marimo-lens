@@ -286,7 +286,10 @@ test("large authored scopes preserve parent picking, child evidence, and respons
       (_, i) =>
         `<article id="scoped-card-${i}" style="padding:16px;border:1px solid #999"><h3>Card ${i}</h3><p><em>Focus ${i}</em> ${"<span>Detail</span> ".repeat(20)}</p></article>`,
     ).join("");
-    document.body.append(scope);
+    // Authored scopes render as notebook content inside marimo's app pane.
+    const app = document.getElementById("App");
+    if (!app) throw new Error("Marimo app pane is unavailable");
+    app.append(scope);
   });
   const target = page.locator("#scoped-card-0 em");
   await target.scrollIntoViewIfNeeded();

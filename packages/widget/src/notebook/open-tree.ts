@@ -11,3 +11,14 @@ export function containsOpenTree(root: Node, node: Node): boolean {
 function isShadowRoot(value: Node): value is ShadowRoot {
   return value.nodeType === 11 && "host" in value;
 }
+
+export function composedClosest(node: Element, selector: string): Element | null {
+  let current: Element | null = node;
+  while (current) {
+    const match = current.closest(selector);
+    if (match) return match;
+    const root = current.getRootNode();
+    current = isShadowRoot(root) ? root.host : null;
+  }
+  return null;
+}

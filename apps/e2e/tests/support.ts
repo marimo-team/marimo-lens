@@ -111,7 +111,14 @@ export async function screenshot(page: Page, testInfo: TestInfo, name: string) {
 export async function runAction(page: Page, action = "Inspect context"): Promise<Report> {
   const output = page.locator('[aria-label="Agent result"]');
   const previous = (await output.count()) > 0 ? await output.textContent() : null;
-  await page.getByRole("combobox", { name: "Agent action" }).selectOption({ label: action });
+  const select = page.getByRole("combobox", { name: "Agent action" });
+  const changed =
+    (await select.evaluate((element: HTMLSelectElement) => element.selectedOptions[0]?.label)) !==
+    action;
+  await select.selectOption({ label: action });
+  // A new action reruns the result cell and clears the stale report. Clicking
+  // during that rerun can race the layout shift and drop the click.
+  if (previous !== null && changed) await expect(output).toHaveCount(0);
   await page
     .getByRole("button", { name: "Run agent action", exact: true })
     .click({ noWaitAfter: true });

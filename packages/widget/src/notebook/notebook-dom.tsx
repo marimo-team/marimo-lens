@@ -14,7 +14,7 @@ import {
   type InteractionSurface,
   type InteractionSurfaceOptions,
 } from "@/notebook/interaction-documents";
-import { containsOpenTree } from "@/notebook/open-tree";
+import { composedClosest, containsOpenTree } from "@/notebook/open-tree";
 import {
   deepestElementAtPoint,
   getOutputCell,
@@ -32,6 +32,7 @@ import {
   type TargetSurface,
   validateTargetSelector,
 } from "@/notebook/selection-target";
+import { intersectBounds, windowViewportBounds, type ViewportBounds } from "@/notebook/viewport";
 
 type LayoutListener = () => void;
 
@@ -47,10 +48,13 @@ export class NotebookDomAdapter {
   readonly document: Document;
   readonly window: Window & typeof globalThis;
 
+  #pane: HTMLElement | null = null;
   readonly #layoutListeners = new Set<LayoutListener>();
+  readonly #viewportListeners = new Set<LayoutListener>();
   #selector: TargetSelector = null;
   #uiRoot: ShadowRoot | null = null;
   #stopLayoutObserver: (() => void) | null = null;
+  #stopViewportObserver: (() => void) | null = null;
   #contentRevision = 0;
   readonly #contentRevisions = new WeakMap<HTMLElement, number>();
 
@@ -70,9 +74,32 @@ export class NotebookDomAdapter {
       throw new Error("Lens UI requires one root in its owning document");
     }
     this.#uiRoot = root;
+    const { host } = root;
+    host.toggleAttribute("data-marimo-lens-pane", this.#pane !== null);
+    (this.#pane ?? this.document.body).append(host);
+    const stopClip =
+      this.#pane && host instanceof this.window.HTMLElement ? this.#clipToPane(host) : null;
     return () => {
+      stopClip?.();
+      host.remove();
       if (this.#uiRoot === root) this.#uiRoot = null;
     };
+  }
+
+  // `#App` forms a stacking context below marimo's application chrome, so Lens
+  // cannot paint above panels, dialogs, or menus from inside it. The clip keeps
+  // fixed Lens UI out of the chrome that `#App` still overlaps.
+  #clipToPane(host: HTMLElement): () => void {
+    const clip = () => {
+      const pane = this.viewportBounds();
+      const box = host.getBoundingClientRect();
+      host.style.setProperty(
+        "--marimo-lens-pane-clip",
+        `inset(${pane.top - box.top}px ${box.right - pane.right}px ${box.bottom - pane.bottom}px ${pane.left - box.left}px)`,
+      );
+    };
+    clip();
+    return this.subscribeViewport(clip);
   }
 
   get activeElement(): Element | null {
@@ -81,8 +108,26 @@ export class NotebookDomAdapter {
     return element;
   }
 
+  /** The visible notebook pane: marimo's `#App` scroller, or the visual viewport elsewhere. */
+  viewportBounds(): ViewportBounds {
+    const windowBounds = windowViewportBounds(this.window);
+    const pane = this.#pane?.getBoundingClientRect();
+    if (!pane) return windowBounds;
+    // A collapsed or offscreen pane leaves no area for Lens UI.
+    return (
+      intersectBounds(windowBounds, pane) ??
+      new this.window.DOMRect(windowBounds.left, windowBounds.top, 0, 0)
+    );
+  }
+
   registerHost(host: Element): () => void {
-    return registerLensHostOutput(host);
+    const pane = composedClosest(host, "#App");
+    this.#pane = pane instanceof this.window.HTMLElement ? pane : null;
+    const releaseOutput = registerLensHostOutput(host);
+    return () => {
+      releaseOutput();
+      this.#pane = null;
+    };
   }
 
   configureSelector(selector: TargetSelector): void {
@@ -222,10 +267,52 @@ export class NotebookDomAdapter {
     };
   }
 
+  subscribeViewport(listener: LayoutListener): () => void {
+    this.#viewportListeners.add(listener);
+    this.#stopViewportObserver ??= this.#observeViewport();
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.#viewportListeners.delete(listener);
+      if (this.#viewportListeners.size > 0) return;
+      this.#stopViewportObserver?.();
+      this.#stopViewportObserver = null;
+    };
+  }
+
   dispose(): void {
     this.#layoutListeners.clear();
+    this.#viewportListeners.clear();
     this.#stopLayoutObserver?.();
     this.#stopLayoutObserver = null;
+    this.#stopViewportObserver?.();
+    this.#stopViewportObserver = null;
+  }
+
+  #observeViewport(): () => void {
+    let frame = 0;
+    const schedule = () => {
+      if (frame) return;
+      frame = this.window.requestAnimationFrame(() => {
+        frame = 0;
+        for (const listener of this.#viewportListeners) listener();
+      });
+    };
+    const pane = this.#pane;
+    const observer =
+      pane && this.window.ResizeObserver ? new this.window.ResizeObserver(schedule) : null;
+    if (pane) observer?.observe(pane);
+    this.window.addEventListener("resize", schedule);
+    this.window.visualViewport?.addEventListener("resize", schedule);
+    this.window.visualViewport?.addEventListener("scroll", schedule);
+    return () => {
+      if (frame) this.window.cancelAnimationFrame(frame);
+      observer?.disconnect();
+      this.window.removeEventListener("resize", schedule);
+      this.window.visualViewport?.removeEventListener("resize", schedule);
+      this.window.visualViewport?.removeEventListener("scroll", schedule);
+    };
   }
 
   #observeLayout(): () => void {
@@ -247,16 +334,20 @@ export class NotebookDomAdapter {
       schedule();
     };
 
-    const resized = () => {
-      invalidateContent();
-      schedule();
-    };
+    // The viewport subscription publishes the geometry change.
+    const resized = () => invalidateContent();
     const scrolled = (event: Event) => {
       if (event.target instanceof this.window.Element) invalidateContent([event.target]);
       schedule();
     };
     this.window.addEventListener("resize", resized);
     this.window.addEventListener("scroll", scrolled, true);
+    // Pane geometry moves every target without changing target content. A
+    // pending layout frame already publishes the change.
+    const stopViewport = this.subscribeViewport(() => {
+      if (frame) return;
+      for (const listener of this.#layoutListeners) listener();
+    });
 
     const inDomRegion = (node: Node) => {
       if (!(node instanceof this.window.Element)) return false;
@@ -390,6 +481,7 @@ export class NotebookDomAdapter {
         shadow.removeEventListener("scroll", scrolled, true);
       }
       observedShadows.clear();
+      stopViewport();
       this.window.removeEventListener("resize", resized);
       this.window.removeEventListener("scroll", scrolled, true);
     };

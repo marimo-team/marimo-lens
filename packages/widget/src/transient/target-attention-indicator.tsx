@@ -2,6 +2,7 @@ import * as stylex from "@stylexjs/stylex";
 import { LocateFixed, MousePointer2 } from "lucide-react";
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
+import { intersectBounds, type ViewportBounds } from "@/notebook/viewport";
 import { ui } from "@/styles/primitives";
 import {
   TARGET_ATTENTION_TOP_GUTTER,
@@ -63,7 +64,7 @@ export function projectTargetAttentionSurface(
             reason:
               !target?.isConnected || !presentation.bounds
                 ? "target-unavailable"
-                : intersectsViewport(presentation.bounds, ownerWindow)
+                : hasVisibleExtent(presentation.bounds, presentation.viewport)
                   ? "label-space"
                   : "offscreen",
           },
@@ -78,24 +79,23 @@ export function projectTargetAttention(
   const target = presentation?.target;
   const rect = presentation?.bounds;
   if (!presentation || !target?.isConnected || !rect) return null;
+  const { viewport } = presentation;
   const transitioning = presentation.trail && presentation.framing === "pending";
-  if (!transitioning && !intersectsViewport(rect, ownerWindow)) return null;
+  if (!transitioning && !hasVisibleExtent(rect, viewport)) return null;
 
-  const anchor = clamp(
-    ownerWindow.innerWidth - rect.right + 8,
-    VIEWPORT_MARGIN,
-    ownerWindow.innerWidth - VIEWPORT_MARGIN,
+  const labelRight = clamp(
+    rect.right - 8,
+    viewport.left + VIEWPORT_MARGIN,
+    viewport.right - VIEWPORT_MARGIN,
   );
-  const availableLabelWidth = Math.max(0, ownerWindow.innerWidth - anchor - VIEWPORT_MARGIN);
+  const availableLabelWidth = Math.max(0, labelRight - viewport.left - VIEWPORT_MARGIN);
   const labelMaxWidth = Math.floor(Math.min(LABEL_MAX_WIDTH, availableLabelWidth));
   const labelHeight =
     measurement?.maxWidth === labelMaxWidth ? measurement.height : LABEL_MIN_HEIGHT;
-  const minimumTop = Math.max(
-    TARGET_ATTENTION_TOP_GUTTER,
-    labelHeight + LABEL_GAP + VIEWPORT_MARGIN,
-  );
+  const minimumTop =
+    viewport.top + Math.max(TARGET_ATTENTION_TOP_GUTTER, labelHeight + LABEL_GAP + VIEWPORT_MARGIN);
   const labelTop = transitioning
-    ? clamp(rect.top, minimumTop, ownerWindow.innerHeight - VIEWPORT_MARGIN)
+    ? clamp(rect.top, minimumTop, viewport.bottom - VIEWPORT_MARGIN)
     : rect.top;
   if (labelTop < minimumTop) {
     return null;
@@ -111,7 +111,7 @@ export function projectTargetAttention(
       height: rect.height,
     },
     label: {
-      right: anchor,
+      right: ownerWindow.innerWidth - labelRight,
       bottom: ownerWindow.innerHeight - labelTop + LABEL_GAP,
       maxWidth: labelMaxWidth,
     },
@@ -313,10 +313,9 @@ function attentionAnnouncement(presentation: TargetAttentionPresentation): strin
   return step + (message ? `${status} ${message}` : status);
 }
 
-function intersectsViewport(rect: DOMRectReadOnly, ownerWindow: Window): boolean {
-  const visibleWidth = Math.min(rect.right, ownerWindow.innerWidth) - Math.max(rect.left, 0);
-  const visibleHeight = Math.min(rect.bottom, ownerWindow.innerHeight) - Math.max(rect.top, 0);
-  return visibleWidth >= MIN_VISIBLE_TARGET && visibleHeight >= MIN_VISIBLE_TARGET;
+function hasVisibleExtent(rect: DOMRectReadOnly, viewport: ViewportBounds): boolean {
+  const visible = intersectBounds(rect, viewport);
+  return !!visible && visible.width >= MIN_VISIBLE_TARGET && visible.height >= MIN_VISIBLE_TARGET;
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

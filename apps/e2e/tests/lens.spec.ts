@@ -527,7 +527,7 @@ test("Lens controls retain their appearance and keyboard behavior under page sty
 
 test("Lens stacks between notebook content and application overlays", async ({ page }) => {
   const host = page.locator("[data-marimo-lens-portal]");
-  await expect(host).toHaveCSS("z-index", "35");
+  await expect(host).toHaveCSS("z-index", "60");
 
   const select = page.getByRole("button", { name: "Select a target", exact: true });
   const bounds = await select.boundingBox();
@@ -536,7 +536,8 @@ test("Lens stacks between notebook content and application overlays", async ({ p
 
   const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
   const layers = await page.evaluate(({ x, y }) => {
-    const probe = (name: string, zIndex: number) => {
+    // Notebook affordances live in marimo's app pane; application overlays portal to the body.
+    const probe = (name: string, zIndex: number, parent: HTMLElement) => {
       const element = document.createElement("div");
       element.dataset.layerProbe = name;
       Object.assign(element.style, {
@@ -548,13 +549,13 @@ test("Lens stacks between notebook content and application overlays", async ({ p
         pointerEvents: "auto",
         zIndex: String(zIndex),
       });
-      document.body.append(element);
+      parent.append(element);
       return element;
     };
 
-    const notebook = probe("notebook", 30);
+    const notebook = probe("notebook", 30, document.getElementById("App") ?? document.body);
     const overNotebook = document.elementFromPoint(x, y)?.matches("[data-marimo-lens-portal]");
-    const application = probe("application", 40);
+    const application = probe("application", 40, document.body);
     const underApplication = document.elementFromPoint(x, y) === application;
     notebook.remove();
     application.remove();

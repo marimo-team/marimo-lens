@@ -174,7 +174,8 @@ query or ambient global.
 
 ## UI style isolation
 
-The active UI lives in an open shadow root under the owning document body.
+The active UI lives in an open shadow root under Marimo's `#App` pane, or under
+the owning document body outside Marimo.
 Typed StyleX modules own component styles, variants, media queries, and theme
 tokens. The extracted stylesheet resets inherited typography and sets the color
 scheme. Lens consumes Marimo's Slate palette tokens, with local light and dark
@@ -183,17 +184,37 @@ and shares the theme with the portal, conflict notice, and error boundary.
 Document-level keyboard handling reads composed event paths, and focus restoration
 uses the explicitly registered UI root and follows its active element.
 `createLensSurface()` owns the host, shared document styles,
-and disposal. The portal registers that root with `NotebookDomAdapter`.
+and disposal. The portal registers that root with `NotebookDomAdapter`, which
+mounts the host.
 `LensDock` owns one positioned panel for the selection sheet or a transient
 notice. `widget.css` contains the host reset and panel geometry driven by
 `useDockPosition`. The selection sheet owns scrolling for its notice and lists.
 
-The portal host defaults to `z-index: 35`. This places Lens above Marimo's
-notebook and cell affordances, which reach `z-index: 30`, and below application
-panels, dialogs, menus, and toasts. An embedding
-page can set `--marimo-lens-z-index` when its overlay scale uses different
-bands. Lens components use local z-index values inside that host stacking
-context.
+In a Marimo editor, the adapter resolves the `#App` pane through the AnyWidget
+host's composed ancestor tree and mounts the portal host inside it, as Marimo
+does for editor tooltips. `#App` is a `z-index: 1` stacking context, so dialogs,
+menus, toasts, and positioned chrome paint above Lens. Inside it, the host
+defaults to `z-index: 60`: above notebook and cell affordances, which reach
+`z-index: 30`, and persistent pane controls at `z-index: 50`, and below pane
+alerts, editor tooltips, and the floating outline. The adapter also clips the
+host to the visible pane, which keeps Lens out of sidebars, the developer panel,
+and the footer that `#App` overlaps. Anchored surfaces, labels, the dock, reveal
+visibility, and attention framing use the same pane bounds.
+
+Lens UI for a target outside `#App`, such as `mo.sidebar` content, is clipped or
+covered by that chrome. A fullscreen output occupies the browser top layer and
+hides Lens until it exits. Marimo's PNG export skips the `print:hidden` host,
+and a print rule in the host stylesheet hides Lens.
+
+Outside Marimo, the portal stays under the document body, uses the visual
+viewport, and defaults to `z-index: 35`. An embedding page can set
+`--marimo-lens-z-index` when its overlay scale uses different bands; the
+explicit value applies inside and outside a Marimo pane. Lens components use
+local z-index values inside the host stacking context.
+
+The note editor is a non-modal dialog, because the browser top layer would paint
+it above Marimo dialogs. Escape closes it from Lens UI and stays with notebook
+controls elsewhere.
 
 `useDockPosition` observes the visible intersection of the portal surface with
 its embedding page. This keeps the dock inside VS Code's notebook pane, whose

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
 afterEach(() => {
+  Reflect.deleteProperty(window, "visualViewport");
   document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -15,6 +16,152 @@ async function paint() {
 }
 
 describe("notebook DOM layout subscriptions", () => {
+  test("uses the marimo app pane as the visible notebook viewport", () => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_280);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(720);
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(320, 24, 900, 640);
+    const widget = document.createElement("marimo-anywidget");
+    const host = document.createElement("span");
+    widget.attachShadow({ mode: "open" }).append(host);
+    app.append(widget);
+    document.body.append(app);
+
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.registerHost(host);
+    expect(dom.viewportBounds()).toMatchObject({
+      left: 320,
+      top: 24,
+      right: 1_220,
+      bottom: 664,
+      width: 900,
+      height: 640,
+    });
+    release();
+  });
+
+  test("reports no visible area for a collapsed marimo app pane", () => {
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(320, 24, 0, 640);
+    const host = document.createElement("span");
+    app.append(host);
+    document.body.append(app);
+
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.registerHost(host);
+    expect(dom.viewportBounds()).toMatchObject({ width: 0, height: 0 });
+    release();
+  });
+
+  test("falls back to the browser viewport outside marimo", () => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_280);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(720);
+
+    expect(new NotebookDomAdapter(document).viewportBounds()).toMatchObject({
+      left: 0,
+      top: 0,
+      right: 1_280,
+      bottom: 720,
+      width: 1_280,
+      height: 720,
+    });
+  });
+
+  test("mounts Lens UI inside the marimo app pane and clips it to the pane", () => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_280);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(720);
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(320, 24, 900, 640);
+    const host = document.createElement("span");
+    app.append(host);
+    document.body.append(app);
+    const portal = document.createElement("div");
+    portal.getBoundingClientRect = () => new DOMRect(0, 0, 1_280, 720);
+    const uiRoot = portal.attachShadow({ mode: "open" });
+
+    const dom = new NotebookDomAdapter(document);
+    const releaseHost = dom.registerHost(host);
+    const releaseUi = dom.registerUiRoot(uiRoot);
+
+    expect(portal.parentElement).toBe(app);
+    expect(portal.hasAttribute("data-marimo-lens-pane")).toBe(true);
+    expect(portal.style.getPropertyValue("--marimo-lens-pane-clip")).toBe(
+      "inset(24px 60px 56px 320px)",
+    );
+    releaseUi();
+    expect(portal.isConnected).toBe(false);
+    releaseHost();
+    dom.dispose();
+  });
+
+  test("publishes visual viewport changes through the viewport subscription", async () => {
+    vi.useFakeTimers();
+    const visualViewport = Object.assign(new EventTarget(), {
+      offsetLeft: 0,
+      offsetTop: 0,
+      pageLeft: 0,
+      pageTop: 0,
+      width: 800,
+      height: 600,
+      scale: 1,
+      onresize: null,
+      onscroll: null,
+    }) satisfies VisualViewport;
+    Object.defineProperty(window, "visualViewport", {
+      configurable: true,
+      value: visualViewport,
+    });
+    const listener = vi.fn();
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.subscribeViewport(listener);
+
+    visualViewport.dispatchEvent(new Event("resize"));
+    await paint();
+
+    expect(listener).toHaveBeenCalledOnce();
+    release();
+  });
+
+  test("treats marimo pane resizing as geometry instead of output content", async () => {
+    vi.useFakeTimers();
+    // Each target notifies only the observer that watches it.
+    const observers = new Map<Element, (target: Element) => void>();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class implements ResizeObserver {
+        constructor(readonly callback: ResizeObserverCallback) {}
+        observe = (target: Element) =>
+          observers.set(target, () => this.callback([resizeEntry(target)], this));
+        unobserve = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+    const notify = (target: Element) => observers.get(target)?.(target);
+    const app = document.createElement("main");
+    app.id = "App";
+    const host = document.createElement("span");
+    const output = document.createElement("div");
+    output.id = "output-cell";
+    app.append(host, output);
+    document.body.append(app);
+    const dom = new NotebookDomAdapter(document);
+    const releaseHost = dom.registerHost(host);
+    const listener = vi.fn();
+    const releaseLayout = dom.subscribeLayout(listener);
+    const revision = dom.contentRevision(output);
+
+    notify(app);
+    await paint();
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(dom.contentRevision(output)).toBe(revision);
+    releaseLayout();
+    releaseHost();
+  });
+
   test("unsupported :has selectors do not interrupt layout notifications", async () => {
     vi.useFakeTimers();
     const closest = Element.prototype.closest;
@@ -239,6 +386,16 @@ describe("notebook DOM layout subscriptions", () => {
     release();
   });
 });
+
+function resizeEntry(target: Element): ResizeObserverEntry {
+  return {
+    target,
+    contentRect: new DOMRect(),
+    borderBoxSize: [],
+    contentBoxSize: [],
+    devicePixelContentBoxSize: [],
+  };
+}
 
 describe("notebook DOM paint scheduling", () => {
   test("continues without a paint when the notebook is hidden", async () => {

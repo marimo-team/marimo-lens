@@ -185,6 +185,43 @@ describe("target attention", () => {
     }
   });
 
+  test("publishes a resized marimo pane when target bounds stay fixed", () => {
+    vi.useFakeTimers();
+    const resizeObservers = new Map<Element, () => void>();
+    vi.stubGlobal(
+      "ResizeObserver",
+      class implements ResizeObserver {
+        constructor(readonly callback: ResizeObserverCallback) {}
+        observe = (target: Element) => resizeObservers.set(target, () => this.callback([], this));
+        unobserve = vi.fn();
+        disconnect = vi.fn();
+      },
+    );
+    const onChange = vi.fn();
+    const cell = setupCell("pane-cell");
+    cell.getBoundingClientRect = () => new DOMRect(320, 100, 400, 300);
+    let pane = new DOMRect(300, 0, 900, 680);
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => pane;
+    const host = document.createElement("span");
+    app.append(host, cell);
+    document.body.append(app);
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.registerHost(host);
+    const controller = new TestAttentionController(dom, onChange);
+    controller.startActivity(startActivityEvent("pane-cell"));
+    expect(onChange.mock.lastCall?.[0]?.viewport).toMatchObject({ left: 300 });
+
+    pane = new DOMRect(400, 0, 800, 680);
+    resizeObservers.get(app)?.();
+    vi.advanceTimersToNextFrame();
+
+    expect(onChange.mock.lastCall?.[0]?.viewport).toMatchObject({ left: 400 });
+    controller.dispose();
+    release();
+  });
+
   test("marks visible activity without scrolling or moving focus", () => {
     vi.useFakeTimers();
     const onChange = vi.fn();
@@ -226,6 +263,33 @@ describe("target attention", () => {
       behavior: "smooth",
     });
     controller.dispose();
+  });
+
+  test("frames a window-visible target hidden behind marimo chrome", () => {
+    vi.useFakeTimers();
+    const onChange = vi.fn();
+    const cell = setupCell("covered-cell");
+    cell.getBoundingClientRect = () => new DOMRect(50, 100, 300, 200);
+    cell.scrollIntoView = vi.fn();
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(320, 0, 900, 680);
+    const host = document.createElement("span");
+    app.append(cell, host);
+    document.body.append(app);
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.registerHost(host);
+    const controller = new TestAttentionController(dom, onChange);
+
+    controller.startActivity(startActivityEvent("covered-cell"));
+
+    expect(cell.scrollIntoView).toHaveBeenCalledWith({
+      block: "center",
+      inline: "nearest",
+      behavior: "smooth",
+    });
+    controller.dispose();
+    release();
   });
 
   test("does not restart offscreen activity framing on the initial resize observation", () => {

@@ -4,7 +4,22 @@
   position: fixed !important;
   z-index: var(--marimo-lens-z-index, 35) !important;
   inset: 0 !important;
+  clip-path: var(--marimo-lens-pane-clip, none) !important;
   pointer-events: none !important;
+}
+
+/* Inside marimo's app pane, Lens sits above persistent pane controls (z-index 50)
+   and below pane alerts, editor tooltips, and the floating outline (z-index 100+).
+   An explicit --marimo-lens-z-index overrides both defaults. */
+:host([data-marimo-lens-pane]) {
+  z-index: var(--marimo-lens-z-index, 60) !important;
+}
+
+/* The host reset overrides page utilities, so print hiding lives here. */
+@media print {
+  :host {
+    display: none !important;
+  }
 }
 
 :host *,
