@@ -74,15 +74,17 @@ export function getOutputCell(ownerDocument: Document, outputCellId: string): Ou
 }
 
 // marimo renders no output root for a cell without output. Its cell container
-// stands in as the cell's notebook surface until an output root appears. Only
-// document-tree containers qualify, so lookup by ID finds every picked cell.
+// stands in as the cell's notebook surface until an output root appears. Like
+// getOutputCell, the check reads the canonical root and the container's open
+// tree. Only document-tree containers qualify, so lookup by ID finds every
+// picked cell.
 export function outputlessCellFromRoot(element: Element): OutputCell | null {
   const id = element.getAttribute("data-cell-id");
   if (!id || element.id !== `cell-${id}` || !isHTMLElement(element)) return null;
   const ownerDocument = element.ownerDocument;
   if (element.getRootNode() !== ownerDocument) return null;
   if (ownerDocument.getElementById(`output-${id}`)) return null;
-  return element.querySelector(OUTPUT_ROOT_SELECTOR) ? null : { id, element };
+  return outputRoots(element).next().done ? { id, element } : null;
 }
 
 export function getOutputlessCell(ownerDocument: Document, cellId: string): OutputCell | null {
@@ -91,9 +93,15 @@ export function getOutputlessCell(ownerDocument: Document, cellId: string): Outp
   return cell && isVisible(cell.element) ? cell : null;
 }
 
-export function listOutputlessCells(ownerDocument: Document): OutputCell[] {
+/** Skips cells with a listed output root, wherever that root renders. */
+export function listOutputlessCells(
+  ownerDocument: Document,
+  outputs: readonly OutputCell[],
+): OutputCell[] {
+  const listed = new Set(outputs.map(({ id }) => id));
   const cells: OutputCell[] = [];
   for (const element of ownerDocument.querySelectorAll('[id^="cell-"][data-cell-id]')) {
+    if (listed.has(element.getAttribute("data-cell-id")!)) continue;
     const cell = outputlessCellFromRoot(element);
     if (cell) cells.push(cell);
   }

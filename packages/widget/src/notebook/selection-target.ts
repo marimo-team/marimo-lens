@@ -2,6 +2,8 @@ import type { SelectionTarget, TargetSelector } from "@marimo-lens/protocol";
 
 import { parseSelectionTarget } from "@marimo-lens/protocol";
 
+import type { OutputCell } from "@/notebook/types";
+
 import { indexDocumentIds } from "@/notebook/document-ids";
 import {
   containsLensHost,
@@ -136,10 +138,13 @@ export function listTargetSurfaces(
     const candidate = domTarget(root, (ids ??= indexDocumentIds(ownerDocument)));
     if (candidate) strongest.set(root, { priority: 0, surface: candidate });
   }
-  for (const cell of [...listOutputRoots(ownerDocument), ...listOutputlessCells(ownerDocument)]) {
-    if ((strongest.get(cell.element)?.priority ?? -1) >= 1) continue;
-    const candidate = notebookTarget(cell.element);
-    if (candidate) strongest.set(cell.element, { priority: 1, surface: candidate });
+  const outputs = listOutputRoots(ownerDocument);
+  for (const candidate of [
+    ...outputs.map((output) => notebookTarget(output.element)),
+    ...listOutputlessCells(ownerDocument, outputs).map(notebookSurface),
+  ]) {
+    if (!candidate || (strongest.get(candidate.element)?.priority ?? -1) >= 1) continue;
+    strongest.set(candidate.element, { priority: 1, surface: candidate });
   }
 
   return [...strongest.values()]
@@ -201,7 +206,11 @@ function bestTarget(elements: Element[], selector: TargetSelector): TargetSurfac
 
 function notebookTarget(element: Element): TargetSurface | null {
   const cell = outputCellFromRoot(element) ?? outputlessCellFromRoot(element);
-  if (!cell || !isVisible(cell.element)) return null;
+  return cell ? notebookSurface(cell) : null;
+}
+
+function notebookSurface(cell: OutputCell): TargetSurface | null {
+  if (!isVisible(cell.element)) return null;
   return surface(
     {
       kind: "notebook",

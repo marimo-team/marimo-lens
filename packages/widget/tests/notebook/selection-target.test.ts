@@ -414,6 +414,29 @@ describe("selection targets", () => {
     expect(listTargetSurfaces(document, null)).toEqual([]);
   });
 
+  test("a cell whose output renders in an open shadow root keeps its code unselectable", () => {
+    document.body.innerHTML =
+      '<div id="cell-chart" data-cell-id="chart"><div class="cm-line">chart</div><div id="host"></div></div>';
+    const cell = visible(document.getElementById("cell-chart")!);
+    const shadow = document.getElementById("host")!.attachShadow({ mode: "open" });
+    const output = visible(document.createElement("div"));
+    output.id = "output-chart";
+    shadow.appendChild(output);
+
+    expect(targetFromElement(cell.querySelector(".cm-line"), null)).toBeNull();
+    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([output]);
+  });
+
+  test("a cell with a configured output root elsewhere lists one surface", () => {
+    document.body.innerHTML =
+      '<div id="cell-chart" data-cell-id="chart"><div class="cm-line">chart</div></div>' +
+      '<section id="custom" data-marimo-lens-output-cell-id="chart">Chart</section>';
+    visible(document.getElementById("cell-chart")!);
+    const custom = visible(document.getElementById("custom")!);
+
+    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([custom]);
+  });
+
   test("an output-less cell in an open shadow root is not a target", () => {
     const host = document.createElement("div");
     const shadow = host.attachShadow({ mode: "open" });
