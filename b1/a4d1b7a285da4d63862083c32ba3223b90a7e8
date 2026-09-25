@@ -1,0 +1,20 @@
+apps/e2e/tests/robustness.spec.ts
+  s_0039769a72be10::t_bdfcad35763bc3 196-197,201
+  s_0039769a72be10::t_4a84460e28baf9 198-200
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "b1a4d1b7a285da4d63862083c32ba3223b90a7e8",
+  "prompts": {},
+  "sessions": {
+    "s_0039769a72be10": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0d79d-19ff-7dd3-8b0b-89d51f987285",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
