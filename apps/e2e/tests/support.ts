@@ -16,6 +16,7 @@ type Selection = {
 
 type Report = {
   action: string;
+  mounted_identity: string | null;
   error: { code: string; revision: number | null } | null;
   context_ms: number;
   references: { revision: number; selections: Selection[] };

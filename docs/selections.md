@@ -344,9 +344,11 @@ screen-reader users.
 
 ## Multiple Lens instances
 
-The first displayed Lens in a document owns interaction. Additional Lens views
-show **Lens is already active** until the owner closes. A Lens in another
-same-origin document has its own owner.
+The first displayed Lens view in a document owns interaction. Additional views
+render no Lens UI and log a warning to the browser console. Use
+`marimo_lens.agent.connect()` to access the Lens that owns the visible dock.
+Ownership passes to the next view when the current owner closes. A Lens in
+another same-origin document has its own owner.
 
 [How Lens works](./how-lens-works#activity-reveal-and-resolve) distinguishes
 activity, reveal, resolution, History entries, and resolution receipts. The

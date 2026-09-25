@@ -333,6 +333,33 @@ def test_connect_deduplicates_context_and_browser_discovery(
     lens.close()
 
 
+def test_connect_prefers_the_unique_browser_ready_lens_in_context() -> None:
+    active = _mounted_lens()
+    duplicate = Lens()
+    context = _code_mode_context(active=active, duplicate=duplicate)
+
+    available = agent.discover(context)
+    active_handle = agent.connect()
+    connected = agent.connect(context)
+    duplicate_handle = next(
+        (
+            candidate
+            for candidate in available
+            if candidate.identity != active_handle.identity
+        ),
+        None,
+    )
+
+    assert connected.identity == active_handle.identity
+    assert duplicate_handle is not None
+    assert (
+        agent.connect(context, identity=duplicate_handle.identity).identity
+        == duplicate_handle.identity
+    )
+    active.close()
+    duplicate.close()
+
+
 def test_connect_uses_a_lens_held_by_a_marimo_wrapper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

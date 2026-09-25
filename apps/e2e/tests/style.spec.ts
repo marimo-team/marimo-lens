@@ -29,13 +29,7 @@ test("reduced motion preserves control geometry while pressed", async ({ page })
   }
 });
 
-test("conflict and render-error notices follow live theme changes", async ({
-  page,
-  browserErrors,
-}) => {
-  await page.getByRole("combobox", { name: "Lens views" }).selectOption("Duplicate");
-  const conflict = page.locator("[data-marimo-lens-view-conflict]");
-  await expect(conflict).toBeVisible();
+test("render-error notices follow live theme changes", async ({ page, browserErrors }) => {
   await page.getByRole("combobox", { name: "Target mode" }).selectOption("Invalid selector");
   const error = page.getByRole("alert").filter({ hasText: "Lens dom_selector is invalid" });
   await expect(error).toBeVisible();
@@ -47,7 +41,6 @@ test("conflict and render-error notices follow live theme changes", async ({
   for (const colorScheme of ["dark", "light"] as const) {
     await page.emulateMedia({ colorScheme });
     await expect(page.locator("body")).toHaveAttribute("data-theme", colorScheme);
-    await expect(conflict).toHaveCSS("color-scheme", colorScheme);
     await expect(error).toHaveCSS("color-scheme", colorScheme);
   }
 });

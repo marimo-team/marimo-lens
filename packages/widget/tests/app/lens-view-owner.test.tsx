@@ -1,7 +1,7 @@
 import { StrictMode } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, test } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { LensViewOwner } from "@/app/lens-view-owner";
 import { getOutputCell } from "@/notebook/output-root";
@@ -13,32 +13,29 @@ afterEach(() => {
   for (const root of roots) act(() => root.unmount());
   roots.clear();
   document.body.replaceChildren();
+  vi.restoreAllMocks();
 });
 
 describe("Lens view ownership", () => {
-  test("reports conflicts, transfers ownership, and releases it after teardown", () => {
+  test("warns on duplicate views, transfers ownership, and releases it after teardown", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const first = renderView("first");
     const second = renderView("second");
     const third = renderView("third");
 
     expect(activeViews()).toEqual(["first"]);
-    expect(document.querySelectorAll("[data-marimo-lens-view-conflict]")).toHaveLength(2);
-    const message = document.querySelector("[data-marimo-lens-view-conflict]")?.textContent;
-    expect(message).toContain("Lens is already active");
-    expect(message).toContain("Use the existing Lens instance in this notebook.");
+    expect(warning).toHaveBeenCalledTimes(2);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining("marimo_lens.agent.connect()"));
 
     unmount(first);
     expect(activeViews()).toEqual(["second"]);
-    expect(document.querySelectorAll("[data-marimo-lens-view-conflict]")).toHaveLength(1);
 
     unmount(second);
     expect(activeViews()).toEqual(["third"]);
-    expect(document.querySelector("[data-marimo-lens-view-conflict]")).toBeNull();
 
     unmount(third);
     renderView("next");
     expect(activeViews()).toEqual(["next"]);
-    expect(document.querySelector("[data-marimo-lens-view-conflict]")).toBeNull();
   });
 
   test("owns views independently in separate documents", () => {
@@ -48,8 +45,6 @@ describe("Lens view ownership", () => {
 
     expect(activeViews(document)).toEqual(["primary"]);
     expect(activeViews(secondaryDocument)).toEqual(["secondary"]);
-    expect(document.querySelector("[data-marimo-lens-view-conflict]")).toBeNull();
-    expect(secondaryDocument.querySelector("[data-marimo-lens-view-conflict]")).toBeNull();
   });
 
   test("owns the portal surface and stylesheet through host-document teardown", () => {

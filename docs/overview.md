@@ -97,10 +97,10 @@ so a connected agent reads guidance that matches the installed version.
 
 ## Where next
 
-| I want to…                                 | Read                               |
-| ------------------------------------------ | ---------------------------------- |
+| I want to…                                 | Read                                 |
+| ------------------------------------------ | ------------------------------------ |
 | Install Lens and make a first selection    | [Getting started](./getting-started) |
-| Understand the selection lifecycle         | [How Lens works](./how-lens-works) |
-| Connect or build an agent integration      | [Connect an agent](./agents)       |
-| Make a dashboard or custom view selectable | [Custom targets](./custom-targets) |
-| Know what an agent can see                 | [Data and trust](./data-and-trust) |
+| Understand the selection lifecycle         | [How Lens works](./how-lens-works)   |
+| Connect or build an agent integration      | [Connect an agent](./agents)         |
+| Make a dashboard or custom view selectable | [Custom targets](./custom-targets)   |
+| Know what an agent can see                 | [Data and trust](./data-and-trust)   |

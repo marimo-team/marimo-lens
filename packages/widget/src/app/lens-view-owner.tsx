@@ -1,11 +1,7 @@
-import * as stylex from "@stylexjs/stylex";
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { NotebookDomAdapter, NotebookDomProvider } from "@/notebook/notebook-dom";
-import { LensThemeContext, observeLensTheme, useLensTheme, type LensTheme } from "@/ui/theme";
-
-import { rootStyles } from "../styles/root";
-import { darkTheme, lightTheme } from "../styles/tokens.stylex";
+import { LensThemeContext, observeLensTheme, type LensTheme } from "@/ui/theme";
 
 // Anywidget can mount views from separate app-module instances into one document.
 // The global symbol lets those instances share one ordered registry.
@@ -13,7 +9,6 @@ const VIEW_REGISTRY: unique symbol = Symbol.for("marimo-lens.view-registry.v1");
 
 type ViewOwnership = "owner" | "conflict";
 type ViewRegistry = Map<symbol, (ownership: ViewOwnership) => void>;
-type OwnedView = { adapter: NotebookDomAdapter; ownership: ViewOwnership };
 
 declare global {
   interface Document {
@@ -26,7 +21,8 @@ export function LensViewOwner({ children }: { children: ReactNode }) {
   if (viewIdRef.current === null) viewIdRef.current = Symbol("marimo-lens-view");
   const viewId = viewIdRef.current;
   const hostRef = useRef<HTMLSpanElement>(null);
-  const [ownedView, setOwnedView] = useState<OwnedView | null>(null);
+  const conflictWarnedRef = useRef(false);
+  const [ownedAdapter, setOwnedAdapter] = useState<NotebookDomAdapter | null>(null);
   const [theme, setTheme] = useState<LensTheme>("light");
 
   useLayoutEffect(() => {
@@ -36,7 +32,14 @@ export function LensViewOwner({ children }: { children: ReactNode }) {
     const adapter = new NotebookDomAdapter(host.ownerDocument);
     const releaseHostOutput = adapter.registerHost(host);
     const releaseView = acquireView(host.ownerDocument, viewId, (ownership) => {
-      setOwnedView({ adapter, ownership });
+      if (ownership === "conflict" && !conflictWarnedRef.current) {
+        conflictWarnedRef.current = true;
+        console.warn(
+          "marimo-lens: another Lens view owns this browser document. " +
+            "Use marimo_lens.agent.connect() to access it.",
+        );
+      }
+      setOwnedAdapter(ownership === "owner" ? adapter : null);
     });
     return () => {
       releaseTheme();
@@ -49,10 +52,9 @@ export function LensViewOwner({ children }: { children: ReactNode }) {
   return (
     <LensThemeContext value={theme}>
       <span ref={hostRef} hidden data-marimo-lens-host data-marimo-lens-ui />
-      {ownedView?.ownership === "owner" ? (
-        <NotebookDomProvider adapter={ownedView.adapter}>{children}</NotebookDomProvider>
+      {ownedAdapter ? (
+        <NotebookDomProvider adapter={ownedAdapter}>{children}</NotebookDomProvider>
       ) : null}
-      {ownedView?.ownership === "conflict" ? <LensViewConflict /> : null}
     </LensThemeContext>
   );
 }
@@ -99,22 +101,4 @@ function publishOwnership(views: ViewRegistry): void {
     listener(ownerPublished ? "conflict" : "owner");
     ownerPublished = true;
   }
-}
-
-function LensViewConflict() {
-  const theme = useLensTheme();
-  return (
-    <output
-      {...stylex.props(
-        rootStyles.base,
-        rootStyles.conflict,
-        theme === "dark" ? darkTheme : lightTheme,
-      )}
-      data-marimo-lens-view-conflict
-      data-marimo-lens-ui
-    >
-      <strong {...stylex.props(rootStyles.conflictTitle)}>Lens is already active</strong>
-      <span>Use the existing Lens instance in this notebook.</span>
-    </output>
-  );
 }

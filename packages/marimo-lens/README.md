@@ -74,8 +74,10 @@ Use `marimo_lens.agent.skill()` to read individual skill resources and
 `marimo_lens.agent.plugin()` to inspect the installed plugin bundle.
 
 Agents call `marimo_lens.agent.connect()` to reuse an existing Lens, including
-automatically mounted instances. `discover()` lists available handles when an
-agent needs to check availability or choose between instances.
+automatically mounted instances. When one browser-ready Lens owns the dock,
+`connect()` selects it even if the code-mode context contains other Lens
+objects. `discover()` lists available handles when an agent needs to inspect
+availability or choose between instances.
 
 After verification, call `resolve(..., summary="...")` with what changed or
 what you found and checked. The summary appears beside the original request in

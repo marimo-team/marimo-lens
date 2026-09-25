@@ -94,19 +94,22 @@ Candidates are deduplicated by Python object identity. Closed Lens objects and
 objects with no communication channel are excluded.
 
 An empty tuple reports no candidates. Order implies no browser ownership or
-priority. `connect(context=None, *, identity=None)` selects from that same
-public discovery path. Agents can inspect candidate contexts and reconnect by
-identity when several instances exist.
+priority. `connect(context=None, *, identity=None)` prefers the unique
+browser-ready Lens over additional context candidates. Agents can inspect
+candidate contexts and reconnect by identity when several browser-ready
+instances exist.
 
 Connection outcomes:
 
-| State                                   | Result                                                                    |
-| --------------------------------------- | ------------------------------------------------------------------------- |
-| One candidate and no requested identity | Return its `MountedLens` handle.                                          |
-| No candidate                            | Raise `lens_unavailable`.                                                 |
-| Several candidates and no identity      | Raise `lens_ambiguous`.                                                   |
-| Requested identity matches              | Return that Lens.                                                         |
-| Requested identity is unavailable       | Raise `lens_unavailable` and tell the caller to connect again without it. |
+| State                                                          | Result                                                                    |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| One browser-ready Lens and no requested identity               | Return its `MountedLens`, even when context contains more candidates.     |
+| No browser-ready Lens and one candidate                        | Return its `MountedLens` handle.                                          |
+| No candidates                                                  | Raise `lens_unavailable`.                                                 |
+| Several browser-ready Lens instances and no requested identity | Raise `lens_ambiguous`.                                                   |
+| Several context candidates with no browser-ready Lens          | Raise `lens_ambiguous`.                                                   |
+| Requested identity matches                                     | Return that Lens.                                                         |
+| Requested identity is unavailable                              | Raise `lens_unavailable` and tell the caller to connect again without it. |
 
 Each Lens receives one opaque URL-safe identity in a weak process-local mapping.
 The identity remains stable while the Python `Lens` object remains alive. It is

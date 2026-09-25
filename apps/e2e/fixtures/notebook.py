@@ -98,8 +98,9 @@ def _(Lens, target_mode):
         "Invalid selector": "[",
     }
     lens = Lens(dom_selector=_selectors[target_mode.value])
+    duplicate_lens = Lens(dom_selector=_selectors[target_mode.value])
     activity = {}
-    return activity, lens
+    return activity, duplicate_lens, lens
 
 
 @app.cell(hide_code=True)
@@ -113,9 +114,11 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(lens, mo, views):
+def _(duplicate_lens, lens, mo, views):
     mo.stop(views.value == "Hidden")
-    mo.output.replace(mo.vstack([lens, lens]) if views.value == "Duplicate" else lens)
+    mo.output.replace(
+        mo.vstack([lens, duplicate_lens]) if views.value == "Duplicate" else lens
+    )
 
 
 @app.cell(hide_code=True)
@@ -123,6 +126,7 @@ def _(mo):
     action = mo.ui.dropdown(
         [
             "Inspect context",
+            "Connect to active Lens",
             "Start activity",
             "Start multiline activity",
             "Stop activity",
@@ -144,7 +148,14 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(LensError, action, activity, execute, html, json, lens, mo, time):
     mo.stop(not execute.value)
-    _context = lens.context()
+    _mounted = None
+    if action.value == "Connect to active Lens":
+        import marimo_lens.agent as lens_agent
+
+        _mounted = lens_agent.connect()
+        _context = _mounted.context()
+    else:
+        _context = lens.context()
     _references = _context.references
     _selections = _references["selections"]
     _error = None
@@ -223,7 +234,7 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
         except LensError as _caught:
             _error = {"code": _caught.code, "revision": _caught.revision}
     _started = time.perf_counter()
-    _result = lens.context()
+    _result = _mounted.context() if _mounted is not None else lens.context()
     _text = _result.text
     _elapsed_ms = (time.perf_counter() - _started) * 1000
     activity["sequence"] = activity.get("sequence", 0) + 1
@@ -231,6 +242,7 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
         "action": action.value,
         "sequence": activity["sequence"],
         "error": _error,
+        "mounted_identity": _mounted.identity if _mounted is not None else None,
         "context_ms": _elapsed_ms,
         "references": _result.references,
         "images": {
