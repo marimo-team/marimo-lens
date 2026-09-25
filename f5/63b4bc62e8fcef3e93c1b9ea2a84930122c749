@@ -1,0 +1,78 @@
+docs/troubleshooting.md
+  s_0039769a72be10::t_2826fcf5982db3 98,100-101,103-105,107-109,111-112
+packages/widget/src/app/lens-view-owner.tsx
+  s_0039769a72be10::t_c5adf152074607 4,37-41
+  s_0039769a72be10::t_d2501117b90987 24-25,35-36,42,55-56
+packages/marimo-lens/src/marimo_lens/agent.py
+  s_0039769a72be10::t_d2501117b90987 277-283,290,332-333
+  s_0039769a72be10::t_97d48415646fca 314-316,320,342-344
+packages/marimo-lens/tests/test_agent.py
+  s_0039769a72be10::t_c5063e8eeeccda 344-350,354-358
+  s_0039769a72be10::t_97d48415646fca 336-343,351-353,359-362
+apps/e2e/tests/robustness.spec.ts
+  s_0039769a72be10::t_fb7a49789fda7f 175-176
+  s_0039769a72be10::t_6f2ec29b6892fa 178-186
+  s_0039769a72be10::t_5b45a89c82f1f0 187-197
+  s_0039769a72be10::t_5f8e0d90f21a8b 172
+packages/marimo-lens/README.md
+  s_0039769a72be10::t_11157e01e70c33 77-80
+apps/e2e/fixtures/notebook.py
+  s_0039769a72be10::t_3bc447ac357b31 101,103,117,119-121,129,151-154,156-158,237,245
+  s_0039769a72be10::t_4496b387d4b79f 155
+docs/reference/errors.md
+  s_0039769a72be10::t_5f8e0d90f21a8b 19-33
+apps/e2e/tests/support.ts
+  s_0039769a72be10::t_fb7a49789fda7f 19
+docs/reference/attributes.md
+  s_0039769a72be10::t_22c6d40b15033d 15-26,76-82
+packages/widget/tests/app/lens-view-owner.test.tsx
+  s_0039769a72be10::t_6f2ec29b6892fa 16
+  s_0039769a72be10::t_63c5dd661b8ba7 28
+  s_0039769a72be10::t_8c3ad830c2e8fe 4,20-21,27
+docs/selections.md
+  s_0039769a72be10::t_2826fcf5982db3 347-351
+docs/api.md
+  s_0039769a72be10::t_2826fcf5982db3 399-402,406-409
+  s_0039769a72be10::t_752153dceecb79 403
+apps/e2e/tests/style.spec.ts
+  s_0039769a72be10::t_5b45a89c82f1f0 32
+docs/overview.md
+  s_0039769a72be10::t_22c6d40b15033d 100-101,103-106
+packages/marimo-lens/build.mjs
+  s_0039769a72be10::t_22c6d40b15033d 1-2,7
+development_docs/agent-integration.md
+  s_0039769a72be10::t_5f8e0d90f21a8b 104-107
+  s_0039769a72be10::t_53d8d539c4193e 97-100,108-112
+skills/marimo-lens/SKILL.md
+  s_0039769a72be10::t_53d8d539c4193e 49-54
+apps/docs/.vitepress/theme/custom.css
+  s_0039769a72be10::t_22c6d40b15033d 391-392
+development_docs/README.md
+  s_0039769a72be10::t_22c6d40b15033d 29-33,35-44
+docs/agents.md
+  s_0039769a72be10::t_11157e01e70c33 111
+  s_0039769a72be10::t_5f8e0d90f21a8b 108-110,112
+  s_0039769a72be10::t_2826fcf5982db3 65-67,114-116
+packages/widget/src/styles/root.ts
+  s_0039769a72be10::t_97d48415646fca 3
+packages/widget/tests/widget.test.tsx
+  s_0039769a72be10::t_5b45a89c82f1f0 28
+  s_0039769a72be10::t_11157e01e70c33 27
+  s_0039769a72be10::t_f3f2a2ae62910c 5,23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f563b4bc62e8fcef3e93c1b9ea2a84930122c749",
+  "prompts": {},
+  "sessions": {
+    "s_0039769a72be10": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0d79d-19ff-7dd3-8b0b-89d51f987285",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
