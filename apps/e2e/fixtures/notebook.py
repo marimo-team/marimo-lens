@@ -148,17 +148,22 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(LensError, action, activity, execute, html, json, lens, mo, time):
     mo.stop(not execute.value)
+    _error = None
     _mounted = None
     if action.value == "Connect to active Lens":
         import marimo_lens.agent as lens_agent
 
-        _mounted = lens_agent.connect()
-        _context = _mounted.context()
+        try:
+            _mounted = lens_agent.connect()
+        except LensError as _caught:
+            _error = {"code": _caught.code, "revision": _caught.revision}
+            _context = lens.context()
+        else:
+            _context = _mounted.context()
     else:
         _context = lens.context()
     _references = _context.references
     _selections = _references["selections"]
-    _error = None
     if action.value == "Seed 63 selections":
         # Seed through the widget transport so Python still validates every revision.
         # The browser test exercises the final admission and overflow through gestures.

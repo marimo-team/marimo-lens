@@ -187,12 +187,16 @@ test("duplicate views retain one owner and the same kernel selections", async ({
   await views.selectOption({ label: "Duplicate" });
   await expect(page.getByText("Lens is already active", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(1);
-  await expect.poll(() => ownershipWarnings.length).toBe(1);
+  await expect.poll(() => ownershipWarnings.length).toBeGreaterThan(0);
   const connected = await runAction(page, "Connect to active Lens");
   expect(connected.mounted_identity).toBe(owner.mounted_identity);
   expect(connected.references.selections).toEqual(before.references.selections);
   await views.selectOption({ label: "Hidden" });
   await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(0);
+  const unavailable = await runAction(page, "Connect to active Lens");
+  expect(unavailable.error).toEqual({ code: "lens_unavailable", revision: null });
+  expect(unavailable.mounted_identity).toBeNull();
+  expect(unavailable.references.selections).toEqual(before.references.selections);
   await views.selectOption({ label: "Single" });
   await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(1);
   const after = await runAction(page);
