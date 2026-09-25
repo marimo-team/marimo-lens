@@ -46,10 +46,12 @@ Combine connection with the first useful operation: check availability for an
 add request, inspect relevant cells and values for a Trail, or read the current
 selection snapshot. A separate call that prints only an identity is unnecessary.
 
-`connect(ctx)` reuses authored and automatically mounted instances. Keep its
-opaque identity when work spans calls. Each call has a fresh scratchpad, so
-reimport `cm` and `lens_agent`, reacquire the context, and select that same Lens
-using `identity=` in later calls.
+`connect(ctx)` reuses authored and automatically mounted instances. When one
+browser-ready Lens owns the visible dock, it selects that Lens even if the
+context contains other Lens objects. Keep its opaque identity when work spans
+calls. Each call has a fresh scratchpad, so reimport `cm` and `lens_agent`,
+reacquire the context, and select that same Lens using `identity=` in later
+calls.
 
 For `lens_ambiguous`, inspect `lens_agent.discover(ctx)` and choose the identity
 matching the request and visible surface. Ask the user if those clues cannot

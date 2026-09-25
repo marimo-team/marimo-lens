@@ -95,19 +95,21 @@ Same-origin iframe documents can receive pointer and keyboard selection events.
 Image capture still requires every nested iframe document to remain accessible
 throughout rasterization.
 
-## Lens is already active
+## Lens view ownership warning
 
-**Symptom:** A mounted value shows **Lens is already active**.
+**Symptom:** The browser console reports that another Lens view owns this
+document.
 
-**Action:** Use the first displayed Lens in that browser document. Close or
-remove the duplicate view after its work is complete.
+**Action:** In a code-mode call, use `lens_agent.connect(ctx)` to access the Lens
+that owns the visible dock. When one browser-ready Lens exists,
+`connect(ctx)` selects it even if the context contains other Lens objects.
 
-**Result:** One dock owns selection gestures, target attention, and cell-output image
-capture in that document. Ownership passes to the next displayed view when the
-current owner closes.
+The warning is about views in one browser document. If several browser-ready
+instances exist, use `lens_agent.discover(ctx)` and reconnect with the intended
+identity. Ownership passes to the next view when the current owner closes.
 
-This browser message is separate from `lens_ambiguous`. A code-mode connection
-can find several Python Lens instances even when one browser view owns the dock.
+This warning is separate from `lens_ambiguous`, which means the API could not
+select one browser-ready instance or one context candidate.
 
 ## Code mode reports `lens_ambiguous`
 

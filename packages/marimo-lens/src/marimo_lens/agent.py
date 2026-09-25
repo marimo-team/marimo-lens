@@ -274,13 +274,20 @@ def discover(context: object | None = None) -> tuple[MountedLens, ...]:
         TypeError: The context lacks a globals mapping.
     """
 
+    return _discover_candidates(context, mounted_lenses(current_runtime_scope()))
+
+
+def _discover_candidates(
+    context: object | None,
+    browser_ready: Sequence[Lens],
+) -> tuple[MountedLens, ...]:
     namespace: Mapping[str, object] | None = None
     if context is not None:
         raw_namespace = getattr(context, "globals", None)
         if not isinstance(raw_namespace, Mapping):
             raise TypeError("context must expose a globals mapping")
         namespace = cast(Mapping[str, object], raw_namespace)
-    candidates = {id(lens): lens for lens in mounted_lenses(current_runtime_scope())}
+    candidates = {id(lens): lens for lens in browser_ready}
     if namespace is not None:
         for value in namespace.values():
             lens = _as_lens(value)
@@ -304,12 +311,13 @@ def connect(
     """Select one of the Lens handles returned by discover().
 
     Pass a code-mode context to include existing Lens objects from its kernel
-    globals. Pass an earlier handle's identity to reconnect to that Lens in a
-    later kernel call.
+    globals. A unique browser-ready Lens takes priority over additional Lens
+    objects in those globals. Pass an earlier handle's identity to reconnect to
+    that Lens in a later kernel call.
 
     Raises:
         LensError: No available Lens matches, or several are available without
-            an identity selecting one.
+            a unique browser-ready Lens or an identity selecting one.
         TypeError: The context lacks a globals mapping or identity has the wrong
             type.
         ValueError: Identity is empty.
@@ -321,7 +329,8 @@ def connect(
         if not identity:
             raise ValueError("identity must not be empty")
 
-    mounted = discover(context)
+    browser_ready = mounted_lenses(current_runtime_scope())
+    mounted = _discover_candidates(context, browser_ready)
     if identity is not None:
         for lens in mounted:
             if lens.identity == identity:
@@ -330,6 +339,9 @@ def connect(
             "lens_unavailable",
             ("The requested Lens is unavailable. Connect again without an identity."),
         )
+    if len(browser_ready) == 1:
+        lens = browser_ready[0]
+        return MountedLens(identity=_identity(lens), lens=lens)
     if len(mounted) == 1:
         return mounted[0]
     if not mounted:

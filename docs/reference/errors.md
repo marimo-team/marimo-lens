@@ -16,21 +16,21 @@ or malformed.
 
 ## `LensError` codes
 
-| Code                      | Cause                                                              | Recovery                                                                      |
-| ------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `lens_unavailable`        | No live Lens matches the requested identity.                       | Retry `connect()` without identity, then mount Lens when none is available.   |
-| `lens_ambiguous`          | Several Lens instances are available without a selecting identity. | Inspect `discover()` handles and reconnect with the intended identity.        |
-| `lens_closed`             | The owning Lens instance closed.                                   | Mount and connect to a new Lens.                                              |
-| `revision_conflict`       | Selection state changed after the caller captured context.         | Stop owned activity, read a fresh context, and reassess the work.             |
-| `selection_not_found`     | A referenced selection is no longer Open.                          | Read current selections and keep unrelated work unchanged.                    |
-| `selection_context_limit` | A mutation cannot fit required state or reference bounds.          | Shorten notes, reduce Open selections, or clear old History before retrying.  |
-| `runtime_unavailable`     | Lens cannot inspect the active marimo runtime.                     | Keep selections Open and restore live-kernel access.                          |
-| `cell_not_found`          | The current graph has no requested cell ID.                        | Read fresh graph state and choose a current graph member.                     |
-| `browser_unavailable`     | No displayed Lens view can perform cell-output capture.            | Render Lens in an active browser document and retry.                          |
-| `capture_busy`            | The single capture slot is waiting for another cell.               | Poll the existing cell request before starting another.                       |
-| `capture_timeout`         | Output capture did not finish before its deadline.                 | Confirm the browser view remains active, then start a fresh capture.          |
-| `output_unavailable`      | The cell has no stable rendered output to capture.                 | Run the cell and wait for its output before retrying.                         |
-| `capture_failed`          | Browser transport, rasterization, or PNG validation failed.        | Inspect browser errors and use code, data, and text context for verification. |
+| Code                      | Cause                                                       | Recovery                                                                      |
+| ------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `lens_unavailable`        | No live Lens matches the requested identity.                | Retry `connect()` without identity, then mount Lens when none is available.   |
+| `lens_ambiguous`          | Several candidates exist with no unique browser-ready Lens. | Inspect `discover()` handles and reconnect with the intended identity.        |
+| `lens_closed`             | The owning Lens instance closed.                            | Mount and connect to a new Lens.                                              |
+| `revision_conflict`       | Selection state changed after the caller captured context.  | Stop owned activity, read a fresh context, and reassess the work.             |
+| `selection_not_found`     | A referenced selection is no longer Open.                   | Read current selections and keep unrelated work unchanged.                    |
+| `selection_context_limit` | A mutation cannot fit required state or reference bounds.   | Shorten notes, reduce Open selections, or clear old History before retrying.  |
+| `runtime_unavailable`     | Lens cannot inspect the active marimo runtime.              | Keep selections Open and restore live-kernel access.                          |
+| `cell_not_found`          | The current graph has no requested cell ID.                 | Read fresh graph state and choose a current graph member.                     |
+| `browser_unavailable`     | No displayed Lens view can perform cell-output capture.     | Render Lens in an active browser document and retry.                          |
+| `capture_busy`            | The single capture slot is waiting for another cell.        | Poll the existing cell request before starting another.                       |
+| `capture_timeout`         | Output capture did not finish before its deadline.          | Confirm the browser view remains active, then start a fresh capture.          |
+| `output_unavailable`      | The cell has no stable rendered output to capture.          | Run the cell and wait for its output before retrying.                         |
+| `capture_failed`          | Browser transport, rasterization, or PNG validation failed. | Inspect browser errors and use code, data, and text context for verification. |
 
 Presentation methods validate their Python inputs and addresses before sending
 events. Activity, reveal, and resolution-receipt delivery is best effort, so a

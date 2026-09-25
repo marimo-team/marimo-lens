@@ -26,22 +26,22 @@ page.
 
 ## Contract owners
 
-| Contract                                | Canonical owner                                                 |
-| --------------------------------------- | --------------------------------------------------------------- |
-| Public Python methods and agent adapter | [`docs/api.md`](../docs/api.md)                                 |
-| Public context shapes                   | [`docs/reference/context.md`](../docs/reference/context.md)     |
-| Public errors and limits                | [`docs/reference/errors.md`](../docs/reference/errors.md)       |
+| Contract                                | Canonical owner                                                   |
+| --------------------------------------- | ----------------------------------------------------------------- |
+| Public Python methods and agent adapter | [`docs/api.md`](../docs/api.md)                                   |
+| Public context shapes                   | [`docs/reference/context.md`](../docs/reference/context.md)       |
+| Public errors and limits                | [`docs/reference/errors.md`](../docs/reference/errors.md)         |
 | Public target attributes                | [`docs/reference/attributes.md`](../docs/reference/attributes.md) |
-| Public product model                    | [`docs/overview.md`](../docs/overview.md)                       |
-| Public selection behavior               | [`docs/selections.md`](../docs/selections.md)                   |
-| Public agent workflow                   | [`docs/agents.md`](../docs/agents.md)                           |
-| Internal ownership and vocabulary       | [Architecture](architecture.md)                                 |
-| Selection aggregate and transitions     | [Selection state](selection-state.md)                           |
-| Browser transport and schema evolution  | [Protocol](protocol.md)                                         |
-| Contributor commands and local loop     | [Development](development.md)                                   |
-| Distribution artifacts                  | [Build and distribution](build-and-distribution.md)             |
-| Release procedure                       | [Release](release.md)                                           |
-| Executable agent workflow policy        | [`skills/marimo-lens/SKILL.md`](../skills/marimo-lens/SKILL.md) |
+| Public product model                    | [`docs/overview.md`](../docs/overview.md)                         |
+| Public selection behavior               | [`docs/selections.md`](../docs/selections.md)                     |
+| Public agent workflow                   | [`docs/agents.md`](../docs/agents.md)                             |
+| Internal ownership and vocabulary       | [Architecture](architecture.md)                                   |
+| Selection aggregate and transitions     | [Selection state](selection-state.md)                             |
+| Browser transport and schema evolution  | [Protocol](protocol.md)                                           |
+| Contributor commands and local loop     | [Development](development.md)                                     |
+| Distribution artifacts                  | [Build and distribution](build-and-distribution.md)               |
+| Release procedure                       | [Release](release.md)                                             |
+| Executable agent workflow policy        | [`skills/marimo-lens/SKILL.md`](../skills/marimo-lens/SKILL.md)   |
 
 Source schemas and constants remain the exact authority for wire fields and
 numeric limits. Maintainer pages explain why those contracts exist, how the

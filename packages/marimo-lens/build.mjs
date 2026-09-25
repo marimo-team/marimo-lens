@@ -1,13 +1,10 @@
+import stylex from "@stylexjs/unplugin/esbuild";
+import { build, context } from "esbuild";
 import { rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { build, context } from "esbuild";
-import stylex from "@stylexjs/unplugin/esbuild";
-
 const packageRoot = fileURLToPath(new URL(".", import.meta.url));
-const outputDirectory = fileURLToPath(
-  new URL("./src/marimo_lens/static", import.meta.url),
-);
+const outputDirectory = fileURLToPath(new URL("./src/marimo_lens/static", import.meta.url));
 const watch = process.argv.includes("--watch");
 const options = {
   absWorkingDir: packageRoot,

@@ -2,7 +2,7 @@ import type { AnyModel, Experimental, Host, RenderProps } from "@anywidget/types
 import type { LensState } from "@marimo-lens/protocol";
 
 import { act } from "react";
-import { afterEach, describe, expect, test } from "vite-plus/test";
+import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { createLensRender } from "@/app/lens-render";
 
@@ -20,10 +20,12 @@ afterEach(() => {
   }
   cleanups.clear();
   document.body.replaceChildren();
+  vi.restoreAllMocks();
 });
 
 describe("Lens widget views", () => {
-  test("treats repeated renders of one model as conflicting displayed views", () => {
+  test("renders controls in one view and transfers ownership after teardown", () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     const underlyingModel = fakeModel();
     const firstContainer = appendContainer();
     const secondContainer = appendContainer();
@@ -33,11 +35,9 @@ describe("Lens widget views", () => {
 
     expect(firstContainer.querySelector("[data-widget-content]")).not.toBeNull();
     expect(secondContainer.querySelector("[data-widget-content]")).toBeNull();
-    expect(secondContainer.querySelector("[data-marimo-lens-view-conflict]")).not.toBeNull();
 
     release(releaseFirst);
     expect(secondContainer.querySelector("[data-widget-content]")).not.toBeNull();
-    expect(secondContainer.querySelector("[data-marimo-lens-view-conflict]")).toBeNull();
 
     release(releaseSecond);
     const nextContainer = appendContainer();

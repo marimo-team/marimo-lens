@@ -62,7 +62,9 @@ installation's guidance.
 `connect()` reuses an available Lens. It never creates a widget or a notebook
 cell. It finds browser-ready instances in the active runtime, including
 automatically mounted ones, plus Lens objects in the supplied code-mode
-globals. Run this inside one code-mode kernel call:
+globals. When one browser-ready Lens owns the visible dock, `connect()` selects
+it even if the globals contain other Lens objects. Run this inside one
+code-mode kernel call:
 
 ```python
 import marimo._code_mode as cm
@@ -103,15 +105,15 @@ for candidate in available:
     print(candidate.identity, candidate.context().current)
 ```
 
-| Result          | Next action                                                                                     |
-| --------------- | ----------------------------------------------------------------------------------------------- |
-| One handle      | Use it, or call `connect()` to select it.                                                       |
-| Several handles | Inspect their current selections and reconnect with the intended `identity`.                    |
-| Empty tuple     | Let a pending mount finish rendering and retry in a fresh call. Add Lens only when none exists. |
+| Result          | Next action                                                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| One handle      | Use it, or call `connect()` to select it.                                                                                             |
+| Several handles | Call `connect(ctx)` to select a unique browser-ready Lens. If that is ambiguous, inspect candidates and pass the intended `identity`. |
+| Empty tuple     | Let a pending mount finish rendering and retry in a fresh call. Add Lens only when none exists.                                       |
 
-Discovery order does not indicate which instance owns the visible dock. Do not
-pick the first candidate arbitrarily or delete another instance's selections to
-resolve ambiguity. An automatically mounted Lens appears after its browser view
+Discovery order does not indicate which instance owns the visible dock. When
+several browser-ready instances exist, inspect their contexts before selecting
+an identity. An automatically mounted Lens appears after its browser view
 reports ready, so an empty result during startup does not prove that the
 notebook needs another Lens.
 

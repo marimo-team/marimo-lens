@@ -396,12 +396,17 @@ mounted = lens_agent.connect(cm.get_context())
 ```
 
 `context` adds Lens objects found in code-mode globals to browser-ready Lens
-registrations. `identity` selects the same Lens in a later kernel call.
+registrations. When exactly one browser-ready Lens owns a displayed view,
+`connect()` selects it even if `context.globals` contains additional Lens
+objects. With no browser-ready Lens, one available context object is selected.
+Use `identity` to reconnect to the same Lens in a later kernel call or to choose
+a specific candidate when several are available.
 
 Raises `LensError(code="lens_unavailable")` when no matching Lens exists.
-Raises `LensError(code="lens_ambiguous")` when several candidates exist and no
-identity selects one. A context without a globals mapping or a non-string
-identity raises `TypeError`. An empty identity raises `ValueError`.
+Raises `LensError(code="lens_ambiguous")` when several browser-ready instances
+exist, or when several context objects exist without a browser-ready instance,
+and no identity selects one. A context without a globals mapping or a
+non-string identity raises `TypeError`. An empty identity raises `ValueError`.
 
 ### `MountedLens`
 

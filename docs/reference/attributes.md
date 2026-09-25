@@ -12,18 +12,18 @@ shows them in use.
 
 ## Attributes
 
-| Attribute                         | Put it on                                | Meaning                                                                                                                               | Bound                                                             |
-| --------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `data-marimo-lens-target`         | Any authored element                     | Makes the element a selectable target, with or without notebook inputs.                                                               | None                                                              |
-| `data-marimo-lens-scope`          | A container                              | CSS selector for preferred grouping roots. A click inside selects the nearest matching root, or the nearest rendered block otherwise. | None                                                              |
-| `data-marimo-lens-label`          | A target root, or inside an output       | Display name shown by the target indicator and captured as `description.label`.                                                       | 256 code units                                                    |
-| `data-marimo-lens-detail`         | Same element as the label                | Secondary text. Captured only alongside a label.                                                                                      | 512 code units                                                    |
-| `data-marimo-lens-render-source`  | A target root                            | JSON object with required `path` and optional `line`, `column`, and `symbol`. Carried as evidence and never opened.                   | `path` 1,024, `symbol` 256 code units, positive safe integers     |
-| `data-marimo-lens-context`        | The target or an ancestor                | Preferred container for selection-image capture. Must belong to the same document.                                                    | None                                                              |
-| `data-marimo-lens-cell-id`        | A source element, which can be hidden    | One resolved producing cell ID.                                                                                                       | 128 code units                                                    |
-| `data-marimo-lens-selector`       | The same element as `cell-id`            | Optional symbolic value selector from that cell. Descriptive evidence that Lens never evaluates.                                      | 4,096 code units, nonempty when present                           |
-| `data-marimo-lens-inputs`         | A composed region                        | Whitespace-separated IDs of source elements in the same document. Declares the region's complete input set.                           | 64 sources per target                                             |
-| `data-marimo-lens-output-cell-id` | Custom output DOM                        | Exposes a canonical notebook output rendered by the host.                                                                             | 128 code units                                                    |
+| Attribute                         | Put it on                             | Meaning                                                                                                                               | Bound                                                         |
+| --------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `data-marimo-lens-target`         | Any authored element                  | Makes the element a selectable target, with or without notebook inputs.                                                               | None                                                          |
+| `data-marimo-lens-scope`          | A container                           | CSS selector for preferred grouping roots. A click inside selects the nearest matching root, or the nearest rendered block otherwise. | None                                                          |
+| `data-marimo-lens-label`          | A target root, or inside an output    | Display name shown by the target indicator and captured as `description.label`.                                                       | 256 code units                                                |
+| `data-marimo-lens-detail`         | Same element as the label             | Secondary text. Captured only alongside a label.                                                                                      | 512 code units                                                |
+| `data-marimo-lens-render-source`  | A target root                         | JSON object with required `path` and optional `line`, `column`, and `symbol`. Carried as evidence and never opened.                   | `path` 1,024, `symbol` 256 code units, positive safe integers |
+| `data-marimo-lens-context`        | The target or an ancestor             | Preferred container for selection-image capture. Must belong to the same document.                                                    | None                                                          |
+| `data-marimo-lens-cell-id`        | A source element, which can be hidden | One resolved producing cell ID.                                                                                                       | 128 code units                                                |
+| `data-marimo-lens-selector`       | The same element as `cell-id`         | Optional symbolic value selector from that cell. Descriptive evidence that Lens never evaluates.                                      | 4,096 code units, nonempty when present                       |
+| `data-marimo-lens-inputs`         | A composed region                     | Whitespace-separated IDs of source elements in the same document. Declares the region's complete input set.                           | 64 sources per target                                         |
+| `data-marimo-lens-output-cell-id` | Custom output DOM                     | Exposes a canonical notebook output rendered by the host.                                                                             | 128 code units                                                |
 
 Bounds are UTF-16 code units. Most characters use one unit, and characters
 outside the Basic Multilingual Plane, including many emoji, use two. Lens
@@ -73,13 +73,13 @@ selector, and its notebook sources. The exact selector is a unique authored
 element ID when available. Otherwise Lens assigns a locator owned by that
 element.
 
-| Change                                                      | Effect on existing selections                                                |
-| ----------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Label, detail, or rendering reference                       | Identity preserved. Future selections capture the new value.                 |
-| Element replaced with the same unique ID and sources        | The selection reattaches.                                                    |
-| Element ID changed, duplicated, or unkeyed element replaced | Target unavailable.                                                          |
-| Value selector or producing cells changed                   | Target unavailable.                                                          |
-| Root no longer matches `dom_selector`                       | Target unavailable.                                                          |
+| Change                                                      | Effect on existing selections                                                  |
+| ----------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Label, detail, or rendering reference                       | Identity preserved. Future selections capture the new value.                   |
+| Element replaced with the same unique ID and sources        | The selection reattaches.                                                      |
+| Element ID changed, duplicated, or unkeyed element replaced | Target unavailable.                                                            |
+| Value selector or producing cells changed                   | Target unavailable.                                                            |
+| Root no longer matches `dom_selector`                       | Target unavailable.                                                            |
 | Full document replacement                                   | New document identity. Older selections stay Open with **Target unavailable**. |
 
 Notebook targets reconnect whenever the same cell ID renders again in the same

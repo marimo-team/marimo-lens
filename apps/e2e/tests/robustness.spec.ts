@@ -169,22 +169,42 @@ test("cancelling a region drag leaves no annotation and releases notebook contro
   expect((await runAction(page)).references.selections[0].anchor.kind).toBe("rect");
 });
 
-test("duplicate views and repeated unmounts retain one owner and the same kernel selections", async ({
-  page,
-}) => {
+test("duplicate views retain one owner and the same kernel selections", async ({ page }) => {
   await selectOutput(page, "point", "S1", "Survive view replacement");
   const before = await runAction(page);
+  const owner = await runAction(page, "Connect to active Lens");
+  expect(owner.mounted_identity).toBeTruthy();
   const views = page.getByRole("combobox", { name: "Lens views" });
-  for (let cycle = 0; cycle < 4; cycle += 1) {
-    await views.selectOption({ label: "Duplicate" });
-    await expect(page.getByText("Lens is already active", { exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(1);
-    await views.selectOption({ label: "Hidden" });
-    await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(0);
-    await expect(page.getByText("Lens is already active", { exact: true })).toHaveCount(0);
-    await views.selectOption({ label: "Single" });
-    await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(1);
-  }
+  const ownershipWarnings: string[] = [];
+  page.on("console", (message) => {
+    if (
+      message.type() === "warning" &&
+      message.text().includes("another Lens view owns this browser document")
+    ) {
+      ownershipWarnings.push(message.text());
+    }
+  });
+  await views.selectOption({ label: "Duplicate" });
+  await expect(page.getByText("Lens is already active", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(1);
+  await expect.poll(() => ownershipWarnings.length).toBeGreaterThan(0);
+  const connected = await runAction(page, "Connect to active Lens");
+  expect(connected.mounted_identity).toBe(owner.mounted_identity);
+  expect(connected.references.selections).toEqual(before.references.selections);
+  await views.selectOption({ label: "Hidden" });
+  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(0);
+  // The dock disappears before its browser-ready event reaches the kernel.
+  await expect
+    .poll(async () => (await runAction(page, "Connect to active Lens")).error?.code ?? null, {
+      timeout: 20_000,
+    })
+    .toBe("lens_unavailable");
+  const unavailable = await runAction(page, "Connect to active Lens");
+  expect(unavailable.error).toEqual({ code: "lens_unavailable", revision: null });
+  expect(unavailable.mounted_identity).toBeNull();
+  expect(unavailable.references.selections).toEqual(before.references.selections);
+  await views.selectOption({ label: "Single" });
+  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(1);
   const after = await runAction(page);
   expect(after.references).toMatchObject({
     revision: before.references.revision,
