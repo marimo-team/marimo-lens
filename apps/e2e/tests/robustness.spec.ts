@@ -193,6 +193,12 @@ test("duplicate views retain one owner and the same kernel selections", async ({
   expect(connected.references.selections).toEqual(before.references.selections);
   await views.selectOption({ label: "Hidden" });
   await expect(page.getByRole("button", { name: "Select a target", exact: true })).toHaveCount(0);
+  // The dock disappears before its browser-ready event reaches the kernel.
+  await expect
+    .poll(async () => (await runAction(page, "Connect to active Lens")).error?.code ?? null, {
+      timeout: 20_000,
+    })
+    .toBe("lens_unavailable");
   const unavailable = await runAction(page, "Connect to active Lens");
   expect(unavailable.error).toEqual({ code: "lens_unavailable", revision: null });
   expect(unavailable.mounted_identity).toBeNull();
