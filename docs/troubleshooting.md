@@ -100,12 +100,12 @@ throughout rasterization.
 **Symptom:** The browser console reports that another Lens view owns this
 document.
 
-**Action:** In a code-mode call, use `lens_agent.connect(ctx)` to access the Lens
+**Action:** In a code-mode call, use `marimo_lens.agent.connect(ctx)` to access the Lens
 that owns the visible dock. When one browser-ready Lens exists,
 `connect(ctx)` selects it even if the context contains other Lens objects.
 
 The warning is about views in one browser document. If several browser-ready
-instances exist, use `lens_agent.discover(ctx)` and reconnect with the intended
+instances exist, use `marimo_lens.agent.discover(ctx)` and reconnect with the intended
 identity. Ownership passes to the next view when the current owner closes.
 
 This warning is separate from `lens_ambiguous`, which means the API could not
@@ -117,12 +117,12 @@ select one browser-ready instance or one context candidate.
 `LensError(code="lens_ambiguous")`.
 
 **Action:** Reconnect with the `MountedLens.identity` saved from the intended
-Lens. If you have no saved identity, use `lens_agent.discover(ctx)` to inspect
+Lens. If you have no saved identity, use `marimo_lens.agent.discover(ctx)` to inspect
 available handles and their current selections. See [Several or no
 instances](./agents#several-or-no-instances).
 
 ```python
-mounted = lens_agent.connect(ctx, identity=saved_identity)
+mounted = marimo_lens.agent.connect(ctx, identity=saved_identity)
 ```
 
 **Result:** `mounted.identity` matches the saved identity and subsequent calls
@@ -159,9 +159,9 @@ active agent has no advertised `lens` capability.
 environment and import its agent adapter there.
 
 ```python
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-help(lens_agent)
+help(marimo_lens.agent)
 ```
 
 Lens registers `marimo_lens.agent` in marimo's `marimo.agent.capability`
@@ -175,7 +175,7 @@ instances](./agents#several-or-no-instances). End the kernel call after
 `add_lens_cell(ctx)` so the browser can render and register the new Lens before
 calling `connect()` again.
 
-**Result:** `lens_agent.connect(ctx)` returns a `MountedLens` and
+**Result:** `marimo_lens.agent.connect(ctx)` returns a `MountedLens` and
 `mounted.context()` returns the current detached context.
 
 Use [marimo Pair](https://marimo.io/pair)

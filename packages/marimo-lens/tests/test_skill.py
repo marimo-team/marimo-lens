@@ -272,9 +272,9 @@ def _code_mode_block(relative_path: str, heading: str) -> str:
         if line
         not in {
             "import marimo._code_mode as cm",
-            "import marimo_lens.agent as lens_agent",
+            "import marimo_lens",
         }
-        and not line.startswith("mounted = lens_agent.connect(")
+        and not line.startswith("mounted = marimo_lens.agent.connect(")
     ]
     return "\n".join(lines)
 

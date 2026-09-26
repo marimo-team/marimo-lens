@@ -23,7 +23,7 @@ import agent_plugins as ap
 print(ap.read("marimo-lens"))
 ```
 
-`help(marimo_lens.agent)` supplies the same core after importing that module.
+`help(marimo_lens.agent)` supplies the same core after `import marimo_lens`.
 Reuse a briefing already loaded from the same environment and installation.
 Use the installed `help(marimo._code_mode)` for notebook operations when that
 host contract has not been read yet.
@@ -56,7 +56,7 @@ async with cm.get_context() as ctx:
 ```
 
 Wait for installation to complete. In a subsequent scratchpad call, check
-`cm.capabilities()` and import `marimo_lens.agent` to read its briefing.
+`cm.capabilities()` and read `help(marimo_lens.agent)` after `import marimo_lens`.
 Continue in the same notebook session, then follow the core skill's mount
 recipe. Installation makes the package available. Displaying a Lens instance
 makes the dock available.
@@ -82,7 +82,7 @@ Otherwise, use the notebook or host mounting policy that applies:
   target structure, copy, spacing, or styling. Avoid `*` and selectors that
   turn every nested wrapper into a target.
 
-For an ordinary notebook, `lens_agent.add_lens_cell(ctx)` mounts the default
+For an ordinary notebook, `marimo_lens.agent.add_lens_cell(ctx)` mounts the default
 Lens. A host document may require an authored Lens cell so it can pass and
 render the host-owned selector. Follow the host skill for that mount.
 

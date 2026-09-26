@@ -49,11 +49,11 @@ selection snapshot. A separate call that prints only an identity is unnecessary.
 `connect(ctx)` reuses authored and automatically mounted instances. When one
 browser-ready Lens owns the visible dock, it selects that Lens even if the
 context contains other Lens objects. Keep its opaque identity when work spans
-calls. Each call has a fresh scratchpad, so reimport `cm` and `lens_agent`,
+calls. Each call has a fresh scratchpad, so reimport `cm` and `marimo_lens`,
 reacquire the context, and select that same Lens using `identity=` in later
 calls.
 
-For `lens_ambiguous`, inspect `lens_agent.discover(ctx)` and choose the identity
+For `lens_ambiguous`, inspect `marimo_lens.agent.discover(ctx)` and choose the identity
 matching the request and visible surface. Ask the user if those clues cannot
 distinguish the instances.
 
@@ -68,14 +68,14 @@ queue one cell:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 async with cm.get_context() as ctx:
-    available = lens_agent.discover(ctx)
+    available = marimo_lens.agent.discover(ctx)
     if available:
         print({"identities": [mounted.identity for mounted in available]})
     else:
-        print({"cell_id": lens_agent.add_lens_cell(ctx)})
+        print({"cell_id": marimo_lens.agent.add_lens_cell(ctx)})
 ```
 
 End the call so the queued cell can run and the browser can render the dock.
@@ -110,10 +110,10 @@ Substitute the actual cell names and explanations supported by their values:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 ctx = cm.get_context()
-mounted = lens_agent.connect(ctx)
+mounted = marimo_lens.agent.connect(ctx)
 route = [
     ("inputs", "Inputs", "Start with the values used by this notebook."),
     ("analysis", "Calculation", "Follow how the inputs become a result."),
@@ -174,7 +174,7 @@ feedback across calls, and recovery.
 For selection work, read its reference inside the notebook:
 
 ```python
-import marimo_lens.agent
+import marimo_lens
 
 print(
     marimo_lens.agent.skill()

@@ -12,10 +12,10 @@ kernel call:
 import json
 
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 ctx = cm.get_context()
-mounted = lens_agent.connect(ctx)
+mounted = marimo_lens.agent.connect(ctx)
 snapshot = mounted.context()
 print(
     json.dumps(
@@ -63,7 +63,7 @@ inventory. Notebook-order enumeration belongs to explicit overview and
 walkthrough requests.
 
 When `connect(ctx)` reports `lens_ambiguous`, use a saved identity or call
-`lens_agent.discover(ctx)` to get available `MountedLens` handles. Inspect their
+`marimo_lens.agent.discover(ctx)` to get available `MountedLens` handles. Inspect their
 identities and compact current selections, then choose the instance that matches
 the request. Discovery returns an empty tuple when none are available and never
 mounts a widget. Order does not indicate browser ownership. Ask the user which
@@ -86,9 +86,9 @@ empty, contains one cell, or contains several cells.
 import json
 
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
+mounted = marimo_lens.agent.connect(cm.get_context(), identity="F3n...")
 snapshot = mounted.context()
 selection = snapshot.current
 if selection is None:

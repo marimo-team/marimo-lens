@@ -65,7 +65,7 @@ Read the packaged briefing from a terminal:
 uvx --with marimo-lens agent-plugins read marimo-lens
 ```
 
-In an existing notebook kernel, run `import marimo_lens.agent` followed by
+In an existing notebook kernel, run `import marimo_lens` followed by
 `help(marimo_lens.agent)`. The help includes the same core skill and references
 from that installation. The terminal command uses an isolated tool environment
 and does not connect to the notebook.

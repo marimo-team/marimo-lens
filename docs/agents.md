@@ -29,7 +29,7 @@ advertise to agents.
 In the notebook kernel, read the core skill with either form:
 
 ```python
-import marimo_lens.agent
+import marimo_lens
 
 help(marimo_lens.agent)
 ```
@@ -43,7 +43,7 @@ print(ap.read("marimo-lens"))
 Read a reference only when its workflow applies:
 
 ```python
-import marimo_lens.agent
+import marimo_lens
 
 print(
     marimo_lens.agent.skill()
@@ -68,9 +68,9 @@ code-mode kernel call:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context())
+mounted = marimo_lens.agent.connect(cm.get_context())
 lens_context = mounted.context()
 
 print(mounted.identity)
@@ -86,7 +86,7 @@ Each kernel call has a fresh scratchpad. Save `mounted.identity` in your
 working state and pass it back to select the same Lens later:
 
 ```python
-mounted = lens_agent.connect(cm.get_context(), identity=saved_identity)
+mounted = marimo_lens.agent.connect(cm.get_context(), identity=saved_identity)
 ```
 
 The identity belongs to one live Lens instance and lasts for that runtime. When
@@ -98,9 +98,9 @@ Use `discover()` to check availability or inspect candidates:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-available = lens_agent.discover(cm.get_context())
+available = marimo_lens.agent.discover(cm.get_context())
 for candidate in available:
     print(candidate.identity, candidate.context().current)
 ```
@@ -122,10 +122,10 @@ Lens cell:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 async with cm.get_context() as context:
-    cell_id = lens_agent.add_lens_cell(context)
+    cell_id = marimo_lens.agent.add_lens_cell(context)
     print(cell_id)
 ```
 
@@ -195,12 +195,12 @@ the same captured revision in one call:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 # Replace these with the strings saved in agent working state from the earlier call.
 identity = "<saved Lens identity>"
 selection_id = "<saved selection ID>"
-mounted = lens_agent.connect(cm.get_context(), identity=identity)
+mounted = marimo_lens.agent.connect(cm.get_context(), identity=identity)
 fresh_context = mounted.context()
 fresh_selection = next(
     item

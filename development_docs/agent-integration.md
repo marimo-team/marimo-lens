@@ -36,6 +36,11 @@ value: marimo_lens.agent
 The entry point lives in `packages/marimo-lens/pyproject.toml`. marimo code mode
 can discover the installed module through its capability registry.
 
+`import marimo_lens` also loads the submodule, so agents and docs reach the
+handoff surface as `marimo_lens.agent.*`. The entry point keeps naming the
+submodule because marimo prints it in `help(cm)`, and its module help carries
+the skill.
+
 `marimo_lens.agent.plugin()` locates the Agent Plugin installed with the active
 `marimo-lens` distribution. `marimo_lens.agent.skill()` selects its `marimo-lens` skill.
 Module help lazily calls `agent_plugins.read("marimo-lens")`, delivering the

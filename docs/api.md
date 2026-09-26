@@ -292,10 +292,11 @@ Later public operations raise `LensError(code="lens_closed")`.
 
 ## Agent adapter
 
-Read the agent resources from the installed package:
+`import marimo_lens` loads `marimo_lens.agent`, the module marimo registers as
+the `lens` capability. Read the agent resources from the installed package:
 
 ```python
-import marimo_lens.agent
+import marimo_lens
 
 plugin = marimo_lens.agent.plugin()
 skill = marimo_lens.agent.skill()
@@ -337,10 +338,10 @@ cell and returns its new ID.
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 async with cm.get_context() as context:
-    cell_id = lens_agent.add_lens_cell(context)
+    cell_id = marimo_lens.agent.add_lens_cell(context)
 ```
 
 Call `connect()` or `discover()` first to reuse an authored or automatically
@@ -363,9 +364,9 @@ let an agent inspect their contexts and choose an identity for `connect()`.
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-available = lens_agent.discover(cm.get_context())
+available = marimo_lens.agent.discover(cm.get_context())
 for candidate in available:
     print(candidate.identity, candidate.context().current)
 ```
@@ -390,9 +391,9 @@ automatically mounted instances without creating another Lens.
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context())
+mounted = marimo_lens.agent.connect(cm.get_context())
 ```
 
 `context` adds Lens objects found in code-mode globals to browser-ready Lens

@@ -24,9 +24,9 @@ cell ID, and revision in this complete kernel call:
 from tempfile import NamedTemporaryFile
 
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
+mounted = marimo_lens.agent.connect(cm.get_context(), identity="F3n...")
 cell_png = mounted.cell_image("BYtC", expected_revision=8)
 if cell_png is None:
     print("capture_pending")
@@ -82,9 +82,9 @@ verified selection ID into one completion call. Reveal replaces activity:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
+mounted = marimo_lens.agent.connect(cm.get_context(), identity="F3n...")
 snapshot = mounted.context()
 selection = next(
     selection
