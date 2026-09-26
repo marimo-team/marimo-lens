@@ -249,7 +249,8 @@ it also makes it current. If the current selection leaves **Open**, Lens focuses
 the most recently activated selection that remains.
 
 Open the note editor from a row, describe what the agent should inspect or
-change, then press **Done**.
+change, then press **Done**, or `Command+Enter` on macOS and `Ctrl+Enter`
+elsewhere.
 
 Press **Select** again when the request refers to another point or region. An
 agent can resolve those selections together after one verified change.
@@ -319,16 +320,17 @@ Use these keys while selection mode is active:
 
 Open **Selections** for row, tab, and note controls:
 
-| Keys                                  | Result                                                                    |
-| ------------------------------------- | ------------------------------------------------------------------------- |
-| `↑` / `↓` on an open selection        | Move focus between selection rows.                                        |
-| `Enter` on an open selection          | Make the focused selection current.                                       |
-| `←` / `→` on **Open** or **History**  | Switch tabs when the other tab contains items.                            |
-| `Tab` / `Shift+Tab`                   | Move through row actions. In the note editor, cycle through its controls. |
-| `Escape` in **Selections**            | Close the sheet and return focus to **Selections**.                       |
-| `Escape` in the note editor           | Close the editor and return focus to the selection marker or Lens dock.   |
-| `Enter` or `Space` on an image action | Pin the preview and move focus to its close control.                      |
-| `Escape` in an image preview          | Close the preview and restore focus to its image action.                  |
+| Keys                                               | Result                                                                    |
+| -------------------------------------------------- | ------------------------------------------------------------------------- |
+| `↑` / `↓` on an open selection                     | Move focus between selection rows.                                        |
+| `Enter` on an open selection                       | Make the focused selection current.                                       |
+| `←` / `→` on **Open** or **History**               | Switch tabs when the other tab contains items.                            |
+| `Tab` / `Shift+Tab`                                | Move through row actions. In the note editor, cycle through its controls. |
+| `Escape` in **Selections**                         | Close the sheet and return focus to **Selections**.                       |
+| `Command+Enter` or `Ctrl+Enter` in the note editor | Save the note and close the editor.                                       |
+| `Escape` in the note editor                        | Close the editor and return focus to the selection marker or Lens dock.   |
+| `Enter` or `Space` on an image action              | Pin the preview and move focus to its close control.                      |
+| `Escape` in an image preview                       | Close the preview and restore focus to its image action.                  |
 
 Use these keys on the current region's resize handles:
 

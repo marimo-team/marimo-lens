@@ -34,6 +34,33 @@ describe("selection note editor", () => {
     expect(onSave).toHaveBeenCalledWith("");
   });
 
+  test("saves the draft with Control+Enter or Meta+Enter from any editor control", () => {
+    const onSave = vi.fn<(note: string) => void>();
+    const onCancel = vi.fn();
+    renderEditor(selectionFixture({ note: "" }), onSave, { onCancel });
+    const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
+    const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Cancel",
+    )!;
+    act(() => setTextareaValue(textarea, "Line one\nLine two"));
+
+    const enter = (init: KeyboardEventInit) =>
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init });
+    act(() => {
+      textarea.dispatchEvent(enter({}));
+    });
+    expect(onSave).not.toHaveBeenCalled();
+
+    const shortcut = enter({ ctrlKey: true });
+    act(() => {
+      textarea.dispatchEvent(shortcut);
+      cancel.dispatchEvent(enter({ metaKey: true }));
+    });
+    expect(shortcut.defaultPrevented).toBe(true);
+    expect(onCancel).not.toHaveBeenCalled();
+    expect(onSave.mock.calls).toEqual([["Line one\nLine two"], ["Line one\nLine two"]]);
+  });
+
   test("preserves local typing while the selection state changes", () => {
     const onSave = vi.fn<(note: string) => void>();
     const selection = selectionFixture({ note: "", snapshot: { status: "pending" } });
