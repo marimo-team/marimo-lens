@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import os
 import pydoc
 import subprocess
 import sys
@@ -115,6 +116,23 @@ def test_package_import_exposes_agent_resources_and_help(import_statement: str) 
 
     assert result.returncode == 0, result.stderr
     assert "marimo_lens.agent" in result.stdout
+
+
+def test_module_help_carries_the_skill_through_a_windows_code_page() -> None:
+    # A Windows kernel whose output is redirected reports the locale code page,
+    # and pydoc's help() escapes characters that code page cannot encode.
+    result = subprocess.run(
+        [sys.executable, "-c", "import marimo_lens\nhelp(marimo_lens.agent)"],
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        check=True,
+    )
+    help_text = result.stdout.decode("cp1252")
+
+    skill_lines = [
+        line.strip() for line in agent.skill().body.splitlines() if line.strip()
+    ]
+    assert [line for line in skill_lines if line not in help_text] == []
 
 
 def test_package_import_defers_reading_agent_resources() -> None:
