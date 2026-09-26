@@ -73,11 +73,17 @@ The package registers `marimo_lens.agent` in marimo's
 capability, read the packaged Agent Skill, and call `connect()` inside the live
 kernel.
 
-[marimo Pair](https://marimo.io/pair) is one optional code-mode integration.
-Read Lens instructions through `agent_plugins.read("marimo-lens")` in the
-notebook's Python environment, or through `help(marimo_lens.agent)`. A terminal
-bootstrap with `uvx --with marimo-lens agent-plugins read marimo-lens` reads an
-isolated installation and requires network access when packages are uncached.
+[marimo pair](https://marimo.io/pair) connects terminal agents such as Claude
+Code and Codex. marimo 0.25.0 includes its `marimo pair notebook list` and
+`marimo pair execute` commands. Earlier releases connect through the marimo
+pair skill's `execute-code.sh`. marimo's code-mode sidebar is the in-editor
+integration.
+
+Read Lens instructions through `help(marimo_lens.agent)` or
+`agent_plugins.read("marimo-lens")` in the notebook's Python environment. A
+terminal bootstrap with `uvx --with marimo-lens agent-plugins read marimo-lens`
+reads an isolated installation and requires network access when packages are
+uncached.
 
 ## Hosted docs and released packages
 

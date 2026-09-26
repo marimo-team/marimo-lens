@@ -32,7 +32,7 @@ https://github.com/user-attachments/assets/7845c3b6-3ead-469f-8910-b688feb6a284
 ## Get started
 
 Use Lens with an agent connected to your notebook through
-[marimo Pair](https://marimo.io/pair) or marimo's code-mode sidebar. Lens is a
+[marimo pair](https://marimo.io/pair) or marimo's code-mode sidebar. Lens is a
 separate Python package, installed in the notebook's environment.
 
 [Follow the quickstart](https://marimo-team.github.io/marimo-lens/getting-started)
@@ -49,8 +49,13 @@ Read the packaged Lens briefing:
 uvx --with marimo-lens agent-plugins read marimo-lens
 ```
 
-In a connected notebook kernel, use `import agent_plugins as ap` followed by
-`print(ap.read("marimo-lens"))` to read that environment's installed guidance.
+With a notebook connected through marimo pair, read the guidance installed in
+its kernel:
+
+```console
+marimo pair execute --url <URL> --file <notebook.py> -c 'import marimo_lens; help(marimo_lens.agent)'
+```
+
 [Connect an agent](https://marimo-team.github.io/marimo-lens/agents) covers
 connection and resource access.
 

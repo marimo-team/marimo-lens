@@ -5,12 +5,13 @@ The [core skill](../SKILL.md) routes requests and covers walkthroughs.
 resolution policy. Use these recipes in the live marimo kernel.
 
 Notebook discovery, connection, scratchpad execution, and general notebook
-mutation belong to the active code-mode integration, such as marimo Pair. This
+mutation belong to the active code-mode integration, such as marimo pair. This
 reference covers the Lens calls that cross kernel executions.
 
-Each kernel call has a fresh scratchpad namespace. Reimport the modules and
-select the saved Lens identity in each call, as the examples do. Substitute
-your captured identity, cell IDs, and revision for the example values.
+Each kernel call, such as one `marimo pair execute`, has a fresh scratchpad
+namespace. Reimport the modules and select the saved Lens identity in each
+call, as the examples do. Substitute your captured identity, cell IDs, and
+revision for the example values.
 
 Use the [core skill](../SKILL.md) for ordinary mounting and Trails. Read this
 reference when a task needs image transfer, completion across calls, or recovery.
@@ -41,9 +42,11 @@ else:
 When the call prints `capture_pending`, end that execution so the browser can
 respond. Repeat the call in a fresh execution with the same identity, cell ID,
 and revision. When it prints a path, open the image and delete the file after
-inspection. The kernel and image reader must share a filesystem. For an image
-reader that accepts bytes directly, deliver `cell_png` in that same call.
-Scratchpad bindings from the previous call will have been discarded.
+inspection. The kernel and image reader must share a filesystem, as they do
+with a local marimo pair server. A remote kernel, such as a molab notebook,
+writes the file on its own machine. For an image reader that accepts bytes
+directly, deliver `cell_png` in that same call. Scratchpad bindings from the
+previous call will have been discarded.
 
 Continue until the call returns PNG bytes or raises a terminal `LensError`. A
 pending capture owns Lens's single full-cell capture slot, so finish it before

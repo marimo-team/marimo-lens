@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import json
 import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -254,6 +255,29 @@ def test_address_mode_builds_evidence_workset_for_every_selection() -> None:
         b"selection-png",
         b"second-selection-png",
     ]
+
+
+def test_pair_reference_heredoc_prints_the_connected_lens(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ctx = object()
+
+    def connect(context: object) -> SimpleNamespace:
+        assert context is ctx
+        return SimpleNamespace(identity="lens-a", context=_context)
+
+    text = (REPOSITORY_ROOT / "skills/marimo-lens/references/setup.md").read_text()
+    section = text.split("## Run Lens through marimo pair\n", maxsplit=1)[1]
+    match = re.search(
+        r"```bash\nmarimo pair execute .*?<<'PY'\n(.*?)\nPY\n```", section, re.DOTALL
+    )
+    assert match is not None
+    monkeypatch.setattr(code_mode, "get_context", lambda: ctx)
+    monkeypatch.setattr(lens_agent, "connect", connect)
+    exec(match.group(1), {})  # noqa: S102 - Exercise the repository-owned reference example.
+
+    assert json.loads(capsys.readouterr().out) == {"identity": "lens-a", "revision": 4}
 
 
 def _python_block(relative_path: str, heading: str) -> str:

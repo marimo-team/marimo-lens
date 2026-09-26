@@ -202,7 +202,7 @@ calling `connect()` again.
 **Result:** `marimo_lens.agent.connect(ctx)` returns a `MountedLens` and
 `mounted.context()` returns the current detached context.
 
-Use [marimo Pair](https://marimo.io/pair)
+Use [marimo pair](https://marimo.io/pair)
 when the agent still needs a live marimo code-mode connection.
 
 ## Cell-output image returns `None`

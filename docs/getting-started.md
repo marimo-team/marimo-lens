@@ -7,7 +7,7 @@ description: Install Lens, connect a notebook agent, make a first selection, and
 
 This page takes you from an empty notebook to a first reviewed change. You need
 Python 3.10 through 3.14, [uv](https://docs.astral.sh/uv/), and an agent that
-can run Python in the live marimo kernel. [marimo Pair](https://marimo.io/pair)
+can run Python in the live marimo kernel. [marimo pair](https://marimo.io/pair)
 and the editor's **Code Mode (beta)** sidebar both qualify.
 
 ## Open the sample notebook
@@ -132,7 +132,7 @@ You have two ways to bring an agent into the notebook. Pick one:
 - **Use your own agent.** If you would rather work with an agent you already
   use, such as Claude Code or Codex, open **Settings → Pair with an agent**,
   choose it, and follow the connection instructions. If you already use
-  [marimo Pair](https://marimo.io/pair), keep that connection.
+  [marimo pair](https://marimo.io/pair), keep that connection.
 
 Either way, check the connection by asking:
 

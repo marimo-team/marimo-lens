@@ -5,7 +5,8 @@ description: >-
   address a user's selection on a rendered output or configured DOM target.
   Use when asked to enable Lens, give a walkthrough, explain results in place,
   or act on selected points, regions, and notes. The address mode handles every
-  open selection. Requires access to the live marimo notebook kernel.
+  open selection. Requires the live marimo notebook kernel, reached through
+  marimo pair or the editor's code-mode sidebar.
 ---
 
 # Work with marimo Lens
@@ -30,10 +31,13 @@ walkthrough request into permission to edit or resolve them.
 This core skill contains the complete ordinary mounting and Trail workflows.
 Read a reference only when its task or exception applies.
 
-Run Lens operations in the live notebook kernel. If this briefing came from a
-terminal environment, connect to the notebook through its code-mode integration
-and use that installation's guidance. Reuse instructions already loaded for the
-same environment and Lens installation.
+Run each Python block in this skill as one call in the live notebook kernel.
+From a terminal, that call is one `marimo pair execute` with the block on
+stdin, and printed results arrive in its JSON `stdout`.
+[Run Lens through marimo pair](references/setup.md#run-lens-through-marimo-pair)
+covers targeting, errors, and concurrency. In the editor's code-mode sidebar,
+each block is one `execute_code` call. Reuse instructions already loaded for
+the same environment and Lens installation.
 
 Speak as a colleague in chat, activity, popovers, and summaries. Describe what
 you changed or found and the evidence behind it. Use concrete labels and a
@@ -42,9 +46,11 @@ Use a teaching tone when requested.
 
 ## Begin with the requested work
 
-Combine connection with the first useful operation: check availability for an
-add request, inspect relevant cells and values for a Trail, or read the current
-selection snapshot. A separate call that prints only an identity is unnecessary.
+After the integration's required first call, such as `help(cm)` for marimo
+pair, combine connection with the first useful operation: check availability
+for an add request, inspect relevant cells and values for a Trail, or read the
+current selection snapshot. A separate call that prints only an identity is
+unnecessary.
 
 `connect(ctx)` reuses authored and automatically mounted instances. When one
 browser-ready Lens owns the visible dock, it selects that Lens even if the

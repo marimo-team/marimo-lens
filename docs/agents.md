@@ -40,6 +40,10 @@ import agent_plugins as ap
 print(ap.read("marimo-lens"))
 ```
 
+`help()` prints the skill followed by the API reference for `connect()`,
+`discover()`, and `MountedLens`. `ap.read()` returns the skill alone as a
+string, so print it.
+
 Read a reference only when its workflow applies:
 
 ```python
@@ -52,10 +56,18 @@ print(
 )
 ```
 
-From a terminal, `uvx --with marimo-lens agent-plugins read marimo-lens` prints
-the same core skill from an isolated installation. It does not connect to a
-notebook. Working with a notebook requires the live connection and that
-installation's guidance.
+Through [marimo pair](https://marimo.io/pair), read the skill from the kernel
+that runs your calls. marimo's `help(cm)` lists `lens` under installed
+capabilities and points to this module:
+
+```bash
+marimo pair execute --url http://localhost:2718 --file notebook.py \
+  -c 'import marimo_lens; help(marimo_lens.agent)'
+```
+
+Before a notebook connection exists,
+`uvx --with marimo-lens agent-plugins read marimo-lens` prints the same core
+skill from an isolated installation, which can differ from the notebook's.
 
 ## Connect to Lens
 
@@ -91,6 +103,37 @@ mounted = marimo_lens.agent.connect(cm.get_context(), identity=saved_identity)
 
 The identity belongs to one live Lens instance and lasts for that runtime. When
 it is gone, retry once without it and read fresh context before continuing.
+
+### Run through marimo pair
+
+From a terminal, each kernel call is one `marimo pair execute`. Pass the Python
+on stdin and read printed results from the JSON result's `stdout`:
+
+```bash
+marimo pair execute --url http://localhost:2718 --file notebook.py --code-file - <<'PY'
+import json
+
+import marimo._code_mode as cm
+import marimo_lens
+
+mounted = marimo_lens.agent.connect(cm.get_context())
+print(json.dumps({"identity": mounted.identity, "current": mounted.context().current}))
+PY
+```
+
+- Pass `--file` on every call. The session ID changes when the page reloads,
+  while the kernel, its Lens, and the saved identity remain.
+- An uncaught `LensError` sets `success` to `false`. The last `stderr` line
+  names its code, as in `LensError: lens_unavailable: No Lens is available in
+the active notebook.`
+- When `marimo pair` reports an unknown outcome, read fresh Lens context before
+  repeating a mutation. A committed `resolve()` has already moved its
+  selections to History.
+- One session runs one execution at a time. Calls to different notebooks can
+  run concurrently.
+
+`marimo pair execute` ships with marimo 0.25.0. `marimo pair --help` covers
+server discovery, authentication, and session selection.
 
 ### Several or no instances
 

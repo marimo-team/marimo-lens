@@ -17,7 +17,7 @@ inspection, edits, execution, and general verification.
 | `marimo_lens.agent` | Discovers or creates Lens, selects one instance, returns `MountedLens`, and locates packaged resources. |
 | `MountedLens`       | Exposes detached context, cell-output PNG capture, activity, reveal, and resolve.                       |
 | Lens Agent Skill    | Defines request routing, evidence requirements, verification, presentation, and resolution policy.      |
-| marimo Pair         | Provides a code-mode connection when the current agent has no live notebook execution channel.          |
+| marimo pair         | Lists live notebooks and runs code-mode calls from a terminal through `marimo pair execute`.            |
 
 Lens augments a code-mode integration. It does not own the notebook execution
 environment.
