@@ -32,6 +32,15 @@ marimo 0.25.0 mounts Lens
 after it runs successfully. If your notebook already shows a Lens dock, reuse
 it.
 
+In marimo 0.25.0, the automatic mount also runs for code-mode calls. Each
+`marimo pair execute` whose code imports marimo adds a Lens to the scratchpad
+output, and a call that runs notebook cells can log
+`Failed to automatically mount marimo-lens` on `stderr`. Those instances stay
+out of view until the editor's **Scratchpad** panel shows the scratchpad
+output. Then one of them can take over the dock when the notebook's Lens cell
+reruns, and `connect()` can select it or raise `lens_ambiguous`. Leave the
+Scratchpad panel unopened while an agent works with Lens.
+
 In marimo 0.24, display a `Lens()` instance in a notebook cell, ask your
 connected agent to add it, or use a host integration that mounts it.
 Installation alone does not show a dock in those releases. The

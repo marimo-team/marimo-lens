@@ -91,7 +91,10 @@ first `help(cm)` call. That help lists `lens` under installed capabilities.
 
 `marimo pair execute` and `marimo pair notebook list` ship with marimo 0.25.0.
 With an earlier marimo, the marimo pair skill's `execute-code.sh` runs the same
-blocks and prints their output directly.
+blocks and prints their output directly. In marimo 0.25.0, a call that runs
+notebook cells can also log `Failed to automatically mount marimo-lens` on
+`stderr`. That warning comes from marimo's scratchpad and leaves the notebook's
+Lens unchanged.
 
 ## Install in a running notebook
 
