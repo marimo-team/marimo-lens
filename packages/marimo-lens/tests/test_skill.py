@@ -257,6 +257,34 @@ def test_address_mode_builds_evidence_workset_for_every_selection() -> None:
     ]
 
 
+def test_primary_skill_reads_open_selections_with_notes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ctx = object()
+
+    def connect(context: object) -> SimpleNamespace:
+        assert context is ctx
+        return SimpleNamespace(identity="lens-a", context=_context)
+
+    monkeypatch.setattr(code_mode, "get_context", lambda: ctx)
+    monkeypatch.setattr(lens_agent, "connect", connect)
+    exec(  # noqa: S102 - Exercise the repository-owned skill example.
+        _python_block("skills/marimo-lens/SKILL.md", "## Address a selection"),
+        {},
+    )
+
+    assert json.loads(capsys.readouterr().out) == {
+        "identity": "lens-a",
+        "revision": 4,
+        "currentId": "selection-1",
+        "selections": [
+            {"id": "selection-1", "label": "S1", "note": ""},
+            {"id": "selection-2", "label": "S2", "note": "Check the second mark"},
+        ],
+    }
+
+
 def test_selection_reference_lists_open_selections_for_another_session(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

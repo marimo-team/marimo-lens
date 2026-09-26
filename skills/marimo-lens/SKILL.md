@@ -156,6 +156,39 @@ changed results before showing another Trail.
 
 ## Address a selection
 
+Read the open selections and their notes in one call. The selections live in
+`snapshot.references["selections"]`, and `snapshot.current` is the likely
+referent for "this" or "here":
+
+```python
+import json
+
+import marimo._code_mode as cm
+import marimo_lens
+
+mounted = marimo_lens.agent.connect(cm.get_context())
+snapshot = mounted.context()
+print(
+    json.dumps(
+        {
+            "identity": mounted.identity,
+            "revision": snapshot.revision,
+            "currentId": (snapshot.current or {}).get("id"),
+            "selections": [
+                {"id": s["id"], "label": s["label"], "note": s["note"]}
+                for s in snapshot.references["selections"]
+            ],
+        },
+        ensure_ascii=False,
+    )
+)
+```
+
+An empty list means this notebook holds no open selections. The editor's
+code-mode sidebar reaches only its own notebook, so tell the user and add that
+notes in another notebook are addressed from that notebook's sidebar or
+through marimo pair.
+
 Follow [selection work](references/selections.md) for the complete lifecycle:
 read context, inspect evidence, start activity, apply the requested change,
 verify, reveal, and resolve. Preserve these boundaries:
@@ -173,7 +206,7 @@ verify, reveal, and resolve. Preserve these boundaries:
   ambiguous, blocked, or unverified selections open. On revision conflict,
   stop owned activity, reconnect, and reassess fresh context.
 - A Lens belongs to one notebook session. When the connected Lens holds none
-  of the selections the user refers to, read the server's other sessions as
+  of the selections the user refers to, check the other notebooks as
   described in
   [selections in other notebooks](references/selections.md#selections-in-other-notebooks).
 

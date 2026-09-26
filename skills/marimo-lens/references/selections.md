@@ -117,6 +117,11 @@ work in another notebook. Make and verify that change through the other
 notebook's session, then reveal and resolve the selection with the Lens that
 holds it, so the result appears beside the original request.
 
+The editor's code-mode sidebar reaches only its own notebook. When the user
+asks about notes or selections and this Lens has none open, tell the user that
+this notebook has no open selections and that notes in another notebook are
+addressed from that notebook's sidebar or through marimo pair.
+
 ## Start meaningful activity
 
 Choose the relevant `SelectionReference`, then start activity against that
@@ -276,7 +281,8 @@ after it returns visible pixels.
 
 Check the available tools before requesting images. If the session exposes
 only text results and no image reader, or the reader reports that it cannot
-display images, treat visual inspection as unavailable. Skip capture and
+display images, treat visual inspection as unavailable. The editor's code-mode
+sidebar returns `execute_code` results as text and has no image reader. Skip capture and
 image-inspection attempts that cannot inform the task. Python image objects,
 dimensions, hashes, base64, and OCR do not establish visual inspection.
 Delete the temporary path and skip later image-reader calls unless the reader
