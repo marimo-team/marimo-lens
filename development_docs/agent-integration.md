@@ -72,9 +72,10 @@ It searches for the private marker used by an agent-created Lens cell:
 The behavior is:
 
 - One existing marked cell returns its ID. It is also queued to run unless
-  its code-mode status is `idle`, `queued`, `running`, or `disabled`. This
-  remounts Lens in a new kernel whose notebook has not run, or after a failed
-  first run. An `idle` cell holds a live Lens whose selections would be lost.
+  the registry holds an open Lens created by that cell, or its code-mode status
+  is `queued`, `running`, or `disabled`. This remounts Lens in a new kernel
+  whose notebook has not run, after a failed first run, or after `close()`. A
+  cell's status reports its last run, not whether its Lens is still open.
 - Several marked cells raise `lens_ambiguous`.
 - No marked cell queues one hidden-code cell, runs it when the code-mode
   context applies the mutation, and returns its ID.
@@ -129,6 +130,10 @@ identifier.
 A Python Lens registers through `_registry.py` when a browser view reports
 output capture ready in the active marimo runtime scope. It unregisters when every
 browser view becomes unready or the Lens closes.
+
+Each Lens also records the runtime scope and cell that constructed it.
+`add_lens_cell()` uses that origin to leave a cell alone while the Lens it
+created is open, even when no browser view currently shows it.
 
 The registry is scoped by the active marimo UI registry object. It prevents a
 code-mode call from discovering a displayed Lens in another live runtime. Weak

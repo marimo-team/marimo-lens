@@ -13,7 +13,7 @@ from typing import Protocol, cast
 import agent_plugins
 
 from ._marimo_runtime import current_runtime_scope
-from ._registry import mounted_lenses
+from ._registry import mounted_lenses, open_lenses_from_cell
 from .activity import ActivityHandle
 from .context import LensContext, SelectionReference
 from .errors import LensError
@@ -225,10 +225,11 @@ def add_lens_cell(ctx: object) -> str:
     """Queue a collapsed notebook cell that mounts a Lens.
 
     Return the existing agent-created Lens cell ID when the notebook already
-    contains one. That cell is queued to run again unless it is up to date,
-    pending, or disabled, so a notebook reopened in a new kernel or a failed
-    first run mounts Lens. The code-mode context creates and runs cells when
-    its async context manager exits.
+    contains one. That cell is queued to run again unless it still holds an
+    open Lens or is queued, running, or disabled. A notebook reopened in a new
+    kernel, a failed first run, or a closed Lens then mounts a new Lens. The
+    code-mode context creates and runs cells when its async context manager
+    exits.
 
     Call connect() in a later kernel call after the browser has rendered the
     cell.
@@ -256,9 +257,14 @@ def add_lens_cell(ctx: object) -> str:
         )
     if existing:
         cell_id = str(existing[0].id)
-        # An idle cell holds a live Lens, and rerunning it would drop its Open
+        # Rerunning a cell replaces its open Lens and drops that Lens's Open
         # selections. A queued or running cell is already mounting one.
-        if existing[0].status not in {"idle", "queued", "running", "disabled"}:
+        holds_open_lens = bool(open_lenses_from_cell(current_runtime_scope(), cell_id))
+        if not holds_open_lens and existing[0].status not in {
+            "queued",
+            "running",
+            "disabled",
+        }:
             run_cell(cell_id)
         return cell_id
 

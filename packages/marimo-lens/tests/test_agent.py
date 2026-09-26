@@ -313,17 +313,28 @@ def test_add_lens_cell_reports_duplicate_generated_cells() -> None:
 
 
 @pytest.mark.parametrize(
-    ("status", "runs"),
+    ("status", "cell_lens", "runs"),
     [
-        ("stale", ["lens-1"]),
-        ("exception", ["lens-1"]),
-        ("idle", []),
-        ("queued", []),
+        ("stale", None, ["lens-1"]),
+        ("exception", None, ["lens-1"]),
+        ("idle", "closed", ["lens-1"]),
+        ("idle", "open", []),
+        ("queued", None, []),
     ],
 )
-def test_add_lens_cell_reruns_its_cell_unless_a_lens_is_live_or_pending(
-    status: str, runs: list[str]
+def test_add_lens_cell_reruns_its_cell_unless_it_holds_an_open_lens(
+    _active_runtime: SimpleNamespace,
+    status: str,
+    cell_lens: str | None,
+    runs: list[str],
 ) -> None:
+    lens = None
+    if cell_lens is not None:
+        _active_runtime.context.execution_context = SimpleNamespace(cell_id="lens-1")
+        lens = Lens()
+        _active_runtime.context.execution_context = None
+        if cell_lens == "closed":
+            lens.close()
     queued: list[str] = []
 
     class Cells:
@@ -341,6 +352,8 @@ def test_add_lens_cell_reruns_its_cell_unless_a_lens_is_live_or_pending(
 
     assert agent.add_lens_cell(context) == "lens-1"
     assert queued == runs
+    if lens is not None:
+        lens.close()
 
 
 def test_connect_preserves_identity_across_kernel_calls() -> None:
