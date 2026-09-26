@@ -1,0 +1,24 @@
+skills/marimo-lens/SKILL.md
+  s_4ef8a9cdd83feb::t_ba0a528fece5bb 209
+  s_4ef8a9cdd83feb::t_82f56a2e7b0882 159-191
+skills/marimo-lens/references/selections.md
+  s_4ef8a9cdd83feb::t_ba0a528fece5bb 120-124,284-285
+packages/marimo-lens/tests/test_skill.py
+  s_4ef8a9cdd83feb::t_82f56a2e7b0882 260-287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "50e257851d5cbd89016f7cae47a31617997e8571",
+  "prompts": {},
+  "sessions": {
+    "s_4ef8a9cdd83feb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "49169b65-7bac-41e4-86e8-9d771bc29a09",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
