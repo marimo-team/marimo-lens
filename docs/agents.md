@@ -56,9 +56,9 @@ print(
 )
 ```
 
-Through [marimo pair](https://marimo.io/pair), read the skill from the kernel
-that runs your calls. marimo's `help(cm)` lists `lens` under installed
-capabilities and points to this module:
+With marimo 0.25.0 or later, [marimo pair](https://marimo.io/pair) reads the
+skill from the kernel that runs your calls. marimo's `help(cm)` lists `lens`
+under installed capabilities and points to this module:
 
 ```bash
 marimo pair execute --url http://localhost:2718 --file notebook.py \

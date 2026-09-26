@@ -82,8 +82,9 @@ A Lens belongs to one notebook session and its kernel. `connect(ctx)` and
 `discover(ctx)` see only the session that runs the call. When the request
 refers to selections this Lens does not hold, list the live notebooks through
 the code-mode integration. With marimo pair, `marimo pair notebook list`
-reports every notebook path, and `--url` repeats for several servers. Run this
-read-only block in every listed notebook concurrently:
+reports each notebook's path and server URL. To list several servers in one
+call, pass `--url` once per server. Run this read-only block in every listed
+notebook concurrently:
 
 ```python
 import json
@@ -107,9 +108,9 @@ print(json.dumps(open_selections, ensure_ascii=False))
 ```
 
 With marimo pair, save the block to a file and start one
-`marimo pair execute --url <URL> --file <path> --code-file <file>` per notebook
-without waiting for the previous one. Each result's `stdout` holds that
-notebook's list.
+`marimo pair execute --url <URL> --file <path> --code-file <file>` per notebook,
+passing that notebook's server URL, without waiting for the previous one. Each
+result's `stdout` holds that notebook's list.
 
 Address each selection through the session that holds it. A note can ask for
 work in another notebook. Make and verify that change through the other

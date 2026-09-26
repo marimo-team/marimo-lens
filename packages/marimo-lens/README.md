@@ -67,7 +67,8 @@ uvx --with marimo-lens agent-plugins read marimo-lens
 
 In an existing notebook kernel, run `import marimo_lens` followed by
 `help(marimo_lens.agent)`. The help includes the same core skill and references
-from that installation. Through marimo pair, run it in the notebook's kernel:
+from that installation. With marimo 0.25.0 or later, marimo pair runs it in the
+notebook's kernel from a terminal:
 
 ```console
 marimo pair execute --url <URL> --file <notebook.py> -c 'import marimo_lens; help(marimo_lens.agent)'
