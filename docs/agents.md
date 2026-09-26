@@ -29,7 +29,7 @@ advertise to agents.
 In the notebook kernel, read the core skill with either form:
 
 ```python
-import marimo_lens.agent
+import marimo_lens
 
 help(marimo_lens.agent)
 ```
@@ -40,10 +40,14 @@ import agent_plugins as ap
 print(ap.read("marimo-lens"))
 ```
 
+`help()` prints the skill followed by the API reference for `connect()`,
+`discover()`, and `MountedLens`. `ap.read()` returns the skill alone as a
+string, so print it.
+
 Read a reference only when its workflow applies:
 
 ```python
-import marimo_lens.agent
+import marimo_lens
 
 print(
     marimo_lens.agent.skill()
@@ -52,10 +56,18 @@ print(
 )
 ```
 
-From a terminal, `uvx --with marimo-lens agent-plugins read marimo-lens` prints
-the same core skill from an isolated installation. It does not connect to a
-notebook. Working with a notebook requires the live connection and that
-installation's guidance.
+[marimo pair](https://marimo.io/pair) reads the skill from the kernel that runs
+your calls. marimo's `help(cm)` lists `lens`
+under installed capabilities and points to this module:
+
+```bash
+marimo pair execute --url http://localhost:2718 --file notebook.py \
+  -c 'import marimo_lens; help(marimo_lens.agent)'
+```
+
+Before a notebook connection exists,
+`uvx --with marimo-lens agent-plugins read marimo-lens` prints the same core
+skill from an isolated installation, which can differ from the notebook's.
 
 ## Connect to Lens
 
@@ -68,9 +80,9 @@ code-mode kernel call:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context())
+mounted = marimo_lens.agent.connect(cm.get_context())
 lens_context = mounted.context()
 
 print(mounted.identity)
@@ -86,11 +98,42 @@ Each kernel call has a fresh scratchpad. Save `mounted.identity` in your
 working state and pass it back to select the same Lens later:
 
 ```python
-mounted = lens_agent.connect(cm.get_context(), identity=saved_identity)
+mounted = marimo_lens.agent.connect(cm.get_context(), identity=saved_identity)
 ```
 
 The identity belongs to one live Lens instance and lasts for that runtime. When
 it is gone, retry once without it and read fresh context before continuing.
+
+### Run through marimo pair
+
+From a terminal, each kernel call is one `marimo pair execute`. Pass the Python
+on stdin and read printed results from the JSON result's `stdout`:
+
+```bash
+marimo pair execute --url http://localhost:2718 --file notebook.py --code-file - <<'PY'
+import json
+
+import marimo._code_mode as cm
+import marimo_lens
+
+mounted = marimo_lens.agent.connect(cm.get_context())
+print(json.dumps({"identity": mounted.identity, "current": mounted.context().current}))
+PY
+```
+
+- Pass `--file` on every call. The session ID changes when the page reloads,
+  while the kernel, its Lens, and the saved identity remain.
+- An uncaught `LensError` sets `success` to `false`. The last `stderr` line
+  names its code, as in `LensError: lens_unavailable: No Lens is available in
+the active notebook.`
+- When `marimo pair` reports an unknown outcome, read fresh Lens context before
+  repeating a mutation. A committed `resolve()` has already moved its
+  selections to History.
+- One session runs one execution at a time. Calls to different notebooks can
+  run concurrently.
+
+`marimo pair --help` covers server discovery, authentication, and session
+selection.
 
 ### Several or no instances
 
@@ -98,9 +141,9 @@ Use `discover()` to check availability or inspect candidates:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-available = lens_agent.discover(cm.get_context())
+available = marimo_lens.agent.discover(cm.get_context())
 for candidate in available:
     print(candidate.identity, candidate.context().current)
 ```
@@ -122,18 +165,34 @@ Lens cell:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 async with cm.get_context() as context:
-    cell_id = lens_agent.add_lens_cell(context)
+    cell_id = marimo_lens.agent.add_lens_cell(context)
     print(cell_id)
 ```
 
 End that kernel call so the cell can run and the browser can render the dock,
 then connect in a fresh call. `add_lens_cell()` reuses one agent-managed Lens
-cell and raises `lens_ambiguous` when it finds several. A host that mounts Lens
-with its own `dom_selector` policy owns mounting. Follow the host integration
-instead.
+cell, reruns it when it holds no live Lens, and raises `lens_ambiguous` when it
+finds several. A host that mounts Lens with its own `dom_selector` policy owns
+mounting. Follow the host integration instead.
+
+A reopened notebook whose cells have not run in the new kernel has no Lens yet.
+Run the cell that mounts Lens with `ctx.run_cell(cell_id)`: a cell that imports
+marimo, or an authored Lens cell.
+
+### Selections in other notebooks
+
+A Lens belongs to one notebook session and its kernel, so `connect()` and
+`discover()` see only the session that runs the call. When the person refers to
+selections that this Lens does not hold, list the server's live sessions
+through the code-mode integration, such as `marimo pair notebook list`, and
+read `discover()` in each session concurrently.
+
+Address a selection through the session that holds it. When its note asks for
+work in another notebook, edit and verify through that notebook's session, then
+reveal and resolve the selection with the Lens that holds it.
 
 ## Address a selection
 
@@ -195,12 +254,12 @@ the same captured revision in one call:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 # Replace these with the strings saved in agent working state from the earlier call.
 identity = "<saved Lens identity>"
 selection_id = "<saved selection ID>"
-mounted = lens_agent.connect(cm.get_context(), identity=identity)
+mounted = marimo_lens.agent.connect(cm.get_context(), identity=identity)
 fresh_context = mounted.context()
 fresh_selection = next(
     item

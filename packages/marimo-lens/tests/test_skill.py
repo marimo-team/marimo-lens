@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import asyncio
+import json
 import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -256,6 +257,88 @@ def test_address_mode_builds_evidence_workset_for_every_selection() -> None:
     ]
 
 
+def test_primary_skill_reads_open_selections_with_notes(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ctx = object()
+
+    def connect(context: object) -> SimpleNamespace:
+        assert context is ctx
+        return SimpleNamespace(identity="lens-a", context=_context)
+
+    monkeypatch.setattr(code_mode, "get_context", lambda: ctx)
+    monkeypatch.setattr(lens_agent, "connect", connect)
+    exec(  # noqa: S102 - Exercise the repository-owned skill example.
+        _python_block("skills/marimo-lens/SKILL.md", "## Address a selection"),
+        {},
+    )
+
+    assert json.loads(capsys.readouterr().out) == {
+        "identity": "lens-a",
+        "revision": 4,
+        "currentId": "selection-1",
+        "selections": [
+            {"id": "selection-1", "label": "S1", "note": ""},
+            {"id": "selection-2", "label": "S2", "note": "Check the second mark"},
+        ],
+    }
+
+
+def test_selection_reference_lists_open_selections_for_another_session(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ctx = object()
+
+    def discover(context: object) -> tuple[SimpleNamespace, ...]:
+        assert context is ctx
+        return (SimpleNamespace(identity="lens-a", context=_context),)
+
+    monkeypatch.setattr(code_mode, "get_context", lambda: ctx)
+    monkeypatch.setattr(lens_agent, "discover", discover)
+    exec(  # noqa: S102 - Exercise the repository-owned reference example.
+        _python_block(
+            "skills/marimo-lens/references/selections.md",
+            "### Selections in other notebooks",
+        ),
+        {},
+    )
+
+    assert json.loads(capsys.readouterr().out) == [
+        {"identity": "lens-a", "id": "selection-1", "label": "S1", "note": ""},
+        {
+            "identity": "lens-a",
+            "id": "selection-2",
+            "label": "S2",
+            "note": "Check the second mark",
+        },
+    ]
+
+
+def test_pair_reference_heredoc_prints_the_connected_lens(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ctx = object()
+
+    def connect(context: object) -> SimpleNamespace:
+        assert context is ctx
+        return SimpleNamespace(identity="lens-a", context=_context)
+
+    text = (REPOSITORY_ROOT / "skills/marimo-lens/references/setup.md").read_text()
+    section = text.split("## Run Lens through marimo pair\n", maxsplit=1)[1]
+    match = re.search(
+        r"```bash\nmarimo pair execute .*?<<'PY'\n(.*?)\nPY\n```", section, re.DOTALL
+    )
+    assert match is not None
+    monkeypatch.setattr(code_mode, "get_context", lambda: ctx)
+    monkeypatch.setattr(lens_agent, "connect", connect)
+    exec(match.group(1), {})  # noqa: S102 - Exercise the repository-owned reference example.
+
+    assert json.loads(capsys.readouterr().out) == {"identity": "lens-a", "revision": 4}
+
+
 def _python_block(relative_path: str, heading: str) -> str:
     text = (REPOSITORY_ROOT / relative_path).read_text()
     section = text.split(f"{heading}\n", maxsplit=1)[1]
@@ -272,9 +355,9 @@ def _code_mode_block(relative_path: str, heading: str) -> str:
         if line
         not in {
             "import marimo._code_mode as cm",
-            "import marimo_lens.agent as lens_agent",
+            "import marimo_lens",
         }
-        and not line.startswith("mounted = lens_agent.connect(")
+        and not line.startswith("mounted = marimo_lens.agent.connect(")
     ]
     return "\n".join(lines)
 

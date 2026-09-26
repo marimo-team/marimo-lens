@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 describe("Lens widget views", () => {
-  test("renders controls in one view and transfers ownership after teardown", () => {
+  test("renders controls in one view and transfers ownership after teardown", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const underlyingModel = fakeModel();
     const firstContainer = appendContainer();
@@ -36,10 +36,10 @@ describe("Lens widget views", () => {
     expect(firstContainer.querySelector("[data-widget-content]")).not.toBeNull();
     expect(secondContainer.querySelector("[data-widget-content]")).toBeNull();
 
-    release(releaseFirst);
+    await release(releaseFirst);
     expect(secondContainer.querySelector("[data-widget-content]")).not.toBeNull();
 
-    release(releaseSecond);
+    await release(releaseSecond);
     const nextContainer = appendContainer();
     renderWidget(nextContainer, new Proxy(underlyingModel, {}));
     expect(nextContainer.querySelector("[data-widget-content]")).not.toBeNull();
@@ -75,8 +75,9 @@ function renderWidget(container: HTMLElement, model: AnyModel): RenderCleanup {
   return cleanup;
 }
 
-function release(cleanup: RenderCleanup): void {
-  act(() => {
+async function release(cleanup: RenderCleanup): Promise<void> {
+  // Ownership moves to the next view after the releasing task.
+  await act(async () => {
     void cleanup();
   });
   cleanups.delete(cleanup);

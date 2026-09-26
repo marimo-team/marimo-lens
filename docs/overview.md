@@ -13,7 +13,7 @@ row in a table, and hand that mark to a notebook agent together with the code
 and data behind it. The agent inspects, revises, and verifies the notebook.
 Lens then brings the result back into view for your review.
 
-[marimo Pair](https://marimo.io/pair) and marimo's code-mode sidebar let people
+[marimo pair](https://marimo.io/pair) and marimo's code-mode sidebar let people
 collaborate with agents on notebook analyses. A person asks in plain language
 while the agent inspects data, edits code, and runs cells in the live notebook.
 When the question is about something visible, language is a poor pointer. "The
@@ -92,7 +92,7 @@ lens
 Lens owns selections, notebook context, and visible feedback. It does not edit
 or run cells. That work belongs to a **code-mode agent**, an agent that can
 execute Python in the live notebook kernel, such as one connected through
-marimo Pair. The `marimo-lens` package includes the agent's own instructions,
+marimo pair. The `marimo-lens` package includes the agent's own instructions,
 so a connected agent reads guidance that matches the installed version.
 
 ## Where next

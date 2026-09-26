@@ -17,7 +17,7 @@ inspection, edits, execution, and general verification.
 | `marimo_lens.agent` | Discovers or creates Lens, selects one instance, returns `MountedLens`, and locates packaged resources. |
 | `MountedLens`       | Exposes detached context, cell-output PNG capture, activity, reveal, and resolve.                       |
 | Lens Agent Skill    | Defines request routing, evidence requirements, verification, presentation, and resolution policy.      |
-| marimo Pair         | Provides a code-mode connection when the current agent has no live notebook execution channel.          |
+| marimo pair         | Lists live notebooks and runs code-mode calls from a terminal through `marimo pair execute`.            |
 
 Lens augments a code-mode integration. It does not own the notebook execution
 environment.
@@ -35,6 +35,11 @@ value: marimo_lens.agent
 
 The entry point lives in `packages/marimo-lens/pyproject.toml`. marimo code mode
 can discover the installed module through its capability registry.
+
+`import marimo_lens` also loads the submodule, so agents and docs reach the
+handoff surface as `marimo_lens.agent.*`. The entry point keeps naming the
+submodule because marimo prints it in `help(cm)`, and its module help carries
+the skill.
 
 `marimo_lens.agent.plugin()` locates the Agent Plugin installed with the active
 `marimo-lens` distribution. `marimo_lens.agent.skill()` selects its `marimo-lens` skill.
@@ -66,7 +71,11 @@ It searches for the private marker used by an agent-created Lens cell:
 
 The behavior is:
 
-- One existing marked cell returns its ID.
+- One existing marked cell returns its ID. It is also queued to run unless
+  the registry holds an open Lens created by that cell, or its code-mode status
+  is `queued`, `running`, or `disabled`. This remounts Lens in a new kernel
+  whose notebook has not run, after a failed first run, or after `close()`. A
+  cell's status reports its last run, not whether its Lens is still open.
 - Several marked cells raise `lens_ambiguous`.
 - No marked cell queues one hidden-code cell, runs it when the code-mode
   context applies the mutation, and returns its ID.
@@ -121,6 +130,10 @@ identifier.
 A Python Lens registers through `_registry.py` when a browser view reports
 output capture ready in the active marimo runtime scope. It unregisters when every
 browser view becomes unready or the Lens closes.
+
+Each Lens also records the runtime scope and cell that constructed it.
+`add_lens_cell()` uses that origin to leave a cell alone while the Lens it
+created is open, even when no browser view currently shows it.
 
 The registry is scoped by the active marimo UI registry object. It prevents a
 code-mode call from discovering a displayed Lens in another live runtime. Weak
@@ -269,6 +282,10 @@ and image reader must share a filesystem.
 
 Keep ambiguous, blocked, and unverified selections open. Resolution records a
 History entry and releases the selection image.
+
+`LensError` text begins with its code. Code-mode transports such as
+`marimo pair execute` return an uncaught error as traceback text, so the code
+stays visible outside the exception object.
 
 ## Source map
 

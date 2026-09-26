@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import inspect
+import os
 import pydoc
 import subprocess
 import sys
+import traceback
 from collections.abc import Mapping, Sequence
 from importlib.metadata import distribution
 from types import SimpleNamespace
@@ -114,6 +116,23 @@ def test_package_import_exposes_agent_resources_and_help(import_statement: str) 
 
     assert result.returncode == 0, result.stderr
     assert "marimo_lens.agent" in result.stdout
+
+
+def test_module_help_carries_the_skill_through_a_windows_code_page() -> None:
+    # A Windows kernel whose output is redirected reports the locale code page,
+    # and pydoc's help() escapes characters that code page cannot encode.
+    result = subprocess.run(
+        [sys.executable, "-c", "import marimo_lens\nhelp(marimo_lens.agent)"],
+        capture_output=True,
+        env={**os.environ, "PYTHONIOENCODING": "cp1252"},
+        check=True,
+    )
+    help_text = result.stdout.decode("cp1252")
+
+    skill_lines = [
+        line.strip() for line in agent.skill().body.splitlines() if line.strip()
+    ]
+    assert [line for line in skill_lines if line not in help_text] == []
 
 
 def test_package_import_defers_reading_agent_resources() -> None:
@@ -293,6 +312,50 @@ def test_add_lens_cell_reports_duplicate_generated_cells() -> None:
     assert raised.value.code == "lens_ambiguous"
 
 
+@pytest.mark.parametrize(
+    ("status", "cell_lens", "runs"),
+    [
+        ("stale", None, ["lens-1"]),
+        ("exception", None, ["lens-1"]),
+        ("idle", "closed", ["lens-1"]),
+        ("idle", "open", []),
+        ("queued", None, []),
+    ],
+)
+def test_add_lens_cell_reruns_its_cell_unless_it_holds_an_open_lens(
+    _active_runtime: SimpleNamespace,
+    status: str,
+    cell_lens: str | None,
+    runs: list[str],
+) -> None:
+    lens = None
+    if cell_lens is not None:
+        _active_runtime.context.execution_context = SimpleNamespace(cell_id="lens-1")
+        lens = Lens()
+        _active_runtime.context.execution_context = None
+        if cell_lens == "closed":
+            lens.close()
+    queued: list[str] = []
+
+    class Cells:
+        def find(self, _substring: str) -> list[SimpleNamespace]:
+            return [SimpleNamespace(id="lens-1", status=status)]
+
+    def create_cell(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("an existing Lens cell must be reused")
+
+    context = SimpleNamespace(
+        cells=Cells(),
+        create_cell=create_cell,
+        run_cell=queued.append,
+    )
+
+    assert agent.add_lens_cell(context) == "lens-1"
+    assert queued == runs
+    if lens is not None:
+        lens.close()
+
+
 def test_connect_preserves_identity_across_kernel_calls() -> None:
     lens = _mounted_lens()
 
@@ -418,6 +481,17 @@ def test_connect_ignores_a_closed_context_lens() -> None:
 
     assert mounted.context().revision == 0
     available.close()
+
+
+def test_unavailable_connection_reports_its_code_in_the_traceback() -> None:
+    with pytest.raises(LensError) as raised:
+        agent.connect(_code_mode_context())
+
+    # Code-mode transports return an uncaught error as its formatted traceback.
+    assert traceback.format_exception_only(raised.value)[-1] == (
+        "marimo_lens.errors.LensError: lens_unavailable: "
+        "No Lens is available in the active notebook.\n"
+    )
 
 
 def test_connect_uses_identity_to_select_an_available_context_lens() -> None:

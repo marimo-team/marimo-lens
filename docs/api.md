@@ -292,10 +292,11 @@ Later public operations raise `LensError(code="lens_closed")`.
 
 ## Agent adapter
 
-Read the agent resources from the installed package:
+`import marimo_lens` loads `marimo_lens.agent`, the module marimo registers as
+the `lens` capability. Read the agent resources from the installed package:
 
 ```python
-import marimo_lens.agent
+import marimo_lens
 
 plugin = marimo_lens.agent.plugin()
 skill = marimo_lens.agent.skill()
@@ -337,10 +338,10 @@ cell and returns its new ID.
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 async with cm.get_context() as context:
-    cell_id = lens_agent.add_lens_cell(context)
+    cell_id = marimo_lens.agent.add_lens_cell(context)
 ```
 
 Call `connect()` or `discover()` first to reuse an authored or automatically
@@ -349,8 +350,14 @@ mounted Lens. This helper searches for agent-managed cells.
 The code-mode context creates and runs a queued cell when its async context
 manager exits. Connect in a later kernel call after the browser renders Lens.
 
-`ctx` must expose `create_cell()`, `run_cell()`, and `cells.find()`. Other
-objects raise `TypeError`. Several agent-managed Lens cells raise
+An existing agent-managed cell is queued to run again unless it still holds an
+open Lens or its status is `queued`, `running`, or `disabled`. This mounts a
+new Lens in a notebook reopened in a new kernel, after a failed first run, or
+after `close()`. A cell whose Lens is open keeps that Lens and its Open
+selections.
+
+`ctx` must expose `create_cell()`, `run_cell()`, and `cells.find()`, and found
+cells must report `status`. Objects without those methods raise `TypeError`. Several agent-managed Lens cells raise
 `LensError(code="lens_ambiguous")`.
 
 ### `discover`
@@ -363,9 +370,9 @@ let an agent inspect their contexts and choose an identity for `connect()`.
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-available = lens_agent.discover(cm.get_context())
+available = marimo_lens.agent.discover(cm.get_context())
 for candidate in available:
     print(candidate.identity, candidate.context().current)
 ```
@@ -390,9 +397,9 @@ automatically mounted instances without creating another Lens.
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context())
+mounted = marimo_lens.agent.connect(cm.get_context())
 ```
 
 `context` adds Lens objects found in code-mode globals to browser-ready Lens
@@ -455,6 +462,10 @@ difference between a selection image and a cell-output image.
 
 - `code: str`, a stable machine-readable failure code.
 - `revision: int | None`, the current selection-state revision when available.
+
+`str(error)` starts with the code, as in
+`lens_unavailable: No Lens is available in the active notebook.`, so a
+traceback reported by a code-mode integration names the recovery code.
 
 Read [Errors and limits](./reference/errors) for every code, recovery action,
 argument rule, and bound. Read [Connect an agent](./agents) for the complete

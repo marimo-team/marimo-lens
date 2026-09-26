@@ -5,12 +5,13 @@ The [core skill](../SKILL.md) routes requests and covers walkthroughs.
 resolution policy. Use these recipes in the live marimo kernel.
 
 Notebook discovery, connection, scratchpad execution, and general notebook
-mutation belong to the active code-mode integration, such as marimo Pair. This
+mutation belong to the active code-mode integration, such as marimo pair. This
 reference covers the Lens calls that cross kernel executions.
 
-Each kernel call has a fresh scratchpad namespace. Reimport the modules and
-select the saved Lens identity in each call, as the examples do. Substitute
-your captured identity, cell IDs, and revision for the example values.
+Each kernel call, such as one `marimo pair execute`, has a fresh scratchpad
+namespace. Reimport the modules and select the saved Lens identity in each
+call, as the examples do. Substitute your captured identity, cell IDs, and
+revision for the example values.
 
 Use the [core skill](../SKILL.md) for ordinary mounting and Trails. Read this
 reference when a task needs image transfer, completion across calls, or recovery.
@@ -24,9 +25,9 @@ cell ID, and revision in this complete kernel call:
 from tempfile import NamedTemporaryFile
 
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
+mounted = marimo_lens.agent.connect(cm.get_context(), identity="F3n...")
 cell_png = mounted.cell_image("BYtC", expected_revision=8)
 if cell_png is None:
     print("capture_pending")
@@ -41,9 +42,11 @@ else:
 When the call prints `capture_pending`, end that execution so the browser can
 respond. Repeat the call in a fresh execution with the same identity, cell ID,
 and revision. When it prints a path, open the image and delete the file after
-inspection. The kernel and image reader must share a filesystem. For an image
-reader that accepts bytes directly, deliver `cell_png` in that same call.
-Scratchpad bindings from the previous call will have been discarded.
+inspection. The kernel and image reader must share a filesystem, as they do
+with a local marimo pair server. A remote kernel, such as a molab notebook,
+writes the file on its own machine. For an image reader that accepts bytes
+directly, deliver `cell_png` in that same call. Scratchpad bindings from the
+previous call will have been discarded.
 
 Continue until the call returns PNG bytes or raises a terminal `LensError`. A
 pending capture owns Lens's single full-cell capture slot, so finish it before
@@ -82,9 +85,9 @@ verified selection ID into one completion call. Reveal replaces activity:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
+mounted = marimo_lens.agent.connect(cm.get_context(), identity="F3n...")
 snapshot = mounted.context()
 selection = next(
     selection
@@ -133,6 +136,9 @@ document identity, so reconnect and read fresh Lens context before continuing.
 | `selection_not_found` | Reconnect and inspect the current selections.                                                                    |
 | `capture_busy`        | Finish the pending cell capture before requesting another.                                                       |
 | `runtime_unavailable` | Keep the request open and report that verification is unavailable.                                               |
+
+Each code is the `LensError.code` attribute and also begins the error text, so
+the traceback that `marimo pair` returns in `stderr` names it.
 
 Keep selections open when recovery cannot restore current evidence and fresh
 verification.
