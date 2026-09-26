@@ -147,7 +147,7 @@ def test_cell_image_raises_one_bounded_capture_failure(
         lens._cell_image("cell-view", expected_revision=0)
 
     assert raised.value.code == error_code
-    assert str(raised.value) == "The cell output cannot be captured."
+    assert str(raised.value) == f"{error_code}: The cell output cannot be captured."
     assert lens._cell_image("cell-view", expected_revision=0) is None
     assert len(_capture_commands(lens)) == 2
 

@@ -462,6 +462,10 @@ difference between a selection image and a cell-output image.
 - `code: str`, a stable machine-readable failure code.
 - `revision: int | None`, the current selection-state revision when available.
 
+`str(error)` starts with the code, as in
+`lens_unavailable: No Lens is available in the active notebook.`, so a
+traceback reported by a code-mode integration names the recovery code.
+
 Read [Errors and limits](./reference/errors) for every code, recovery action,
 argument rule, and bound. Read [Connect an agent](./agents) for the complete
 workflow.

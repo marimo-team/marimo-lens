@@ -134,5 +134,8 @@ document identity, so reconnect and read fresh Lens context before continuing.
 | `capture_busy`        | Finish the pending cell capture before requesting another.                                                       |
 | `runtime_unavailable` | Keep the request open and report that verification is unavailable.                                               |
 
+Each code is the `LensError.code` attribute and also begins the error text, so
+the traceback that `marimo pair` returns in `stderr` names it.
+
 Keep selections open when recovery cannot restore current evidence and fresh
 verification.

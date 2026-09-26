@@ -278,6 +278,10 @@ and image reader must share a filesystem.
 Keep ambiguous, blocked, and unverified selections open. Resolution records a
 History entry and releases the selection image.
 
+`LensError` text begins with its code. Code-mode transports such as
+`marimo pair execute` return an uncaught error as traceback text, so the code
+stays visible outside the exception object.
+
 ## Source map
 
 | Concern                                  | Source                                                    |

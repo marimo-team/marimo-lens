@@ -4,6 +4,7 @@ import inspect
 import pydoc
 import subprocess
 import sys
+import traceback
 from collections.abc import Mapping, Sequence
 from importlib.metadata import distribution
 from types import SimpleNamespace
@@ -449,6 +450,17 @@ def test_connect_ignores_a_closed_context_lens() -> None:
 
     assert mounted.context().revision == 0
     available.close()
+
+
+def test_unavailable_connection_reports_its_code_in_the_traceback() -> None:
+    with pytest.raises(LensError) as raised:
+        agent.connect(_code_mode_context())
+
+    # Code-mode transports return an uncaught error as its formatted traceback.
+    assert traceback.format_exception_only(raised.value)[-1] == (
+        "marimo_lens.errors.LensError: lens_unavailable: "
+        "No Lens is available in the active notebook.\n"
+    )
 
 
 def test_connect_uses_identity_to_select_an_available_context_lens() -> None:
