@@ -26,15 +26,16 @@ depends on agent connection, graph context, control values, or cell-output captu
 Lens is a separate Python package with its own releases. Install it in the
 notebook's environment alongside marimo.
 
-In marimo 0.24.2, display a `Lens()` instance in a notebook cell, ask your
-connected agent to add it, or use a host integration that mounts it.
-Installation alone does not show a dock in that release.
+marimo 0.25.0 mounts Lens
+[automatically](https://github.com/marimo-team/marimo/pull/10814) when
+`marimo-lens` is installed. The first cell that imports marimo shows the dock
+after it runs successfully. If your notebook already shows a Lens dock, reuse
+it.
 
-[Automatic mounting](https://github.com/marimo-team/marimo/pull/10814) is merged
-in upstream development builds. Marimo 0.24.2 predates that change. If your
-notebook already shows a Lens dock, reuse it. The
-[quickstart](./getting-started#add-lens) includes the explicit mounting step
-for released versions that need it.
+In marimo 0.24, display a `Lens()` instance in a notebook cell, ask your
+connected agent to add it, or use a host integration that mounts it.
+Installation alone does not show a dock in those releases. The
+[quickstart](./getting-started#add-lens) includes that explicit mounting step.
 
 ## Browser
 
