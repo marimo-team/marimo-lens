@@ -293,6 +293,37 @@ def test_add_lens_cell_reports_duplicate_generated_cells() -> None:
     assert raised.value.code == "lens_ambiguous"
 
 
+@pytest.mark.parametrize(
+    ("status", "runs"),
+    [
+        ("stale", ["lens-1"]),
+        ("exception", ["lens-1"]),
+        ("idle", []),
+        ("queued", []),
+    ],
+)
+def test_add_lens_cell_reruns_its_cell_unless_a_lens_is_live_or_pending(
+    status: str, runs: list[str]
+) -> None:
+    queued: list[str] = []
+
+    class Cells:
+        def find(self, _substring: str) -> list[SimpleNamespace]:
+            return [SimpleNamespace(id="lens-1", status=status)]
+
+    def create_cell(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("an existing Lens cell must be reused")
+
+    context = SimpleNamespace(
+        cells=Cells(),
+        create_cell=create_cell,
+        run_cell=queued.append,
+    )
+
+    assert agent.add_lens_cell(context) == "lens-1"
+    assert queued == runs
+
+
 def test_connect_preserves_identity_across_kernel_calls() -> None:
     lens = _mounted_lens()
 

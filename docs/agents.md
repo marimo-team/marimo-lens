@@ -131,9 +131,14 @@ async with cm.get_context() as context:
 
 End that kernel call so the cell can run and the browser can render the dock,
 then connect in a fresh call. `add_lens_cell()` reuses one agent-managed Lens
-cell and raises `lens_ambiguous` when it finds several. A host that mounts Lens
-with its own `dom_selector` policy owns mounting. Follow the host integration
-instead.
+cell, reruns it when it holds no live Lens, and raises `lens_ambiguous` when it
+finds several. A host that mounts Lens with its own `dom_selector` policy owns
+mounting. Follow the host integration instead.
+
+A reopened notebook whose cells have not run in the new kernel has no Lens yet.
+When the notebook mounts Lens itself, run that cell with `ctx.run_cell(cell_id)`.
+It is the authored Lens cell or, with automatic mounting, a cell that imports
+marimo.
 
 ## Address a selection
 

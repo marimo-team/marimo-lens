@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting
-description: Recover unavailable targets, failed image capture, stale revisions, code-mode connection failures, and browser capture errors.
+description: Recover unavailable targets, failed image capture, stale revisions, reopened notebooks, code-mode connection failures, and browser capture errors.
 ---
 
 # Troubleshooting
@@ -149,6 +149,30 @@ selection = next(
 A selection-state revision changes when selections are created, activated,
 edited, moved, removed, resolved, reopened, or cleared. It tracks selection
 state independently from notebook cell revisions.
+
+## Lens is missing after the notebook reopens
+
+**Symptom:** After a server restart or a reopened notebook, the cells are
+stale, the Lens dock is absent, and `marimo_lens.agent.discover(ctx)` returns an empty
+tuple.
+
+**Action:** Run the notebook, or run the cell that mounts Lens. Reopening
+starts a new kernel. When marimo's
+[**On startup**](https://docs.marimo.io/guides/configuration/runtime_configuration/#on-startup)
+setting (`runtime.auto_instantiate`) is off, the notebook shows its previous
+outputs without running any cell, so the new kernel has no Lens yet. A
+code-mode call runs notebook cells only through `ctx.run_cell()`.
+
+An agent runs the cell that mounts Lens: the authored Lens cell or, with
+automatic mounting, a cell that imports marimo. For a notebook without one, it
+calls `add_lens_cell(ctx)`, which reruns its own Lens cell or queues a new one.
+Connect in a fresh kernel call.
+
+**Result:** The dock appears after the cell runs, and `discover()` returns its
+handle.
+
+Open selections and History belong to the Lens in the previous kernel and end
+with it. The new Lens starts empty.
 
 ## Code mode cannot find Lens
 

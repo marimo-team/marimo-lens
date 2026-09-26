@@ -80,8 +80,16 @@ async with cm.get_context() as ctx:
 
 End the call so the queued cell can run and the browser can render the dock.
 Reconnect in a fresh call and confirm the dock is available. The helper reuses
-its previously added Lens cell. A host with a custom mounting policy uses its
-own integration instead, as described in [setup](references/setup.md).
+its previously added Lens cell and reruns it when it holds no live Lens. A host
+with a custom mounting policy mounts Lens through its own integration, as
+described in [setup](references/setup.md).
+
+A notebook reopened in a new kernel, for example after a server restart, can
+show every cell as stale. None of its cells have run, so no Lens exists and
+selections from the previous kernel are gone. A code-mode call runs notebook
+cells only through `ctx.run_cell()`. When the notebook mounts Lens itself, run
+its mounting cell: the authored Lens cell or, with automatic mounting, a cell
+that imports marimo. Otherwise use the helper.
 
 If the user only asked to add Lens, report that it is ready and finish. Continue
 to a Trail or selection workflow when that is part of the request.

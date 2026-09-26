@@ -79,7 +79,7 @@ def test_add_lens_cell_output_is_discoverable(
         def create_cell(self, code: str, *, hide_code: bool) -> str:
             self.code = code
             self.hidden = hide_code
-            notebook.append(SimpleNamespace(id="lens-cell", code=code))
+            notebook.append(SimpleNamespace(id="lens-cell", code=code, status="queued"))
             return "lens-cell"
 
         def run_cell(self, cell_id: str) -> None:

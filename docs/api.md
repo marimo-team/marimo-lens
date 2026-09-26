@@ -350,8 +350,13 @@ mounted Lens. This helper searches for agent-managed cells.
 The code-mode context creates and runs a queued cell when its async context
 manager exits. Connect in a later kernel call after the browser renders Lens.
 
-`ctx` must expose `create_cell()`, `run_cell()`, and `cells.find()`. Other
-objects raise `TypeError`. Several agent-managed Lens cells raise
+An existing agent-managed cell is queued to run again unless its status is
+`idle`, `queued`, `running`, or `disabled`. A notebook reopened in a new kernel
+shows the cell as `stale`, and a first run that failed shows `exception`. An
+`idle` cell keeps its live Lens and Open selections.
+
+`ctx` must expose `create_cell()`, `run_cell()`, and `cells.find()`, and found
+cells must report `status`. Objects without those methods raise `TypeError`. Several agent-managed Lens cells raise
 `LensError(code="lens_ambiguous")`.
 
 ### `discover`

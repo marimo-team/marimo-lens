@@ -36,6 +36,7 @@ def skill() -> agent_plugins.Skill:
 
 class _CodeModeCell(Protocol):
     id: object
+    status: object
 
 
 _IDENTITIES: weakref.WeakKeyDictionary[Lens, str] = weakref.WeakKeyDictionary()
@@ -224,8 +225,10 @@ def add_lens_cell(ctx: object) -> str:
     """Queue a collapsed notebook cell that mounts a Lens.
 
     Return the existing agent-created Lens cell ID when the notebook already
-    contains one. The code-mode context creates and runs a new cell when its
-    async context manager exits.
+    contains one. That cell is queued to run again unless it is up to date,
+    pending, or disabled, so a notebook reopened in a new kernel or a failed
+    first run mounts Lens. The code-mode context creates and runs cells when
+    its async context manager exits.
 
     Call connect() in a later kernel call after the browser has rendered the
     cell.
@@ -246,13 +249,18 @@ def add_lens_cell(ctx: object) -> str:
         raise TypeError("context must be a live marimo code-mode context")
 
     existing = cast(Sequence[_CodeModeCell], find_cells(_LENS_CELL_MARKER))
-    if len(existing) == 1:
-        return str(existing[0].id)
     if len(existing) > 1:
         raise LensError(
             "lens_ambiguous",
             "The notebook has multiple agent-created Lens cells. Leave one before adding another.",
         )
+    if existing:
+        cell_id = str(existing[0].id)
+        # An idle cell holds a live Lens, and rerunning it would drop its Open
+        # selections. A queued or running cell is already mounting one.
+        if existing[0].status not in {"idle", "queued", "running", "disabled"}:
+            run_cell(cell_id)
+        return cell_id
 
     cell_id = create_cell(_LENS_CELL_CODE, hide_code=True)
     run_cell(cell_id)

@@ -71,7 +71,10 @@ It searches for the private marker used by an agent-created Lens cell:
 
 The behavior is:
 
-- One existing marked cell returns its ID.
+- One existing marked cell returns its ID. It is also queued to run unless
+  its code-mode status is `idle`, `queued`, `running`, or `disabled`. This
+  remounts Lens in a new kernel whose notebook has not run, or after a failed
+  first run. An `idle` cell holds a live Lens whose selections would be lost.
 - Several marked cells raise `lens_ambiguous`.
 - No marked cell queues one hidden-code cell, runs it when the code-mode
   context applies the mutation, and returns its ID.
