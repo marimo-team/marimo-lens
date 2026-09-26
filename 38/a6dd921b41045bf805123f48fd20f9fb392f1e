@@ -1,0 +1,29 @@
+docs/api.md
+  s_4ef8a9cdd83feb::t_0554f7f4360974 465-468
+development_docs/agent-integration.md
+  s_4ef8a9cdd83feb::t_0c0170ecb0d999 281-283
+packages/marimo-lens/tests/test_agent.py
+  s_4ef8a9cdd83feb::t_c3229907c6c796 7,455-463
+packages/marimo-lens/tests/test_output_capture.py
+  s_4ef8a9cdd83feb::t_7af9027bc12398 150
+docs/reference/errors.md
+  s_4ef8a9cdd83feb::t_0554f7f4360974 9-11
+packages/marimo-lens/src/marimo_lens/errors.py
+  s_4ef8a9cdd83feb::t_7af9027bc12398 25-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "38a6dd921b41045bf805123f48fd20f9fb392f1e",
+  "prompts": {},
+  "sessions": {
+    "s_4ef8a9cdd83feb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "49169b65-7bac-41e4-86e8-9d771bc29a09",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
