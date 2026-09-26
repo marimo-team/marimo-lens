@@ -34,7 +34,7 @@ describe("selection note editor", () => {
     expect(onSave).toHaveBeenCalledWith("");
   });
 
-  test("saves the draft with Control+Enter or Meta+Enter from any editor control", () => {
+  test("saves the draft once per Control+Enter or Meta+Enter press from any editor control", () => {
     const onSave = vi.fn<(note: string) => void>();
     const onCancel = vi.fn();
     renderEditor(selectionFixture({ note: "" }), onSave, { onCancel });
@@ -54,6 +54,7 @@ describe("selection note editor", () => {
     const shortcut = enter({ ctrlKey: true });
     act(() => {
       textarea.dispatchEvent(shortcut);
+      textarea.dispatchEvent(enter({ ctrlKey: true, repeat: true }));
       cancel.dispatchEvent(enter({ metaKey: true }));
     });
     expect(shortcut.defaultPrevented).toBe(true);

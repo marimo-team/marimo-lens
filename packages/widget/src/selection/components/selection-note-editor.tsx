@@ -186,7 +186,8 @@ function isSaveShortcut(event: KeyboardEvent): boolean {
     (event.ctrlKey || event.metaKey) &&
     !event.altKey &&
     !event.shiftKey &&
-    !event.isComposing
+    !event.isComposing &&
+    !event.repeat
   );
 }
 
