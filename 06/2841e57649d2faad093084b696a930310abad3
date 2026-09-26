@@ -1,0 +1,27 @@
+docs/selections.md
+  s_4ef8a9cdd83feb::t_6234e50814de48 323-333
+packages/widget/src/selection/components/selection-note-editor.tsx
+  s_4ef8a9cdd83feb::t_697ee4c2b093f8 92-97
+  s_4ef8a9cdd83feb::t_9ba30c46b16a23 183-192
+  s_4ef8a9cdd83feb::t_e4df164cc7b4dc 173
+packages/widget/tests/selection/components/selection-note-editor.test.tsx
+  s_4ef8a9cdd83feb::t_06019825ad5b02 37,39-40,42-44,57,60
+  s_4ef8a9cdd83feb::t_260d62caac9a3d 38,41,45-48,52-54,59,61-63
+  s_4ef8a9cdd83feb::t_3099a4cffc6411 49-51,55-56,58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "062841e57649d2faad093084b696a930310abad3",
+  "prompts": {},
+  "sessions": {
+    "s_4ef8a9cdd83feb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "49169b65-7bac-41e4-86e8-9d771bc29a09",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
