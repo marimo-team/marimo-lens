@@ -93,9 +93,8 @@ described in [setup](references/setup.md).
 A notebook reopened in a new kernel, for example after a server restart, can
 show every cell as stale. None of its cells have run, so no Lens exists and
 selections from the previous kernel are gone. A code-mode call runs notebook
-cells only through `ctx.run_cell()`. When the notebook mounts Lens itself, run
-its mounting cell: the authored Lens cell or, with automatic mounting, a cell
-that imports marimo. Otherwise use the helper.
+cells only through `ctx.run_cell()`. Run the cell that mounts Lens: a cell that
+imports marimo, or an authored Lens cell. Otherwise use the helper.
 
 If the user only asked to add Lens, report that it is ready and finish. Continue
 to a Trail or selection workflow when that is part of the request.

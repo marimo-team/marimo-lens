@@ -89,10 +89,6 @@ first `help(cm)` call. That help lists `lens` under installed capabilities.
   a filesystem, as with a local server. A remote kernel, such as a molab
   notebook, writes the file on its own machine.
 
-`marimo pair execute` and `marimo pair notebook list` ship with marimo 0.25.0.
-With an earlier marimo, the marimo pair skill's `execute-code.sh` runs the same
-blocks and prints their output directly.
-
 ## Install in a running notebook
 
 When Lens is absent from the active kernel's environment, use its code-mode

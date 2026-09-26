@@ -29,16 +29,8 @@ uv add marimo-lens
 uv run marimo edit notebook.py
 ```
 
-Requires Python 3.10–3.14 and marimo 0.24.0 or newer. If the notebook already
-shows a Lens dock, use that instance. Otherwise mount Lens in one notebook cell
-and keep it displayed:
-
-```python
-from marimo_lens import Lens
-
-lens = Lens()
-lens
-```
+Requires Python 3.10–3.14 and marimo 0.25.0 or newer. marimo mounts Lens
+automatically once a cell that imports marimo runs.
 
 Press **Select**, click a point or drag a region, then add a note.
 
@@ -67,8 +59,8 @@ uvx --with marimo-lens agent-plugins read marimo-lens
 
 In an existing notebook kernel, run `import marimo_lens` followed by
 `help(marimo_lens.agent)`. The help includes the same core skill and references
-from that installation. With marimo 0.25.0 or later, marimo pair runs it in the
-notebook's kernel from a terminal:
+from that installation. marimo pair runs it in the notebook's kernel from a
+terminal:
 
 ```console
 marimo pair execute --url <URL> --file <notebook.py> -c 'import marimo_lens; help(marimo_lens.agent)'

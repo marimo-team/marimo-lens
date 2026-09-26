@@ -25,14 +25,14 @@ skip the local setup, open the same notebook in molab:
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "marimo[recommended]>=0.24.0",
+#     "marimo[recommended]>=0.25.0",
 #     "marimo-lens",
 # ]
 # ///
 
 import marimo
 
-__generated_with = "0.24.2"
+__generated_with = "0.25.0"
 app = marimo.App()
 
 
@@ -40,9 +40,8 @@ app = marimo.App()
 def _():
     import altair as alt
     import marimo as mo
-    from marimo_lens import Lens
 
-    return Lens, alt, mo
+    return alt, mo
 
 
 @app.cell
@@ -79,13 +78,6 @@ def _(mo, revenue):
         f"**{peak['month']} leads with {peak['revenue']} thousand dollars.** "
         "These are revenue totals, not profit."
     )
-    return
-
-
-@app.cell
-def _(Lens):
-    lens = Lens()
-    lens
     return
 
 
@@ -142,30 +134,14 @@ Continue when it identifies `notebook.py` and can inspect its live cells.
 
 ## Add Lens
 
-The sample notebook mounts Lens in its last cell. In a notebook of your own
-that shows no dock, tell your connected agent:
+marimo mounts Lens automatically once a cell that imports marimo runs, so the
+sample notebook shows the dock without a Lens cell. In a notebook of your own
+that shows no dock after it runs, tell your connected agent:
 
 > Add Lens to this notebook.
 
 The agent reuses an existing Lens or adds and runs a Lens cell. Continue when
 you can see the dock.
-
-::: details Add it yourself
-
-Run this in a notebook cell and keep it mounted:
-
-```python
-from marimo_lens import Lens
-
-lens = Lens()
-lens
-```
-
-Lens is a separate Python package with its own releases. Marimo 0.24.2 needs
-this explicit mount or one supplied by a host integration. If your notebook
-already shows a Lens dock, reuse it. See [mounting compatibility](./compatibility#mounting-lens).
-
-:::
 
 ## Ask for a walkthrough
 

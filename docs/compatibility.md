@@ -13,7 +13,7 @@ agent API from the hosted documentation.
 | Component     | Supported contract                                        |
 | ------------- | --------------------------------------------------------- |
 | Python        | 3.10 through 3.14                                         |
-| marimo        | 0.24.0 or newer                                           |
+| marimo        | 0.25.0 or newer                                           |
 | `marimo-lens` | Install a tagged release from PyPI for released behavior. |
 
 The package declares no upper marimo version bound. Lens uses public notebook
@@ -26,16 +26,11 @@ depends on agent connection, graph context, control values, or cell-output captu
 Lens is a separate Python package with its own releases. Install it in the
 notebook's environment alongside marimo.
 
-marimo 0.25.0 mounts Lens
+marimo mounts Lens
 [automatically](https://github.com/marimo-team/marimo/pull/10814) when
 `marimo-lens` is installed. The first cell that imports marimo shows the dock
 after it runs successfully. If your notebook already shows a Lens dock, reuse
 it.
-
-In marimo 0.24, display a `Lens()` instance in a notebook cell, ask your
-connected agent to add it, or use a host integration that mounts it.
-Installation alone does not show a dock in those releases. The
-[quickstart](./getting-started#add-lens) includes that explicit mounting step.
 
 ## Browser
 
@@ -74,9 +69,8 @@ capability, read the packaged Agent Skill, and call `connect()` inside the live
 kernel.
 
 [marimo pair](https://marimo.io/pair) connects terminal agents such as Claude
-Code and Codex. marimo 0.25.0 includes its `marimo pair notebook list` and
-`marimo pair execute` commands. Earlier releases connect through the marimo
-pair skill's `execute-code.sh`. marimo's code-mode sidebar is the in-editor
+Code and Codex through its `marimo pair notebook list` and
+`marimo pair execute` commands. marimo's code-mode sidebar is the in-editor
 integration.
 
 Read Lens instructions through `help(marimo_lens.agent)` or

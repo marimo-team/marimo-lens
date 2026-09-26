@@ -56,8 +56,8 @@ print(
 )
 ```
 
-With marimo 0.25.0 or later, [marimo pair](https://marimo.io/pair) reads the
-skill from the kernel that runs your calls. marimo's `help(cm)` lists `lens`
+[marimo pair](https://marimo.io/pair) reads the skill from the kernel that runs
+your calls. marimo's `help(cm)` lists `lens`
 under installed capabilities and points to this module:
 
 ```bash
@@ -132,8 +132,8 @@ the active notebook.`
 - One session runs one execution at a time. Calls to different notebooks can
   run concurrently.
 
-`marimo pair execute` ships with marimo 0.25.0. `marimo pair --help` covers
-server discovery, authentication, and session selection.
+`marimo pair --help` covers server discovery, authentication, and session
+selection.
 
 ### Several or no instances
 
@@ -179,9 +179,8 @@ finds several. A host that mounts Lens with its own `dom_selector` policy owns
 mounting. Follow the host integration instead.
 
 A reopened notebook whose cells have not run in the new kernel has no Lens yet.
-When the notebook mounts Lens itself, run that cell with `ctx.run_cell(cell_id)`.
-It is the authored Lens cell or, with automatic mounting, a cell that imports
-marimo.
+Run the cell that mounts Lens with `ctx.run_cell(cell_id)`: a cell that imports
+marimo, or an authored Lens cell.
 
 ### Selections in other notebooks
 

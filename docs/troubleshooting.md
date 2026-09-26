@@ -163,8 +163,8 @@ setting (`runtime.auto_instantiate`) is off, the notebook shows its previous
 outputs without running any cell, so the new kernel has no Lens yet. A
 code-mode call runs notebook cells only through `ctx.run_cell()`.
 
-An agent runs the cell that mounts Lens: the authored Lens cell or, with
-automatic mounting, a cell that imports marimo. For a notebook without one, it
+An agent runs the cell that mounts Lens: a cell that imports marimo, or an
+authored Lens cell. For a notebook without one, it
 calls `add_lens_cell(ctx)`, which reruns its own Lens cell or queues a new one.
 Connect in a fresh kernel call.
 
