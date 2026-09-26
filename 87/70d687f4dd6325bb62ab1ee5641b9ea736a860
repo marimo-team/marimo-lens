@@ -1,0 +1,52 @@
+skills/marimo-lens/references/setup.md
+  s_4ef8a9cdd83feb::t_b6dc5c1e881151 72-73
+  s_4ef8a9cdd83feb::t_422f75b5bb49fb 5
+  s_4ef8a9cdd83feb::t_94db82bb967037 14,33-34,47-57,59,61-70,74-94
+  s_4ef8a9cdd83feb::t_82d34292954aa1 58,60,71
+docs/getting-started.md
+  s_4ef8a9cdd83feb::t_33bd1bd6a8c99c 10,135
+docs/overview.md
+  s_4ef8a9cdd83feb::t_33bd1bd6a8c99c 16,95
+packages/marimo-lens/tests/test_skill.py
+  s_4ef8a9cdd83feb::t_7b06fb9321ddca 5
+  s_4ef8a9cdd83feb::t_40c3e7c3db66cb 273
+  s_4ef8a9cdd83feb::t_f846d210aa6a88 260-272,274-282
+docs/compatibility.md
+  s_4ef8a9cdd83feb::t_f4fd42ac5ba70f 76-86
+docs/troubleshooting.md
+  s_4ef8a9cdd83feb::t_33bd1bd6a8c99c 205
+packages/marimo-lens/README.md
+  s_4ef8a9cdd83feb::t_82d34292954aa1 73
+  s_4ef8a9cdd83feb::t_33bd1bd6a8c99c 54,70-72,74-77,97
+development_docs/agent-integration.md
+  s_4ef8a9cdd83feb::t_33bd1bd6a8c99c 20
+docs/agents.md
+  s_4ef8a9cdd83feb::t_b6dc5c1e881151 43-46
+  s_4ef8a9cdd83feb::t_82d34292954aa1 65,117,119
+  s_4ef8a9cdd83feb::t_0554f7f4360974 59-64,66-70,107-116,118,120-127,129-136
+  s_4ef8a9cdd83feb::t_33bd1bd6a8c99c 128
+skills/marimo-lens/references/workflow.md
+  s_4ef8a9cdd83feb::t_bcd456073c0bdb 12-14,48-49
+  s_4ef8a9cdd83feb::t_422f75b5bb49fb 8,11,45-47
+skills/marimo-lens/SKILL.md
+  s_4ef8a9cdd83feb::t_94db82bb967037 8-9,34-40,49-53
+README.md
+  s_4ef8a9cdd83feb::t_33bd1bd6a8c99c 35,52-55,57-58
+  s_4ef8a9cdd83feb::t_82d34292954aa1 56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "8770d687f4dd6325bb62ab1ee5641b9ea736a860",
+  "prompts": {},
+  "sessions": {
+    "s_4ef8a9cdd83feb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "49169b65-7bac-41e4-86e8-9d771bc29a09",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
