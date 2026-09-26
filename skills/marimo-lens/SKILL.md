@@ -172,6 +172,10 @@ verify, reveal, and resolve. Preserve these boundaries:
 - Resolve with a concrete summary of the outcome and verification. Keep
   ambiguous, blocked, or unverified selections open. On revision conflict,
   stop owned activity, reconnect, and reassess fresh context.
+- A Lens belongs to one notebook session. When the connected Lens holds none
+  of the selections the user refers to, read the server's other sessions as
+  described in
+  [selections in other notebooks](references/selections.md#selections-in-other-notebooks).
 
 `$marimo-lens address` handles every open selection, including each note and
 its evidence. For other requests, the user's instruction takes priority over

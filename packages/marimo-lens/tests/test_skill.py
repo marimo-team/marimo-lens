@@ -257,6 +257,37 @@ def test_address_mode_builds_evidence_workset_for_every_selection() -> None:
     ]
 
 
+def test_selection_reference_lists_open_selections_for_another_session(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    ctx = object()
+
+    def discover(context: object) -> tuple[SimpleNamespace, ...]:
+        assert context is ctx
+        return (SimpleNamespace(identity="lens-a", context=_context),)
+
+    monkeypatch.setattr(code_mode, "get_context", lambda: ctx)
+    monkeypatch.setattr(lens_agent, "discover", discover)
+    exec(  # noqa: S102 - Exercise the repository-owned reference example.
+        _python_block(
+            "skills/marimo-lens/references/selections.md",
+            "### Selections in other notebooks",
+        ),
+        {},
+    )
+
+    assert json.loads(capsys.readouterr().out) == [
+        {"identity": "lens-a", "id": "selection-1", "label": "S1", "note": ""},
+        {
+            "identity": "lens-a",
+            "id": "selection-2",
+            "label": "S2",
+            "note": "Check the second mark",
+        },
+    ]
+
+
 def test_pair_reference_heredoc_prints_the_connected_lens(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],

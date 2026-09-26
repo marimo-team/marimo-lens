@@ -183,6 +183,18 @@ When the notebook mounts Lens itself, run that cell with `ctx.run_cell(cell_id)`
 It is the authored Lens cell or, with automatic mounting, a cell that imports
 marimo.
 
+### Selections in other notebooks
+
+A Lens belongs to one notebook session and its kernel, so `connect()` and
+`discover()` see only the session that runs the call. When the person refers to
+selections that this Lens does not hold, list the server's live sessions
+through the code-mode integration, such as `marimo pair notebook list`, and
+read `discover()` in each session concurrently.
+
+Address a selection through the session that holds it. When its note asks for
+work in another notebook, edit and verify through that notebook's session, then
+reveal and resolve the selection with the Lens that holds it.
+
 ## Address a selection
 
 Start activity on the selection before inspecting its code, so the person sees

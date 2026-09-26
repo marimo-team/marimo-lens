@@ -76,6 +76,46 @@ empty selection list describes the current attention state. Continue an
 explicit overview or walkthrough through the notebook's ordered cells and
 graph.
 
+### Selections in other notebooks
+
+A Lens belongs to one notebook session and its kernel. `connect(ctx)` and
+`discover(ctx)` see only the session that runs the call. When the request
+refers to selections this Lens does not hold, list the live notebooks through
+the code-mode integration. With marimo pair, `marimo pair notebook list`
+reports every notebook path, and `--url` repeats for several servers. Run this
+read-only block in every listed notebook concurrently:
+
+```python
+import json
+
+import marimo._code_mode as cm
+import marimo_lens
+
+open_selections = []
+for mounted in marimo_lens.agent.discover(cm.get_context()):
+    snapshot = mounted.context()
+    open_selections.extend(
+        {
+            "identity": mounted.identity,
+            "id": selection["id"],
+            "label": selection["label"],
+            "note": selection["note"],
+        }
+        for selection in snapshot.references["selections"]
+    )
+print(json.dumps(open_selections, ensure_ascii=False))
+```
+
+With marimo pair, save the block to a file and start one
+`marimo pair execute --url <URL> --file <path> --code-file <file>` per notebook
+without waiting for the previous one. Each result's `stdout` holds that
+notebook's list.
+
+Address each selection through the session that holds it. A note can ask for
+work in another notebook. Make and verify that change through the other
+notebook's session, then reveal and resolve the selection with the Lens that
+holds it, so the result appears beside the original request.
+
 ## Start meaningful activity
 
 Choose the relevant `SelectionReference`, then start activity against that
