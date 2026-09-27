@@ -13,7 +13,7 @@ agent API from the hosted documentation.
 | Component     | Supported contract                                        |
 | ------------- | --------------------------------------------------------- |
 | Python        | 3.10 through 3.14                                         |
-| marimo        | 0.24.0 or newer                                           |
+| marimo        | 0.25.0 or newer                                           |
 | `marimo-lens` | Install a tagged release from PyPI for released behavior. |
 
 The package declares no upper marimo version bound. Lens uses public notebook
@@ -26,15 +26,11 @@ depends on agent connection, graph context, control values, or cell-output captu
 Lens is a separate Python package with its own releases. Install it in the
 notebook's environment alongside marimo.
 
-In marimo 0.24.2, display a `Lens()` instance in a notebook cell, ask your
-connected agent to add it, or use a host integration that mounts it.
-Installation alone does not show a dock in that release.
-
-[Automatic mounting](https://github.com/marimo-team/marimo/pull/10814) is merged
-in upstream development builds. Marimo 0.24.2 predates that change. If your
-notebook already shows a Lens dock, reuse it. The
-[quickstart](./getting-started#add-lens) includes the explicit mounting step
-for released versions that need it.
+marimo mounts Lens
+[automatically](https://github.com/marimo-team/marimo/pull/10814) when
+`marimo-lens` is installed. The first cell that imports marimo shows the dock
+after it runs successfully. If your notebook already shows a Lens dock, reuse
+it.
 
 ## Browser
 
@@ -72,11 +68,16 @@ The package registers `marimo_lens.agent` in marimo's
 capability, read the packaged Agent Skill, and call `connect()` inside the live
 kernel.
 
-[marimo Pair](https://marimo.io/pair) is one optional code-mode integration.
-Read Lens instructions through `agent_plugins.read("marimo-lens")` in the
-notebook's Python environment, or through `help(marimo_lens.agent)`. A terminal
-bootstrap with `uvx --with marimo-lens agent-plugins read marimo-lens` reads an
-isolated installation and requires network access when packages are uncached.
+[marimo pair](https://marimo.io/pair) connects terminal agents such as Claude
+Code and Codex through its `marimo pair notebook list` and
+`marimo pair execute` commands. marimo's code-mode sidebar is the in-editor
+integration.
+
+Read Lens instructions through `help(marimo_lens.agent)` or
+`agent_plugins.read("marimo-lens")` in the notebook's Python environment. A
+terminal bootstrap with `uvx --with marimo-lens agent-plugins read marimo-lens`
+reads an isolated installation and requires network access when packages are
+uncached.
 
 ## Hosted docs and released packages
 

@@ -88,6 +88,23 @@ def current_runtime_scope() -> object | None:
         return None
 
 
+def current_cell_id() -> str | None:
+    """Return the ID of the notebook cell that is executing, if any."""
+
+    try:
+        from marimo._runtime.context import get_context
+    except ImportError:
+        return None
+
+    try:
+        context = _read_runtime_context(get_context)
+        execution = _read_runtime_attribute(context, "execution_context")
+        cell_id = _read_runtime_attribute(execution, "cell_id")
+    except _RuntimeReadError:
+        return None
+    return str(cell_id) if cell_id is not None else None
+
+
 class _RuntimeReadError(RuntimeError):
     """A host-owned runtime value could not be read."""
 

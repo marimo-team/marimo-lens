@@ -5,7 +5,8 @@ description: >-
   address a user's selection on a rendered output or configured DOM target.
   Use when asked to enable Lens, give a walkthrough, explain results in place,
   or act on selected points, regions, and notes. The address mode handles every
-  open selection. Requires access to the live marimo notebook kernel.
+  open selection. Requires the live marimo notebook kernel, reached through
+  marimo pair or the editor's code-mode sidebar.
 ---
 
 # Work with marimo Lens
@@ -30,10 +31,13 @@ walkthrough request into permission to edit or resolve them.
 This core skill contains the complete ordinary mounting and Trail workflows.
 Read a reference only when its task or exception applies.
 
-Run Lens operations in the live notebook kernel. If this briefing came from a
-terminal environment, connect to the notebook through its code-mode integration
-and use that installation's guidance. Reuse instructions already loaded for the
-same environment and Lens installation.
+Run each Python block in this skill as one call in the live notebook kernel.
+From a terminal, that call is one `marimo pair execute` with the block on
+stdin, and printed results arrive in its JSON `stdout`.
+[Run Lens through marimo pair](references/setup.md#run-lens-through-marimo-pair)
+covers targeting, errors, and concurrency. In the editor's code-mode sidebar,
+each block is one `execute_code` call. Reuse instructions already loaded for
+the same environment and Lens installation.
 
 Speak as a colleague in chat, activity, popovers, and summaries. Describe what
 you changed or found and the evidence behind it. Use concrete labels and a
@@ -42,18 +46,20 @@ Use a teaching tone when requested.
 
 ## Begin with the requested work
 
-Combine connection with the first useful operation: check availability for an
-add request, inspect relevant cells and values for a Trail, or read the current
-selection snapshot. A separate call that prints only an identity is unnecessary.
+After the integration's required first call, such as `help(cm)` for marimo
+pair, combine connection with the first useful operation: check availability
+for an add request, inspect relevant cells and values for a Trail, or read the
+current selection snapshot. A separate call that prints only an identity is
+unnecessary.
 
 `connect(ctx)` reuses authored and automatically mounted instances. When one
 browser-ready Lens owns the visible dock, it selects that Lens even if the
 context contains other Lens objects. Keep its opaque identity when work spans
-calls. Each call has a fresh scratchpad, so reimport `cm` and `lens_agent`,
+calls. Each call has a fresh scratchpad, so reimport `cm` and `marimo_lens`,
 reacquire the context, and select that same Lens using `identity=` in later
 calls.
 
-For `lens_ambiguous`, inspect `lens_agent.discover(ctx)` and choose the identity
+For `lens_ambiguous`, inspect `marimo_lens.agent.discover(ctx)` and choose the identity
 matching the request and visible surface. Ask the user if those clues cannot
 distinguish the instances.
 
@@ -68,20 +74,27 @@ queue one cell:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 async with cm.get_context() as ctx:
-    available = lens_agent.discover(ctx)
+    available = marimo_lens.agent.discover(ctx)
     if available:
         print({"identities": [mounted.identity for mounted in available]})
     else:
-        print({"cell_id": lens_agent.add_lens_cell(ctx)})
+        print({"cell_id": marimo_lens.agent.add_lens_cell(ctx)})
 ```
 
 End the call so the queued cell can run and the browser can render the dock.
 Reconnect in a fresh call and confirm the dock is available. The helper reuses
-its previously added Lens cell. A host with a custom mounting policy uses its
-own integration instead, as described in [setup](references/setup.md).
+its previously added Lens cell and reruns it when it holds no live Lens. A host
+with a custom mounting policy mounts Lens through its own integration, as
+described in [setup](references/setup.md).
+
+A notebook reopened in a new kernel, for example after a server restart, can
+show every cell as stale. None of its cells have run, so no Lens exists and
+selections from the previous kernel are gone. A code-mode call runs notebook
+cells only through `ctx.run_cell()`. Run the cell that mounts Lens: a cell that
+imports marimo, or an authored Lens cell. Otherwise use the helper.
 
 If the user only asked to add Lens, report that it is ready and finish. Continue
 to a Trail or selection workflow when that is part of the request.
@@ -110,10 +123,10 @@ Substitute the actual cell names and explanations supported by their values:
 
 ```python
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 ctx = cm.get_context()
-mounted = lens_agent.connect(ctx)
+mounted = marimo_lens.agent.connect(ctx)
 route = [
     ("inputs", "Inputs", "Start with the values used by this notebook."),
     ("analysis", "Calculation", "Follow how the inputs become a result."),
@@ -142,6 +155,39 @@ changed results before showing another Trail.
 
 ## Address a selection
 
+Read the open selections and their notes in one call. The selections live in
+`snapshot.references["selections"]`, and `snapshot.current` is the likely
+referent for "this" or "here":
+
+```python
+import json
+
+import marimo._code_mode as cm
+import marimo_lens
+
+mounted = marimo_lens.agent.connect(cm.get_context())
+snapshot = mounted.context()
+print(
+    json.dumps(
+        {
+            "identity": mounted.identity,
+            "revision": snapshot.revision,
+            "currentId": (snapshot.current or {}).get("id"),
+            "selections": [
+                {"id": s["id"], "label": s["label"], "note": s["note"]}
+                for s in snapshot.references["selections"]
+            ],
+        },
+        ensure_ascii=False,
+    )
+)
+```
+
+An empty list means this notebook holds no open selections. The editor's
+code-mode sidebar reaches only its own notebook, so tell the user and add that
+notes in another notebook are addressed from that notebook's sidebar or
+through marimo pair.
+
 Follow [selection work](references/selections.md) for the complete lifecycle:
 read context, inspect evidence, start activity, apply the requested change,
 verify, reveal, and resolve. Preserve these boundaries:
@@ -158,6 +204,10 @@ verify, reveal, and resolve. Preserve these boundaries:
 - Resolve with a concrete summary of the outcome and verification. Keep
   ambiguous, blocked, or unverified selections open. On revision conflict,
   stop owned activity, reconnect, and reassess fresh context.
+- A Lens belongs to one notebook session. When the connected Lens holds none
+  of the selections the user refers to, check the other notebooks as
+  described in
+  [selections in other notebooks](references/selections.md#selections-in-other-notebooks).
 
 `$marimo-lens address` handles every open selection, including each note and
 its evidence. For other requests, the user's instruction takes priority over
@@ -174,7 +224,7 @@ feedback across calls, and recovery.
 For selection work, read its reference inside the notebook:
 
 ```python
-import marimo_lens.agent
+import marimo_lens
 
 print(
     marimo_lens.agent.skill()

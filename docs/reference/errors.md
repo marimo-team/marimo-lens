@@ -6,8 +6,9 @@ description: Lens error codes, recovery actions, argument failures, resource bou
 # Errors and limits
 
 Expected operation failures raise `LensError`. Its `code` attribute is stable
-for programmatic recovery. Its `revision` attribute contains the current
-selection-state revision when a Lens instance was available.
+for programmatic recovery, and the error text starts with the same code. Its
+`revision` attribute contains the current selection-state revision when a Lens
+instance was available.
 
 Invalid Python argument types raise `TypeError`. Invalid values and bounds
 raise `ValueError` before an operation begins. Agent Plugin discovery can raise

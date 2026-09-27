@@ -22,5 +22,10 @@ class LensError(RuntimeError):
         self.code = code
         self.revision = revision
 
+    def __str__(self) -> str:
+        # Code-mode transports report uncaught errors as traceback text, so
+        # the recovery code must appear there, not only as an attribute.
+        return f"{self.code}: {super().__str__()}"
+
 
 __all__ = ["LensError"]

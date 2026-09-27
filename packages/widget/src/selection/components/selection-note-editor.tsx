@@ -89,6 +89,12 @@ export function SelectionNoteEditor({
         textareaRef.current?.focus({ preventScroll: true });
       }}
       onKeyDown={(event) => {
+        if (isSaveShortcut(event.nativeEvent)) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (!mutationPending) onSave(draft);
+          return;
+        }
         if (event.key !== "Tab") return;
         const controls = Array.from(
           event.currentTarget.querySelectorAll<HTMLElement>(
@@ -164,12 +170,24 @@ export function SelectionNoteEditor({
             type="button"
             onClick={() => onSave(draft)}
             disabled={mutationPending}
+            aria-keyshortcuts="Control+Enter Meta+Enter"
           >
             {saving ? "Saving…" : "Done"}
           </button>
         </span>
       </footer>
     </dialog>
+  );
+}
+
+function isSaveShortcut(event: KeyboardEvent): boolean {
+  return (
+    event.key === "Enter" &&
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    !event.shiftKey &&
+    !event.isComposing &&
+    !event.repeat
   );
 }
 

@@ -79,7 +79,12 @@ function acquireView(
       return;
     }
 
-    publishOwnership(views);
+    // A cleared output releases all of its views in one task, and React flushes
+    // the next owner synchronously inside this unmount. Handing ownership over
+    // after the task keeps a departing view from announcing capture readiness.
+    queueMicrotask(() => {
+      if (views.size > 0) publishOwnership(views);
+    });
   };
 }
 

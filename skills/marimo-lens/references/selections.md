@@ -12,10 +12,10 @@ kernel call:
 import json
 
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
 ctx = cm.get_context()
-mounted = lens_agent.connect(ctx)
+mounted = marimo_lens.agent.connect(ctx)
 snapshot = mounted.context()
 print(
     json.dumps(
@@ -63,7 +63,7 @@ inventory. Notebook-order enumeration belongs to explicit overview and
 walkthrough requests.
 
 When `connect(ctx)` reports `lens_ambiguous`, use a saved identity or call
-`lens_agent.discover(ctx)` to get available `MountedLens` handles. Inspect their
+`marimo_lens.agent.discover(ctx)` to get available `MountedLens` handles. Inspect their
 identities and compact current selections, then choose the instance that matches
 the request. Discovery returns an empty tuple when none are available and never
 mounts a widget. Order does not indicate browser ownership. Ask the user which
@@ -76,6 +76,52 @@ empty selection list describes the current attention state. Continue an
 explicit overview or walkthrough through the notebook's ordered cells and
 graph.
 
+### Selections in other notebooks
+
+A Lens belongs to one notebook session and its kernel. `connect(ctx)` and
+`discover(ctx)` see only the session that runs the call. When the request
+refers to selections this Lens does not hold, list the live notebooks through
+the code-mode integration. With marimo pair, `marimo pair notebook list`
+reports each notebook's path and server URL. To list several servers in one
+call, pass `--url` once per server. Run this read-only block in every listed
+notebook concurrently:
+
+```python
+import json
+
+import marimo._code_mode as cm
+import marimo_lens
+
+open_selections = []
+for mounted in marimo_lens.agent.discover(cm.get_context()):
+    snapshot = mounted.context()
+    open_selections.extend(
+        {
+            "identity": mounted.identity,
+            "id": selection["id"],
+            "label": selection["label"],
+            "note": selection["note"],
+        }
+        for selection in snapshot.references["selections"]
+    )
+print(json.dumps(open_selections, ensure_ascii=False))
+```
+
+With marimo pair, save the block to a file and start one
+`marimo pair execute --url <URL> --file <path> --code-file <file>` per notebook,
+passing that notebook's server URL, without waiting for the previous one. Each
+result's `stdout` holds that notebook's list.
+
+Address each selection through the session that holds it. A note can ask for
+work in another notebook. Make and verify that change through the other
+notebook's session, then reveal and resolve the selection with the Lens that
+holds it, so the result appears beside the original request.
+
+The editor's code-mode sidebar reaches only its own notebook. When the user
+asks about notes or selections and this Lens has none open, tell the user that
+this notebook has no open selections and that notes in another notebook are
+addressed from that notebook's sidebar or through marimo pair.
+
 ## Start meaningful activity
 
 Choose the relevant `SelectionReference`, then start activity against that
@@ -86,9 +132,9 @@ empty, contains one cell, or contains several cells.
 import json
 
 import marimo._code_mode as cm
-import marimo_lens.agent as lens_agent
+import marimo_lens
 
-mounted = lens_agent.connect(cm.get_context(), identity="F3n...")
+mounted = marimo_lens.agent.connect(cm.get_context(), identity="F3n...")
 snapshot = mounted.context()
 selection = snapshot.current
 if selection is None:
@@ -235,7 +281,8 @@ after it returns visible pixels.
 
 Check the available tools before requesting images. If the session exposes
 only text results and no image reader, or the reader reports that it cannot
-display images, treat visual inspection as unavailable. Skip capture and
+display images, treat visual inspection as unavailable. The editor's code-mode
+sidebar returns `execute_code` results as text and has no image reader. Skip capture and
 image-inspection attempts that cannot inform the task. Python image objects,
 dimensions, hashes, base64, and OCR do not establish visual inspection.
 Delete the temporary path and skip later image-reader calls unless the reader

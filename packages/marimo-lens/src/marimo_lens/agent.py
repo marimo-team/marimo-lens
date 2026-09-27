@@ -13,7 +13,7 @@ from typing import Protocol, cast
 import agent_plugins
 
 from ._marimo_runtime import current_runtime_scope
-from ._registry import mounted_lenses
+from ._registry import mounted_lenses, open_lenses_from_cell
 from .activity import ActivityHandle
 from .context import LensContext, SelectionReference
 from .errors import LensError
@@ -36,6 +36,7 @@ def skill() -> agent_plugins.Skill:
 
 class _CodeModeCell(Protocol):
     id: object
+    status: object
 
 
 _IDENTITIES: weakref.WeakKeyDictionary[Lens, str] = weakref.WeakKeyDictionary()
@@ -224,8 +225,11 @@ def add_lens_cell(ctx: object) -> str:
     """Queue a collapsed notebook cell that mounts a Lens.
 
     Return the existing agent-created Lens cell ID when the notebook already
-    contains one. The code-mode context creates and runs a new cell when its
-    async context manager exits.
+    contains one. That cell is queued to run again unless it still holds an
+    open Lens or is queued, running, or disabled. A notebook reopened in a new
+    kernel, a failed first run, or a closed Lens then mounts a new Lens. The
+    code-mode context creates and runs cells when its async context manager
+    exits.
 
     Call connect() in a later kernel call after the browser has rendered the
     cell.
@@ -246,13 +250,23 @@ def add_lens_cell(ctx: object) -> str:
         raise TypeError("context must be a live marimo code-mode context")
 
     existing = cast(Sequence[_CodeModeCell], find_cells(_LENS_CELL_MARKER))
-    if len(existing) == 1:
-        return str(existing[0].id)
     if len(existing) > 1:
         raise LensError(
             "lens_ambiguous",
             "The notebook has multiple agent-created Lens cells. Leave one before adding another.",
         )
+    if existing:
+        cell_id = str(existing[0].id)
+        # Rerunning a cell replaces its open Lens and drops that Lens's Open
+        # selections. A queued or running cell is already mounting one.
+        holds_open_lens = bool(open_lenses_from_cell(current_runtime_scope(), cell_id))
+        if not holds_open_lens and existing[0].status not in {
+            "queued",
+            "running",
+            "disabled",
+        }:
+            run_cell(cell_id)
+        return cell_id
 
     cell_id = create_cell(_LENS_CELL_CODE, hide_code=True)
     run_cell(cell_id)

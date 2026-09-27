@@ -18,7 +18,11 @@ from pydantic import TypeAdapter, ValidationError
 
 from ._context import build_lens_context, target_cell_ids
 from ._images import ImageError
-from ._marimo_runtime import MarimoRuntimeAdapter, current_runtime_scope
+from ._marimo_runtime import (
+    MarimoRuntimeAdapter,
+    current_cell_id,
+    current_runtime_scope,
+)
 from ._output_capture import OutputCaptureSlot
 from ._protocol import (
     Command,
@@ -57,7 +61,7 @@ from ._protocol_models import (
     TrailStopPayload,
     dump_model,
 )
-from ._registry import register_lens, unregister_lens
+from ._registry import record_origin, register_lens, unregister_lens
 from ._selection_state import (
     SelectionStore,
     activate_selection,
@@ -124,6 +128,7 @@ class Lens(anywidget.AnyWidget):
         )
         self._bind_comm_close()
         self.on_msg(self._handle_lens_message)
+        record_origin(self, current_runtime_scope(), current_cell_id())
 
     def context(self) -> LensContext:
         """Return detached selection context from the current marimo runtime.

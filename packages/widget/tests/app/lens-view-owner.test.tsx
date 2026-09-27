@@ -1,4 +1,4 @@
-import { StrictMode } from "react";
+import { StrictMode, useLayoutEffect } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 describe("Lens view ownership", () => {
-  test("warns on duplicate views, transfers ownership, and releases it after teardown", () => {
+  test("warns on duplicate views, transfers ownership, and releases it after teardown", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const first = renderView("first");
     const second = renderView("second");
@@ -27,15 +27,33 @@ describe("Lens view ownership", () => {
     expect(warning).toHaveBeenCalledTimes(2);
     expect(warning).toHaveBeenCalledWith(expect.stringContaining("marimo_lens.agent.connect()"));
 
-    unmount(first);
+    await unmountAsync(first);
     expect(activeViews()).toEqual(["second"]);
 
-    unmount(second);
+    await unmountAsync(second);
     expect(activeViews()).toEqual(["third"]);
 
-    unmount(third);
+    await unmountAsync(third);
     renderView("next");
     expect(activeViews()).toEqual(["next"]);
+  });
+
+  test("views released in the same teardown never take ownership on the way out", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const mounted: string[] = [];
+    const first = renderView("first", document, mounted);
+    const second = renderView("second", document, mounted);
+
+    // A cleared output tears down all of its Lens views in one task.
+    await act(async () => {
+      first.unmount();
+      second.unmount();
+    });
+    roots.delete(first);
+    roots.delete(second);
+
+    expect(mounted).toEqual(["first"]);
+    expect(activeViews()).toEqual([]);
   });
 
   test("owns views independently in separate documents", () => {
@@ -110,7 +128,7 @@ describe("Lens view ownership", () => {
   });
 });
 
-function renderView(label: string, ownerDocument = document): Root {
+function renderView(label: string, ownerDocument = document, mounted: string[] = []): Root {
   const container = ownerDocument.createElement("div");
   ownerDocument.body.appendChild(container);
   const root = createRoot(container);
@@ -119,7 +137,7 @@ function renderView(label: string, ownerDocument = document): Root {
     root.render(
       <StrictMode>
         <LensViewOwner>
-          <span data-active-lens-view>{label}</span>
+          <ActiveView label={label} mounted={mounted} />
         </LensViewOwner>
       </StrictMode>,
     ),
@@ -127,8 +145,20 @@ function renderView(label: string, ownerDocument = document): Root {
   return root;
 }
 
+function ActiveView({ label, mounted }: { label: string; mounted: string[] }) {
+  useLayoutEffect(() => {
+    if (!mounted.includes(label)) mounted.push(label);
+  }, [label, mounted]);
+  return <span data-active-lens-view>{label}</span>;
+}
+
 function unmount(root: Root): void {
   act(() => root.unmount());
+  roots.delete(root);
+}
+
+async function unmountAsync(root: Root): Promise<void> {
+  await act(async () => root.unmount());
   roots.delete(root);
 }
 
