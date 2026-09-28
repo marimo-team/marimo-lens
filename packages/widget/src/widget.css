@@ -4,8 +4,15 @@
   position: fixed !important;
   z-index: var(--marimo-lens-z-index, 35) !important;
   inset: 0 !important;
-  clip-path: var(--marimo-lens-pane-clip, none) !important;
   pointer-events: none !important;
+}
+
+/* The pane clip applies to the Lens root and leaves the host unclipped. Chrome
+   includes a target's own clip-path in its IntersectionObserver rectangle, and
+   the dock observes the host to find the part of this document an embedding
+   page shows. */
+[data-marimo-lens-root] {
+  clip-path: var(--marimo-lens-pane-clip, none) !important;
 }
 
 /* Inside marimo's app pane, Lens sits above persistent pane controls (z-index 50)

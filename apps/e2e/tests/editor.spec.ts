@@ -214,13 +214,6 @@ async function expectLensClippedByApp(
         const marker = shadow?.querySelector<HTMLElement>("[data-marimo-lens-selection-id]");
         if (!app || !portal || !shadow || !dock || !marker) return null;
         const pane = app.getBoundingClientRect();
-        const sameInsets = (clipPath: string, expected: number[]) => {
-          const insets = /^inset\((.*)\)$/.exec(clipPath)?.[1]?.split(" ").map(Number.parseFloat);
-          return (
-            insets?.length === 4 &&
-            insets.every((inset, index) => Math.abs(inset - expected[index]!) < 1)
-          );
-        };
         const dockBounds = dock.getBoundingClientRect();
         const markerBounds = marker.getBoundingClientRect();
         const y = markerBounds.top + markerBounds.height / 2;
@@ -241,12 +234,6 @@ async function expectLensClippedByApp(
             dockBounds.bottom <= pane.bottom,
           straddles: markerBounds.left < pane.left && markerBounds.right > pane.left,
           chromeOwnsHiddenSide: !lensOwns(pane.left - 4, y),
-          clipMatchesPane: sameInsets(getComputedStyle(portal).clipPath, [
-            pane.top,
-            window.innerWidth - pane.right,
-            window.innerHeight - pane.bottom,
-            pane.left,
-          ]),
           hiddenHandlesClipped: handles
             .filter(({ inPane }) => !inPane)
             .every(({ x, y: handleY }) => !lensOwns(x, handleY)),
@@ -259,7 +246,6 @@ async function expectLensClippedByApp(
       dockInside: true,
       straddles: true,
       chromeOwnsHiddenSide: true,
-      clipMatchesPane: true,
       hiddenHandlesClipped: true,
       hiddenHandles: kind === "rect" ? 2 : 0,
     });

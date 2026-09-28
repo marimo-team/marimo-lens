@@ -92,10 +92,12 @@ export class NotebookDomAdapter {
   #clipToPane(host: HTMLElement): () => void {
     const clip = () => {
       const pane = this.viewportBounds();
-      const box = host.getBoundingClientRect();
+      // Every fixed Lens surface is placed in client coordinates, so the Lens
+      // root sits at the client origin and pane client coordinates are its
+      // insets. The host box can predate the shadow stylesheet on first mount.
       host.style.setProperty(
         "--marimo-lens-pane-clip",
-        `inset(${pane.top - box.top}px ${box.right - pane.right}px ${box.bottom - pane.bottom}px ${pane.left - box.left}px)`,
+        `inset(${pane.top}px calc(100% - ${pane.right}px) calc(100% - ${pane.bottom}px) ${pane.left}px)`,
       );
     };
     clip();

@@ -63,3 +63,44 @@ test("keeps the dock inside a clipped notebook webview while scrolling and resiz
   await expect(collapsed).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("embedded-dock.png") });
 });
+
+test("keeps the dock in the visible part of an embedded notebook as the page scrolls", async ({
+  page,
+}) => {
+  await page.route("**/scrolling-host", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: `<style>
+        body { margin: 0; }
+        iframe { display: block; width: 100%; height: 600px; margin: 500px 0 1200px; border: 0; }
+      </style><iframe src="http://127.0.0.1:4817"></iframe>`,
+    }),
+  );
+  await page.goto("/scrolling-host");
+  const notebook = page.frameLocator("iframe");
+  const dock = notebook.locator("[data-marimo-lens-dock]");
+  const viewport = page.viewportSize()!;
+  // The page shows the top slice of the notebook, and the dock settles in it.
+  await expect
+    .poll(async () => {
+      const bounds = await dock.boundingBox();
+      return bounds ? bounds.y + bounds.height : Number.POSITIVE_INFINITY;
+    })
+    .toBeLessThan(viewport.height);
+
+  await page.evaluate(() => window.scrollTo(0, 400));
+  const frame = (await page.locator("iframe").boundingBox())!;
+  const frameBottom = frame.y + frame.height;
+  expect(frameBottom).toBeLessThan(viewport.height);
+  await expect(async () => {
+    const bounds = (await dock.boundingBox())!;
+    const gap = frameBottom - (bounds.y + bounds.height);
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThan(24);
+  }).toPass({ timeout: 10_000 });
+
+  const settled = (await dock.boundingBox())!;
+  await notebook.getByRole("button", { name: "Move Lens", exact: true }).focus();
+  await page.keyboard.press("ArrowUp");
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(settled.y - 10, 0);
+});

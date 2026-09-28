@@ -666,6 +666,40 @@ test("losing window focus keeps the last dock position and ends the drag", async
   await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y - 10, 0);
 });
 
+test("dock reaches the bottom of a notebook pane that grows after Lens loads", async ({ page }) => {
+  // A marimo panel can hold the notebook pane short while Lens loads.
+  await page.addInitScript(() => {
+    document.addEventListener("DOMContentLoaded", () => {
+      const style = document.createElement("style");
+      style.id = "short-pane";
+      style.textContent = "#App { flex: none !important; height: 40vh !important; }";
+      document.head.append(style);
+    });
+  });
+  await page.reload();
+  const dock = page.locator("[data-marimo-lens-dock]");
+  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+  await expect(grip).toBeVisible({ timeout: 30_000 });
+  await page.evaluate(() => document.getElementById("short-pane")?.remove());
+
+  const viewport = page.viewportSize()!;
+  const pane = (await page.locator("#App").boundingBox())!;
+  const paneBottom = Math.min(pane.y + pane.height, viewport.height);
+  expect(paneBottom).toBeGreaterThan(viewport.height * 0.8);
+  const handle = (await grip.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + handle.width / 2, viewport.height - 1, { steps: 15 });
+  await page.mouse.up();
+  await expect(async () => {
+    const bounds = (await dock.boundingBox())!;
+    const gap = paneBottom - (bounds.y + bounds.height);
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThan(24);
+  }).toPass({ timeout: 10_000 });
+  await expectInsideViewport(page, dock);
+});
+
 test("moved dock keeps selections reachable at viewport edges and after resizing", async ({
   page,
 }, testInfo) => {

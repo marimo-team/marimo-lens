@@ -78,8 +78,8 @@ describe("notebook DOM layout subscriptions", () => {
     const host = document.createElement("span");
     app.append(host);
     document.body.append(app);
+    // The portal has no layout box yet, as before its shadow stylesheet applies.
     const portal = document.createElement("div");
-    portal.getBoundingClientRect = () => new DOMRect(0, 0, 1_280, 720);
     const uiRoot = portal.attachShadow({ mode: "open" });
 
     const dom = new NotebookDomAdapter(document);
@@ -89,7 +89,7 @@ describe("notebook DOM layout subscriptions", () => {
     expect(portal.parentElement).toBe(app);
     expect(portal.hasAttribute("data-marimo-lens-pane")).toBe(true);
     expect(portal.style.getPropertyValue("--marimo-lens-pane-clip")).toBe(
-      "inset(24px 60px 56px 320px)",
+      "inset(24px calc(100% - 1220px) calc(100% - 664px) 320px)",
     );
     releaseUi();
     expect(portal.isConnected).toBe(false);
