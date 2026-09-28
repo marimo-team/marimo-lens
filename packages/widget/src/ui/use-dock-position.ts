@@ -133,7 +133,6 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
           : null;
       if (!handle || event.button !== 0 || !event.isPrimary || drag) return;
       layout();
-      visible?.refresh();
       drag = {
         id: event.pointerId,
         handle,
@@ -186,7 +185,6 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
       event.preventDefault();
       event.stopPropagation();
       finish(true);
-      visible?.refresh();
       if (event.key === "Home") {
         position = DEFAULT_POSITION;
         layout();
@@ -205,15 +203,13 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
     const observer = win.ResizeObserver ? new win.ResizeObserver(layout) : null;
     observer?.observe(dock);
     const root = dom.uiRoot;
-    // An embedding page can move the visible part of this document without
-    // notice, so movement starts from a fresh measurement.
-    const visible =
+    const stopViewport =
       root instanceof win.ShadowRoot
         ? observeVisibleViewport(root.host, (rect) => {
             visibleBounds = rect;
             layout();
           })
-        : null;
+        : () => {};
     const stopPane = dom.subscribeViewport(layout);
     dock.addEventListener("pointerdown", down);
     // Keep tracking outside the dock even if the host releases pointer capture.
@@ -228,7 +224,7 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
       finish(true);
       if (frame) win.cancelAnimationFrame(frame);
       observer?.disconnect();
-      visible?.disconnect();
+      stopViewport();
       stopPane();
       dock.removeEventListener("pointerdown", down);
       win.removeEventListener("pointermove", pointerMove, true);

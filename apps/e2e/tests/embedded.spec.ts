@@ -64,7 +64,7 @@ test("keeps the dock inside a clipped notebook webview while scrolling and resiz
   await page.screenshot({ path: testInfo.outputPath("embedded-dock.png") });
 });
 
-test("reaches the part of an embedded notebook that the page scrolls into view", async ({
+test("keeps the dock in the visible part of an embedded notebook as the page scrolls", async ({
   page,
 }) => {
   await page.route("**/scrolling-host", (route) =>
@@ -80,7 +80,7 @@ test("reaches the part of an embedded notebook that the page scrolls into view",
   const notebook = page.frameLocator("iframe");
   const dock = notebook.locator("[data-marimo-lens-dock]");
   const viewport = page.viewportSize()!;
-  // The dock settles in the top slice of the notebook that the page shows.
+  // The page shows the top slice of the notebook, and the dock settles in it.
   await expect
     .poll(async () => {
       const bounds = await dock.boundingBox();
@@ -92,17 +92,15 @@ test("reaches the part of an embedded notebook that the page scrolls into view",
   const frame = (await page.locator("iframe").boundingBox())!;
   const frameBottom = frame.y + frame.height;
   expect(frameBottom).toBeLessThan(viewport.height);
-  const handle = (await notebook
-    .getByRole("button", { name: "Move Lens", exact: true })
-    .boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle.x + handle.width / 2, frameBottom - 4, { steps: 15 });
-  await page.mouse.up();
-  await expect
-    .poll(async () => {
-      const bounds = (await dock.boundingBox())!;
-      return frameBottom - (bounds.y + bounds.height);
-    })
-    .toBeLessThan(24);
+  await expect(async () => {
+    const bounds = (await dock.boundingBox())!;
+    const gap = frameBottom - (bounds.y + bounds.height);
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThan(24);
+  }).toPass({ timeout: 10_000 });
+
+  const settled = (await dock.boundingBox())!;
+  await notebook.getByRole("button", { name: "Move Lens", exact: true }).focus();
+  await page.keyboard.press("ArrowUp");
+  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(settled.y - 10, 0);
 });

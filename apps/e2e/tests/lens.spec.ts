@@ -691,12 +691,12 @@ test("dock reaches the bottom of a notebook pane that grows after Lens loads", a
   await page.mouse.down();
   await page.mouse.move(handle.x + handle.width / 2, viewport.height - 1, { steps: 15 });
   await page.mouse.up();
-  await expect
-    .poll(async () => {
-      const bounds = (await dock.boundingBox())!;
-      return paneBottom - (bounds.y + bounds.height);
-    })
-    .toBeLessThan(24);
+  await expect(async () => {
+    const bounds = (await dock.boundingBox())!;
+    const gap = paneBottom - (bounds.y + bounds.height);
+    expect(gap).toBeGreaterThanOrEqual(0);
+    expect(gap).toBeLessThan(24);
+  }).toPass({ timeout: 10_000 });
   await expectInsideViewport(page, dock);
 });
 

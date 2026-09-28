@@ -37,21 +37,25 @@ export function sameBounds(first: ViewportBounds | null, second: ViewportBounds 
   );
 }
 
-type VisibleViewportObserver = { refresh: () => void; disconnect: () => void };
+const VISIBLE_FRACTION_STEPS = Array.from({ length: 1001 }, (_, step) => step / 1000);
 
-// IntersectionObserver reports threshold crossings, so a visible area that
-// changes while the surface stays partly visible needs `refresh`.
 export function observeVisibleViewport(
   surface: Element,
   onChange: (bounds: DOMRectReadOnly) => void,
-): VisibleViewportObserver {
+): () => void {
   const ownerWindow = surface.ownerDocument.defaultView;
-  if (!ownerWindow?.IntersectionObserver) return { refresh: () => {}, disconnect: () => {} };
+  if (!ownerWindow?.IntersectionObserver) return () => {};
 
-  const observer = new ownerWindow.IntersectionObserver((entries) => {
-    const entry = entries[0];
-    if (entry?.isIntersecting) onChange(entry.intersectionRect);
-  });
+  // Report every 0.1% change in the visible fraction, so a page that scrolls a
+  // partly visible embed keeps the rectangle current. One callback can batch
+  // several entries, and the last one is the current geometry.
+  const observer = new ownerWindow.IntersectionObserver(
+    (entries) => {
+      const entry = entries.at(-1);
+      if (entry?.isIntersecting) onChange(entry.intersectionRect);
+    },
+    { threshold: VISIBLE_FRACTION_STEPS },
+  );
   observer.observe(surface);
 
   let frame = 0;
@@ -74,13 +78,10 @@ export function observeVisibleViewport(
   };
   ownerWindow.addEventListener("message", onMessage);
   ownerWindow.addEventListener("resize", refresh);
-  return {
-    refresh,
-    disconnect: () => {
-      ownerWindow.cancelAnimationFrame(frame);
-      observer.disconnect();
-      ownerWindow.removeEventListener("message", onMessage);
-      ownerWindow.removeEventListener("resize", refresh);
-    },
+  return () => {
+    ownerWindow.cancelAnimationFrame(frame);
+    observer.disconnect();
+    ownerWindow.removeEventListener("message", onMessage);
+    ownerWindow.removeEventListener("resize", refresh);
   };
 }

@@ -231,10 +231,10 @@ controls elsewhere.
 its embedding page. This keeps the dock inside VS Code's notebook pane, whose
 output webview can be much taller than the pane. The host stays unclipped
 because Chrome includes a target's own `clip-path` in the intersection
-rectangle. An observer reports threshold crossings only, so the dock refreshes
-the intersection on VS Code's `view-scroll` messages, on window resizes, and
-when a drag or keyboard move starts. A page that scrolls an embedded notebook
-into view then leaves the whole visible notebook reachable.
+rectangle. The observer reports every 0.1% change in the visible fraction, so
+the dock follows a page that scrolls a partly visible notebook. A translation
+that keeps the visible fraction constant crosses no threshold, so the viewport
+adapter re-observes on VS Code's `view-scroll` messages and on window resizes.
 
 ## Browser view ownership
 
