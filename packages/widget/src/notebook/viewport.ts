@@ -37,12 +37,16 @@ export function sameBounds(first: ViewportBounds | null, second: ViewportBounds 
   );
 }
 
+type VisibleViewportObserver = { refresh: () => void; disconnect: () => void };
+
+// IntersectionObserver reports threshold crossings, so a visible area that
+// changes while the surface stays partly visible needs `refresh`.
 export function observeVisibleViewport(
   surface: Element,
   onChange: (bounds: DOMRectReadOnly) => void,
-): () => void {
+): VisibleViewportObserver {
   const ownerWindow = surface.ownerDocument.defaultView;
-  if (!ownerWindow?.IntersectionObserver) return () => {};
+  if (!ownerWindow?.IntersectionObserver) return { refresh: () => {}, disconnect: () => {} };
 
   const observer = new ownerWindow.IntersectionObserver((entries) => {
     const entry = entries[0];
@@ -70,10 +74,13 @@ export function observeVisibleViewport(
   };
   ownerWindow.addEventListener("message", onMessage);
   ownerWindow.addEventListener("resize", refresh);
-  return () => {
-    ownerWindow.cancelAnimationFrame(frame);
-    observer.disconnect();
-    ownerWindow.removeEventListener("message", onMessage);
-    ownerWindow.removeEventListener("resize", refresh);
+  return {
+    refresh,
+    disconnect: () => {
+      ownerWindow.cancelAnimationFrame(frame);
+      observer.disconnect();
+      ownerWindow.removeEventListener("message", onMessage);
+      ownerWindow.removeEventListener("resize", refresh);
+    },
   };
 }

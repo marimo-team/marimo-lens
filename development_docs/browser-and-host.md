@@ -206,9 +206,11 @@ menus, toasts, and positioned chrome paint above Lens. Inside it, the host
 defaults to `z-index: 60`: above notebook and cell affordances, which reach
 `z-index: 30`, and persistent pane controls at `z-index: 50`, and below pane
 alerts, editor tooltips, and the floating outline. The adapter also clips the
-host to the visible pane, which keeps Lens out of sidebars, the developer panel,
-and the footer that `#App` overlaps. Anchored surfaces, labels, the dock, reveal
-visibility, and attention framing use the same pane bounds.
+Lens root inside the host to the visible pane, which keeps Lens out of sidebars,
+the developer panel, and the footer that `#App` overlaps. The clip is computed
+from pane bounds alone, so it holds before the shadow stylesheet lays out the
+host. Anchored surfaces, labels, the dock, reveal visibility, and attention
+framing use the same pane bounds.
 
 Lens UI for a target outside `#App`, such as `mo.sidebar` content, is clipped or
 covered by that chrome. A fullscreen output occupies the browser top layer and
@@ -225,11 +227,14 @@ The note editor is a non-modal dialog, because the browser top layer would paint
 it above Marimo dialogs. Escape closes it from Lens UI and stays with notebook
 controls elsewhere.
 
-`useDockPosition` observes the visible intersection of the portal surface with
+`useDockPosition` observes the visible intersection of the portal host with
 its embedding page. This keeps the dock inside VS Code's notebook pane, whose
-output webview can be much taller than the pane. The notebook viewport adapter refreshes that
-intersection on VS Code's `view-scroll` messages, including translations that
-preserve the intersection ratio.
+output webview can be much taller than the pane. The host stays unclipped
+because Chrome includes a target's own `clip-path` in the intersection
+rectangle. An observer reports threshold crossings only, so the dock refreshes
+the intersection on VS Code's `view-scroll` messages, on window resizes, and
+when a drag or keyboard move starts. A page that scrolls an embedded notebook
+into view then leaves the whole visible notebook reachable.
 
 ## Browser view ownership
 
