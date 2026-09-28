@@ -1,0 +1,36 @@
+packages/widget/src/ui/use-dock-position.ts
+  s_82c605653c1e79::t_9965b339e0698f 136,189,208-210,216,231
+packages/widget/src/widget.css
+  s_82c605653c1e79::t_9965b339e0698f 14-15
+  s_82c605653c1e79::t_ab3663ff65cd0d 10-13
+apps/e2e/tests/embedded.spec.ts
+  s_82c605653c1e79::t_f019caa6d809d2 66-108
+development_docs/browser-and-host.md
+  s_82c605653c1e79::t_5c5383419d88da 209-213,230,232-237
+apps/e2e/tests/lens.spec.ts
+  s_82c605653c1e79::t_4369001c636b13 672-677
+  s_82c605653c1e79::t_fd88708477011f 669-671,678-702
+packages/widget/src/notebook/notebook-dom.tsx
+  s_82c605653c1e79::t_9965b339e0698f 95-97,100
+packages/widget/tests/notebook/notebook-dom.test.ts
+  s_82c605653c1e79::t_ef22b070981414 81,92
+packages/widget/src/notebook/viewport.ts
+  s_82c605653c1e79::t_c347800afe18ed 40-41,47
+  s_82c605653c1e79::t_9965b339e0698f 42-43,49,77-84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "1bd5d62d31fdf361cd1a59491501426dc8b81f78",
+  "prompts": {},
+  "sessions": {
+    "s_82c605653c1e79": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c1447c4-7e60-43ed-be2f-9041db713219",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
