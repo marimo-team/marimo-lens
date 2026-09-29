@@ -72,18 +72,25 @@ def test_editor_notebook_shows_one_automatic_lens(runtime: SimpleNamespace) -> N
 
 
 @pytest.mark.parametrize(
-    "code",
+    "cells",
     [
-        "from marimo_lens import Lens\nlens = Lens(dom_selector='main')",
-        "import marimo_lens as ml\nml.Lens()",
-        "import marimo as _mo\nfrom marimo_lens import Lens as _Lens\n_mo.output.append(_Lens())",
+        ("from marimo_lens import Lens\nlens = Lens(dom_selector='main')",),
+        ("import marimo_lens as ml\nml.Lens()",),
+        (
+            (
+                "import marimo as _mo\nfrom marimo_lens import Lens as _Lens\n"
+                "_mo.output.append(_Lens())"
+            ),
+        ),
+        ("from marimo_lens import Lens", "lens = Lens(dom_selector='main')"),
+        ("import marimo_lens", "lens = marimo_lens.Lens()"),
     ],
-    ids=["authored", "module", "private"],
+    ids=["authored", "module", "private", "class-across-cells", "module-across-cells"],
 )
 def test_notebook_that_creates_a_lens_skips_the_automatic_lens(
-    runtime: SimpleNamespace, code: str
+    runtime: SimpleNamespace, cells: tuple[str, ...]
 ) -> None:
-    _notebook(runtime, "import marimo as mo", code)
+    _notebook(runtime, "import marimo as mo", *cells)
 
     assert _lens(runtime, automatic_lens()) is None
 
@@ -115,9 +122,11 @@ def test_agent_managed_lens_cell_skips_the_automatic_lens(
         "import marimo_lens.agent as _agent\n_agent.connect()",
         "from marimo_lens import LensContext",
         "import marimo_lens\nmarimo_lens.notebook_lens()",
+        "from marimo_lens import Lens\nisinstance(value, Lens)",
+        "import marimo_lens\nother.Lens()",
         "note = 'marimo_lens Lens'",
     ],
-    ids=["agent-module", "types", "host-api", "text"],
+    ids=["agent-module", "types", "host-api", "type-check", "other-receiver", "text"],
 )
 def test_other_lens_references_keep_the_automatic_lens(
     runtime: SimpleNamespace, code: str

@@ -312,8 +312,10 @@ Returns `None` when:
 - The kernel serves an app (`marimo run`), a script, or a test.
 - The caller runs outside a notebook cell, such as a code-mode scratchpad call.
 - The runtime already holds an open Lens.
-- A notebook cell creates its own Lens through `from marimo_lens import Lens`
-  or `marimo_lens.Lens`.
+- A notebook cell constructs its own Lens, as in `Lens(...)` after
+  `from marimo_lens import Lens`, or `marimo_lens.Lens(...)`. The import and
+  the call can sit in different cells. An import used only for type checks
+  keeps the automatic Lens.
 
 A Lens that a notebook cell creates later, such as a newly added
 `Lens(dom_selector=...)` cell, closes the automatic Lens and its Open

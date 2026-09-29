@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+from collections.abc import Sequence
 
 from ._marimo_runtime import (
     current_cell_id,
@@ -43,7 +44,7 @@ def automatic_lens() -> Lens | None:
         or cell_id is None
         or runtime_cell_status(cell_id) != "available"
         or notebook_lens() is not None
-        or any(_creates_lens(code) for code in notebook_cell_codes())
+        or _constructs_lens(notebook_cell_codes())
     ):
         return None
     lens = Lens()
@@ -54,28 +55,61 @@ def automatic_lens() -> Lens | None:
 # Recognizing these cells before they run keeps marimo from rendering an
 # automatic Lens that the notebook's own Lens would close moments later, while
 # the automatic Lens's browser view is still initializing.
-def _creates_lens(code: str) -> bool:
-    if "marimo_lens" not in code or "Lens" not in code:
+def _constructs_lens(codes: Sequence[str]) -> bool:
+    if not any("marimo_lens" in code for code in codes):
         return False
-    try:
-        nodes = tuple(ast.walk(ast.parse(code)))
-    except SyntaxError:
-        return False
-    imports_module = any(
-        isinstance(node, ast.Import)
-        and any(alias.name == "marimo_lens" for alias in node.names)
-        for node in nodes
-    )
-    return any(
-        (
-            isinstance(node, ast.ImportFrom)
-            and node.level == 0
-            and (node.module or "").partition(".")[0] == "marimo_lens"
-            and any(alias.name in {"Lens", "*"} for alias in node.names)
-        )
-        or (imports_module and isinstance(node, ast.Attribute) and node.attr == "Lens")
-        for node in nodes
-    )
+    trees = []
+    for code in codes:
+        try:
+            trees.append(ast.parse(code))
+        except SyntaxError:
+            continue
+    cells = [(tree, _lens_names(tree)) for tree in trees]
+    # marimo shares public names across cells and keeps `_` names cell-local.
+    shared = {
+        (kind, name)
+        for _tree, names in cells
+        for kind, name in names
+        if not name.startswith("_")
+    }
+    return any(_calls_lens(tree, shared | names) for tree, names in cells)
+
+
+def _lens_names(tree: ast.AST) -> set[tuple[str, str]]:
+    """Return ("class", name) and ("module", name) bindings to marimo-lens."""
+
+    names: set[tuple[str, str]] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom) and node.level == 0:
+            if (node.module or "").partition(".")[0] == "marimo_lens":
+                names.update(
+                    ("class", alias.asname or "Lens")
+                    for alias in node.names
+                    if alias.name in {"Lens", "*"}
+                )
+        elif isinstance(node, ast.Import):
+            names.update(
+                ("module", alias.asname or alias.name.partition(".")[0])
+                for alias in node.names
+                if alias.name.partition(".")[0] == "marimo_lens"
+            )
+    return names
+
+
+def _calls_lens(tree: ast.AST, names: set[tuple[str, str]]) -> bool:
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if isinstance(func, ast.Name) and ("class", func.id) in names:
+            return True
+        if isinstance(func, ast.Attribute) and func.attr == "Lens":
+            receiver = func.value
+            while isinstance(receiver, ast.Attribute):
+                receiver = receiver.value
+            if isinstance(receiver, ast.Name) and ("module", receiver.id) in names:
+                return True
+    return False
 
 
 __all__ = ["automatic_lens", "notebook_lens"]

@@ -144,10 +144,12 @@ host such as a preview renders `notebook_lens()` in its own document.
 
 Two rules keep one Lens per notebook runtime:
 
-- `automatic_lens()` skips a notebook whose graph already contains a cell that
-  imports `Lens`. It reads cell source, so private aliases such as the
-  agent-managed cell's `Lens as _Lens` count. Skipping avoids rendering a Lens
-  that the notebook's own Lens would close moments later.
+- `automatic_lens()` skips a notebook whose graph already contains a call that
+  constructs a marimo-lens `Lens`. It resolves import aliases from cell
+  source, sharing public names across cells and keeping `_` names cell-local
+  as marimo does. The agent-managed cell's `Lens as _Lens` therefore counts,
+  and an import used only for type checks does not. Skipping avoids rendering
+  a Lens that the notebook's own Lens would close moments later.
 - A Lens constructed by a notebook cell closes open automatic Lens models in its
   scope. This covers cells that marimo's graph gains later, including cells
   added during the session and cells that first run in a notebook opened
