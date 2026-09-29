@@ -51,6 +51,7 @@ becomes authoritative.
 | Resolution receipt | Transient browser acknowledgement for one atomic `resolve()` call. It can represent several History entries.                      |
 | Browser view       | One rendered [AnyWidget](https://anywidget.dev/) view of a Python `Lens` model. A document grants one view interaction ownership. |
 | `MountedLens`      | The agent-facing handle returned by `marimo_lens.agent.connect()`.                                                                |
+| Automatic Lens     | The default Lens that marimo shows in its editor when the notebook creates none. `automatic_lens()` owns that decision.           |
 
 Use `context` for a `LensContext` variable. Reserve `runtime snapshot` for the
 private `RuntimeSnapshot` type. In prose, call `selection["snapshot"]` the

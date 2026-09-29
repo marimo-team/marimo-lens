@@ -38,6 +38,18 @@ describe("Lens view ownership", () => {
     expect(activeViews()).toEqual(["next"]);
   });
 
+  test("keeps another view of the owning Lens quiet", () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    renderView("notebook", document, [], "lens-1");
+    renderView("preview", document, [], "lens-1");
+
+    expect(activeViews()).toEqual(["notebook"]);
+    expect(warning).not.toHaveBeenCalled();
+
+    renderView("other", document, [], "lens-2");
+    expect(warning).toHaveBeenCalledOnce();
+  });
+
   test("views released in the same teardown never take ownership on the way out", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => {});
     const mounted: string[] = [];
@@ -128,7 +140,12 @@ describe("Lens view ownership", () => {
   });
 });
 
-function renderView(label: string, ownerDocument = document, mounted: string[] = []): Root {
+function renderView(
+  label: string,
+  ownerDocument = document,
+  mounted: string[] = [],
+  lensId?: string,
+): Root {
   const container = ownerDocument.createElement("div");
   ownerDocument.body.appendChild(container);
   const root = createRoot(container);
@@ -136,7 +153,7 @@ function renderView(label: string, ownerDocument = document, mounted: string[] =
   act(() =>
     root.render(
       <StrictMode>
-        <LensViewOwner>
+        <LensViewOwner lensId={lensId}>
           <ActiveView label={label} mounted={mounted} />
         </LensViewOwner>
       </StrictMode>,

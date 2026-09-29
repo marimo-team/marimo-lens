@@ -189,7 +189,7 @@ Typed StyleX modules own component styles, variants, media queries, and theme
 tokens. The extracted stylesheet resets inherited typography and sets the color
 scheme. Lens consumes Marimo's Slate palette tokens, with local light and dark
 defaults. `LensViewOwner` observes theme changes on the body and document element
-and shares the theme with the portal, conflict notice, and error boundary.
+and shares the theme with the portal and error boundary.
 Document-level keyboard handling reads composed event paths, and focus restoration
 uses the explicitly registered UI root and follows its active element.
 `createLensSurface()` owns the host, shared document styles,
@@ -241,7 +241,12 @@ adapter re-observes on VS Code's `view-scroll` messages and on window resizes.
 One Python `Lens` model can have several AnyWidget browser views. The first Lens
 view registered in a document owns selection interaction, portals, global
 styles, output capture, and transient presentation. Later views in that document
-render a conflict surface.
+render nothing.
+
+Each view reads the Lens's synchronized `_lens_id`. A later view of the owning
+Lens stays quiet, which lets a host preview render the notebook's Lens again. A
+later view of another Lens logs one console warning that names
+`marimo_lens.agent.connect()`.
 
 The registry is stored on the owning `Document` through a global symbol. This
 lets separate AnyWidget module instances coordinate. When the owner view
@@ -250,9 +255,9 @@ independent registry and owner.
 
 Browser readiness follows the interaction owner. The owner mounts the output
 capture handler and sends ready or unready events as that handler connects or
-releases. Conflict views render their ownership notice without a capture
-handler. Python considers the Lens mounted in the current marimo runtime while
-at least one document's interaction owner remains ready.
+releases. Views that do not own the document mount no capture handler. Python
+considers the Lens mounted in the current marimo runtime while at least one
+document's interaction owner remains ready.
 
 ## Selection interaction
 

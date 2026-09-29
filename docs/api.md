@@ -19,15 +19,19 @@ provided one.
 | Show a user-paced notebook walkthrough     | [`reveal()`](#lens-reveal)                                                                                       |
 | Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                |
 | Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
+| Share the notebook's Lens with a host      | [`automatic_lens()`](#automatic-lens), [`notebook_lens()`](#notebook-lens)                                       |
 
-The two caller roles are:
+The caller roles are:
 
 - Notebook authors construct `Lens` and keep it mounted with the notebook.
 - Code-mode agents call `marimo_lens.agent.connect()` and work through a
   `MountedLens` handle.
+- marimo and host integrations call the [host API](#host-api) to show one Lens
+  per notebook runtime.
 
-The two surfaces share context, activity, reveal, and resolution behavior. The
-agent handle adds stable reconnection identity and current cell-output capture.
+Authors and agents share context, activity, reveal, and resolution behavior.
+The agent handle adds stable reconnection identity and current cell-output
+capture.
 
 ::: info Source version
 
@@ -289,6 +293,53 @@ Open selections, History entries, and Lens-owned selection images. Repeated
 calls have no effect.
 
 Later public operations raise `LensError(code="lens_closed")`.
+
+## Host API
+
+marimo and host integrations call these functions in the live notebook kernel.
+Together they keep one Lens per notebook runtime.
+
+### `automatic_lens`
+
+`automatic_lens() -> Lens | None`
+
+Returns a new `Lens` for marimo to show, or `None` when the notebook needs
+none. marimo calls it after a notebook cell that imports marimo runs
+successfully in the editor, then displays the returned Lens. The Lens belongs
+to that cell.
+
+Returns `None` when:
+
+- The kernel serves an app (`marimo run`), a script, or a test.
+- The caller runs outside a notebook cell, such as a code-mode scratchpad call.
+- The runtime already holds an open Lens.
+- A notebook cell constructs its own Lens, as in `Lens(...)` after
+  `from marimo_lens import Lens`, or `marimo_lens.Lens(...)`. The import and
+  the call can sit in different cells. An import used only for type checks
+  keeps the automatic Lens.
+
+A Lens that a notebook cell creates later, such as a newly added
+`Lens(dom_selector=...)` cell, closes the automatic Lens and its Open
+selections. Rerunning or deleting the cell that owns the automatic Lens also
+closes it. The next successful run of a cell that imports marimo shows a new
+one when the notebook has no other Lens.
+
+### `notebook_lens`
+
+`notebook_lens() -> Lens | None`
+
+Returns the oldest open Lens in the active marimo runtime, or `None`. A host
+renders it in another browser document, such as a preview, to share the
+notebook's Lens:
+
+```python
+import marimo_lens
+
+lens = marimo_lens.notebook_lens()
+```
+
+Each browser document gives one Lens view interaction ownership, so the
+notebook and the host document each show a dock for the same selections.
 
 ## Agent adapter
 

@@ -5,10 +5,12 @@ import { LensThemeContext, observeLensTheme, type LensTheme } from "@/ui/theme";
 
 // Anywidget can mount views from separate app-module instances into one document.
 // The global symbol lets those instances share one ordered registry.
-const VIEW_REGISTRY: unique symbol = Symbol.for("marimo-lens.view-registry.v1");
+const VIEW_REGISTRY: unique symbol = Symbol.for("marimo-lens.view-registry.v2");
 
-type ViewOwnership = "owner" | "conflict";
-type ViewRegistry = Map<symbol, (ownership: ViewOwnership) => void>;
+// A duplicate view renders the owning Lens again, as a host preview can.
+type ViewOwnership = "owner" | "duplicate" | "conflict";
+type ViewListener = (ownership: ViewOwnership) => void;
+type ViewRegistry = Map<symbol, { lensId: string | undefined; listener: ViewListener }>;
 
 declare global {
   interface Document {
@@ -16,7 +18,7 @@ declare global {
   }
 }
 
-export function LensViewOwner({ children }: { children: ReactNode }) {
+export function LensViewOwner({ children, lensId }: { children: ReactNode; lensId?: string }) {
   const viewIdRef = useRef<symbol | null>(null);
   if (viewIdRef.current === null) viewIdRef.current = Symbol("marimo-lens-view");
   const viewId = viewIdRef.current;
@@ -31,7 +33,7 @@ export function LensViewOwner({ children }: { children: ReactNode }) {
     const releaseTheme = observeLensTheme(host.ownerDocument, setTheme);
     const adapter = new NotebookDomAdapter(host.ownerDocument);
     const releaseHostOutput = adapter.registerHost(host);
-    const releaseView = acquireView(host.ownerDocument, viewId, (ownership) => {
+    const releaseView = acquireView(host.ownerDocument, viewId, lensId, (ownership) => {
       if (ownership === "conflict" && !conflictWarnedRef.current) {
         conflictWarnedRef.current = true;
         console.warn(
@@ -47,7 +49,7 @@ export function LensViewOwner({ children }: { children: ReactNode }) {
       releaseHostOutput();
       adapter.dispose();
     };
-  }, [viewId]);
+  }, [lensId, viewId]);
 
   return (
     <LensThemeContext value={theme}>
@@ -62,10 +64,11 @@ export function LensViewOwner({ children }: { children: ReactNode }) {
 function acquireView(
   ownerDocument: Document,
   viewId: symbol,
-  listener: (ownership: ViewOwnership) => void,
+  lensId: string | undefined,
+  listener: ViewListener,
 ): () => void {
   const views = viewRegistry(ownerDocument);
-  views.set(viewId, listener);
+  views.set(viewId, { lensId, listener });
   publishOwnership(views);
 
   let released = false;
@@ -101,9 +104,15 @@ function viewRegistry(ownerDocument: Document): ViewRegistry {
 }
 
 function publishOwnership(views: ViewRegistry): void {
-  let ownerPublished = false;
-  for (const listener of views.values()) {
-    listener(ownerPublished ? "conflict" : "owner");
-    ownerPublished = true;
+  let owner: { lensId: string | undefined } | undefined;
+  for (const view of views.values()) {
+    if (owner === undefined) {
+      owner = view;
+      view.listener("owner");
+    } else {
+      view.listener(
+        view.lensId !== undefined && view.lensId === owner.lensId ? "duplicate" : "conflict",
+      );
+    }
   }
 }

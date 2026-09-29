@@ -61,7 +61,12 @@ from ._protocol_models import (
     TrailStopPayload,
     dump_model,
 )
-from ._registry import record_origin, register_lens, unregister_lens
+from ._registry import (
+    automatic_lenses,
+    record_origin,
+    register_lens,
+    unregister_lens,
+)
 from ._selection_state import (
     SelectionStore,
     activate_selection,
@@ -99,6 +104,9 @@ class Lens(anywidget.AnyWidget):
         }
     ).tag(sync=True)
     _selector = traitlets.Unicode(default_value=None, allow_none=True).tag(sync=True)
+    # Browser views of one Lens share this ID, so a document can tell a second
+    # view of its owning Lens from another Lens.
+    _lens_id = traitlets.Unicode().tag(sync=True)
 
     def __init__(
         self,
@@ -119,6 +127,7 @@ class Lens(anywidget.AnyWidget):
         super().__init__(
             _state=self._selection_store.state.payload(),
             _selector=selector,
+            _lens_id=uuid.uuid4().hex,
         )
         self._output_capture = OutputCaptureSlot(
             lock=self._lock,
@@ -128,7 +137,18 @@ class Lens(anywidget.AnyWidget):
         )
         self._bind_comm_close()
         self.on_msg(self._handle_lens_message)
-        record_origin(self, current_runtime_scope(), current_cell_id())
+        scope, cell_id = current_runtime_scope(), current_cell_id()
+        record_origin(self, scope, cell_id)
+        # A Lens created by a notebook cell replaces marimo's automatic Lens.
+        # Hosts that never call automatic_lens() leave this path inert.
+        automatic = automatic_lenses(scope)
+        if (
+            automatic
+            and cell_id is not None
+            and self._runtime.cell_status(cell_id) == "available"
+        ):
+            for lens in automatic:
+                lens.close()
 
     def context(self) -> LensContext:
         """Return detached selection context from the current marimo runtime.

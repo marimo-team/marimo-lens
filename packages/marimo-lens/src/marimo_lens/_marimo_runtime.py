@@ -105,6 +105,41 @@ def current_cell_id() -> str | None:
     return str(cell_id) if cell_id is not None else None
 
 
+def edit_session() -> bool:
+    """Return whether the active marimo kernel serves the notebook editor."""
+
+    try:
+        from marimo import app_meta
+    except ImportError:
+        return False
+    return app_meta().mode == "edit"
+
+
+def notebook_cell_codes() -> tuple[str, ...]:
+    """Return the code of each cell in the active marimo dataflow graph."""
+
+    try:
+        from marimo._runtime.context import get_context
+    except ImportError:
+        return ()
+
+    try:
+        context = _read_runtime_context(get_context)
+    except _RuntimeReadError:
+        return ()
+
+    graph = getattr(context, "graph", None)
+    if graph is None:
+        return ()
+    with _graph_lock(getattr(graph, "lock", None)):
+        raw_cells = getattr(graph, "cells", {})
+        if not isinstance(raw_cells, Mapping):
+            return ()
+        return tuple(
+            str(getattr(cell, "code", "") or "") for cell in tuple(raw_cells.values())
+        )
+
+
 class _RuntimeReadError(RuntimeError):
     """A host-owned runtime value could not be read."""
 

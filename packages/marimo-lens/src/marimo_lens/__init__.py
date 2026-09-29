@@ -5,6 +5,7 @@ from __future__ import annotations
 from importlib import metadata
 
 from . import agent as agent
+from ._mount import automatic_lens, notebook_lens
 from .activity import ActivityHandle
 from .context import (
     CellReference,
@@ -33,4 +34,6 @@ __all__ = [
     "SelectionTargetReference",
     "__version__",
     "agent",
+    "automatic_lens",
+    "notebook_lens",
 ]
