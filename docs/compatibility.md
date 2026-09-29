@@ -27,10 +27,11 @@ Lens is a separate Python package with its own releases. Install it in the
 notebook's environment alongside marimo.
 
 marimo mounts Lens
-[automatically](https://github.com/marimo-team/marimo/pull/10814) when
-`marimo-lens` is installed. The first cell that imports marimo shows the dock
-after it runs successfully. If your notebook already shows a Lens dock, reuse
-it.
+[automatically](https://github.com/marimo-team/marimo/pull/10814) in its editor
+when `marimo-lens` is installed. The first cell that imports marimo shows the
+dock after it runs successfully. A Lens that the notebook creates replaces the
+automatic one. [`automatic_lens()`](./api#automatic-lens) defines when marimo
+adds a Lens.
 
 ## Browser
 

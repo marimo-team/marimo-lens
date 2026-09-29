@@ -13,9 +13,10 @@ _LOCK = threading.RLock()
 _LENSES: weakref.WeakKeyDictionary[Lens, weakref.ReferenceType[object]] = (
     weakref.WeakKeyDictionary()
 )
-_ORIGINS: weakref.WeakKeyDictionary[Lens, tuple[weakref.ReferenceType[object], str]] = (
-    weakref.WeakKeyDictionary()
-)
+_ORIGINS: weakref.WeakKeyDictionary[
+    Lens, tuple[weakref.ReferenceType[object], str | None]
+] = weakref.WeakKeyDictionary()
+_AUTOMATIC: weakref.WeakSet[Lens] = weakref.WeakSet()
 
 
 def mounted_lenses(scope: object | None) -> tuple[Lens, ...]:
@@ -40,10 +41,33 @@ def unregister_lens(lens: Lens) -> None:
 
 
 def record_origin(lens: Lens, scope: object | None, cell_id: str | None) -> None:
-    if scope is None or cell_id is None:
+    if scope is None:
         return
     with _LOCK:
         _ORIGINS[lens] = (weakref.ref(scope), cell_id)
+
+
+def open_lenses(scope: object | None) -> tuple[Lens, ...]:
+    """Return open Lens models created in ``scope``, oldest first."""
+
+    if scope is None:
+        return ()
+    with _LOCK:
+        return tuple(
+            lens
+            for lens, (scope_ref, _origin) in _ORIGINS.items()
+            if scope_ref() is scope and not lens._lens_closed
+        )
+
+
+def mark_automatic(lens: Lens) -> None:
+    with _LOCK:
+        _AUTOMATIC.add(lens)
+
+
+def automatic_lenses(scope: object | None) -> tuple[Lens, ...]:
+    with _LOCK:
+        return tuple(lens for lens in open_lenses(scope) if lens in _AUTOMATIC)
 
 
 def open_lenses_from_cell(scope: object | None, cell_id: str) -> tuple[Lens, ...]:
@@ -58,7 +82,10 @@ def open_lenses_from_cell(scope: object | None, cell_id: str) -> tuple[Lens, ...
 
 
 __all__ = [
+    "automatic_lenses",
+    "mark_automatic",
     "mounted_lenses",
+    "open_lenses",
     "open_lenses_from_cell",
     "record_origin",
     "register_lens",

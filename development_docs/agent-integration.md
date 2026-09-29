@@ -131,9 +131,27 @@ A Python Lens registers through `_registry.py` when a browser view reports
 output capture ready in the active marimo runtime scope. It unregisters when every
 browser view becomes unready or the Lens closes.
 
-Each Lens also records the runtime scope and cell that constructed it.
-`add_lens_cell()` uses that origin to leave a cell alone while the Lens it
-created is open, even when no browser view currently shows it.
+Each Lens also records the runtime scope that constructed it, with the
+executing cell when one exists. `add_lens_cell()` uses that origin to leave a
+cell alone while the Lens it created is open, even when no browser view
+currently shows it.
+
+The same origins answer the host API. `notebook_lens()` returns the oldest open
+Lens in the active scope. `automatic_lens()` returns a new default Lens only for
+a notebook cell in marimo's editor, and only while the scope holds no open
+Lens. marimo shows that Lens in the output of the cell that imports marimo. A
+host such as a preview renders `notebook_lens()` in its own document.
+
+Two rules keep one Lens per notebook runtime:
+
+- `automatic_lens()` skips a notebook whose graph already contains a cell that
+  imports `Lens`. It reads cell source, so private aliases such as the
+  agent-managed cell's `Lens as _Lens` count. Skipping avoids rendering a Lens
+  that the notebook's own Lens would close moments later.
+- A Lens constructed by a notebook cell closes open automatic Lens models in its
+  scope. This covers cells that marimo's graph gains later, including cells
+  added during the session and cells that first run in a notebook opened
+  without autorun.
 
 The registry is scoped by the active marimo UI registry object. It prevents a
 code-mode call from discovering a displayed Lens in another live runtime. Weak
