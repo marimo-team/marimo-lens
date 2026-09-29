@@ -32,8 +32,8 @@ def automatic_lens() -> Lens | None:
     """Return a new Lens for marimo to show, or None when the notebook needs none.
 
     marimo calls this after a notebook cell that imports marimo runs in its
-    editor and shows the returned Lens in that cell's output. Returns None
-    outside the editor or a notebook cell, while the runtime holds an open
+    editor and displays the returned Lens, which belongs to that cell. Returns
+    None outside the editor or a notebook cell, while the runtime holds an open
     Lens, and when a notebook cell creates its own Lens. A Lens that a notebook
     cell creates later closes the automatic Lens.
     """

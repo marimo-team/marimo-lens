@@ -139,10 +139,16 @@ class Lens(anywidget.AnyWidget):
         self.on_msg(self._handle_lens_message)
         scope, cell_id = current_runtime_scope(), current_cell_id()
         record_origin(self, scope, cell_id)
-        if cell_id is not None and self._runtime.cell_status(cell_id) == "available":
-            # A Lens created by a notebook cell replaces marimo's automatic Lens.
-            for automatic in automatic_lenses(scope):
-                automatic.close()
+        # A Lens created by a notebook cell replaces marimo's automatic Lens.
+        # Hosts that never call automatic_lens() leave this path inert.
+        automatic = automatic_lenses(scope)
+        if (
+            automatic
+            and cell_id is not None
+            and self._runtime.cell_status(cell_id) == "available"
+        ):
+            for lens in automatic:
+                lens.close()
 
     def context(self) -> LensContext:
         """Return detached selection context from the current marimo runtime.

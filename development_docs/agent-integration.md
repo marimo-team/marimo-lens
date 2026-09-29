@@ -139,8 +139,9 @@ currently shows it.
 The same origins answer the host API. `notebook_lens()` returns the oldest open
 Lens in the active scope. `automatic_lens()` returns a new default Lens only for
 a notebook cell in marimo's editor, and only while the scope holds no open
-Lens. marimo shows that Lens in the output of the cell that imports marimo. A
-host such as a preview renders `notebook_lens()` in its own document.
+Lens. marimo decides where to display that Lens, and the cell that imports
+marimo owns its lifetime. A host such as a preview renders `notebook_lens()` in
+its own document.
 
 Two rules keep one Lens per notebook runtime:
 

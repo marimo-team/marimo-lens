@@ -305,7 +305,8 @@ Together they keep one Lens per notebook runtime.
 
 Returns a new `Lens` for marimo to show, or `None` when the notebook needs
 none. marimo calls it after a notebook cell that imports marimo runs
-successfully in the editor, then shows the returned Lens in that cell's output.
+successfully in the editor, then displays the returned Lens. The Lens belongs
+to that cell.
 
 Returns `None` when:
 
@@ -319,7 +320,7 @@ Returns `None` when:
 
 A Lens that a notebook cell creates later, such as a newly added
 `Lens(dom_selector=...)` cell, closes the automatic Lens and its Open
-selections. Rerunning or deleting the cell that shows the automatic Lens also
+selections. Rerunning or deleting the cell that owns the automatic Lens also
 closes it. The next successful run of a cell that imports marimo shows a new
 one when the notebook has no other Lens.
 
