@@ -1,0 +1,61 @@
+packages/marimo-lens/src/marimo_lens/_registry.py
+  s_31b1c84cd2fa0e::t_2689fe67c1bfa1 19,63-72,85-86
+  s_31b1c84cd2fa0e::t_d2ce1c36e227f5 16-18,44,50-60,88
+packages/widget/src/app/lens-render.tsx
+  s_31b1c84cd2fa0e::t_1f1d03868a3107 10,12
+  s_31b1c84cd2fa0e::t_4320781a4f02f4 3
+packages/widget/tests/app/lens-view-owner.test.tsx
+  s_31b1c84cd2fa0e::t_1f1d03868a3107 41,43-44,49,147,156
+  s_31b1c84cd2fa0e::t_166688620043c3 42,45-48,50-52,143-146,148
+docs/api.md
+  s_31b1c84cd2fa0e::t_e17c406c348dd1 22,24,29-30,32-34,297-306,309-312,314,317,323-339
+  s_31b1c84cd2fa0e::t_e87223de2992c6 307-308,313,315-316,318-322
+packages/marimo-lens/tests/test_mount.py
+  s_31b1c84cd2fa0e::t_707bac717b673f 1-4,6-14,22-26,28-29,33,35-36,38-43,46,49-51,57-62,64-66,68-69,71-82,84-87,89-90,92-108,110-116,119,121-125,160,162-169,171-173,175,177-200
+  s_31b1c84cd2fa0e::t_13fc1e1730dfa0 47
+  s_31b1c84cd2fa0e::t_2b87edf1f1a15d 27,30-31,34,37,44-45,48,52-56,63,67,70,83,88,91,109,117-118,120,126-159,161,170,174,176
+  s_31b1c84cd2fa0e::t_252217096455c5 5,15-21,32
+packages/widget/src/app/lens-view-owner.tsx
+  s_31b1c84cd2fa0e::t_4320781a4f02f4 8,11-12,68,108-113,115-116
+  s_31b1c84cd2fa0e::t_1f1d03868a3107 10,13,21,36,52,67,71,107,114
+packages/marimo-lens/src/marimo_lens/_marimo_runtime.py
+  s_31b1c84cd2fa0e::t_9334185c285150 108-117
+  s_31b1c84cd2fa0e::t_ead4176e919d29 118-142
+development_docs/agent-integration.md
+  s_31b1c84cd2fa0e::t_4d761b21e9b483 134-139,144
+  s_31b1c84cd2fa0e::t_e87223de2992c6 140-143,145-154
+packages/marimo-lens/src/marimo_lens/widget.py
+  s_31b1c84cd2fa0e::t_1f1d03868a3107 107-109,130
+  s_31b1c84cd2fa0e::t_2689fe67c1bfa1 64-69,140-145
+development_docs/architecture.md
+  s_31b1c84cd2fa0e::t_4d761b21e9b483 54
+packages/marimo-lens/tests/test_context_types.py
+  s_31b1c84cd2fa0e::t_77e6201ae25362 21-22,41-42
+docs/compatibility.md
+  s_31b1c84cd2fa0e::t_1a6fe5f4420add 30-31
+  s_31b1c84cd2fa0e::t_e87223de2992c6 32-34
+development_docs/browser-and-host.md
+  s_31b1c84cd2fa0e::t_7337b944f0eb4d 192,244-249
+  s_31b1c84cd2fa0e::t_67fc171790a731 258-260
+packages/marimo-lens/src/marimo_lens/_mount.py
+  s_31b1c84cd2fa0e::t_4b0ef20cbfded9 55-56
+  s_31b1c84cd2fa0e::t_b84934618c0bad 1-4,15-32,38-39,48,79-81
+  s_31b1c84cd2fa0e::t_2689fe67c1bfa1 7-10,12-14,33-34,40-45,47,49-51
+  s_31b1c84cd2fa0e::t_ead4176e919d29 5-6,11,35-37,46,52-54,57-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "c0bc62b6ae627ef63fa7ad472a426d98260ee7d1",
+  "prompts": {},
+  "sessions": {
+    "s_31b1c84cd2fa0e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c6ec822-0dce-459f-8d20-ee24f822508c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
