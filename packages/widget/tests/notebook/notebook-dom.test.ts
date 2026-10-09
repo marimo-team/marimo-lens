@@ -144,6 +144,12 @@ describe("notebook DOM layout subscriptions", () => {
     expect(note.value).toBe("Keep this note");
     expect(dom.listTargets(null).map(({ target }) => target.cellIds)).toEqual([["cell"]]);
     expect(dom.getTarget(otherTarget.target, null)).toBeNull();
+    expect(dom.targetFromElement(other, null)).toBeNull();
+    const resolveEvent = vi.fn((event: Event) => dom.targetFromEvent(event, null));
+    other.addEventListener("pointerdown", resolveEvent, { once: true });
+    other.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(resolveEvent).toHaveReturnedWith(null);
+    expect(dom.targetFromElement(output, null)?.element).toBe(output);
     expect(dom.getOutputCell("other")).toBeNull();
     expect(dom.getCell("other")).toBeNull();
     expect(dom.listOutputCells().map(({ id }) => id)).toEqual(["cell"]);
@@ -156,6 +162,7 @@ describe("notebook DOM layout subscriptions", () => {
     expect(dom.viewportBounds()).toMatchObject({ left: 320, top: 24, width: 900, height: 640 });
     expect(dom.uiRoot).toBe(root);
     expect(dom.getTarget(otherTarget.target, null)?.element).toBe(other);
+    expect(dom.targetFromElement(other, null)?.element).toBe(other);
     expect(dom.getCell("other")).toBe(otherCell);
     releaseUi();
     fullscreen = output;

@@ -151,11 +151,13 @@ export class NotebookDomAdapter {
   }
 
   targetFromEvent(event: Event, selector: TargetSelector): TargetSurface | null {
-    return targetFromEvent(event, selector);
+    const surface = targetFromEvent(event, selector);
+    return surface && this.#visibleInFullscreen(surface.element) ? surface : null;
   }
 
   targetFromElement(element: Element | null, selector: TargetSelector): TargetSurface | null {
-    return targetFromElement(element, selector);
+    const surface = targetFromElement(element, selector);
+    return surface && this.#visibleInFullscreen(surface.element) ? surface : null;
   }
 
   captureContext(element: HTMLElement): HTMLElement | "auto" {
