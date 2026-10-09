@@ -40,6 +40,99 @@ test("editor selections reference a cell without output through its code", async
   expect(report.text).toContain('reporting_months = ["January", "February", "March"]');
 });
 
+for (const kind of ["point", "region"] as const) {
+  test(`fullscreen ${kind} selections keep the inline cell, note, and image`, async ({
+    page,
+  }, testInfo) => {
+    const chart = page.getByRole("region", { name: "Revenue by month" });
+    const output = page.locator('[id^="output-"]', { has: chart });
+    const cellId = (await output.getAttribute("id"))!.slice("output-".length);
+    const cell = page.locator("[data-cell-id]", { has: chart });
+    await selectOutput(page, "point", "S1", "Inline attention");
+    await chart.hover();
+    await cell.getByTestId("fullscreen-output-button").click();
+    await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeVisible();
+
+    await selectOutput(page, kind, "S2", `Review this fullscreen ${kind}`);
+    await page.getByRole("button", { name: "Open selections, 2 open, 0 in history" }).click();
+    await expect(page.getByText(`Review this fullscreen ${kind}`, { exact: true })).toBeVisible();
+    await screenshot(page, testInfo, `fullscreen-${kind}-selection`);
+    await page.getByRole("button", { name: "Exit fullscreen", exact: true }).click();
+
+    await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeHidden();
+    await expect(page.locator("[data-marimo-lens-selection-id]")).toHaveCount(2);
+    const report = await runAction(page);
+    expect(report.references.selections).toHaveLength(2);
+    const [inline, fullscreen] = report.references.selections;
+    expect(fullscreen).toMatchObject({
+      label: "S2",
+      note: `Review this fullscreen ${kind}`,
+      target: { kind: "notebook", cellIds: [cellId] },
+      anchor: { kind: kind === "point" ? "point" : "rect" },
+      snapshot: { status: "available" },
+    });
+    expect(fullscreen.target).toEqual(inline.target);
+    expect(fullscreen.cells).toEqual([{ id: cellId, status: "available" }]);
+    expect(report.images[fullscreen.id].signature).toBe("89504e470d0a1a0a");
+    expect(report.images[fullscreen.id].bytes).toBeGreaterThan(100);
+
+    await chart.evaluate((target) => target.scrollIntoView({ block: "center" }));
+    await chart.hover();
+    await cell.getByTestId("fullscreen-output-button").click();
+    await page.getByRole("button", { name: "Select a target", exact: true }).click();
+    await page.getByRole("button", { name: "Cancel selection mode", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Exit fullscreen", exact: true }).click();
+  });
+}
+
+test("fullscreen hides other cells' markers and keeps keyboard selection on its output", async ({
+  page,
+}) => {
+  const chart = page.getByRole("region", { name: "Revenue by month" });
+  const output = page.locator('[id^="output-"]', { has: chart });
+  const cellId = (await output.getAttribute("id"))!.slice("output-".length);
+  await selectOutput(
+    page,
+    "point",
+    "S1",
+    "Keep this inline note",
+    page.getByRole("heading", { name: "Regional revenue", exact: true }),
+  );
+  await chart.evaluate((target) => target.scrollIntoView({ block: "center" }));
+  await chart.hover();
+  await page
+    .locator("[data-cell-id]", { has: chart })
+    .getByTestId("fullscreen-output-button")
+    .click();
+  await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeVisible();
+  await expect(page.locator("[data-marimo-lens-selection-id]")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Enter");
+  const editor = page.getByRole("dialog", { name: /Add note for S2/ });
+  await expect(editor).toBeVisible();
+  await editor.getByRole("textbox").fill("Keyboard attention on the fullscreen output");
+  await editor.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(editor).toBeHidden();
+  await expect(page.locator("[data-marimo-lens-selection-id]")).toHaveCount(1);
+  await page.getByRole("button", { name: "Exit fullscreen", exact: true }).click();
+  await expect(page.locator("[data-marimo-lens-selection-id]")).toHaveCount(2);
+
+  const report = await runAction(page);
+  expect(report.references.selections).toHaveLength(2);
+  expect(report.references.selections[0].note).toBe("Keep this inline note");
+  expect(report.references.selections[0].target.cellIds).not.toEqual([cellId]);
+  expect(report.references.selections[1]).toMatchObject({
+    note: "Keyboard attention on the fullscreen output",
+    target: { kind: "notebook", cellIds: [cellId] },
+    anchor: { kind: "point" },
+    snapshot: { status: "available" },
+  });
+});
+
 test("Marimo dialogs cover Lens selection markers", async ({ page }, testInfo) => {
   await selectOutput(page, "point", "S1", "Check dialog stacking");
   await page.getByRole("region", { name: "Revenue by month" }).evaluate((target) => {
