@@ -213,8 +213,12 @@ host. Anchored surfaces, labels, the dock, reveal visibility, and attention
 framing use the same pane bounds.
 
 Lens UI for a target outside `#App`, such as `mo.sidebar` content, is clipped or
-covered by that chrome. A fullscreen output occupies the browser top layer and
-hides Lens until it exits. Marimo's PNG export skips the `print:hidden` host,
+covered by that chrome. When an output enters fullscreen, the adapter moves the
+existing Lens host into that output in the browser top layer and uses its visible
+bounds. Only targets inside the fullscreen surface are available for selection
+and attention. Point and region selections, notes, and selection images retain
+the original cell target. On exit, the host returns to the pane and its clipping
+resumes. Marimo's PNG export skips the `print:hidden` host,
 and a print rule in the host stylesheet hides Lens.
 
 Outside Marimo, the portal stays under the document body, uses the visual

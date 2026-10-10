@@ -4,6 +4,7 @@ import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
 afterEach(() => {
   Reflect.deleteProperty(window, "visualViewport");
+  Reflect.deleteProperty(document, "fullscreenElement");
   document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -93,6 +94,109 @@ describe("notebook DOM layout subscriptions", () => {
     );
     releaseUi();
     expect(portal.isConnected).toBe(false);
+    releaseHost();
+    dom.dispose();
+  });
+
+  test("moves the same Lens UI into fullscreen and restores the pane on exit", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_280);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(720);
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(320, 24, 900, 640);
+    const host = document.createElement("span");
+    const output = document.createElement("div");
+    output.id = "output-cell";
+    output.getBoundingClientRect = () => new DOMRect(0, 0, 1_280, 720);
+    const other = document.createElement("div");
+    other.id = "output-other";
+    other.getBoundingClientRect = () => new DOMRect(320, 24, 900, 200);
+    const otherCell = document.createElement("div");
+    otherCell.id = "cell-other";
+    otherCell.append(other);
+    app.append(host, output, otherCell);
+    document.body.append(app);
+    let fullscreen: Element | null = null;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreen,
+    });
+    const portal = document.createElement("div");
+    const root = portal.attachShadow({ mode: "open" });
+    const note = document.createElement("textarea");
+    note.value = "Keep this note";
+    root.append(note);
+    const dom = new NotebookDomAdapter(document);
+    const releaseHost = dom.registerHost(host);
+    const releaseUi = dom.registerUiRoot(root);
+    const listener = vi.fn();
+    const releaseLayout = dom.subscribeLayout(listener);
+    const otherTarget = dom.targetFromElement(other, null)!;
+
+    fullscreen = output;
+    document.dispatchEvent(new Event("fullscreenchange"));
+    await paint();
+
+    expect(portal.parentElement).toBe(output);
+    expect(dom.viewportBounds()).toMatchObject({ left: 0, top: 0, width: 1_280, height: 720 });
+    expect(listener).toHaveBeenCalled();
+    expect(note.value).toBe("Keep this note");
+    expect(dom.listTargets(null).map(({ target }) => target.cellIds)).toEqual([["cell"]]);
+    expect(dom.getTarget(otherTarget.target, null)).toBeNull();
+    expect(dom.targetFromElement(other, null)).toBeNull();
+    const resolveEvent = vi.fn((event: Event) => dom.targetFromEvent(event, null));
+    other.addEventListener("pointerdown", resolveEvent, { once: true });
+    other.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    expect(resolveEvent).toHaveReturnedWith(null);
+    expect(dom.targetFromElement(output, null)?.element).toBe(output);
+    expect(dom.getOutputCell("other")).toBeNull();
+    expect(dom.getCell("other")).toBeNull();
+    expect(dom.listOutputCells().map(({ id }) => id)).toEqual(["cell"]);
+
+    fullscreen = null;
+    document.dispatchEvent(new Event("fullscreenchange"));
+    await paint();
+
+    expect(portal.parentElement).toBe(app);
+    expect(dom.viewportBounds()).toMatchObject({ left: 320, top: 24, width: 900, height: 640 });
+    expect(dom.uiRoot).toBe(root);
+    expect(dom.getTarget(otherTarget.target, null)?.element).toBe(other);
+    expect(dom.targetFromElement(other, null)?.element).toBe(other);
+    expect(dom.getCell("other")).toBe(otherCell);
+    releaseUi();
+    fullscreen = output;
+    document.dispatchEvent(new Event("fullscreenchange"));
+    await paint();
+    expect(portal.isConnected).toBe(false);
+    releaseLayout();
+    releaseHost();
+    dom.dispose();
+  });
+
+  test("mounts in an already fullscreen output and ignores fullscreen outside its pane", () => {
+    const app = document.createElement("main");
+    app.id = "App";
+    const host = document.createElement("span");
+    const output = document.createElement("div");
+    const unrelated = document.createElement("div");
+    app.append(host, output);
+    document.body.append(app, unrelated);
+    let fullscreen = output;
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      get: () => fullscreen,
+    });
+    const portal = document.createElement("div");
+    const dom = new NotebookDomAdapter(document);
+    const releaseHost = dom.registerHost(host);
+    const releaseUi = dom.registerUiRoot(portal.attachShadow({ mode: "open" }));
+
+    expect(portal.parentElement).toBe(output);
+    fullscreen = unrelated;
+    document.dispatchEvent(new Event("fullscreenchange"));
+    expect(portal.parentElement).toBe(app);
+    releaseUi();
     releaseHost();
     dom.dispose();
   });

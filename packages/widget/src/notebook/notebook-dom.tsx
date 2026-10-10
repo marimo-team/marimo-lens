@@ -76,10 +76,13 @@ export class NotebookDomAdapter {
     this.#uiRoot = root;
     const { host } = root;
     host.toggleAttribute("data-marimo-lens-pane", this.#pane !== null);
-    (this.#pane ?? this.document.body).append(host);
+    const mount = () => (this.#viewportRoot() ?? this.document.body).append(host);
+    mount();
+    this.document.addEventListener("fullscreenchange", mount);
     const stopClip =
       this.#pane && host instanceof this.window.HTMLElement ? this.#clipToPane(host) : null;
     return () => {
+      this.document.removeEventListener("fullscreenchange", mount);
       stopClip?.();
       host.remove();
       if (this.#uiRoot === root) this.#uiRoot = null;
@@ -88,7 +91,7 @@ export class NotebookDomAdapter {
 
   // `#App` forms a stacking context below marimo's application chrome, so Lens
   // cannot paint above panels, dialogs, or menus from inside it. The clip keeps
-  // fixed Lens UI out of the chrome that `#App` still overlaps.
+  // fixed Lens UI inside the pane, or its fullscreen output in the top layer.
   #clipToPane(host: HTMLElement): () => void {
     const clip = () => {
       const pane = this.viewportBounds();
@@ -110,10 +113,18 @@ export class NotebookDomAdapter {
     return element;
   }
 
-  /** The visible notebook pane: marimo's `#App` scroller, or the visual viewport elsewhere. */
+  #viewportRoot(): HTMLElement | null {
+    const fullscreen = this.document.fullscreenElement;
+    return fullscreen instanceof this.window.HTMLElement &&
+      (!this.#pane || containsOpenTree(this.#pane, fullscreen))
+      ? fullscreen
+      : this.#pane;
+  }
+
+  /** The visible fullscreen output, marimo's `#App` pane, or the visual viewport elsewhere. */
   viewportBounds(): ViewportBounds {
     const windowBounds = windowViewportBounds(this.window);
-    const pane = this.#pane?.getBoundingClientRect();
+    const pane = this.#viewportRoot()?.getBoundingClientRect();
     if (!pane) return windowBounds;
     // A collapsed or offscreen pane leaves no area for Lens UI.
     return (
@@ -140,11 +151,13 @@ export class NotebookDomAdapter {
   }
 
   targetFromEvent(event: Event, selector: TargetSelector): TargetSurface | null {
-    return targetFromEvent(event, selector);
+    const surface = targetFromEvent(event, selector);
+    return surface && this.#visibleInFullscreen(surface.element) ? surface : null;
   }
 
   targetFromElement(element: Element | null, selector: TargetSelector): TargetSurface | null {
-    return targetFromElement(element, selector);
+    const surface = targetFromElement(element, selector);
+    return surface && this.#visibleInFullscreen(surface.element) ? surface : null;
   }
 
   captureContext(element: HTMLElement): HTMLElement | "auto" {
@@ -156,11 +169,19 @@ export class NotebookDomAdapter {
   }
 
   getTarget(target: SelectionTarget, selector: TargetSelector): TargetSurface | null {
-    return getTargetSurface(this.document, target, selector);
+    const surface = getTargetSurface(this.document, target, selector);
+    return surface && this.#visibleInFullscreen(surface.element) ? surface : null;
   }
 
   listTargets(selector: TargetSelector): TargetSurface[] {
-    return listTargetSurfaces(this.document, selector);
+    return listTargetSurfaces(this.document, selector).filter(({ element }) =>
+      this.#visibleInFullscreen(element),
+    );
+  }
+
+  #visibleInFullscreen(element: Element): boolean {
+    const fullscreen = this.document.fullscreenElement;
+    return !fullscreen || containsOpenTree(fullscreen, element);
   }
 
   contentRevision(target: HTMLElement): number {
@@ -169,16 +190,21 @@ export class NotebookDomAdapter {
   }
 
   getOutputCell(outputCellId: string): OutputCell | null {
-    return getOutputCell(this.document, outputCellId);
+    const cell = getOutputCell(this.document, outputCellId);
+    return cell && this.#visibleInFullscreen(cell.element) ? cell : null;
   }
 
   getCell(cellId: string): HTMLElement | null {
     const element = this.document.getElementById(`cell-${cellId}`);
-    return element instanceof this.window.HTMLElement ? element : null;
+    return element instanceof this.window.HTMLElement && this.#visibleInFullscreen(element)
+      ? element
+      : null;
   }
 
   listOutputCells(): OutputCell[] {
-    return listOutputCells(this.document);
+    return listOutputCells(this.document).filter(({ element }) =>
+      this.#visibleInFullscreen(element),
+    );
   }
 
   stopScroll(target: HTMLElement): void {
@@ -305,12 +331,14 @@ export class NotebookDomAdapter {
     const observer =
       pane && this.window.ResizeObserver ? new this.window.ResizeObserver(schedule) : null;
     if (pane) observer?.observe(pane);
+    this.document.addEventListener("fullscreenchange", schedule);
     this.window.addEventListener("resize", schedule);
     this.window.visualViewport?.addEventListener("resize", schedule);
     this.window.visualViewport?.addEventListener("scroll", schedule);
     return () => {
       if (frame) this.window.cancelAnimationFrame(frame);
       observer?.disconnect();
+      this.document.removeEventListener("fullscreenchange", schedule);
       this.window.removeEventListener("resize", schedule);
       this.window.visualViewport?.removeEventListener("resize", schedule);
       this.window.visualViewport?.removeEventListener("scroll", schedule);

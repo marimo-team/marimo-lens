@@ -1,9 +1,11 @@
 ci_control: &ci_control
+  - .gitattributes
   - .github/filters.yml
   - .github/workflows/ci.yml
   - Makefile
   - .github/actions/setup-js/**
 pages_control: &pages_control
+  - .gitattributes
   - .github/filters.yml
   - .github/workflows/pages.yml
   - Makefile
