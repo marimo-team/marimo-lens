@@ -488,6 +488,42 @@ describe("image capture", () => {
     });
   });
 
+  test("names an iframe that becomes inaccessible during capture", async () => {
+    const output = document.createElement("div");
+    output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 240);
+    Object.defineProperties(output, {
+      scrollWidth: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 240 },
+    });
+    const loaded = document.createElement("iframe");
+    document.body.append(loaded);
+    const frameDocument = loaded.contentDocument;
+    const frame = document.createElement("iframe");
+    let reads = 0;
+    // The first read is the check before capture, and later reads see the
+    // frame after it navigated to another origin.
+    Object.defineProperty(frame, "contentDocument", {
+      get: () => {
+        reads += 1;
+        if (reads > 1) throw new DOMException("Blocked a frame", "SecurityError");
+        return frameDocument;
+      },
+    });
+    output.append(frame);
+    toPng.mockRejectedValueOnce(new DOMException("Blocked a frame", "SecurityError"));
+    const result = await captureSelectionSnapshot({
+      selectionId: "selection-1",
+      label: "S1",
+      anchor: { kind: "point", x: 0.5, y: 0.5 },
+      output,
+    });
+
+    expect(result).toMatchObject({
+      status: "failed",
+      snapshot: { error: "Output contains iframe content that cannot be captured" },
+    });
+  });
+
   test("aborts an in-flight renderer capture", async () => {
     const output = document.createElement("div");
     output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 240);

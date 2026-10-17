@@ -201,8 +201,11 @@ export async function captureElementRaster(
     });
   } catch (error) {
     // A browser withholds the pixels of media from another origin served
-    // without CORS, and its SecurityError names an internal canvas.
+    // without CORS, and its SecurityError names an internal canvas. An iframe
+    // that became inaccessible during capture raises one as well, so it keeps
+    // the iframe reason.
     if (parseErrorCause(error)?.name === "SecurityError") {
+      assertCapturableIframes(element);
       throw ownerError(
         ownerDocument,
         "Output contains media from another origin that cannot be captured",
