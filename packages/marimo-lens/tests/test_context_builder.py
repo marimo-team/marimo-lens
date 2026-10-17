@@ -290,15 +290,16 @@ def test_text_deduplicates_source_for_selections_on_one_cell() -> None:
 
 
 @pytest.mark.parametrize(
-    ("snapshot_state", "expected"),
+    ("snapshot_state", "reference", "expected"),
     [
-        ({"status": "pending"}, "pending"),
+        ({"status": "pending"}, {"status": "pending"}, "pending"),
         (
             {
                 "status": "failed",
                 "capturedAt": "2026-07-14T11:58:00Z",
                 "error": "External frame cannot be captured",
             },
+            {"status": "failed", "error": "External frame cannot be captured"},
             "failed (External frame cannot be captured)",
         ),
         (
@@ -311,12 +312,14 @@ def test_text_deduplicates_source_for_selections_on_one_cell() -> None:
                 "sha256": "0" * 64,
                 "capturedAt": "2026-07-14T11:58:00Z",
             },
+            {"status": "outdated"},
             "outdated (10x20 PNG)",
         ),
     ],
 )
 def test_text_preserves_context_across_snapshot_states(
     snapshot_state: dict[str, object],
+    reference: dict[str, object],
     expected: str,
 ) -> None:
     runtime = snapshot(cell("cell-view", code="source_sentinel = 42"))
@@ -328,9 +331,7 @@ def test_text_preserves_context_across_snapshot_states(
         current_selection_id="selection-1",
     )
 
-    assert references["selections"][0]["snapshot"] == {
-        "status": snapshot_state["status"]
-    }
+    assert references["selections"][0]["snapshot"] == reference
     assert "source_sentinel = 42" in text
     assert "Investigate this." in text
     assert expected in text

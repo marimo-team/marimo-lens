@@ -83,7 +83,8 @@ Each selection reference preserves admission data:
 
 Target identity, selection identity, geometry, and producing cell IDs remain
 intact. Reference fitting first shortens notebook path and runtime reason, then
-removes optional DOM hints, then shortens notes. It processes secondary
+removes optional DOM hints, target descriptions, and snapshot failure reasons,
+then shortens notes. It processes secondary
 selections before the current selection.
 
 History entries stay outside compact references. A DOM target with no

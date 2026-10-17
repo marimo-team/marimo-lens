@@ -1,3 +1,4 @@
+import { parseErrorCause } from "@marimo-lens/protocol";
 import { toPng } from "html-to-image";
 
 import { outputContentMetrics, parentElementAcrossShadow } from "./geometry";
@@ -183,19 +184,32 @@ export async function captureElementRaster(
   }
   assertCapturableIframes(element);
   const raster = captureRasterSize(geometry.width, geometry.height);
-  const dataUrl = await rasterize(element, {
-    backgroundColor,
-    width: geometry.width,
-    height: geometry.height,
-    canvasWidth: raster.width,
-    canvasHeight: raster.height,
-    pixelRatio: 1,
-    imagePlaceholder: TRANSPARENT_PIXEL,
-    includeStyleProperties: [...CAPTURE_STYLE_PROPERTIES],
-    extraStyleContent: HIDE_SCROLLBARS,
-    filter: shouldCaptureNode,
-    style: geometry.style,
-  });
+  let dataUrl: string;
+  try {
+    dataUrl = await rasterize(element, {
+      backgroundColor,
+      width: geometry.width,
+      height: geometry.height,
+      canvasWidth: raster.width,
+      canvasHeight: raster.height,
+      pixelRatio: 1,
+      imagePlaceholder: TRANSPARENT_PIXEL,
+      includeStyleProperties: [...CAPTURE_STYLE_PROPERTIES],
+      extraStyleContent: HIDE_SCROLLBARS,
+      filter: shouldCaptureNode,
+      style: geometry.style,
+    });
+  } catch (error) {
+    // A browser withholds the pixels of media from another origin served
+    // without CORS, and its SecurityError names an internal canvas.
+    if (parseErrorCause(error)?.name === "SecurityError") {
+      throw ownerError(
+        ownerDocument,
+        "Output contains media from another origin that cannot be captured",
+      );
+    }
+    throw error;
+  }
   throwIfCaptureAborted(signal, ownerDocument);
   assertCapturableIframes(element);
   return loadRasterImage(ownerDocument, dataUrl, signal);

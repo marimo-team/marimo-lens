@@ -462,6 +462,32 @@ describe("image capture", () => {
     });
   });
 
+  test("names media from another origin when the browser withholds its pixels", async () => {
+    const output = document.createElement("div");
+    output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 240);
+    Object.defineProperties(output, {
+      scrollWidth: { configurable: true, value: 400 },
+      scrollHeight: { configurable: true, value: 240 },
+    });
+    toPng.mockRejectedValueOnce(
+      new DOMException(
+        "Failed to execute 'toDataURL' on 'HTMLCanvasElement': Tainted canvases may not be exported.",
+        "SecurityError",
+      ),
+    );
+    const result = await captureSelectionSnapshot({
+      selectionId: "selection-1",
+      label: "S1",
+      anchor: { kind: "point", x: 0.5, y: 0.5 },
+      output,
+    });
+
+    expect(result).toMatchObject({
+      status: "failed",
+      snapshot: { error: "Output contains media from another origin that cannot be captured" },
+    });
+  });
+
   test("aborts an in-flight renderer capture", async () => {
     const output = document.createElement("div");
     output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 240);

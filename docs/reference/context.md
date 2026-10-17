@@ -185,8 +185,8 @@ The `bounds` mapping contains `x`, `y`, `width`, and `height` between zero and
 one. The bounds remain inside the target.
 
 DOM hint fields are bounded when the browser collects them. When the complete
-reference exceeds its shared budget, fitting drops optional DOM hints and
-target descriptions before shortening notes. Target identity, selection identity, and anchor geometry
+reference exceeds its shared budget, fitting drops optional DOM hints, target
+descriptions, and snapshot failure reasons before shortening notes. Target identity, selection identity, and anchor geometry
 remain intact.
 
 ## Captured target description
@@ -203,7 +203,7 @@ attributes](./attributes) for the DOM contract.
 
 ## Selection image status
 
-The compact `snapshot` reference contains one `status` field:
+The compact `snapshot` reference contains a `status` field:
 
 | Status      | Meaning                                                               |
 | ----------- | --------------------------------------------------------------------- |
@@ -212,10 +212,24 @@ The compact `snapshot` reference contains one `status` field:
 | `outdated`  | `context.images[id]` contains the image from before the marker moved. |
 | `failed`    | Capture failed and `context.images` has no image for the selection.   |
 
-Image dimensions, hashes, timestamps, and failure details belong to private
-selection state and browser transport. The public compact reference exposes
-status. The public `images` mapping exposes validated bytes when status is
-`available` or `outdated`.
+A `failed` snapshot also carries `error`, the reason capture failed, when the
+browser reported one:
+
+```json
+{
+  "status": "failed",
+  "error": "Output contains media from another origin that cannot be captured"
+}
+```
+
+Capture fails for content the browser keeps from Lens, such as an iframe from
+another origin, or an image or video from another origin served without
+[CORS](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS). The
+selection keeps its note, target, and notebook context.
+
+Image dimensions, hashes, and timestamps belong to private selection state and
+browser transport. The public `images` mapping exposes validated bytes when
+status is `available` or `outdated`.
 
 ## `previousResolution`
 

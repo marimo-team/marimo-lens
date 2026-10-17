@@ -47,6 +47,7 @@ def _minimal_reference_size(selections: Sequence[Mapping[str, Any]]) -> int:
         selection["note"] = ""
         selection.pop("domHint", None)
         selection.pop("description", None)
+        selection["snapshot"].pop("error", None)
 
     current_selection_id = max(
         (str(selection["id"]) for selection in selections),
@@ -156,6 +157,12 @@ def _fit_reference_selection_evidence(
                 return
 
     for selection in selections:
+        if selection["snapshot"].pop("error", None) is None:
+            continue
+        if _reference_size(references) <= MAX_CONTEXT_REFERENCES_BYTES:
+            return
+
+    for selection in selections:
         note = selection.get("note")
         if not isinstance(note, str) or not note:
             continue
@@ -229,6 +236,9 @@ def _project_selection(
         "anchor": copy.deepcopy(selection["anchor"]),
         "snapshot": {"status": snapshot_status},
     }
+    error = snapshot.get("error")
+    if snapshot_status == "failed" and isinstance(error, str) and error:
+        item["snapshot"]["error"] = error
     dom_hint = selection.get("domHint")
     if isinstance(dom_hint, Mapping):
         item["domHint"] = copy.deepcopy(dict(dom_hint))
