@@ -1014,7 +1014,7 @@ function deferred<T>() {
 function successResponse(revision: number): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 6,
+    version: 7,
     requestId: "request-1",
     ok: true,
     revision,

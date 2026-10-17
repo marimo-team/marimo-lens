@@ -30,7 +30,7 @@ describe("target attention", () => {
     second.scrollIntoView = vi.fn();
     controller.reveal({
       protocol: "marimo-lens.event",
-      version: 6,
+      version: 7,
       type: "attention.reveal",
       payload: {
         id: "trail-1",
@@ -43,7 +43,7 @@ describe("target attention", () => {
     const navigation = onChange.mock.lastCall?.[0].trail;
     controller.reveal({
       protocol: "marimo-lens.event",
-      version: 6,
+      version: 7,
       type: "attention.reveal",
       payload: {
         id: "current",
@@ -74,7 +74,7 @@ describe("target attention", () => {
     setupCell("second").scrollIntoView = vi.fn();
     controller.reveal({
       protocol: "marimo-lens.event",
-      version: 6,
+      version: 7,
       type: "attention.reveal",
       payload: {
         id: "timed",
@@ -122,7 +122,7 @@ describe("target attention", () => {
     cell.scrollIntoView = vi.fn();
     controller.reveal({
       protocol: "marimo-lens.event",
-      version: 6,
+      version: 7,
       type: "attention.reveal",
       payload: {
         id: "tour",
@@ -790,7 +790,7 @@ function startActivityEvent(
   if (message) payload.message = message;
   return {
     protocol: "marimo-lens.event",
-    version: 6,
+    version: 7,
     type: "attention.activity.start",
     payload,
   };
@@ -799,7 +799,7 @@ function startActivityEvent(
 function activityStopEvent(activityId: string): AttentionActivityStopEvent {
   return {
     protocol: "marimo-lens.event",
-    version: 6,
+    version: 7,
     type: "attention.activity.stop",
     payload: { activityId },
   };
@@ -814,7 +814,7 @@ function revealEvent(cellId: string, message?: string, durationMs = 4_000): Atte
   if (message) payload.steps[0]!.message = message;
   return {
     protocol: "marimo-lens.event",
-    version: 6,
+    version: 7,
     type: "attention.reveal",
     payload,
   };

@@ -41,6 +41,8 @@ test("a target names the part of a media file it shows", () => {
       data-marimo-lens-media='{"path":"animation.mp4","start":3.2,"end":4}'></div>
     <div id="chart" data-marimo-lens-target data-marimo-lens-label="Chart"
       data-marimo-lens-media='{"path":"report.pdf","page":0}'></div>
+    <div id="table" data-marimo-lens-target data-marimo-lens-label="Table"
+      data-marimo-lens-media='{"path":"report.pdf",'></div>
   `;
   const describe = (id: string) => {
     const element = document.getElementById(id)!;
@@ -52,6 +54,7 @@ test("a target names the part of a media file it shows", () => {
     label: "Square",
     media: { path: "animation.mp4", start: 3.2, end: 4 },
   });
-  // A page counts from 1, so this media is malformed and the target keeps its label.
+  // Media that breaks its rules or is not JSON is left out, and the label stays.
   expect(describe("chart")).toEqual({ label: "Chart" });
+  expect(describe("table")).toEqual({ label: "Table" });
 });

@@ -56,7 +56,7 @@ def test_reveal_event_carries_ordered_targets_and_omits_absent_explanations() ->
         )
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 6,
+        "version": 7,
         "type": "attention.reveal",
         "payload": {
             "id": "reveal-1",
@@ -86,7 +86,7 @@ def test_target_activity_start_event_uses_transient_transport() -> None:
         message="Updating the aggregation.",
     ) == {
         "protocol": "marimo-lens.event",
-        "version": 6,
+        "version": 7,
         "type": "attention.activity.start",
         "payload": {
             "activityId": "activity-1",
@@ -114,7 +114,7 @@ def test_target_activity_start_event_omits_an_absent_duration() -> None:
 def test_target_activity_stop_event_targets_one_owner() -> None:
     assert attention_activity_stop_event(activity_id="activity-1") == {
         "protocol": "marimo-lens.event",
-        "version": 6,
+        "version": 7,
         "type": "attention.activity.stop",
         "payload": {"activityId": "activity-1"},
     }
@@ -262,8 +262,8 @@ def test_command_ignores_unrelated_envelopes() -> None:
 @pytest.mark.parametrize(
     ("updates", "code"),
     [
-        ({"version": 3}, "unsupported_version"),
-        ({"version": 7}, "unsupported_version"),
+        ({"version": 6}, "unsupported_version"),
+        ({"version": 8}, "unsupported_version"),
         ({"version": True}, "unsupported_version"),
         ({"type": "selection.unknown"}, "unsupported_command"),
     ],
@@ -729,9 +729,9 @@ def test_responses_use_current_version_and_include_an_object_payload() -> None:
         message="Bad request.",
     )
 
-    assert success["version"] == 6
+    assert success["version"] == 7
     assert success["payload"] == {}
-    assert error["version"] == 6
+    assert error["version"] == 7
     assert error["payload"] == {}
     assert error["error"] == {
         "code": "invalid_request",
@@ -796,7 +796,7 @@ def test_output_capture_uses_a_separate_outgoing_command_path() -> None:
 
     assert command == {
         "protocol": "marimo-lens.command",
-        "version": 6,
+        "version": 7,
         "requestId": "request-1",
         "type": "output.capture",
         "payload": {"outputCellId": "cell-view"},
@@ -811,7 +811,7 @@ def test_output_capture_response_requires_metadata_and_one_png() -> None:
     response = parse_capture_response(
         {
             "protocol": "marimo-lens.response",
-            "version": 6,
+            "version": 7,
             "requestId": "request-1",
             "ok": True,
             "revision": 4,
@@ -843,7 +843,7 @@ def test_output_capture_response_rejects_image_for_another_request() -> None:
         parse_capture_response(
             {
                 "protocol": "marimo-lens.response",
-                "version": 6,
+                "version": 7,
                 "requestId": "request-1",
                 "ok": True,
                 "revision": 4,
@@ -871,7 +871,7 @@ def test_output_capture_failure_rejects_binary_buffers() -> None:
         parse_capture_response(
             {
                 "protocol": "marimo-lens.response",
-                "version": 6,
+                "version": 7,
                 "requestId": "request-1",
                 "ok": False,
                 "revision": 4,
@@ -888,7 +888,7 @@ def test_output_capture_response_accepts_additive_fields() -> None:
     response = parse_capture_response(
         {
             "protocol": "marimo-lens.response",
-            "version": 6,
+            "version": 7,
             "requestId": "request-1",
             "ok": False,
             "revision": 4,
@@ -936,7 +936,7 @@ def test_invalid_request_id_is_not_echoed(request_id: str) -> None:
 def _command(command_type: str, payload: dict[str, object]) -> dict[str, object]:
     return {
         "protocol": "marimo-lens.command",
-        "version": 6,
+        "version": 7,
         "requestId": "request-1",
         "type": command_type,
         "payload": payload,

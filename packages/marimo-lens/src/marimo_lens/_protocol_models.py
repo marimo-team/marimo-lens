@@ -27,7 +27,7 @@ from typing_extensions import Self
 COMMAND_PROTOCOL = "marimo-lens.command"
 RESPONSE_PROTOCOL = "marimo-lens.response"
 EVENT_PROTOCOL = "marimo-lens.event"
-PROTOCOL_VERSION = 6
+PROTOCOL_VERSION = 7
 
 MAX_SELECTIONS = 64
 MAX_HISTORY = 64

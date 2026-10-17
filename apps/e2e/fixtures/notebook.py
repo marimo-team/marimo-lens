@@ -175,7 +175,7 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
             for _index in range(2, 64):
                 _command = {
                     "protocol": "marimo-lens.command",
-                    "version": 6,
+                    "version": 7,
                     "requestId": f"seed-{_index}",
                     "type": "selection.put",
                     "payload": {

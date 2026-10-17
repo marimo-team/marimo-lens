@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { hasTextContent } from "./bounded-text";
 
-export const WIDGET_TRANSPORT_VERSION = 6;
+export const WIDGET_TRANSPORT_VERSION = 7;
 
 export type TransportPrimitive = boolean | null | number | string | undefined;
 export type TransportRecord = { readonly [key: string]: TransportValue };
