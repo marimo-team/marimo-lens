@@ -99,7 +99,7 @@ Lens could not inspect the active marimo runtime.
 | `cells`              | `list[CellReference]`            | Producing cell IDs with current graph status.                    |
 | `anchor`             | `Mapping[str, object]`           | Normalized point or region geometry.                             |
 | `snapshot`           | `Mapping[str, object]`           | Selection-image status.                                          |
-| `description`        | `Mapping[str, object]`, optional | Captured target label, detail, and rendering reference.          |
+| `description`        | `Mapping[str, object]`, optional | Captured target label, detail, rendering reference, and media.   |
 | `domHint`            | `Mapping[str, object]`, optional | Bounded description of the element at the point or region.       |
 | `previousResolution` | `Mapping[str, object]`, optional | Prior result for the current reopened selection.                 |
 
@@ -192,8 +192,12 @@ remain intact.
 ## Captured target description
 
 A selection can include `description`, containing `label`, optional `detail`,
-and optional `renderSource`. The rendering reference contains `path` and optional
-`line`, `column`, and `symbol`. These are bounded client-supplied descriptions,
+optional `renderSource`, and optional `media`. The rendering reference contains
+`path` and optional `line`, `column`, and `symbol`. `media` names the file the
+target shows part of with `path`, at most 1,024 code units, an optional `page`
+as a positive safe integer, and optional `start` and `end` as nonnegative
+seconds, with `end` after `start`. Lens leaves out media that breaks these
+rules and keeps the rest of the description. These are bounded client-supplied descriptions,
 separate from runtime-derived notebook provenance. History and reopen retain
 the creation-time description. Compact context may omit descriptions to fit its
 byte budget, and standalone text reports truncation within its own budget.

@@ -12,23 +12,41 @@ shows them in use.
 
 ## Attributes
 
-| Attribute                         | Put it on                             | Meaning                                                                                                                               | Bound                                                         |
-| --------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `data-marimo-lens-target`         | Any authored element                  | Makes the element a selectable target, with or without notebook inputs.                                                               | None                                                          |
-| `data-marimo-lens-scope`          | A container                           | CSS selector for preferred grouping roots. A click inside selects the nearest matching root, or the nearest rendered block otherwise. | None                                                          |
-| `data-marimo-lens-label`          | A target root, or inside an output    | Display name shown by the target indicator and captured as `description.label`.                                                       | 256 code units                                                |
-| `data-marimo-lens-detail`         | Same element as the label             | Secondary text. Captured only alongside a label.                                                                                      | 512 code units                                                |
-| `data-marimo-lens-render-source`  | A target root                         | JSON object with required `path` and optional `line`, `column`, and `symbol`. Carried as evidence and never opened.                   | `path` 1,024, `symbol` 256 code units, positive safe integers |
-| `data-marimo-lens-context`        | The target or an ancestor             | Preferred container for selection-image capture. Must belong to the same document.                                                    | None                                                          |
-| `data-marimo-lens-cell-id`        | A source element, which can be hidden | One resolved producing cell ID.                                                                                                       | 128 code units                                                |
-| `data-marimo-lens-selector`       | The same element as `cell-id`         | Optional symbolic value selector from that cell. Descriptive evidence that Lens never evaluates.                                      | 4,096 code units, nonempty when present                       |
-| `data-marimo-lens-inputs`         | A composed region                     | Whitespace-separated IDs of source elements in the same document. Declares the region's complete input set.                           | 64 sources per target                                         |
-| `data-marimo-lens-output-cell-id` | Custom output DOM                     | Exposes a canonical notebook output rendered by the host.                                                                             | 128 code units                                                |
+| Attribute                         | Put it on                             | Meaning                                                                                                                                | Bound                                                                                                     |
+| --------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `data-marimo-lens-target`         | Any authored element                  | Makes the element a selectable target, with or without notebook inputs.                                                                | None                                                                                                      |
+| `data-marimo-lens-scope`          | A container                           | CSS selector for preferred grouping roots. A click inside selects the nearest matching root, or the nearest rendered block otherwise.  | None                                                                                                      |
+| `data-marimo-lens-label`          | A target root, or inside an output    | Display name shown by the target indicator and captured as `description.label`.                                                        | 256 code units                                                                                            |
+| `data-marimo-lens-detail`         | Same element as the label             | Secondary text. Captured only alongside a label.                                                                                       | 512 code units                                                                                            |
+| `data-marimo-lens-render-source`  | A target root                         | JSON object with required `path` and optional `line`, `column`, and `symbol`. Carried as evidence and never opened.                    | `path` 1,024, `symbol` 256 code units, positive safe integers                                             |
+| `data-marimo-lens-media`          | A target root                         | JSON object naming the file the target shows part of: required `path`, optional `page` from 1, and optional `start` and `end` seconds. | `path` 1,024 code units, `page` positive safe integer, times nonnegative seconds with `end` after `start` |
+| `data-marimo-lens-context`        | The target or an ancestor             | Preferred container for selection-image capture. Must belong to the same document.                                                     | None                                                                                                      |
+| `data-marimo-lens-cell-id`        | A source element, which can be hidden | One resolved producing cell ID.                                                                                                        | 128 code units                                                                                            |
+| `data-marimo-lens-selector`       | The same element as `cell-id`         | Optional symbolic value selector from that cell. Descriptive evidence that Lens never evaluates.                                       | 4,096 code units, nonempty when present                                                                   |
+| `data-marimo-lens-inputs`         | A composed region                     | Whitespace-separated IDs of source elements in the same document. Declares the region's complete input set.                            | 64 sources per target                                                                                     |
+| `data-marimo-lens-output-cell-id` | Custom output DOM                     | Exposes a canonical notebook output rendered by the host.                                                                              | 128 code units                                                                                            |
 
 Bounds are UTF-16 code units. Most characters use one unit, and characters
 outside the Basic Multilingual Plane, including many emoji, use two. Lens
-renders labels and details as bounded plain text. Malformed render-source JSON
-is omitted while valid labels and notebook inputs remain available.
+renders labels and details as bounded plain text. Malformed render-source or
+media JSON is omitted while valid labels and notebook inputs remain available.
+
+A target over part of a document or a video names that part with
+`data-marimo-lens-media`, so a selection records the page or the moment
+alongside its notebook sources:
+
+```html
+<div
+  data-marimo-lens-target
+  data-marimo-lens-label="Revenue chart"
+  data-marimo-lens-media='{"path":"report.pdf","page":2}'
+></div>
+<div
+  data-marimo-lens-target
+  data-marimo-lens-label="Moving point"
+  data-marimo-lens-media='{"path":"animation.mp4","start":3.2,"end":4}'
+></div>
+```
 
 ## Target precedence
 

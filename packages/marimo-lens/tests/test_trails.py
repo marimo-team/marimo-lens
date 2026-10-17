@@ -67,7 +67,7 @@ def test_new_trail_releases_previous_watch_and_invalidation_is_scoped(
     registry.dispose("second", deletion=True)
     assert messages[-1] == {
         "protocol": "marimo-lens.event",
-        "version": 6,
+        "version": 7,
         "type": "attention.trail.stop",
         "payload": {"trailId": current_id},
     }

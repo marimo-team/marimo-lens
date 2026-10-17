@@ -97,8 +97,8 @@ silently redirect a selection.
 
 ## Target-picking indicator
 
-`@marimo-lens/protocol` defines `TargetInfo` (`label`, optional `detail`) and its
-attribute names. The notebook adapter reads consumer text, source-host references,
+`@marimo-lens/protocol` defines `TargetInfo` (`label`, optional `detail`,
+`renderSource`, and `media`) and its attribute names. The notebook adapter reads consumer text, source-host references,
 and native fallbacks. The selection overlay renders a compact, non-interactive
 label attached to the active target, clamped to the viewport. The live indicator exists in the armed workflow. Selection creation snapshots
 the same description into the protocol for Python state, History, and context.
@@ -110,7 +110,8 @@ the same label model for announcements. Selection identity is independent of
 consumer display text.
 
 Selection descriptions stay separate from target identity. Hover text combines
-the captured detail and render-source reference with `target.sources`.
+the captured detail, render-source reference, and media part with
+`target.sources`.
 The document locator stays in agent context. The source signature controls reattachment.
 
 ## Target resolution

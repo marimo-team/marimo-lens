@@ -146,7 +146,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: trail,
       }),
@@ -183,7 +183,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: { ...trail, id: "fresh" },
       }),
@@ -191,7 +191,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.trail.stop",
         payload: { trailId: "tour" },
       }),
@@ -200,7 +200,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.trail.stop",
         payload: { trailId: "fresh" },
       }),
@@ -209,7 +209,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: { id: "held", steps: [trail.steps[0]!] },
       }),
@@ -525,7 +525,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: {
           id: "reveal-1",
@@ -609,7 +609,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: {
           id: "reveal-1",
@@ -672,7 +672,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-authored",
@@ -683,7 +683,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-cell",
@@ -753,7 +753,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-authored",
@@ -812,7 +812,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-notebook",
@@ -828,7 +828,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: {
           id: "reveal-1",
@@ -883,7 +883,7 @@ describe("marimo-lens content", () => {
     act(() =>
       listener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-authored",
@@ -980,7 +980,7 @@ describe("marimo-lens content", () => {
 
     const primaryEvent: AttentionEvent = {
       protocol: "marimo-lens.event",
-      version: 6,
+      version: 7,
       type: "attention.activity.start",
       payload: {
         activityId: "activity-primary",
@@ -989,7 +989,7 @@ describe("marimo-lens content", () => {
     };
     const secondaryEvent: AttentionEvent = {
       protocol: "marimo-lens.event",
-      version: 6,
+      version: 7,
       type: "attention.activity.start",
       payload: {
         activityId: "activity-secondary",
@@ -1316,7 +1316,7 @@ describe("marimo-lens content", () => {
     const reveal = () =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: {
           id: "reveal-1",
@@ -1369,7 +1369,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: {
           id: "reveal-1",
@@ -1399,7 +1399,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-3",
@@ -1417,7 +1417,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: {
           id: "reveal-1",
@@ -1474,13 +1474,13 @@ describe("marimo-lens content", () => {
     const event: AttentionEvent = activity
       ? {
           protocol: "marimo-lens.event",
-          version: 6,
+          version: 7,
           type: "attention.activity.start",
           payload: { address, activityId: "completed-activity" },
         }
       : {
           protocol: "marimo-lens.event",
-          version: 6,
+          version: 7,
           type: "attention.reveal",
           payload: { id: "reveal-1", steps: [{ address }], durationMs: 4_000 },
         };
@@ -1598,7 +1598,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.activity.start",
         payload: {
           activityId: "activity-4",
@@ -1896,7 +1896,7 @@ describe("marimo-lens content", () => {
     act(() =>
       attentionListener?.({
         protocol: "marimo-lens.event",
-        version: 6,
+        version: 7,
         type: "attention.reveal",
         payload: {
           id: "reveal-1",
@@ -2099,7 +2099,7 @@ function resolvedEvent(overrides: ResolvedEventOptions = {}): SelectionResolvedE
   if (summary) payload.summary = summary;
   return {
     protocol: "marimo-lens.event",
-    version: 6,
+    version: 7,
     type: "selection.resolved",
     revision,
     payload,
@@ -2181,7 +2181,7 @@ function requireCaptureHandler(handler: OutputCaptureHandler | undefined): Outpu
 function outputCaptureCommand(): OutputCaptureCommand {
   return {
     protocol: "marimo-lens.command",
-    version: 6,
+    version: 7,
     requestId: "capture-1",
     type: "output.capture",
     payload: { outputCellId: "cell-1" },

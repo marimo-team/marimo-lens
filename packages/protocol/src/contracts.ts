@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { hasTextContent } from "./bounded-text";
 
-export const WIDGET_TRANSPORT_VERSION = 6;
+export const WIDGET_TRANSPORT_VERSION = 7;
 
 export type TransportPrimitive = boolean | null | number | string | undefined;
 export type TransportRecord = { readonly [key: string]: TransportValue };
@@ -204,17 +204,39 @@ export const RenderSourceSchema = v.strictObject({
   symbol: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(256))),
 });
 
+const SecondsSchema = v.pipe(FiniteNumberSchema, v.minValue(0));
+
+/** The file a target shows part of: a page of a document, or a span of a video or audio file. */
+export const TargetMediaSchema = v.pipe(
+  v.strictObject({
+    path: v.pipe(NonEmptyStringSchema, v.maxLength(1_024)),
+    page: v.optional(PositiveIntegerSchema),
+    start: v.optional(SecondsSchema),
+    end: v.optional(SecondsSchema),
+  }),
+  v.check(
+    (media) => media.start === undefined || media.end === undefined || media.end > media.start,
+    "Media end must come after its start",
+  ),
+);
+
 export const TargetInfoSchema = v.strictObject({
   label: v.pipe(NonEmptyStringSchema, v.maxLength(256)),
   detail: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(512))),
   renderSource: v.optional(RenderSourceSchema),
+  media: v.optional(TargetMediaSchema),
 });
 
 export type TargetInfo = v.InferOutput<typeof TargetInfoSchema>;
 export type RenderSource = v.InferOutput<typeof RenderSourceSchema>;
+export type TargetMedia = v.InferOutput<typeof TargetMediaSchema>;
 
 export function parseRenderSource(value: TransportValue): RenderSource {
   return parseContract(RenderSourceSchema, value, "Lens render source");
+}
+
+export function parseTargetMedia(value: TransportValue): TargetMedia {
+  return parseContract(TargetMediaSchema, value, "Lens target media");
 }
 
 const SelectionInputObjectSchema = v.object({

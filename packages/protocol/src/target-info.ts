@@ -5,6 +5,7 @@ export const SOURCE_CELL_ATTRIBUTE = "data-marimo-lens-cell-id";
 export const SOURCE_SELECTOR_ATTRIBUTE = "data-marimo-lens-selector";
 export const SOURCE_INPUTS_ATTRIBUTE = "data-marimo-lens-inputs";
 export const RENDER_SOURCE_ATTRIBUTE = "data-marimo-lens-render-source";
+export const MEDIA_ATTRIBUTE = "data-marimo-lens-media";
 export const CAPTURE_CONTEXT_ATTRIBUTE = "data-marimo-lens-context";
 
 export const TARGET_METADATA_ATTRIBUTES = [
@@ -14,5 +15,6 @@ export const TARGET_METADATA_ATTRIBUTES = [
   SOURCE_SELECTOR_ATTRIBUTE,
   SOURCE_INPUTS_ATTRIBUTE,
   RENDER_SOURCE_ATTRIBUTE,
+  MEDIA_ATTRIBUTE,
   CAPTURE_CONTEXT_ATTRIBUTE,
 ] as const;

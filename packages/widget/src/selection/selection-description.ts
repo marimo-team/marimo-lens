@@ -12,6 +12,14 @@ export function selectionTitle(selection: DescribedSelection): string {
       `Render source: ${source.path}${source.line ? `:${source.line}` : ""}${source.symbol ? ` (${source.symbol})` : ""}`,
     );
   }
+  if (description.media) {
+    const media = description.media;
+    const span =
+      media.start === undefined && media.end === undefined
+        ? ""
+        : `, ${media.start ?? 0} s to ${media.end === undefined ? "end" : `${media.end} s`}`;
+    lines.push(`Media: ${media.path}${media.page ? `, page ${media.page}` : ""}${span}`);
+  }
   if (target.kind === "notebook") lines.push(`Notebook cell ${target.cellIds[0]}`);
   else {
     lines.push(

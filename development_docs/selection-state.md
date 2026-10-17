@@ -21,7 +21,7 @@ Selection
 ├── anchor: normalized point or rectangle
 ├── note
 ├── DOM hint
-├── captured description and optional render-source reference
+├── captured description with optional render-source reference and media part
 ├── creation time
 ├── selection image status and metadata
 └── previous resolution metadata, when reopened

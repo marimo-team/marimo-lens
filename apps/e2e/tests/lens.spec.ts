@@ -284,6 +284,7 @@ test("custom regions retain symbolic sources through kernel context and reject r
       "data-marimo-lens-render-source",
       JSON.stringify({ path: "src/report.ts", symbol: "revenueCard", line: 12 }),
     );
+    region.setAttribute("data-marimo-lens-media", JSON.stringify({ path: "report.pdf", page: 2 }));
     return id;
   });
   await page.getByRole("button", { name: "Select a target", exact: true }).click();
@@ -310,6 +311,7 @@ test("custom regions retain symbolic sources through kernel context and reject r
         label: "Revenue visibility",
         detail: "Visibility control",
         renderSource: { path: "src/report.ts", symbol: "revenueCard", line: 12 },
+        media: { path: "report.pdf", page: 2 },
       },
     },
   ]);

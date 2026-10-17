@@ -34,3 +34,27 @@ test("an output-less cell is labeled by its cell ID over editor chrome labels", 
   const target = targetFromElement(cell.querySelector(".cm-line"), null)!;
   expect(targetInfo(target)).toEqual({ label: "Cell rates" });
 });
+
+test("a target names the part of a media file it shows", () => {
+  document.body.innerHTML = `
+    <div id="square" data-marimo-lens-target data-marimo-lens-label="Square"
+      data-marimo-lens-media='{"path":"animation.mp4","start":3.2,"end":4}'></div>
+    <div id="chart" data-marimo-lens-target data-marimo-lens-label="Chart"
+      data-marimo-lens-media='{"path":"report.pdf","page":0}'></div>
+    <div id="table" data-marimo-lens-target data-marimo-lens-label="Table"
+      data-marimo-lens-media='{"path":"report.pdf",'></div>
+  `;
+  const describe = (id: string) => {
+    const element = document.getElementById(id)!;
+    element.getBoundingClientRect = () => new DOMRect(0, 0, 100, 100);
+    return targetInfo(targetFromElement(element, null)!);
+  };
+
+  expect(describe("square")).toEqual({
+    label: "Square",
+    media: { path: "animation.mp4", start: 3.2, end: 4 },
+  });
+  // Media that breaks its rules or is not JSON is left out, and the label stays.
+  expect(describe("chart")).toEqual({ label: "Chart" });
+  expect(describe("table")).toEqual({ label: "Table" });
+});

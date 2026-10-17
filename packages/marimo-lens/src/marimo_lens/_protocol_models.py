@@ -27,7 +27,7 @@ from typing_extensions import Self
 COMMAND_PROTOCOL = "marimo-lens.command"
 RESPONSE_PROTOCOL = "marimo-lens.response"
 EVENT_PROTOCOL = "marimo-lens.event"
-PROTOCOL_VERSION = 6
+PROTOCOL_VERSION = 7
 
 MAX_SELECTIONS = 64
 MAX_HISTORY = 64
@@ -416,6 +416,29 @@ class RenderSource(TransportModel):
     ) = None
 
 
+Seconds: TypeAlias = Annotated[
+    float,
+    Field(strict=True, ge=0, allow_inf_nan=False),
+]
+
+
+class TargetMedia(TransportModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: DomSelectorText
+    page: PositiveSafeInteger | None = None
+    start: Seconds | None = None
+    end: Seconds | None = None
+
+    @model_validator(mode="after")
+    def ends_after_start(self) -> Self:
+        if self.start is not None and self.end is not None and self.end <= self.start:
+            raise PydanticCustomError(
+                "invalid_selection", "Media end must come after its start"
+            )
+        return self
+
+
 class TargetInfo(TransportModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -433,6 +456,7 @@ class TargetInfo(TransportModel):
         | None
     ) = None
     render_source: RenderSource | None = None
+    media: TargetMedia | None = None
 
 
 class SelectionInput(TransportModel):
