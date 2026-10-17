@@ -20,4 +20,4 @@ minor="${BASH_REMATCH[2]}"
 patch="${BASH_REMATCH[3]}"
 count="$(git rev-list --count "$base..$commit")"
 
-printf '%s.%s.%s.dev%s\n' "$major" "$minor" "$((patch + 1))" "$count"
+printf '%s.%s.%s.dev%s\n' "$major" "$minor" "$((10#$patch + 1))" "$count"

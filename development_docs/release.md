@@ -168,7 +168,9 @@ source distribution, and manifest with the
    build is the newest available one. An older build finishing later leaves the
    newest links in place.
 4. Comments the install command on the merged pull request once.
-5. Deletes builds outside the newest 30, including partial uploads.
+5. Keeps the newest 30 complete builds. Partial uploads newer than the oldest
+   kept build stay available for a retry. Older builds and partial uploads are
+   deleted.
 6. Uploads the manifest last. Its presence marks a finished publication.
 
 Install a preview by URL in a notebook's inline script metadata or a uv project:
@@ -244,8 +246,10 @@ Watch the run ID printed by GitHub CLI:
 gh run watch RUN_ID --exit-status
 ```
 
-Confirm the `resolve`, `build`, `attest`, `publish`, `verify-pypi`, and
-`release-notes` jobs succeed. Then verify:
+A tag run succeeds when the `resolve`, `build`, `attest`, `publish`,
+`verify-pypi`, and `release-notes` jobs succeed. A preview run uses `resolve`,
+`build`, `attest`, and `preview`, and skips the PyPI jobs. After a tag run,
+verify:
 
 - PyPI lists the expected wheel and source distribution.
 - A fresh environment imports the exact version.

@@ -61,6 +61,7 @@ jobs:
           fi
           version="$(./scripts/preview-version.sh "$PREVIEW_COMMIT")"
           printf 'channel=preview\ncommit=%s\nversion=%s\n' "$PREVIEW_COMMIT" "$version" >> "$GITHUB_OUTPUT"
+          errors="$(mktemp)"
           readiness=0
           ./scripts/require-preview-checks.sh "$PREVIEW_COMMIT" || readiness=$?
           if [[ "$readiness" == 3 ]]; then
@@ -68,8 +69,12 @@ jobs:
             echo 'publish=false' >> "$GITHUB_OUTPUT"
           elif [[ "$readiness" != 0 ]]; then
             exit "$readiness"
-          elif assets="$(gh release view preview --json assets --jq '.assets[] | select(.state == "uploaded" and .size > 0) | .name' 2>/dev/null)" &&
-            grep -qxF "marimo-lens-$version-SHA256SUMS" <<<"$assets"; then
+          elif ! assets="$(gh release view preview --json assets \
+            --jq '.assets[] | select(.state == "uploaded" and .size > 0) | .name' 2>"$errors")" &&
+            ! grep -qxF 'release not found' "$errors"; then
+            cat "$errors" >&2
+            exit 1
+          elif grep -qxF "marimo-lens-$version-SHA256SUMS" <<<"$assets"; then
             echo "::notice::marimo-lens $version is already published as a preview."
             echo 'publish=false' >> "$GITHUB_OUTPUT"
           else

@@ -101,6 +101,7 @@ distribution:
   - *browser_bundle
 release_contracts:
   - *ci_control
+  - .github/workflows/pages.yml
   - .python-version
   - pyproject.toml
   - uv.lock

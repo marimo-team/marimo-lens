@@ -120,6 +120,18 @@ def test_preview_version_ignores_suffixed_and_unreachable_tags(
     assert completed.stdout.strip() == "0.2.4.dev2"
 
 
+def test_preview_version_reads_a_zero_padded_patch_as_decimal(tmp_path: Path) -> None:
+    _git(tmp_path, "init", "--quiet")
+    _commit(tmp_path)
+    _git(tmp_path, "tag", "v0.2.08")
+    candidate = _commit(tmp_path)
+
+    completed = _version(tmp_path, candidate)
+
+    assert completed.returncode == 0, completed.stderr
+    assert completed.stdout.strip() == "0.2.9.dev1"
+
+
 def test_preview_version_requires_a_previous_final_release(tmp_path: Path) -> None:
     _git(tmp_path, "init", "--quiet")
     _commit(tmp_path)
@@ -159,6 +171,8 @@ if state["fail"] == operation:
     state["fail"] = ""
     state_path.write_text(json.dumps(state))
     sys.exit(1)
+if args[0] == "release":
+    assert args[2] == "preview"
 if operation == "run list":
     assert args[args.index("--branch") + 1] == "main"
     assert args[args.index("--event") + 1] == "push"
@@ -178,7 +192,11 @@ elif operation == "attestation verify":
     )
     print(Path(args[args.index("--bundle") + 1]).read_text())
 elif operation == "release view":
+    if state.get("release_error"):
+        print(state["release_error"], file=sys.stderr)
+        sys.exit(1)
     if not state["exists"]:
+        print("release not found", file=sys.stderr)
         sys.exit(1)
     if "--json" in args:
         query = args[args.index("--jq") + 1]
@@ -458,6 +476,20 @@ def test_readiness_api_failure_fails_publication_resolution(tmp_path: Path) -> N
     assert returncode == 1
     assert "publish=" not in output
     assert all(call[:2] != ["release", "view"] for call in github.state()["calls"])
+
+
+def test_release_api_failure_fails_publication_resolution(tmp_path: Path) -> None:
+    github = _GitHub(tmp_path, versions=("0.2.4.dev1",))
+    state = github.state()
+    state["release_error"] = "HTTP 502: Bad Gateway"
+    github.write(state)
+    candidate = _released_repository(tmp_path)
+
+    returncode, output, stderr = github.resolve(tmp_path, candidate)
+
+    assert returncode == 1
+    assert "HTTP 502" in stderr
+    assert "publish=" not in output
 
 
 @pytest.mark.parametrize(
