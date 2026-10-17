@@ -99,6 +99,17 @@ distribution:
   - .github/workflows/publish.yml
   - skills/marimo-lens/**
   - *browser_bundle
+release_contracts:
+  - *ci_control
+  - .python-version
+  - pyproject.toml
+  - uv.lock
+  - .github/workflows/publish.yml
+  - scripts/preview-provenance.mjs
+  - scripts/preview-version.sh
+  - scripts/publish-preview.sh
+  - scripts/require-preview-checks.sh
+  - scripts/tests/**
 e2e:
   - *python_inputs
   - *browser_bundle

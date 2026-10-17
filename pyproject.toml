@@ -2,7 +2,16 @@
 members = ["packages/marimo-lens"]
 
 [dependency-groups]
-dev = ["basedpyright>=1.40", "marimo>=0.24", "pyrefly>=1", "pytest>=9", "ruff>=0.16", "ty>=0.0.39"]
+dev = [
+  "basedpyright>=1.40",
+  "marimo>=0.24",
+  "pyrefly>=1",
+  "pytest>=9",
+  "pyyaml>=6",
+  "ruff>=0.16",
+  "ty>=0.0.39",
+  "types-pyyaml>=6",
+]
 
 [tool.uv]
 exclude-newer = "3 days"
