@@ -574,6 +574,28 @@ def test_selection_rejects_numbers_too_large_for_browser_coordinates() -> None:
     assert raised.value.code == "invalid_selection"
 
 
+def test_selection_rejects_media_that_ends_before_it_starts() -> None:
+    value = selection()
+    value["description"] = {
+        "label": "Square",
+        "media": {"path": "animation.mp4", "start": 4.0, "end": 3.2},
+    }
+
+    with pytest.raises(ProtocolError) as raised:
+        parse_command(
+            _command(
+                "selection.put",
+                {
+                    "selection": value,
+                    "expectedRevision": 0,
+                    "imageAction": "clear",
+                },
+            ),
+            [],
+        )
+    assert raised.value.code == "invalid_selection"
+
+
 def test_available_image_id_is_derived_from_selection_id() -> None:
     data = png()
     value = selection(snapshot=snapshot_metadata(data))

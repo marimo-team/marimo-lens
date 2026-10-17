@@ -7,14 +7,15 @@ to meaningful regions such as a chart, metric, or comparison panel. Encode what
 each region represents, its units or grouping, and where it is produced. These
 short descriptions carry the authored structure into later feedback and edits.
 
-| Attribute                                               | Meaning                                                                                                  |
-| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `data-marimo-lens-label`                                | Human-readable name, up to 256 UTF-16 units.                                                             |
-| `data-marimo-lens-detail`                               | Context accompanying the name, such as measure, units, grouping, or filter, up to 512 UTF-16 units.      |
-| `data-marimo-lens-render-source`                        | JSON with a real project `path` and optional `symbol`, `line`, and `column` locating the rendering code. |
-| `data-marimo-lens-context`                              | Preferred image-context container for a configured DOM target.                                           |
-| `data-marimo-lens-cell-id`, `data-marimo-lens-selector` | A resolved producing cell ID and optional symbolic value selector. Lens does not execute the selector.   |
-| `data-marimo-lens-inputs`                               | Space-separated IDs of source elements declaring the region's complete notebook inputs.                  |
+| Attribute                                               | Meaning                                                                                                            |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `data-marimo-lens-label`                                | Human-readable name, up to 256 UTF-16 units.                                                                       |
+| `data-marimo-lens-detail`                               | Context accompanying the name, such as measure, units, grouping, or filter, up to 512 UTF-16 units.                |
+| `data-marimo-lens-render-source`                        | JSON with a real project `path` and optional `symbol`, `line`, and `column` locating the rendering code.           |
+| `data-marimo-lens-media`                                | JSON naming the file a target shows part of, with `path`, optional `page`, and optional `start` and `end` seconds. |
+| `data-marimo-lens-context`                              | Preferred image-context container for a configured DOM target.                                                     |
+| `data-marimo-lens-cell-id`, `data-marimo-lens-selector` | A resolved producing cell ID and optional symbolic value selector. Lens does not execute the selector.             |
+| `data-marimo-lens-inputs`                               | Space-separated IDs of source elements declaring the region's complete notebook inputs.                            |
 
 For example, render this through `mo.Html` or an anywidget's renderer, replacing
 the rendering reference with the actual file and symbol:

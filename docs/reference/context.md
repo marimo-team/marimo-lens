@@ -192,8 +192,10 @@ remain intact.
 ## Captured target description
 
 A selection can include `description`, containing `label`, optional `detail`,
-and optional `renderSource`. The rendering reference contains `path` and optional
-`line`, `column`, and `symbol`. These are bounded client-supplied descriptions,
+optional `renderSource`, and optional `media`. The rendering reference contains
+`path` and optional `line`, `column`, and `symbol`. `media` names the file the
+target shows part of with `path`, an optional `page` counted from 1, and
+optional `start` and `end` in seconds. These are bounded client-supplied descriptions,
 separate from runtime-derived notebook provenance. History and reopen retain
 the creation-time description. Compact context may omit descriptions to fit its
 byte budget, and standalone text reports truncation within its own budget.

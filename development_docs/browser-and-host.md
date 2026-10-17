@@ -110,7 +110,8 @@ the same label model for announcements. Selection identity is independent of
 consumer display text.
 
 Selection descriptions stay separate from target identity. Hover text combines
-the captured detail and render-source reference with `target.sources`.
+the captured detail, render-source reference, and media part with
+`target.sources`.
 The document locator stays in agent context. The source signature controls reattachment.
 
 ## Target resolution

@@ -1141,6 +1141,7 @@ def test_browser_reopens_addressed_selection_and_clears_history() -> None:
         "label": "Athletes",
         "detail": "Browser aggregation",
         "renderSource": {"path": "src/report.ts", "symbol": "summarize", "line": 12},
+        "media": {"path": "report.pdf", "page": 2},
     }
     selected["description"] = description
     assert _put(lens, revision=0, selection_value=selected)["ok"] is True

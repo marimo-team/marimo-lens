@@ -19,6 +19,7 @@ import {
   parseContract,
   parseLensResponse,
   parseTransportEnvelope,
+  parseTargetMedia,
 } from "../src/index";
 import { selectionFixture } from "./fixtures";
 
@@ -743,4 +744,19 @@ describe("selection contracts", () => {
       ),
     ).toEqual({ outputCellId: "cell-view" });
   });
+});
+
+test("target media names a page or a time span that ends after it starts", () => {
+  expect(parseTargetMedia({ path: "report.pdf", page: 2 })).toEqual({
+    path: "report.pdf",
+    page: 2,
+  });
+  expect(parseTargetMedia({ path: "animation.mp4", start: 3.2 })).toEqual({
+    path: "animation.mp4",
+    start: 3.2,
+  });
+  expect(() => parseTargetMedia({ path: "animation.mp4", start: 4, end: 4 })).toThrow(
+    "Media end must come after its start",
+  );
+  expect(() => parseTargetMedia({ path: "report.pdf", sheet: 1 })).toThrow();
 });

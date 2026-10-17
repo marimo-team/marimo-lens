@@ -1,11 +1,14 @@
 import {
   boundedUtf16,
+  MEDIA_ATTRIBUTE,
   parseRenderSource,
+  parseTargetMedia,
   RENDER_SOURCE_ATTRIBUTE,
   SOURCE_INPUTS_ATTRIBUTE,
   TARGET_LABEL_ATTRIBUTE,
   TARGET_DETAIL_ATTRIBUTE,
   type TargetInfo,
+  type TransportValue,
 } from "@marimo-lens/protocol";
 
 import type { TargetSurface } from "@/notebook/selection-target";
@@ -25,15 +28,26 @@ function readInfo(element: Element): TargetInfo | null {
 /** Labels are presentation only; target identity and notebook authority stay separate. */
 export function targetInfo(target: TargetSurface): TargetInfo {
   const info = targetPresentation(target);
-  const value = target.element.getAttribute(RENDER_SOURCE_ATTRIBUTE);
-  if (value && value.length <= 4_096) {
-    try {
-      info.renderSource = parseRenderSource(JSON.parse(value));
-    } catch {
-      // Malformed descriptive evidence cannot establish an editable source location.
-    }
-  }
+  const renderSource = readJson(target.element, RENDER_SOURCE_ATTRIBUTE, parseRenderSource);
+  if (renderSource) info.renderSource = renderSource;
+  const media = readJson(target.element, MEDIA_ATTRIBUTE, parseTargetMedia);
+  if (media) info.media = media;
   return info;
+}
+
+function readJson<T>(
+  element: Element,
+  attribute: string,
+  parse: (value: TransportValue) => T,
+): T | null {
+  const value = element.getAttribute(attribute);
+  if (!value || value.length > 4_096) return null;
+  try {
+    return parse(JSON.parse(value));
+  } catch {
+    // Malformed descriptive evidence is omitted, and the target stays selectable.
+    return null;
+  }
 }
 
 function targetPresentation(target: TargetSurface): TargetInfo {

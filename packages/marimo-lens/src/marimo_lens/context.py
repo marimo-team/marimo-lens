@@ -64,12 +64,22 @@ class RenderSourceReference(TypedDict):
     symbol: NotRequired[str]
 
 
+class TargetMediaReference(TypedDict):
+    """The file a target shows part of, with its page or time span in seconds."""
+
+    path: str
+    page: NotRequired[int]
+    start: NotRequired[float]
+    end: NotRequired[float]
+
+
 class TargetDescription(TypedDict):
     """Bounded presentation captured when the selection was created."""
 
     label: str
     detail: NotRequired[str]
     renderSource: NotRequired[RenderSourceReference]
+    media: NotRequired[TargetMediaReference]
 
 
 class SelectionReference(TypedDict):
