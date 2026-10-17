@@ -550,6 +550,19 @@ def test_preview_provenance_records_checkout_and_signing_workflow_separately(
     )
 
 
+def test_preview_predicate_type_resolves_to_its_documented_contract() -> None:
+    document, heading = PREVIEW_PREDICATE_TYPE.removeprefix(
+        f"https://github.com/{REPOSITORY}/blob/main/"
+    ).split("#")
+    headings = {
+        "-".join(line.lstrip("#").strip().lower().split())
+        for line in (ROOT / document).read_text().splitlines()
+        if line.startswith("#")
+    }
+
+    assert heading in headings
+
+
 def test_preview_attestation_signs_the_validated_commit() -> None:
     jobs = _workflow("publish.yml")["jobs"]
     steps = jobs["attest"]["steps"]

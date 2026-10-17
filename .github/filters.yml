@@ -106,6 +106,7 @@ release_contracts:
   - pyproject.toml
   - uv.lock
   - .github/workflows/publish.yml
+  - development_docs/release.md
   - scripts/preview-provenance.mjs
   - scripts/preview-version.sh
   - scripts/publish-preview.sh
