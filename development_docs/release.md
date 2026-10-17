@@ -6,20 +6,27 @@ annotated `vX.Y.Z` tag. The tag starts GitHub Actions, which rebuilds and
 validates the archives, publishes them to PyPI through
 [Trusted Publishing](https://docs.pypi.org/trusted-publishers/),
 verifies a fresh public installation, and creates GitHub release notes.
+Every validated `main` commit also publishes its wheel, source distribution,
+and checksum manifest to the rolling
+[`preview` GitHub prerelease](https://github.com/marimo-team/marimo-lens/releases/tag/preview).
+See [Rolling previews](#rolling-previews).
 
 Publishing changes external state. [PyPI](https://pypi.org/) versions and uploaded artifacts are
 immutable. Prepare and validate the version before pushing its tag.
 
 ## Release actors
 
-| Stage                                 | Owner                                          |
-| ------------------------------------- | ---------------------------------------------- |
-| Version change                        | Release-bearing pull request                   |
-| Local preflight and annotated tag     | `scripts/release.sh`                           |
-| Archive build and validation          | `build` job in `.github/workflows/publish.yml` |
-| PyPI upload                           | `publish` job and `pypi` environment           |
-| Public index and install verification | `verify-pypi` job                              |
-| GitHub release notes                  | `release-notes` job                            |
+| Stage                                 | Owner                                            |
+| ------------------------------------- | ------------------------------------------------ |
+| Version change                        | Release-bearing pull request                     |
+| Local preflight and annotated tag     | `scripts/release.sh`                             |
+| Channel and version resolution        | `resolve` job in `.github/workflows/publish.yml` |
+| Archive build and validation          | `build` job                                      |
+| Build provenance                      | `attest` job                                     |
+| PyPI upload                           | `publish` job and `pypi` environment             |
+| Public index and install verification | `verify-pypi` job                                |
+| GitHub release notes                  | `release-notes` job                              |
+| Preview publication                   | `preview` job and `preview` environment          |
 
 ## Prepare the release pull request
 
@@ -117,6 +124,11 @@ The `build` job:
 8. Runs `make package`.
 9. Uploads the wheel and source distribution as a one-day workflow artifact.
 
+The `attest` job signs SLSA build provenance for both archives with
+[GitHub artifact attestations](https://docs.github.com/en/actions/security-for-github-actions/using-artifact-attestations).
+Verify a downloaded release archive with
+`gh attestation verify marimo_lens-X.Y.Z-py3-none-any.whl -R marimo-team/marimo-lens`.
+
 The `publish` job downloads that artifact and runs `uv publish` with mandatory
 Trusted Publishing in the protected `pypi` environment.
 
@@ -127,6 +139,98 @@ PyPI in a fresh isolated environment and runs `scripts/verify_release.py`.
 The `release-notes` job runs after publication and public verification. It uses
 `changelogithub` with the repository token to create or update the GitHub
 release notes.
+
+## Rolling previews
+
+`publish.yml` also listens for completed push-event `CI` and `GitHub Pages`
+workflows on `main`. A preview starts once both workflows pass for the exact
+commit. Pull request and fork runs cannot publish. Completions queue per commit,
+and the `resolve` job skips a version whose checksum manifest is already
+published.
+
+`scripts/preview-version.sh` versions a preview as `X.Y.(Z+1).devN`, where
+`vX.Y.Z` is the newest final tag reachable from the commit's parent and `N`
+counts commits since that tag. Tagging the commit later keeps its preview
+version, and previews sort below the next patch release.
+
+The `build` job checks out the validated commit, stamps that version into the
+disposable checkout with `uv version --no-sync`, runs `make package`, and
+writes `marimo-lens-X.Y.Z.devN-SHA256SUMS`. The `attest` job signs the wheel,
+source distribution, and manifest with the
+[preview predicate](#preview-provenance-v1). The `preview` job runs
+`scripts/publish-preview.sh`, which:
+
+1. Checks the transferred archives against the manifest.
+2. Uploads the wheel and source distribution. A retry compares bytes with
+   already published assets and replaces empty starter assets left by a failed
+   upload.
+3. Rewrites the release notes with install and verification commands when this
+   build is the newest available one. An older build finishing later leaves the
+   newest links in place.
+4. Comments the install command on the merged pull request once.
+5. Keeps the newest 30 complete builds. Partial uploads newer than the oldest
+   kept build stay available for a retry. Older builds and partial uploads are
+   deleted.
+6. Uploads the manifest last. Its presence marks a finished publication.
+
+Install a preview by URL in a notebook's inline script metadata or a uv project:
+
+```console
+uv add "marimo-lens @ https://github.com/marimo-team/marimo-lens/releases/download/preview/marimo_lens-X.Y.Z.devN-py3-none-any.whl"
+```
+
+The `preview` tag stays on the commit that created the release. Versioned asset
+names and attestations identify each build. Publication runs in the `preview`
+environment, which allows deployments from `main`. The job needs
+`contents: write` for release assets and `pull-requests: write` for the
+announcement.
+
+A pending or failed upstream workflow defers publication. Its later successful
+completion, or a rerun, retries readiness. A GitHub API failure fails the run.
+Rerun it with `gh run rerun RUN_ID --failed`.
+
+### Preview provenance v1
+
+Preview attestations use this predicate type:
+
+```text
+https://github.com/marimo-team/marimo-lens/blob/main/development_docs/release.md#preview-provenance-v1
+```
+
+A `workflow_run` signs from the newest `main` workflow, which can be ahead of
+the validated commit. GitHub's attestation API restricts build types under the
+standard SLSA predicate, so `scripts/preview-provenance.mjs` writes this custom
+predicate in the SLSA v1 shape:
+
+| Field                                               | Value                                                |
+| --------------------------------------------------- | ---------------------------------------------------- |
+| `buildDefinition.buildType`                         | The predicate type URI                               |
+| `buildDefinition.externalParameters.workflow`       | Signing repository, ref, and workflow path           |
+| `buildDefinition.externalParameters.checkoutCommit` | Packaged source commit                               |
+| `buildDefinition.resolvedDependencies`              | Signing workflow commit, then packaged source commit |
+| `runDetails.builder.id`                             | Signing workflow reference                           |
+| `runDetails.metadata.invocationId`                  | Workflow run and attempt URL                         |
+
+Verify a downloaded preview wheel with the predicate type and publishing
+workflow. `gh attestation download` prints the bundle filename:
+
+```console
+gh attestation download WHEEL_FILE -R marimo-team/marimo-lens
+gh attestation verify WHEEL_FILE -R marimo-team/marimo-lens \
+  --bundle BUNDLE_FILE \
+  --predicate-type "https://github.com/marimo-team/marimo-lens/blob/main/development_docs/release.md#preview-provenance-v1" \
+  --signer-workflow "marimo-team/marimo-lens/.github/workflows/publish.yml"
+```
+
+Read `checkoutCommit` from the verified statement to identify the packaged
+source. The certificate's source digest identifies the signing workflow commit.
+
+The CI `Preview provenance` job signs a probe file with the same predicate,
+downloads its attestation from GitHub with up to five attempts, verifies it, and
+checks the signed checkout commit. It runs on `main` and same-repository pull
+requests that change preview publication. `scripts/tests/` covers versioning,
+readiness, retries, ordering, retention, and the probe step through the shell
+and workflow boundary.
 
 ## Monitor the release
 
@@ -142,7 +246,10 @@ Watch the run ID printed by GitHub CLI:
 gh run watch RUN_ID --exit-status
 ```
 
-Confirm all four jobs succeed. Then verify:
+A tag run succeeds when the `resolve`, `build`, `attest`, `publish`,
+`verify-pypi`, and `release-notes` jobs succeed. A preview run uses `resolve`,
+`build`, `attest`, and `preview`, and skips the PyPI jobs. After a tag run,
+verify:
 
 - PyPI lists the expected wheel and source distribution.
 - A fresh environment imports the exact version.
@@ -201,3 +308,6 @@ package.
 - PyPI publishing uses Trusted Publishing.
 - Public verification installs the exact released version from PyPI.
 - A published version is never rebuilt with different contents.
+- A preview publishes only after `CI` and `GitHub Pages` pass for its exact
+  `main` commit.
+- Preview archives carry signed provenance that names their source commit.

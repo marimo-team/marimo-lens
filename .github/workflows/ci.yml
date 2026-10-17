@@ -22,6 +22,7 @@ jobs:
       python_contracts: ${{ steps.filter.outputs.python_contracts }}
       quality: ${{ steps.filter.outputs.quality }}
       e2e: ${{ steps.filter.outputs.e2e }}
+      release_contracts: ${{ steps.filter.outputs.release_contracts }}
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -133,7 +134,7 @@ jobs:
       - name: Run Python tests
         env:
           UV_PYTHON: ${{ matrix.python-version }}
-        run: uv run pytest -q
+        run: uv run pytest -q packages/marimo-lens/tests
 
   test-js:
     name: JavaScript (${{ matrix.os }})
@@ -229,6 +230,86 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  release-contracts:
+    name: Release contracts
+    needs: changes
+    if: needs.changes.outputs.release_contracts == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Install Python
+        run: uv python install "$(cat .python-version)"
+      - name: Test preview publication
+        run: uv run pytest -q scripts/tests
+
+  # Signs a probe with the preview predicate and reads it back through GitHub,
+  # so a rejected predicate fails here before a main commit tries to publish.
+  # Fork pull requests cannot request the signing token.
+  preview-provenance:
+    name: Preview provenance
+    needs: [changes, release-contracts]
+    if: >-
+      needs.changes.outputs.release_contracts == 'true' &&
+      (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      attestations: write
+      artifact-metadata: write
+      id-token: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Create preview provenance probe
+        id: preview_provenance
+        run: |
+          printf 'Preview provenance probe for %s\n' "$GITHUB_SHA" > "$RUNNER_TEMP/preview-provenance-probe.txt"
+          node scripts/preview-provenance.mjs "$GITHUB_SHA" "$RUNNER_TEMP/preview-provenance.json"
+      - name: Attest preview provenance probe
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          predicate-type: ${{ steps.preview_provenance.outputs.predicate_type }}
+          predicate-path: ${{ runner.temp }}/preview-provenance.json
+          subject-path: ${{ runner.temp }}/preview-provenance-probe.txt
+      - name: Verify stored preview provenance probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PREVIEW_PREDICATE_TYPE: ${{ steps.preview_provenance.outputs.predicate_type }}
+        run: |
+          cd "$RUNNER_TEMP"
+          for attempt in 1 2 3 4 5; do
+            if gh attestation download preview-provenance-probe.txt --repo "$GITHUB_REPOSITORY"; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              exit 1
+            fi
+            printf 'Attestation download attempt %s failed. Retrying in 2s.\n' "$attempt" >&2
+            sleep 2
+          done
+          digest="$(sha256sum preview-provenance-probe.txt)"
+          gh attestation verify preview-provenance-probe.txt \
+            --repo "$GITHUB_REPOSITORY" \
+            --bundle "sha256:${digest%% *}.jsonl" \
+            --predicate-type "$PREVIEW_PREDICATE_TYPE" \
+            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/ci.yml" \
+            --format=json > "$RUNNER_TEMP/preview-provenance-verified.json"
+          jq -e --arg commit "$GITHUB_SHA" \
+            'any(.[].verificationResult.statement.predicate; .buildDefinition.externalParameters.checkoutCommit == $commit)' \
+            "$RUNNER_TEMP/preview-provenance-verified.json"
+
   required:
     if: always()
     needs:
@@ -239,6 +320,8 @@ jobs:
       - test-js
       - package
       - e2e
+      - release-contracts
+      - preview-provenance
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -257,12 +340,18 @@ jobs:
           PACKAGE_REQUIRED: ${{ needs.changes.outputs.distribution == 'true' }}
           E2E: ${{ needs.e2e.result }}
           E2E_REQUIRED: ${{ needs.changes.outputs.e2e == 'true' }}
+          RELEASE: ${{ needs.release-contracts.result }}
+          RELEASE_REQUIRED: ${{ needs.changes.outputs.release_contracts == 'true' }}
+          PROVENANCE: ${{ needs.preview-provenance.result }}
+          PROVENANCE_REQUIRED: >-
+            ${{ needs.changes.outputs.release_contracts == 'true' &&
+            (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) }}
         run: |
           if [ "$CHANGES" != success ]; then
             printf 'Change classification failed: %s\n' "$CHANGES" >&2
             exit 1
           fi
-          for job in QUALITY BROWSER PYTHON JS PACKAGE E2E; do
+          for job in QUALITY BROWSER PYTHON JS PACKAGE E2E RELEASE PROVENANCE; do
             required="${job}_REQUIRED"
             result="${!job}"
             if [ "${!required}" = true ]; then
