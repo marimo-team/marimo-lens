@@ -295,9 +295,11 @@ class _GitHub:
             timeout=30,
         )
 
-    def resolve(self, root: Path, commit: str) -> tuple[int, str, str]:
+    def resolve(
+        self, root: Path, commit: str, *, event: str = "workflow_run"
+    ) -> tuple[int, str, str]:
         scripts = root / "scripts"
-        scripts.mkdir()
+        scripts.mkdir(exist_ok=True)
         for name in ("preview-version.sh", "require-preview-checks.sh"):
             shutil.copy2(ROOT / "scripts" / name, scripts / name)
         step = next(
@@ -312,9 +314,10 @@ class _GitHub:
             cwd=root,
             env={
                 **self.env(),
-                "PUBLICATION_EVENT": "workflow_run",
-                "PREVIEW_COMMIT": commit,
-                "GITHUB_SHA": "b" * 40,
+                "PUBLICATION_EVENT": event,
+                "PREVIEW_COMMIT": commit if event == "workflow_run" else "",
+                "GITHUB_SHA": "b" * 40 if event == "workflow_run" else commit,
+                "GITHUB_REF_NAME": "v0.2.4",
                 "GITHUB_OUTPUT": str(output),
             },
             capture_output=True,
@@ -397,6 +400,52 @@ def test_pending_workflow_defers_preview_publication(tmp_path: Path) -> None:
     assert returncode == 0, stderr
     assert "publish=false\n" in output
     assert all(call[:2] != ["release", "view"] for call in github.state()["calls"])
+
+
+def test_tag_push_resolves_a_release_publication(tmp_path: Path) -> None:
+    github = _GitHub(tmp_path)
+
+    returncode, output, stderr = github.resolve(tmp_path, COMMIT, event="push")
+
+    assert returncode == 0, stderr
+    assert output == (
+        f"channel=release\ncommit={COMMIT}\nversion=0.2.4\npublish=true\n"
+    )
+    assert github.state()["calls"] == []
+
+
+def test_built_checksum_manifest_completes_the_preview(tmp_path: Path) -> None:
+    github = _GitHub(tmp_path)
+    candidate = _released_repository(tmp_path)
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "marimo_lens-0.2.4.dev1-py3-none-any.whl").write_bytes(b"wheel")
+    (dist / "marimo_lens-0.2.4.dev1.tar.gz").write_bytes(b"source")
+    step = next(
+        step
+        for step in _workflow("publish.yml")["jobs"]["build"]["steps"]
+        if step["name"] == "Record preview checksums"
+    )
+    subprocess.run(
+        ["bash", "-eu", "-o", "pipefail", "-c", step["run"]],
+        cwd=dist,
+        env={**os.environ, "VERSION": "0.2.4.dev1"},
+        check=True,
+    )
+
+    published = subprocess.run(
+        ["bash", str(ROOT / "scripts/publish-preview.sh"), str(dist), candidate],
+        env=github.env(),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    returncode, output, stderr = github.resolve(tmp_path, candidate)
+
+    assert published.returncode == 0, published.stderr
+    assert "marimo-lens-0.2.4.dev1-SHA256SUMS" in github.state()["assets"]
+    assert returncode == 0, stderr
+    assert "publish=false\n" in output
 
 
 def test_readiness_api_failure_fails_publication_resolution(tmp_path: Path) -> None:

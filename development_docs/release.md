@@ -6,7 +6,8 @@ annotated `vX.Y.Z` tag. The tag starts GitHub Actions, which rebuilds and
 validates the archives, publishes them to PyPI through
 [Trusted Publishing](https://docs.pypi.org/trusted-publishers/),
 verifies a fresh public installation, and creates GitHub release notes.
-Every validated `main` commit also publishes a wheel to the rolling
+Every validated `main` commit also publishes its wheel, source distribution,
+and checksum manifest to the rolling
 [`preview` GitHub prerelease](https://github.com/marimo-team/marimo-lens/releases/tag/preview).
 See [Rolling previews](#rolling-previews).
 
@@ -25,6 +26,7 @@ immutable. Prepare and validate the version before pushing its tag.
 | PyPI upload                           | `publish` job and `pypi` environment             |
 | Public index and install verification | `verify-pypi` job                                |
 | GitHub release notes                  | `release-notes` job                              |
+| Preview publication                   | `preview` job and `preview` environment          |
 
 ## Prepare the release pull request
 

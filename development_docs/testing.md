@@ -268,6 +268,8 @@ flowchart LR
     changes --> browser[Browser assets]
     changes --> javascript[JavaScript]
     changes --> package[Package]
+    changes --> release[Release contracts]
+    release --> provenance[Preview provenance]
     browser --> python[Python 3.10–3.14]
     browser --> e2e[Notebook E2E]
     quality --> required
@@ -275,6 +277,8 @@ flowchart LR
     e2e --> required
     javascript --> required
     package --> required
+    release --> required
+    provenance --> required
 ```
 
 - **Quality** checks JavaScript and Python formatting, linting, types, unused
@@ -292,6 +296,11 @@ flowchart LR
   startup settings. Reports and failure evidence are uploaded as
   `notebook-e2e-<runner OS>`.
 - **Package** builds and validates distribution artifacts through `make package`.
+- **Release contracts** runs `scripts/tests` against preview versioning,
+  readiness, publication, and workflow steps.
+- **Preview provenance** signs a probe file with the
+  [preview predicate](release.md#preview-provenance-v1) and verifies it through
+  GitHub. It runs on `main` and same-repository pull requests.
 
 `.github/actions/setup-browser/action.yml` restores Chromium's headless shell
 from a cache keyed by operating system, architecture, and installed Playwright
