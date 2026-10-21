@@ -1,0 +1,22 @@
+packages/marimo-lens/src/marimo_lens/_runtime.py
+  s_9bf88f92467853::t_e0bcef484b0a4c 40,42-43
+packages/marimo-lens/tests/test_history.py
+  s_9bf88f92467853::t_32b72fcca2fdb0 97-137
+  s_9bf88f92467853::t_ecbe4c138c8ab7 179-180
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "7cf6cd313c16c92f6db9aff14845d64c07e7eeac",
+  "prompts": {},
+  "sessions": {
+    "s_9bf88f92467853": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa73f9ef-c073-4b2b-8a9d-41baed0c55a7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
