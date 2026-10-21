@@ -1,7 +1,5 @@
-packages/marimo-lens/src/marimo_lens/_brief.py
-  s_9bf88f92467853::t_b84b530d3b3298 1-208,212-242,247-289
-packages/marimo-lens/tests/test_brief.py
-  s_9bf88f92467853::t_a6354f73972755 1-148,177-223
+packages/marimo-lens/src/marimo_lens/_runtime.py
+  s_9bf88f92467853::t_c4832707681b77 57-73
 ---
 {
   "schema_version": "authorship/3.0.0",
@@ -15,7 +13,7 @@ packages/marimo-lens/tests/test_brief.py
         "id": "fa73f9ef-c073-4b2b-8a9d-41baed0c55a7",
         "model": "claude-opus-5-5"
       },
-      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+      "human_author": null
     }
   }
 }
