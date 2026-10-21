@@ -1,0 +1,19 @@
+packages/widget/tests/app/marimo-lens-content.test.tsx
+  s_9bf88f92467853::t_21887816b00e4c 1546-1614
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "877b42ff02ed5e898f465390181b7f27f47df59c",
+  "prompts": {},
+  "sessions": {
+    "s_9bf88f92467853": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa73f9ef-c073-4b2b-8a9d-41baed0c55a7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
