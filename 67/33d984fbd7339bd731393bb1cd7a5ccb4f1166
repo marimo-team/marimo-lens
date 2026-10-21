@@ -1,0 +1,37 @@
+packages/widget/src/app/use-output-capture.ts
+  s_9bf88f92467853::t_576b48393bcf4a 1-45
+packages/widget/src/selection/revisioned-mutations.ts
+  s_9bf88f92467853::t_3898d372888971 1-78,80-116
+packages/widget/src/dock/use-sheet-focus.ts
+  s_9bf88f92467853::t_3559f7bc48d575 1-45
+packages/widget/src/selection/components/resize-handle.tsx
+  s_9bf88f92467853::t_5158ff05b27972 1-211
+packages/widget/src/app/use-history-refresh.ts
+  s_9bf88f92467853::t_1299548e9271b7 1-38
+packages/widget/src/dock/use-selection-shortcut.ts
+  s_9bf88f92467853::t_a83e0812248d0c 1-46
+packages/widget/src/selection/components/adjustment.ts
+  s_9bf88f92467853::t_015ac499f6c6ba 1-14
+packages/widget/src/app/use-adjustment-slot.ts
+  s_9bf88f92467853::t_361907a7bbdbfb 1-36
+packages/widget/src/selection/use-scroll-attachment.ts
+  s_9bf88f92467853::t_683f57ecdde94d 1-115
+packages/widget/src/selection/components/selection-marker.tsx
+  s_9bf88f92467853::t_e9bac3ee4f400c 1-5,7-9,11-219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "6733d984fbd7339bd731393bb1cd7a5ccb4f1166",
+  "prompts": {},
+  "sessions": {
+    "s_9bf88f92467853": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa73f9ef-c073-4b2b-8a9d-41baed0c55a7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
