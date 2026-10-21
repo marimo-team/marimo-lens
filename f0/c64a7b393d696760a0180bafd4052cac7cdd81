@@ -1,0 +1,23 @@
+packages/widget/src/selection/components/history-list.tsx
+  s_9bf88f92467853::t_585dee92a36ba3 1,4-12,15,22,28,34,37-41,48-50,52,54-59,62-130,132-178,180-198,200,202-204,206-207,209-229,233-252,254-258,262-272,275,278,281
+packages/marimo-lens/tests/test_history.py
+  s_9bf88f92467853::t_58c90f9c62fae0 1-58,60-75,77-111,113-128,130-138,141-170,172,174-176
+packages/marimo-lens/src/marimo_lens/_history.py
+  s_9bf88f92467853::t_ade199ecc9562f 1-35,37-159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f0c64a7b393d696760a0180bafd4052cac7cdd81",
+  "prompts": {},
+  "sessions": {
+    "s_9bf88f92467853": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa73f9ef-c073-4b2b-8a9d-41baed0c55a7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
