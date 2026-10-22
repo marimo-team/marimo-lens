@@ -1,0 +1,29 @@
+packages/marimo-lens/tests/test_context_types.py
+  s_b98893a809c18f::t_2098542f192ff5 23,50,79,82,85
+packages/marimo-lens/src/marimo_lens/agent.py
+  s_9926a0b73f9b0a::t_0ee2146d3a2fbd 208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "146f53eb88712c218ec8be2d50a0a1dc4abfed59",
+  "prompts": {},
+  "sessions": {
+    "s_9926a0b73f9b0a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a163c7-6dc8-79c1-8d29-3789f2971352",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    },
+    "s_b98893a809c18f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a163a8-532b-7f40-876f-7bd7de97d60e",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
