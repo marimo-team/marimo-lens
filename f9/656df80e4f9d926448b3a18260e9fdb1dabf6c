@@ -1,0 +1,19 @@
+skills/marimo-lens/references/selections.md
+  s_9bf88f92467853::t_7a25fbc764d6dd 222-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f9656df80e4f9d926448b3a18260e9fdb1dabf6c",
+  "prompts": {},
+  "sessions": {
+    "s_9bf88f92467853": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa73f9ef-c073-4b2b-8a9d-41baed0c55a7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
