@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { drag } from "./support";
+
 test("keeps the dock inside a clipped notebook webview while scrolling and resizing", async ({
   page,
 }, testInfo) => {
@@ -29,7 +31,7 @@ test("keeps the dock inside a clipped notebook webview while scrolling and resiz
 
   await expectDockInPane(500);
   await notebook.getByRole("button", { name: "Collapse Lens" }).click();
-  await notebook.getByRole("button", { name: "Open Lens", exact: true }).click();
+  await notebook.getByRole("button", { name: "Expand Lens", exact: true }).click();
 
   // VS Code moves the oversized webview and publishes scroll updates to it.
   await page.evaluate(() => {
@@ -46,19 +48,13 @@ test("keeps the dock inside a clipped notebook webview while scrolling and resiz
   });
   await expectDockInPane(350, 12);
   await notebook.getByRole("button", { name: "Collapse Lens" }).click();
-  const collapsed = notebook.getByRole("button", { name: "Open Lens", exact: true });
+  const collapsed = notebook.getByRole("button", { name: "Expand Lens", exact: true });
   const grip = collapsed.locator("[data-marimo-lens-collapsed-grip]");
   const initial = (await grip.boundingBox())!;
-  await page.mouse.move(initial.x + initial.width / 2, initial.y + initial.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(0, initial.y, { steps: 10 });
-  await page.mouse.up();
+  await drag(page, initial, { x: 0, y: initial.y }, 10);
   await expect.poll(async () => (await grip.boundingBox())!.x).toBeGreaterThanOrEqual(0);
   const edge = (await grip.boundingBox())!;
-  await page.mouse.move(edge.x + edge.width / 2, edge.y + edge.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(edge.x + 100, edge.y - 40, { steps: 10 });
-  await page.mouse.up();
+  await drag(page, edge, { x: edge.x + 100, y: edge.y - 40 }, 10);
   await expect.poll(async () => (await grip.boundingBox())!.x).toBeGreaterThan(edge.x + 70);
   await expect(collapsed).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("embedded-dock.png") });

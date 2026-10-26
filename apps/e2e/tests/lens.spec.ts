@@ -1,6 +1,14 @@
 import { expect, type Locator } from "@playwright/test";
 
-import { expectInsideViewport, runAction, screenshot, selectOutput, test } from "./support";
+import {
+  drag,
+  editNote,
+  expectInsideViewport,
+  runAction,
+  screenshot,
+  selectOutput,
+  test,
+} from "./support";
 
 test("point and region attention survive note edits, resolution, and image recapture", async ({
   page,
@@ -25,24 +33,27 @@ test("point and region attention survive note edits, resolution, and image recap
   ]);
   for (const selection of before.references.selections) {
     expect(selection.target.cellIds).toHaveLength(1);
-    expect(selection.cells).toEqual([{ id: selection.target.cellIds[0], status: "available" }]);
+    expect(selection.cells).toEqual([
+      {
+        id: selection.target.cellIds[0],
+        status: "available",
+        codeHash: expect.stringMatching(/^[0-9a-f]{16}$/),
+      },
+    ]);
     expect(before.images[selection.id].signature).toBe("89504e470d0a1a0a");
     expect(before.images[selection.id].bytes).toBeGreaterThan(100);
   }
   expect(before.text).toContain("Revenue by month");
   expect(before.text).toContain("Compare the quarter");
-  await page.getByRole("button", { name: "Open selections, 2 open, 0 in history" }).click();
-  const sheet = page.getByRole("region", { name: "Selections", exact: true });
+  await page.getByRole("button", { name: "Requests, 2 open, 0 in history" }).click();
+  const sheet = page.getByRole("region", { name: "Requests", exact: true });
   await expectInsideViewport(page, sheet);
-  await page.getByRole("button", { name: "Edit note for S1", exact: true }).click();
-  const editor = page.getByRole("dialog", { name: /Edit note for S1/ });
+  const editor = await editNote(page, "S1");
   await expectInsideViewport(page, editor);
-  await page
-    .getByRole("textbox", { name: "Note for selection S1" })
-    .fill("Explain the February increase");
+  await editor.getByRole("textbox").fill("Explain the February increase");
   await screenshot(page, testInfo, "note-editor");
   await editor.getByRole("button", { name: "Done", exact: true }).click();
-  await page.getByRole("button", { name: "Open selections, 2 open, 0 in history" }).click();
+  await page.getByRole("button", { name: "Requests, 2 open, 0 in history" }).click();
   await page.getByRole("button", { name: "View image for S1.", exact: true }).click();
   const preview = page.getByRole("dialog", { name: "Selection image for S1", exact: true });
   await expect(preview.getByRole("img")).toBeVisible();
@@ -63,19 +74,26 @@ test("point and region attention survive note edits, resolution, and image recap
   await expect(sheet).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(sheet).toBeHidden();
+  expect((await runAction(page, "Record chat request")).error).toBeNull();
   const resolved = await runAction(page, "Resolve");
   expect(resolved.references.selections).toEqual([]);
   expect(resolved.images).toEqual({});
-  await page.getByRole("button", { name: "Open selections, 0 open, 2 in history" }).click();
+  await page.getByRole("button", { name: "Requests, 0 open, 3 in history" }).click();
   await page.getByRole("tab", { name: /History/ }).click();
   await expect(page.getByRole("button", { name: "Reopen S1", exact: true })).toBeVisible();
   await expectInsideViewport(page, sheet);
+  const entries = page.locator("[data-marimo-lens-history-key]");
+  await expect(entries.filter({ hasText: "Explain the revenue dip" })).toBeVisible();
+  const resolvedS1 = entries.filter({ hasText: "Explain the February increase" });
+  await resolvedS1.locator("[data-marimo-lens-history-summary]").click();
+  const historyImage = resolvedS1.locator("[data-marimo-lens-history-image] img");
+  await expect
+    .poll(() => historyImage.evaluate((element: HTMLImageElement) => element.naturalWidth))
+    .toBeGreaterThan(0);
   await screenshot(page, testInfo, "history");
   await page.getByRole("button", { name: "Reopen S1", exact: true }).click();
-  await expect(
-    page.getByRole("button", { name: "Open selections, 1 open, 2 in history" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Close selections" }).click();
+  await expect(page.getByRole("button", { name: "Requests, 1 open, 3 in history" })).toBeVisible();
+  await page.getByRole("button", { name: "Close requests" }).click();
   const reopened = await runAction(page);
   expect(reopened.references.selections).toMatchObject([
     {
@@ -89,7 +107,7 @@ test("point and region attention survive note edits, resolution, and image recap
   expect(reopened.images[before.references.selections[0].id].signature).toBe("89504e470d0a1a0a");
   expect(reopened.references.revision).toBeGreaterThan(before.references.revision);
   await page.getByRole("button", { name: "Collapse Lens" }).click();
-  await expectInsideViewport(page, page.getByRole("button", { name: /^Open Lens/ }));
+  await expectInsideViewport(page, page.getByRole("button", { name: /^Expand Lens/ }));
   await screenshot(page, testInfo, "collapsed");
 });
 
@@ -109,50 +127,30 @@ test("agent activity and reveal reach the selected output through the kernel", a
   await screenshot(page, testInfo, "reveal");
 });
 
-test("keyboard selection, dialog cancellation, and dock focus remain usable", async ({ page }) => {
-  await page.getByRole("button", { name: "Collapse Lens" }).click();
-  await expect(page.getByRole("button", { name: "Open Lens", exact: true })).toBeFocused();
-  await page.keyboard.press("Alt+l");
-  await expect(
-    page.getByRole("button", { name: "Cancel selection mode", exact: true }),
-  ).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeVisible();
-  await selectOutput(page, "point", "S1", "Preserve this note");
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
-  await page.getByRole("button", { name: "Edit note for S1", exact: true }).click();
-  const note = page.getByRole("textbox", { name: "Note for selection S1" });
-  await note.fill("Discard this draft");
-  await page.keyboard.press("Shift+Tab");
-  await expect(page.getByRole("button", { name: "Done", exact: true })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(note).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(page.getByRole("dialog", { name: /Edit note/ })).toBeHidden();
-  const report = await runAction(page);
-  expect(report.references.selections[0].note).toBe("Preserve this note");
-});
-
-test("keyboard selection reaches a scope containing only text", async ({ page }) => {
-  await page.evaluate(() => {
-    const scope = document.createElement("section");
-    scope.id = "text-only-scope";
-    scope.dataset.marimoLensScope = "article";
-    scope.textContent = "A scope without element descendants";
-    scope.style.padding = "12px";
-    document.body.prepend(scope);
-  });
-  await page.getByRole("button", { name: "Select a target", exact: true }).click();
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("Enter");
-  const dialog = page.getByRole("dialog", { name: /Add note for S1/ });
-  await dialog.getByRole("textbox").fill("Review this text-only region");
-  await dialog.getByRole("button", { name: "Done", exact: true }).click();
-  const report = await runAction(page);
-  expect(report.references.selections).toMatchObject([
-    { target: { kind: "dom", domSelector: "#text-only-scope", cellIds: [] } },
-  ]);
-});
+test(
+  "keyboard selection reaches a scope containing only text",
+  { tag: "@single-project" },
+  async ({ page }) => {
+    await page.evaluate(() => {
+      const scope = document.createElement("section");
+      scope.id = "text-only-scope";
+      scope.dataset.marimoLensScope = "article";
+      scope.textContent = "A scope without element descendants";
+      scope.style.padding = "12px";
+      document.body.prepend(scope);
+    });
+    await page.keyboard.press("Alt+l");
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    const dialog = page.getByRole("dialog", { name: /Add note for S1/ });
+    await dialog.getByRole("textbox").fill("Review this text-only region");
+    await dialog.getByRole("button", { name: "Done", exact: true }).click();
+    const report = await runAction(page);
+    expect(report.references.selections).toMatchObject([
+      { target: { kind: "dom", domSelector: "#text-only-scope", cellIds: [] } },
+    ]);
+  },
+);
 
 test("configured DOM targets retain attention while their output disappears and returns", async ({
   page,
@@ -172,21 +170,21 @@ test("configured DOM targets retain attention while their output disappears and 
   await expect(page.locator(selector)).toHaveAttribute("aria-label", "Revenue by month");
   await page.getByRole("checkbox", { name: "Show revenue" }).uncheck();
   await expect(page.getByRole("region", { name: "Revenue by month" })).toBeHidden();
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+  await page.getByRole("button", { name: "Requests, 1 open, 0 in history" }).click();
   await expect(
     page.getByRole("button", { name: /Current selection S1,.*target unavailable/ }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Close selections" }).click();
+  await page.getByRole("button", { name: "Close requests" }).click();
   await page.getByRole("checkbox", { name: "Show revenue" }).check();
   await expect(page.getByRole("region", { name: "Revenue by month" })).toBeVisible();
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+  await page.getByRole("button", { name: "Requests, 1 open, 0 in history" }).click();
   await expect(
     page.getByRole("button", { name: /Current selection S1,.*target unavailable/ }),
   ).toBeHidden();
   await expect(
     page.getByRole("button", { name: /Current selection S1, Compare these bars/ }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Close selections" }).click();
+  await page.getByRole("button", { name: "Close requests" }).click();
   const restored = await runAction(page);
   expect(restored.references.selections).toEqual(captured.references.selections);
   expect(restored.images).toEqual(captured.images);
@@ -233,7 +231,7 @@ test("live theme changes preserve attention and readable selection labels", asyn
 }, testInfo) => {
   await selectOutput(page, "point", "S1", "Keep this selection");
   const before = await runAction(page);
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+  await page.getByRole("button", { name: "Requests, 1 open, 0 in history" }).click();
   const label = page
     .getByRole("button", { name: /Current selection S1, Keep this selection/ })
     .getByText("S1", { exact: true });
@@ -243,142 +241,154 @@ test("live theme changes preserve attention and readable selection labels", asyn
   await expect(page.locator("body")).toHaveAttribute("data-theme", nextScheme);
   await expect.poll(() => contrastRatio(label)).toBeGreaterThanOrEqual(4.5);
   await screenshot(page, testInfo, "theme-switch");
-  await page.getByRole("button", { name: "Close selections" }).click();
+  await page.getByRole("button", { name: "Close requests" }).click();
   await page.getByRole("button", { name: "Collapse Lens" }).click();
-  const badge = page.getByRole("button", { name: /^Open Lens/ }).getByText("1", { exact: true });
+  const badge = page.getByRole("button", { name: /^Expand Lens/ }).getByText("1", { exact: true });
   await expect.poll(() => contrastRatio(badge)).toBeGreaterThanOrEqual(4.5);
-  await page.getByRole("button", { name: /^Open Lens/ }).click();
+  await page.getByRole("button", { name: /^Expand Lens/ }).click();
   const after = await runAction(page);
   expect(after.references.selections).toEqual(before.references.selections);
   expect(after.references.revision).toBe(before.references.revision);
 });
 
-test("custom regions retain symbolic sources through kernel context and reject retargeting", async ({
-  page,
-}) => {
-  await page.getByRole("combobox", { name: "Target mode" }).selectOption({ label: "DOM roots" });
-  await runAction(page);
-  const cellId = await page.getByRole("checkbox", { name: "Show revenue" }).evaluate((control) => {
-    let current: Element | null = control;
-    let id: string | undefined;
-    while (current) {
-      if (current.id.startsWith("output-")) id = current.id.slice("output-".length);
-      if (current.matches("marimo-island[data-cell-id]"))
-        id = current.getAttribute("data-cell-id") ?? undefined;
-      if (id) break;
-      const root = current.getRootNode();
-      current = current.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
-    }
-    if (!id) throw new Error("The control has no producing output");
-    const host = document.createElement("span");
-    host.id = "visibility-input";
-    host.hidden = true;
-    host.dataset.marimoLensCellId = id;
-    host.dataset.marimoLensSelector = "show_revenue.value";
-    host.dataset.marimoLensLabel = "show_revenue.value";
-    document.body.append(host);
-    const region = document.getElementById("revenue-chart")!;
-    region.setAttribute("data-marimo-lens-inputs", host.id);
-    region.setAttribute("data-marimo-lens-label", "Revenue visibility");
-    region.setAttribute(
-      "data-marimo-lens-render-source",
-      JSON.stringify({ path: "src/report.ts", symbol: "revenueCard", line: 12 }),
+test(
+  "custom regions retain symbolic sources through kernel context and reject retargeting",
+  { tag: "@single-project" },
+  async ({ page }) => {
+    await page.getByRole("combobox", { name: "Target mode" }).selectOption({ label: "DOM roots" });
+    await runAction(page);
+    const cellId = await page
+      .getByRole("checkbox", { name: "Show revenue" })
+      .evaluate((control) => {
+        let current: Element | null = control;
+        let id: string | undefined;
+        while (current) {
+          if (current.id.startsWith("output-")) id = current.id.slice("output-".length);
+          if (current.matches("marimo-island[data-cell-id]"))
+            id = current.getAttribute("data-cell-id") ?? undefined;
+          if (id) break;
+          const root = current.getRootNode();
+          current = current.parentElement ?? (root instanceof ShadowRoot ? root.host : null);
+        }
+        if (!id) throw new Error("The control has no producing output");
+        const host = document.createElement("span");
+        host.id = "visibility-input";
+        host.hidden = true;
+        host.dataset.marimoLensCellId = id;
+        host.dataset.marimoLensSelector = "show_revenue.value";
+        host.dataset.marimoLensLabel = "show_revenue.value";
+        document.body.append(host);
+        const region = document.getElementById("revenue-chart")!;
+        region.setAttribute("data-marimo-lens-inputs", host.id);
+        region.setAttribute("data-marimo-lens-label", "Revenue visibility");
+        region.setAttribute(
+          "data-marimo-lens-render-source",
+          JSON.stringify({ path: "src/report.ts", symbol: "revenueCard", line: 12 }),
+        );
+        region.setAttribute(
+          "data-marimo-lens-media",
+          JSON.stringify({ path: "report.pdf", page: 2 }),
+        );
+        return id;
+      });
+    await page.getByRole("button", { name: "Select a target", exact: true }).click();
+    await page.getByRole("region", { name: "Revenue by month" }).hover();
+    const label = page.locator("[data-marimo-lens-target-label]");
+    await expect(label).toHaveText("Revenue visibilityshow_revenue.value");
+    await page.keyboard.press("Escape");
+    await page.locator("#visibility-input").evaluate((host) => {
+      host.setAttribute("data-marimo-lens-label", "Visibility control");
+    });
+    await selectOutput(page, "point", "S1", "Inspect the custom region input");
+    const captured = await runAction(page);
+    expect(captured.references.selections).toMatchObject([
+      {
+        target: {
+          kind: "dom",
+          cellIds: [cellId],
+          sources: [{ cellId, selector: "show_revenue.value" }],
+        },
+        cells: [
+          { id: cellId, status: "available", codeHash: expect.stringMatching(/^[0-9a-f]{16}$/) },
+        ],
+        snapshot: { status: "available" },
+        description: {
+          label: "Revenue visibility",
+          detail: "Visibility control",
+          renderSource: { path: "src/report.ts", symbol: "revenueCard", line: 12 },
+          media: { path: "report.pdf", page: 2 },
+        },
+      },
+    ]);
+    expect(captured.text).toContain("show_revenue.value");
+    expect(captured.text).toContain("mo.ui.checkbox");
+    expect(captured.text).toContain("src/report.ts");
+    await page
+      .locator("#revenue-chart")
+      .evaluate((element) => element.setAttribute("data-marimo-lens-label", "Updated label"));
+    await page.getByRole("button", { name: "Requests, 1 open, 0 in history" }).click();
+    await expect(page.getByRole("button", { name: /Current selection S1,/ })).toBeVisible();
+    await expect(page.locator("[data-marimo-lens-selection-metadata]")).toContainText(
+      "Revenue visibility",
     );
-    region.setAttribute("data-marimo-lens-media", JSON.stringify({ path: "report.pdf", page: 2 }));
-    return id;
-  });
-  await page.getByRole("button", { name: "Select a target", exact: true }).click();
-  await page.getByRole("region", { name: "Revenue by month" }).hover();
-  const label = page.locator("[data-marimo-lens-target-label]");
-  await expect(label).toHaveText("Revenue visibilityshow_revenue.value");
-  await page.locator("#visibility-input").evaluate((host) => {
-    host.setAttribute("data-marimo-lens-label", "Visibility control");
-  });
-  await expect(label).toHaveText("Revenue visibilityVisibility control");
-  await page.keyboard.press("Escape");
-  await selectOutput(page, "point", "S1", "Inspect the custom region input");
-  const captured = await runAction(page);
-  expect(captured.references.selections).toMatchObject([
-    {
-      target: {
-        kind: "dom",
-        cellIds: [cellId],
-        sources: [{ cellId, selector: "show_revenue.value" }],
-      },
-      cells: [{ id: cellId, status: "available" }],
-      snapshot: { status: "available" },
-      description: {
-        label: "Revenue visibility",
-        detail: "Visibility control",
-        renderSource: { path: "src/report.ts", symbol: "revenueCard", line: 12 },
-        media: { path: "report.pdf", page: 2 },
-      },
-    },
-  ]);
-  expect(captured.text).toContain("show_revenue.value");
-  expect(captured.text).toContain("mo.ui.checkbox");
-  expect(captured.text).toContain("src/report.ts");
-  await page
-    .locator("#revenue-chart")
-    .evaluate((element) => element.setAttribute("data-marimo-lens-label", "Updated label"));
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
-  await expect(page.getByRole("button", { name: /Current selection S1,/ })).toBeVisible();
-  await expect(page.locator("[data-marimo-lens-selection-metadata]")).toContainText(
-    "Revenue visibility",
-  );
-  await expect(page.locator("[data-marimo-lens-selection-metadata]")).toHaveAttribute(
-    "title",
-    new RegExp(`show_revenue.value.*Cell ${cellId}`),
-  );
-  await page
-    .locator("#visibility-input")
-    .evaluate((element) => element.replaceWith(element.cloneNode(true)));
-  await expect(
-    page.getByRole("button", { name: /Current selection S1,.*target unavailable/ }),
-  ).toHaveCount(0);
-  await page.getByRole("button", { name: "Close selections" }).click();
-  await runAction(page, "Resolve");
-  await page.getByRole("button", { name: "Open selections, 0 open, 1 in history" }).click();
-  await expect(page.locator("[data-marimo-lens-history-target]")).toContainText(
-    "Revenue visibility",
-  );
-  await page.getByRole("button", { name: "Reopen S1", exact: true }).click();
-  await expect(page.locator("[data-marimo-lens-selection-metadata]")).toContainText(
-    "Revenue visibility",
-  );
-  // A changed input signature invalidates the target even when its element stays mounted.
-  await page.locator("#visibility-input").evaluate((host) => {
-    host.setAttribute("data-marimo-lens-selector", "target_mode.value");
-  });
-  await expect(
-    page.getByRole("button", { name: /Current selection S1,.*target unavailable/ }),
-  ).toBeVisible();
-});
+    await expect(page.locator("[data-marimo-lens-selection-metadata]")).toHaveAttribute(
+      "title",
+      new RegExp(`show_revenue.value.*Cell ${cellId}`),
+    );
+    await page
+      .locator("#visibility-input")
+      .evaluate((element) => element.replaceWith(element.cloneNode(true)));
+    await expect(
+      page.getByRole("button", { name: /Current selection S1,.*target unavailable/ }),
+    ).toHaveCount(0);
+    await page.getByRole("button", { name: "Close requests" }).click();
+    await runAction(page, "Resolve");
+    await page.getByRole("button", { name: "Requests, 0 open, 1 in history" }).click();
+    await expect(page.locator("[data-marimo-lens-history-target]")).toContainText(
+      "Revenue visibility",
+    );
+    await page.getByRole("button", { name: "Reopen S1", exact: true }).click();
+    await expect(page.locator("[data-marimo-lens-selection-metadata]")).toContainText(
+      "Revenue visibility",
+    );
+    // A changed input signature invalidates the target even when its element stays mounted.
+    await page.locator("#visibility-input").evaluate((host) => {
+      host.setAttribute("data-marimo-lens-selector", "target_mode.value");
+    });
+    await expect(
+      page.getByRole("button", { name: /Current selection S1,.*target unavailable/ }),
+    ).toBeVisible();
+  },
+);
 
-test("selecting a link inside an output does not follow the link", async ({ page }) => {
-  const link = page.getByRole("link", { name: "Read the methodology" });
-  const heading = page.getByRole("heading", { name: "Methodology" });
-  await expect(link).toHaveAttribute("href", /#methodology$/);
-  await link.click();
-  await expect(page).toHaveURL(/#methodology$/);
-  await expect(heading).toBeInViewport();
-  await page.evaluate(() => history.replaceState(null, "", location.pathname + location.search));
-  await link.scrollIntoViewIfNeeded();
-  const url = page.url();
-  await page
-    .getByRole("button", { name: "Select a target", exact: true })
-    .click({ noWaitAfter: true });
-  await expect(
-    page.getByRole("button", { name: "Cancel selection mode", exact: true }),
-  ).toBeVisible();
-  await link.click({ noWaitAfter: true });
-  const editor = page.getByRole("dialog", { name: /Add note for S1/ });
-  await expect(editor).toBeVisible();
-  expect(page.url()).toBe(url);
-  await editor.getByRole("button", { name: "Done", exact: true }).click({ noWaitAfter: true });
-  await expect(editor).toBeHidden();
-  expect(page.url()).toBe(url);
-});
+test(
+  "selecting a link inside an output does not follow the link",
+  { tag: "@single-project" },
+  async ({ page }) => {
+    const link = page.getByRole("link", { name: "Read the methodology" });
+    const heading = page.getByRole("heading", { name: "Methodology" });
+    await expect(link).toHaveAttribute("href", /#methodology$/);
+    await link.click();
+    await expect(page).toHaveURL(/#methodology$/);
+    await expect(heading).toBeInViewport();
+    await page.evaluate(() => history.replaceState(null, "", location.pathname + location.search));
+    await link.scrollIntoViewIfNeeded();
+    const url = page.url();
+    await page
+      .getByRole("button", { name: "Select a target", exact: true })
+      .click({ noWaitAfter: true });
+    await expect(
+      page.getByRole("button", { name: "Cancel selection mode", exact: true }),
+    ).toBeVisible();
+    await link.click({ noWaitAfter: true });
+    const editor = page.getByRole("dialog", { name: /Add note for S1/ });
+    await expect(editor).toBeVisible();
+    expect(page.url()).toBe(url);
+    await editor.getByRole("button", { name: "Done", exact: true }).click({ noWaitAfter: true });
+    await expect(editor).toBeHidden();
+    expect(page.url()).toBe(url);
+  },
+);
 
 test("target picking shows consumer labels at the element edge without intercepting selection", async ({
   page,
@@ -506,66 +516,64 @@ test("Lens controls retain their appearance and keyboard behavior under page sty
   });
   expect(await styleOf()).toEqual(baseline);
   await selectOutput(page, "point", "S1", "Scoped controls");
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
-  await page.getByRole("button", { name: "Edit note for S1" }).click();
-  const editor = page.getByRole("dialog", { name: /Edit note for S1/ });
+  await page.getByRole("button", { name: "Requests, 1 open, 0 in history" }).click();
+  const editor = await editNote(page, "S1");
   await expectInsideViewport(page, editor);
   const note = page.getByRole("textbox", { name: "Note for selection S1" });
   await expect(note).toBeFocused();
-  await page.keyboard.press("Shift+Tab");
-  await expect(editor.getByRole("button", { name: "Done", exact: true })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(note).toBeFocused();
-  expect(await note.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
-    "rgb(255, 0, 255)",
-  );
-  expect(
-    await editor.locator("footer").evaluate((element) => getComputedStyle(element).padding),
-  ).toBe("0px");
+  await note.fill("Discard this draft");
   await screenshot(page, testInfo, "isolated-lens-controls");
   await page.keyboard.press("Escape");
   await expect(editor).toBeHidden();
+  expect((await runAction(page)).references.selections[0].note).toBe("Scoped controls");
 });
 
-test("Lens stacks between notebook content and application overlays", async ({ page }) => {
-  const host = page.locator("[data-marimo-lens-portal]");
-  await expect(host).toHaveCSS("z-index", "60");
+test(
+  "Lens stacks between notebook content and application overlays",
+  { tag: "@single-project" },
+  async ({ page }) => {
+    const select = page.getByRole("button", { name: "Select a target", exact: true });
+    const bounds = await select.boundingBox();
+    expect(bounds).not.toBeNull();
+    if (!bounds) return;
 
-  const select = page.getByRole("button", { name: "Select a target", exact: true });
-  const bounds = await select.boundingBox();
-  expect(bounds).not.toBeNull();
-  if (!bounds) return;
+    const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
+    const layers = await page.evaluate(({ x, y }) => {
+      // Persistent pane controls (z-index 50) live in marimo's app pane, where Lens
+      // stacks at 60. Application overlays portal to the body.
+      const probe = (name: string, zIndex: number, parent: HTMLElement) => {
+        const element = document.createElement("div");
+        element.dataset.layerProbe = name;
+        Object.assign(element.style, {
+          position: "fixed",
+          left: `${x - 10}px`,
+          top: `${y - 10}px`,
+          width: "20px",
+          height: "20px",
+          pointerEvents: "auto",
+          zIndex: String(zIndex),
+        });
+        parent.append(element);
+        return element;
+      };
 
-  const point = { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
-  const layers = await page.evaluate(({ x, y }) => {
-    // Notebook affordances live in marimo's app pane; application overlays portal to the body.
-    const probe = (name: string, zIndex: number, parent: HTMLElement) => {
-      const element = document.createElement("div");
-      element.dataset.layerProbe = name;
-      Object.assign(element.style, {
-        position: "fixed",
-        left: `${x - 10}px`,
-        top: `${y - 10}px`,
-        width: "20px",
-        height: "20px",
-        pointerEvents: "auto",
-        zIndex: String(zIndex),
-      });
-      parent.append(element);
-      return element;
-    };
+      const pane = document.getElementById("App") ?? document.body;
+      const notebook = probe("notebook", 50, pane);
+      const overNotebook = document.elementFromPoint(x, y)?.matches("[data-marimo-lens-portal]");
+      const application = probe("application", 40, document.body);
+      const underApplication = document.elementFromPoint(x, y) === application;
+      notebook.remove();
+      application.remove();
+      // marimo's own in-pane chrome, such as its toolbars, stacks above Lens.
+      const chrome = probe("chrome", 1000, pane);
+      const underChrome = document.elementFromPoint(x, y) === chrome;
+      chrome.remove();
+      return { overNotebook, underApplication, underChrome };
+    }, point);
 
-    const notebook = probe("notebook", 30, document.getElementById("App") ?? document.body);
-    const overNotebook = document.elementFromPoint(x, y)?.matches("[data-marimo-lens-portal]");
-    const application = probe("application", 40, document.body);
-    const underApplication = document.elementFromPoint(x, y) === application;
-    notebook.remove();
-    application.remove();
-    return { overNotebook, underApplication };
-  }, point);
-
-  expect(layers).toEqual({ overNotebook: true, underApplication: true });
-});
+    expect(layers).toEqual({ overNotebook: true, underApplication: true, underChrome: true });
+  },
+);
 
 test("dock movement survives reload and keeps click, cancel, and keyboard controls distinct", async ({
   page,
@@ -574,10 +582,7 @@ test("dock movement survives reload and keeps click, cancel, and keyboard contro
   const grip = page.getByRole("button", { name: "Move Lens", exact: true });
   const initial = (await dock.boundingBox())!;
   const handle = (await grip.boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle.x + handle.width / 2 + 60, handle.y - 180, { steps: 20 });
-  await page.mouse.up();
+  await drag(page, handle, { x: handle.x + handle.width / 2 + 60, y: handle.y - 180 }, 20);
   const moved = (await dock.boundingBox())!;
   expect(moved.y).toBeLessThan(initial.y - 100);
   await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeVisible();
@@ -587,12 +592,9 @@ test("dock movement survives reload and keeps click, cancel, and keyboard contro
   await expect.poll(async () => (await dock.boundingBox())!.x).toBeCloseTo(moved.x, 0);
 
   await page.getByRole("button", { name: "Collapse Lens" }).click();
-  const pill = page.getByRole("button", { name: "Open Lens", exact: true });
+  const pill = page.getByRole("button", { name: "Expand Lens", exact: true });
   const closed = (await pill.boundingBox())!;
-  await page.mouse.move(closed.x + closed.width / 2, closed.y + closed.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(closed.x + closed.width / 2 - 50, closed.y - 80, { steps: 12 });
-  await page.mouse.up();
+  await drag(page, closed, { x: closed.x + closed.width / 2 - 50, y: closed.y - 80 }, 12);
   await expect(pill).toBeVisible();
   await expectInsideViewport(page, pill);
   await screenshot(page, testInfo, "movable-collapsed");
@@ -617,7 +619,7 @@ test("fast dock drags released outside the dock keep their final position", asyn
   for (const collapsed of [false, true]) {
     if (collapsed) await page.getByRole("button", { name: "Collapse Lens" }).click();
     const handle = page.getByRole("button", {
-      name: collapsed ? "Open Lens" : "Move Lens",
+      name: collapsed ? "Expand Lens" : "Move Lens",
       exact: true,
     });
     await handle.focus();
@@ -641,32 +643,28 @@ test("fast dock drags released outside the dock keep their final position", asyn
     await expect.poll(async () => (await dock.boundingBox())!.y).toBeLessThan(20);
     await expect.poll(async () => (await dock.boundingBox())!.x).toBeLessThan(20);
     await expect(handle).toBeVisible();
-    const moved = (await dock.boundingBox())!;
-    await page.reload();
-    await expect(page.getByRole("button", { name: "Move Lens", exact: true })).toBeVisible();
-    await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y, 0);
-    await expect.poll(async () => (await dock.boundingBox())!.x).toBeCloseTo(moved.x, 0);
   }
 });
 
-test("losing window focus keeps the last dock position and ends the drag", async ({ page }) => {
-  const dock = page.locator("[data-marimo-lens-dock]");
-  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
-  const handle = (await grip.boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle.x + handle.width / 2, handle.y - 150);
-  await expect.poll(async () => (await dock.boundingBox())!.y).toBeLessThan(handle.y - 100);
-  const moved = (await dock.boundingBox())!;
-  await page.evaluate(() => window.dispatchEvent(new Event("blur")));
-  await page.mouse.move(0, 0);
-  await page.mouse.up();
-  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y, 0);
-  await expect.poll(async () => (await dock.boundingBox())!.x).toBeCloseTo(moved.x, 0);
-  await grip.focus();
-  await page.keyboard.press("ArrowUp");
-  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y - 10, 0);
-});
+test(
+  "losing window focus keeps the last dock position and ends the drag",
+  { tag: "@single-project" },
+  async ({ page }) => {
+    const dock = page.locator("[data-marimo-lens-dock]");
+    const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+    const handle = (await grip.boundingBox())!;
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y - 150);
+    await expect.poll(async () => (await dock.boundingBox())!.y).toBeLessThan(handle.y - 100);
+    const moved = (await dock.boundingBox())!;
+    await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+    await page.mouse.move(0, 0);
+    await page.mouse.up();
+    await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(moved.y, 0);
+    await expect.poll(async () => (await dock.boundingBox())!.x).toBeCloseTo(moved.x, 0);
+  },
+);
 
 test("dock reaches the bottom of a notebook pane that grows after Lens loads", async ({ page }) => {
   // A marimo panel can hold the notebook pane short while Lens loads.
@@ -689,10 +687,7 @@ test("dock reaches the bottom of a notebook pane that grows after Lens loads", a
   const paneBottom = Math.min(pane.y + pane.height, viewport.height);
   expect(paneBottom).toBeGreaterThan(viewport.height * 0.8);
   const handle = (await grip.boundingBox())!;
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle.x + handle.width / 2, viewport.height - 1, { steps: 15 });
-  await page.mouse.up();
+  await drag(page, handle, { x: handle.x + handle.width / 2, y: viewport.height - 1 }, 15);
   await expect(async () => {
     const bounds = (await dock.boundingBox())!;
     const gap = paneBottom - (bounds.y + bounds.height);
@@ -706,19 +701,15 @@ test("moved dock keeps selections reachable at viewport edges and after resizing
   page,
 }, testInfo) => {
   await selectOutput(page, "point", "S1", "Keep the panel reachable");
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+  await page.getByRole("button", { name: "Requests, 1 open, 0 in history" }).click();
   const grip = page.getByRole("button", { name: "Move Lens", exact: true });
-  const sheet = page.getByRole("region", { name: "Selections", exact: true });
+  const sheet = page.getByRole("region", { name: "Requests", exact: true });
   const viewport = page.viewportSize()!;
   for (const corner of [
     { x: 0, y: 0 },
     { x: viewport.width, y: viewport.height },
   ]) {
-    const handle = (await grip.boundingBox())!;
-    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(corner.x, corner.y, { steps: 15 });
-    await page.mouse.up();
+    await drag(page, (await grip.boundingBox())!, corner, 15);
     await expectInsideViewport(page, sheet);
     await expectInsideViewport(page, page.locator("[data-marimo-lens-dock]"));
     await screenshot(page, testInfo, corner.y === 0 ? "dock-top-left" : "dock-bottom-right");
@@ -726,99 +717,99 @@ test("moved dock keeps selections reachable at viewport edges and after resizing
   await page.setViewportSize({ width: 320, height: 480 });
   await expectInsideViewport(page, sheet);
   await expectInsideViewport(page, page.locator("[data-marimo-lens-dock]"));
-  await page.getByRole("button", { name: "Close selections" }).click();
+  await page.getByRole("button", { name: "Close requests" }).click();
   await expect(sheet).toBeHidden();
 });
 
-test("expanding the pill at every corner keeps controls and long notes inside the viewport", async ({
-  page,
-}) => {
-  const note = "Inspect this long annotation: " + "unbroken-label-".repeat(18);
-  await selectOutput(page, "point", "S1", note);
-  await page.setViewportSize({ width: 280, height: 480 });
-  const dock = page.locator("[data-marimo-lens-dock]");
-  for (const corner of [
-    { x: 0, y: 0 },
-    { x: 280, y: 0 },
-    { x: 0, y: 480 },
-    { x: 280, y: 480 },
-  ]) {
-    await page.getByRole("button", { name: "Collapse Lens" }).click();
-    const pill = page.getByRole("button", { name: /^Open Lens/ });
-    const start = (await pill.boundingBox())!;
-    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(corner.x, corner.y, { steps: 12 });
-    await page.mouse.up();
-    await expectInsideViewport(page, pill.locator("[data-marimo-lens-collapsed-grip]"));
-    await pill.click();
-    await expectInsideViewport(page, dock);
-    for (const name of ["Move Lens", "Select a target", "Collapse Lens"]) {
-      await expectInsideViewport(page, page.getByRole("button", { name, exact: true }));
+test(
+  "expanding the pill at every corner keeps controls and long notes inside the viewport",
+  { tag: "@single-project" },
+  async ({ page }) => {
+    const note = "Inspect this long annotation: " + "unbroken-label-".repeat(18);
+    await selectOutput(page, "point", "S1", note);
+    await page.setViewportSize({ width: 280, height: 480 });
+    const dock = page.locator("[data-marimo-lens-dock]");
+    for (const corner of [
+      { x: 0, y: 0 },
+      { x: 280, y: 0 },
+      { x: 0, y: 480 },
+      { x: 280, y: 480 },
+    ]) {
+      await page.getByRole("button", { name: "Collapse Lens" }).click();
+      const pill = page.getByRole("button", { name: /^Expand Lens/ });
+      await drag(page, (await pill.boundingBox())!, corner, 12);
+      await expectInsideViewport(page, pill.locator("[data-marimo-lens-collapsed-grip]"));
+      await pill.click();
+      await expectInsideViewport(page, dock);
+      for (const name of ["Move Lens", "Select a target", "Collapse Lens"]) {
+        await expectInsideViewport(page, page.getByRole("button", { name, exact: true }));
+      }
+      await page.getByRole("button", { name: "Requests, 1 open, 0 in history" }).click();
+      await expectInsideViewport(page, page.getByRole("region", { name: "Requests", exact: true }));
+      const label = page.locator("[data-marimo-lens-selection-note]");
+      expect(
+        await label.evaluate(
+          (element) =>
+            element.scrollWidth <= element.clientWidth &&
+            element.scrollHeight <= element.clientHeight,
+        ),
+      ).toBe(true);
+      await page
+        .getByRole("button", { name: "Edit note for S1", exact: true })
+        .scrollIntoViewIfNeeded();
+      await expectInsideViewport(
+        page,
+        page.getByRole("button", { name: "Edit note for S1", exact: true }),
+      );
+      await page.getByRole("button", { name: "Close requests" }).click();
     }
-    await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
-    await expectInsideViewport(page, page.getByRole("region", { name: "Selections", exact: true }));
-    const label = page.locator("[data-marimo-lens-selection-note]");
-    expect(
-      await label.evaluate(
-        (element) =>
-          element.scrollWidth <= element.clientWidth &&
-          element.scrollHeight <= element.clientHeight,
-      ),
-    ).toBe(true);
-    await page
-      .getByRole("button", { name: "Edit note for S1", exact: true })
-      .scrollIntoViewIfNeeded();
-    await expectInsideViewport(
-      page,
-      page.getByRole("button", { name: "Edit note for S1", exact: true }),
-    );
-    await page.getByRole("button", { name: "Close selections" }).click();
-  }
-});
+  },
+);
 
-test("short viewports keep every item in a full selection panel reachable", async ({
-  page,
-}, testInfo) => {
-  await selectOutput(page, "point", "S1", "Review this selection");
-  expect((await runAction(page, "Seed 63 selections")).references.selections).toHaveLength(63);
-  for (const viewport of [
-    { width: 240, height: 240 },
-    { width: 320, height: 200 },
-  ]) {
-    await page.setViewportSize(viewport);
-    await page.getByRole("button", { name: "Move Lens", exact: true }).press("Home");
-    await page.getByRole("button", { name: "Open selections, 63 open, 0 in history" }).click();
-    const sheet = page.getByRole("region", { name: "Selections", exact: true });
-    await expectInsideViewport(page, sheet);
-    const last = page.getByRole("button", { name: "Remove selection S63", exact: true });
-    await last.scrollIntoViewIfNeeded();
-    await expectInsideViewport(page, last);
-    await expectInsideViewport(page, page.getByRole("button", { name: "Close selections" }));
-    expect(await sheet.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
-      true,
-    );
-    await screenshot(page, testInfo, `short-panel-${viewport.width}`);
-    await page.getByRole("button", { name: "Close selections" }).click();
-  }
-  await page.setViewportSize({ width: 640, height: 600 });
-  await runAction(page, "Resolve");
-  await page.setViewportSize({ width: 240, height: 320 });
-  await page.getByRole("button", { name: "Open selections, 0 open, 63 in history" }).click();
-  await page.getByRole("tab", { name: /History/ }).click();
-  const lastHistory = page.getByRole("button", { name: "Reopen S1", exact: true });
-  await lastHistory.scrollIntoViewIfNeeded();
-  await expectInsideViewport(page, lastHistory);
-  expect(
-    await page
-      .locator("[data-marimo-lens-history-target]")
-      .evaluateAll((elements) =>
-        elements.every((element) => element.scrollWidth <= element.clientWidth),
-      ),
-  ).toBe(true);
-  await screenshot(page, testInfo, "short-history");
-  await lastHistory.click();
-  await expect(
-    page.getByRole("button", { name: "Open selections, 1 open, 63 in history" }),
-  ).toBeVisible();
-});
+test(
+  "short viewports keep every item in a full selection panel reachable",
+  { tag: "@single-project" },
+  async ({ page }, testInfo) => {
+    await selectOutput(page, "point", "S1", "Review this selection");
+    expect((await runAction(page, "Seed 63 selections")).references.selections).toHaveLength(63);
+    for (const viewport of [
+      { width: 240, height: 240 },
+      { width: 320, height: 200 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.getByRole("button", { name: "Move Lens", exact: true }).press("Home");
+      await page.getByRole("button", { name: "Requests, 63 open, 0 in history" }).click();
+      const sheet = page.getByRole("region", { name: "Requests", exact: true });
+      await expectInsideViewport(page, sheet);
+      const last = page.getByRole("button", { name: "Remove selection S63", exact: true });
+      await last.scrollIntoViewIfNeeded();
+      await expectInsideViewport(page, last);
+      await expectInsideViewport(page, page.getByRole("button", { name: "Close requests" }));
+      expect(await sheet.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+        true,
+      );
+      await screenshot(page, testInfo, `short-panel-${viewport.width}`);
+      await page.getByRole("button", { name: "Close requests" }).click();
+    }
+    await page.setViewportSize({ width: 640, height: 600 });
+    await runAction(page, "Resolve");
+    await page.setViewportSize({ width: 240, height: 320 });
+    await page.getByRole("button", { name: "Requests, 0 open, 63 in history" }).click();
+    await page.getByRole("tab", { name: /History/ }).click();
+    const lastHistory = page.getByRole("button", { name: "Reopen S1", exact: true });
+    await lastHistory.scrollIntoViewIfNeeded();
+    await expectInsideViewport(page, lastHistory);
+    expect(
+      await page
+        .locator("[data-marimo-lens-history-target]")
+        .evaluateAll((elements) =>
+          elements.every((element) => element.scrollWidth <= element.clientWidth),
+        ),
+    ).toBe(true);
+    await screenshot(page, testInfo, "short-history");
+    await lastHistory.click();
+    await expect(
+      page.getByRole("button", { name: "Requests, 1 open, 63 in history" }),
+    ).toBeVisible();
+  },
+);

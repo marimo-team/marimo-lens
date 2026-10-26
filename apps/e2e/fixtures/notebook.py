@@ -97,8 +97,8 @@ def _(Lens, target_mode):
         "DOM roots": '[aria-label="Revenue by month"]',
         "Invalid selector": "[",
     }
-    lens = Lens(dom_selector=_selectors[target_mode.value])
-    duplicate_lens = Lens(dom_selector=_selectors[target_mode.value])
+    lens = Lens(record=True, dom_selector=_selectors[target_mode.value])
+    duplicate_lens = Lens(record=True, dom_selector=_selectors[target_mode.value])
     activity = {}
     return activity, duplicate_lens, lens
 
@@ -135,6 +135,7 @@ def _(mo):
             "Remember revision",
             "Resolve remembered",
             "Resolve unknown",
+            "Record chat request",
             "Seed 63 selections",
         ],
         value="Inspect context",
@@ -175,7 +176,7 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
             for _index in range(2, 64):
                 _command = {
                     "protocol": "marimo-lens.command",
-                    "version": 7,
+                    "version": 8,
                     "requestId": f"seed-{_index}",
                     "type": "selection.put",
                     "payload": {
@@ -224,6 +225,12 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
             [_selection["id"] for _selection in _selections],
             expected_revision=_references["revision"],
             summary="Checked the revenue totals",
+        )
+    elif action.value == "Record chat request":
+        lens.resolve(
+            lens.open_request("Explain the revenue dip"),
+            expected_revision=_references["revision"],
+            summary="The dip follows the March refunds",
         )
     elif action.value == "Remember revision":
         activity["revision"] = _references["revision"]

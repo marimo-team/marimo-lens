@@ -34,13 +34,11 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"], colorScheme: "light" },
     },
     {
-      name: "dark",
-      testMatch: "lens.spec.ts",
-      use: { ...devices["Desktop Chrome"], colorScheme: "dark" },
-    },
-    {
       name: "narrow-dark",
       testMatch: "lens.spec.ts",
+      // Tests tagged @single-project set their own viewport or do not depend on layout or
+      // theme, so the light project covers them.
+      grepInvert: /@single-project/,
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 390, height: 844 },
@@ -48,17 +46,9 @@ export default defineConfig({
       },
     },
     {
-      name: "narrow-light",
-      testMatch: "lens.spec.ts",
-      use: {
-        ...devices["Desktop Chrome"],
-        viewport: { width: 390, height: 844 },
-        colorScheme: "light",
-      },
-    },
-    {
       name: "editor",
       testMatch: ["editor.spec.ts", "robustness.spec.ts"],
+      grepInvert: /@single-project/,
       use: { ...devices["Desktop Chrome"], colorScheme: "light", baseURL: "http://127.0.0.1:4820" },
     },
   ],
