@@ -42,6 +42,30 @@ describe("notebook DOM layout subscriptions", () => {
     release();
   });
 
+  test("lays out Lens UI clear of marimo's floating controls", () => {
+    vi.spyOn(window, "innerWidth", "get").mockReturnValue(360);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(740);
+    const app = document.createElement("main");
+    app.id = "App";
+    app.getBoundingClientRect = () => new DOMRect(0, 0, 360, 740);
+    const host = document.createElement("span");
+    app.append(host);
+    const controls = document.createElement("div");
+    controls.dataset.testid = "chrome-controls-bottom-right";
+    controls.getBoundingClientRect = () => new DOMRect(300, 500, 40, 220);
+    const menu = document.createElement("div");
+    menu.dataset.testid = "chrome-controls-top-right";
+    menu.getBoundingClientRect = () => new DOMRect(250, 12, 90, 36);
+    document.body.append(app, controls, menu);
+
+    const dom = new NotebookDomAdapter(document);
+    const release = dom.registerHost(host);
+
+    expect(dom.viewportBounds()).toMatchObject({ left: 0, right: 360 });
+    expect(dom.layoutBounds()).toMatchObject({ left: 0, top: 56, right: 292, bottom: 740 });
+    release();
+  });
+
   test("reports no visible area for a collapsed marimo app pane", () => {
     const app = document.createElement("main");
     app.id = "App";

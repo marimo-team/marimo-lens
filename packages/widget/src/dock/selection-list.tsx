@@ -78,7 +78,9 @@ export function SelectionList() {
                     data-marimo-lens-selection-metadata
                     title={selectionTitle(selection)}
                   >
-                    <span {...stylex.props(ui.mono)}>{label}</span>
+                    <span {...stylex.props(ui.mono, selectionListStyles.metadataLabel)}>
+                      {label}
+                    </span>
                     <SelectionKindMark kind={selection.anchor.kind} />
                     {!targetAvailable ? (
                       <>

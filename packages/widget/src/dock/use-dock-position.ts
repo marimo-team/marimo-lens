@@ -78,7 +78,7 @@ export function useDockPosition(ref: RefObject<HTMLElement | null>) {
       }
     };
     const layout = () => {
-      const notebook = dom.viewportBounds();
+      const notebook = dom.layoutBounds();
       bounds = {
         left: Math.max(visibleBounds.left, notebook.left),
         top: Math.max(visibleBounds.top, notebook.top),

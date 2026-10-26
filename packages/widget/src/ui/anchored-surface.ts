@@ -66,7 +66,7 @@ export function useAnchoredSurface({
     return () => observer.disconnect();
   }, [open, ownerWindow, surfaceRef]);
 
-  const viewport = dom.viewportBounds();
+  const viewport = dom.layoutBounds();
   if (!anchor) {
     const { inset, placement } = fallback;
     return {
