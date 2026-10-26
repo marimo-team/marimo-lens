@@ -15,11 +15,8 @@
     "knip": "knip --treat-config-hints-as-errors"
   },
   "devDependencies": {
-    "@oxlint/plugins": "catalog:",
     "@types/node": "catalog:",
-    "knip": "6.32.2",
-    "oxlint": "catalog:",
-    "oxlint-tsgolint": "catalog:",
+    "knip": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",

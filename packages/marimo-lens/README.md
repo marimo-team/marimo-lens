@@ -29,7 +29,7 @@ uv add marimo-lens
 uv run marimo edit notebook.py
 ```
 
-Requires Python 3.10–3.14 and marimo 0.25.0 or newer. marimo mounts Lens
+Requires Python 3.10–3.14 and marimo 0.25.2 or newer. marimo mounts Lens
 automatically once a cell that imports marimo runs.
 
 Press **Select**, click a point or drag a region, then add a note.

@@ -25,14 +25,14 @@ skip the local setup, open the same notebook in molab:
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "marimo[recommended]>=0.25.0",
+#     "marimo[recommended]>=0.25.2",
 #     "marimo-lens",
 # ]
 # ///
 
 import marimo
 
-__generated_with = "0.25.0"
+__generated_with = "0.25.2"
 app = marimo.App()
 
 
@@ -122,7 +122,7 @@ You have two ways to bring an agent into the notebook. Pick one:
   notebook's `marimo[recommended]` dependency already includes everything code
   mode needs.
 - **Use your own agent.** If you would rather work with an agent you already
-  use, such as Claude Code or Codex, open **Settings → Pair with an agent**,
+  use, such as Claude Code or Codex, open **Settings → Connect your agent**,
   choose it, and follow the connection instructions. If you already use
   [marimo pair](https://marimo.io/pair), keep that connection.
 

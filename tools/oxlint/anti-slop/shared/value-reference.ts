@@ -1,4 +1,4 @@
-import type { ESTree, Reference, Scope, SourceCode, Variable } from "@oxlint/plugins";
+import type { ESTree, Reference, Scope, SourceCode, Variable } from "vite-plus/lint/plugins";
 
 export type StableConstOrigin =
   | { kind: "expression"; expression: ESTree.Expression }

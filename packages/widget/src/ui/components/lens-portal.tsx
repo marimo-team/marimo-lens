@@ -16,6 +16,7 @@ export function LensPortal({ children, css }: { children: ReactNode; css: string
   useLayoutEffect(() => {
     const surface = createLensSurface(dom.document);
     const releaseRoot = dom.registerUiRoot(surface.root);
+    // oxlint-disable-next-line react/set-state-in-effect -- Children render after the surface is registered, so their layout effects measure an attached root.
     setRoot(surface.root);
     return () => {
       releaseRoot();

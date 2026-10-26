@@ -182,6 +182,7 @@ function SelectionMarker({
     createScrollAttachmentState(dom, output, selection.anchor, anchorKey),
   );
   useLayoutEffect(() => {
+    // oxlint-disable-next-line react/set-state-in-effect -- The attachment reads scroll containers from the committed DOM.
     setAttachmentState((current) =>
       refreshScrollAttachmentState(current, dom, output, selection.anchor, anchorKey),
     );

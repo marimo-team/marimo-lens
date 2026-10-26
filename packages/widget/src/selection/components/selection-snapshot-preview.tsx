@@ -59,6 +59,7 @@ export function SnapshotPreviewButton({
   const suppressFocusOpen = useRef(false);
   const openSnapshotKey = useRef("");
   const [open, setOpen] = useState(false);
+  const [anchorElement, setAnchorElement] = useState<HTMLButtonElement | null>(null);
   const [pinned, setPinned] = useState(false);
   const [motion, setMotion] = useState<"animate" | "instant">("animate");
   const snapshot = selection.snapshot;
@@ -72,7 +73,7 @@ export function SnapshotPreviewButton({
     snapshotLoader,
     triggerRef,
   });
-  const anchor = elementAnchor(triggerRef.current);
+  const anchor = elementAnchor(anchorElement);
   const position = useAnchoredSurface({
     anchor,
     open,
@@ -111,6 +112,7 @@ export function SnapshotPreviewButton({
     (nextMotion: "animate" | "instant") => {
       clearTimers();
       setMotion(nextMotion);
+      setAnchorElement(triggerRef.current);
       setOpen(true);
       openSnapshotKey.current = snapshotKey;
       void ensureLoaded();

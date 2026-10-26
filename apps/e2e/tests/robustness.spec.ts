@@ -303,6 +303,13 @@ test("touch dragging and cancellation leave the next dock action usable", async 
   await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(before.y - 120, 0);
   await page.getByRole("button", { name: "Collapse Lens" }).click();
   const pill = page.getByRole("button", { name: "Open Lens", exact: true });
+  // The dock's resize observer re-anchors the collapsed pill before the next paint.
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
   const closed = (await pill.boundingBox())!;
   await session.send("Input.dispatchTouchEvent", {
     type: "touchStart",

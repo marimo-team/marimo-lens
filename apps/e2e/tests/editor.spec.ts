@@ -139,7 +139,7 @@ test("Marimo dialogs cover Lens selection markers", async ({ page }, testInfo) =
     target.scrollIntoView({ block: "center" });
   });
   await page.getByTestId("notebook-menu-dropdown").click();
-  await page.getByTestId("notebook-menu-dropdown-Pair with an agent").click();
+  await page.getByRole("menuitem", { name: "Connect your agent" }).click();
 
   const dialog = page.getByRole("dialog", { name: "Pair with an agent" });
   const marker = page.locator("[data-marimo-lens-selection-id]");

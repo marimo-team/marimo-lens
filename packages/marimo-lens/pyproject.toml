@@ -22,8 +22,8 @@ classifiers = [
 dependencies = [
   "agent-plugins>=0.2.4",
   "anywidget>=0.9",
-  "marimo>=0.24",
-  "pydantic>=2",
+  "marimo>=0.25.2",
+  "pydantic>=2.4",
   "traitlets>=5",
   "typing-extensions>=4.4",
 ]
