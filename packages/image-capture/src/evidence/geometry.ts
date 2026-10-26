@@ -2,6 +2,8 @@ import type { DomHintBounds, SelectionAnchor } from "@marimo-lens/protocol";
 
 import { ownerWindow } from "./owner-realm";
 
+export type DrawRegion = { x: number; y: number; width: number; height: number };
+
 export type OutputContentMetrics = {
   bounds: DOMRect;
   width: number;
@@ -45,6 +47,30 @@ export function contentBoundsInOutput(source: OutputContentMetrics, target: Outp
   };
 }
 
+export function anchorForDetail(anchor: SelectionAnchor, bounds?: DomHintBounds): SelectionAnchor {
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+    return anchor.kind === "point"
+      ? { kind: "point", x: 0.5, y: 0.5 }
+      : { kind: "rect", x: 0.12, y: 0.12, width: 0.76, height: 0.76 };
+  }
+  if (anchor.kind === "point") {
+    return {
+      kind: "point",
+      x: clamp((anchor.x - bounds.x) / bounds.width, 0, 1),
+      y: clamp((anchor.y - bounds.y) / bounds.height, 0, 1),
+    };
+  }
+  const x = clamp((anchor.x - bounds.x) / bounds.width, 0, 1);
+  const y = clamp((anchor.y - bounds.y) / bounds.height, 0, 1);
+  return {
+    kind: "rect",
+    x,
+    y,
+    width: clamp((anchor.x + anchor.width - bounds.x) / bounds.width, 0, 1) - x,
+    height: clamp((anchor.y + anchor.height - bounds.y) / bounds.height, 0, 1) - y,
+  };
+}
+
 export function anchorCenter(anchor: SelectionAnchor) {
   if (anchor.kind === "point") return { x: anchor.x, y: anchor.y };
   return { x: anchor.x + anchor.width / 2, y: anchor.y + anchor.height / 2 };
@@ -81,6 +107,6 @@ export function parentElementAcrossShadow(element: Element): Element | null {
   return root instanceof ownerWindow(element.ownerDocument).ShadowRoot ? root.host : null;
 }
 
-function clamp(value: number, minimum: number, maximum: number): number {
+export function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
 }

@@ -5,7 +5,7 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 
 import type { TrailNavigation } from "@/transient/target-attention";
 
-import { useNotebookDom } from "@/notebook/notebook-dom";
+import { useNotebookDom } from "@/notebook/notebook-dom-context";
 import { iconButtonStyles } from "@/styles/primitives";
 import { focusDock } from "@/ui/focus";
 

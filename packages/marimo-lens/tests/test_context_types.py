@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from collections.abc import Mapping
 from importlib import metadata as pkg
 from typing import Any, Literal, cast, get_args, get_type_hints
@@ -21,7 +22,9 @@ from marimo_lens import (
     automatic_lens,
     notebook_lens,
 )
-from marimo_lens._runtime import RuntimeSnapshot
+from marimo_lens._notebook.snapshot import RuntimeSnapshot
+
+from tests.support.factories import lens_context
 
 
 def test_package_exports_the_public_api() -> None:
@@ -44,6 +47,18 @@ def test_package_exports_the_public_api() -> None:
 
     assert set(marimo_lens.__all__) == set(expected)
     assert {name: getattr(marimo_lens, name) for name in expected} == expected
+
+
+def test_public_classes_show_their_source_and_type_hints() -> None:
+    for name in marimo_lens.__all__:
+        value = getattr(marimo_lens, name)
+        if isinstance(value, type) and value is not marimo_lens.LensError:
+            assert inspect.getsource(value), name
+            get_type_hints(value)
+
+
+def test_lens_error_reads_as_part_of_the_package() -> None:
+    assert marimo_lens.LensError.__module__ == "marimo_lens"
 
 
 def test_context_exposes_typed_reference_dictionaries() -> None:
@@ -74,7 +89,7 @@ def test_context_exposes_typed_reference_dictionaries() -> None:
 
 def test_context_exposes_immutable_png_bytes_by_selection_id() -> None:
     images = {"selection-1": b"png-bytes"}
-    context = LensContext(references={}, text="", images=images)
+    context = lens_context({}, images=images)
     images.clear()
 
     assert context.images == {"selection-1": b"png-bytes"}
@@ -100,58 +115,44 @@ def test_context_detaches_nested_references_from_its_input() -> None:
     assert context.current == {"id": "selection-1", "note": "Original note"}
 
 
-def test_context_current_returns_the_authoritative_selection() -> None:
-    context = LensContext(
-        references={
+def test_context_references_are_detached_from_lens_state() -> None:
+    lens = Lens()
+    first = lens.context()
+
+    first.references["revision"] = 9
+    first.references["selections"].append(cast(SelectionReference, {"id": "x"}))
+    second = lens.context()
+
+    assert second.revision == 0
+    assert second.references["selections"] == []
+    lens.close()
+
+
+def test_context_current_and_revision_read_the_reference_packet() -> None:
+    current = lens_context(
+        {
+            "revision": 7,
             "currentSelectionId": "selection-2",
             "selections": [
                 {"id": "selection-1", "label": "S1"},
                 {"id": "selection-2", "label": "S2"},
             ],
-        },
-        text="Current notebook context",
-        images={},
+        }
     )
+    empty = lens_context({"currentSelectionId": None, "selections": []})
 
-    assert context.current == {"id": "selection-2", "label": "S2"}
-
-
-def test_context_current_is_none_when_no_selection_is_current() -> None:
-    context = LensContext(
-        references={"currentSelectionId": None, "selections": []},
-        text="No Lens selections were collected.",
-        images={},
-    )
-
-    assert context.current is None
-
-
-def test_context_revision_returns_the_captured_selection_revision() -> None:
-    context = LensContext(
-        references={"revision": 7, "currentSelectionId": None, "selections": []},
-        text="Current notebook context",
-        images={},
-    )
-
-    assert context.revision == 7
-
-
-def test_context_revision_rejects_an_invalid_reference_packet() -> None:
-    context = LensContext(
-        references={"currentSelectionId": None, "selections": []},
-        text="Current notebook context",
-        images={},
-    )
-
+    assert current.current == {"id": "selection-2", "label": "S2"}
+    assert current.revision == 7
+    assert empty.current is None
     with pytest.raises(ValueError, match="valid revision"):
-        _ = context.revision
+        _ = empty.revision
 
 
 def test_lens_context_defers_and_caches_standalone_text(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import marimo_lens._context as context_module
-    from marimo_lens._marimo_runtime import MarimoRuntimeAdapter
+    import marimo_lens._context.build as context_module
+    from marimo_lens._marimo.adapter import MarimoRuntimeAdapter
 
     runtime = RuntimeSnapshot(
         available=False,
@@ -189,8 +190,8 @@ def test_lens_context_defers_and_caches_standalone_text(
 
 
 def test_context_repr_summarizes_context_and_image_sizes() -> None:
-    context = LensContext(
-        references={
+    context = lens_context(
+        {
             "currentSelectionId": "selection-1",
             "selections": [{"note": "private selection content"}, {}],
         },
@@ -198,6 +199,7 @@ def test_context_repr_summarizes_context_and_image_sizes() -> None:
         images={"selection-1": b"x" * 100_000},
     )
 
+    _ = context.text
     result = repr(context)
 
     assert result == (

@@ -48,10 +48,10 @@ stored image outdated until replacement capture succeeds.
 - Open `SelectionRecord` values.
 - Addressed `AddressedSelectionRecord` History entries.
 
-`SelectionStore` owns the current aggregate pointer. A transition first returns
-a complete next aggregate. `SelectionStore.commit()` advances the pointer,
-publishes one `_state` trait value, and restores the previous aggregate if trait
-publication fails.
+`LensSession` owns the current aggregate pointer. A transition first returns a
+complete next aggregate. The session advances the pointer, publishes one
+`_state` trait value, and restores the previous aggregate if trait publication
+fails.
 
 Each successful mutation advances the revision exactly once. Failed validation
 and failed state publication leave the previous aggregate authoritative.
@@ -60,10 +60,10 @@ and failed state publication leave the previous aggregate authoritative.
 
 | State                                   | Authority                         | Lifetime                                                      |
 | --------------------------------------- | --------------------------------- | ------------------------------------------------------------- |
-| Open selections, targets, and PNG bytes | Python `SelectionStore`           | Until delete, clear, resolve, `Lens.close()`, or teardown     |
-| Current selection and activation order  | Python `SelectionStore`           | Updated by activation and selection removal                   |
-| History entries                         | Python `SelectionStore`           | Until History clear, bounded eviction, close, or teardown     |
-| Next stable label                       | Python `SelectionStore`           | For the lifetime of the `Lens` instance                       |
+| Open selections, targets, and PNG bytes | Python `LensSession`              | Until delete, clear, resolve, `Lens.close()`, or teardown     |
+| Current selection and activation order  | Python `LensSession`              | Updated by activation and selection removal                   |
+| History entries                         | Python `LensSession`              | Until History clear, bounded eviction, close, or teardown     |
+| Next stable label                       | Python `LensSession`              | For the lifetime of the `Lens` instance                       |
 | Selection gesture and sheet workflow    | Browser reducer                   | Current interaction-owner browser view                        |
 | Selection capture job                   | Browser `SelectionCapture`        | Until commit, replacement, cancellation, removal, or teardown |
 | Selection image preview read            | Browser `SelectionSnapshotLoader` | While one or more preview consumers hold a lease              |
@@ -178,8 +178,8 @@ State admission protects:
 - Canonical labels, target identities, timestamps, and normalized geometry.
 
 The public [resource limits table](../docs/reference/errors.md#resource-limits) owns the user-visible
-numbers. The exact internal constants live in `_protocol_models.py`,
-`_selection_state.py`, `_references.py`, and `_images.py`.
+numbers. The exact internal constants live in `_core/bounds.py`,
+`_selection/state.py`, `_selection/references.py`, and `_selection/images.py`.
 
 An admission failure raises `selection_context_limit` or a more specific
 protocol error before the authoritative state changes.
@@ -199,13 +199,14 @@ protocol error before the authoritative state changes.
 
 ## Source map
 
-| Concern                                        | Source                                                     |
-| ---------------------------------------------- | ---------------------------------------------------------- |
-| Aggregate, records, transitions, and admission | `packages/marimo-lens/src/marimo_lens/_selection_state.py` |
-| Python composition and command execution       | `packages/marimo-lens/src/marimo_lens/widget.py`           |
-| Python validation models                       | `packages/marimo-lens/src/marimo_lens/_protocol_models.py` |
-| Browser state schemas                          | `packages/protocol/src/contracts.ts`                       |
-| Browser mutation orchestration                 | `packages/widget/src/selection/selection-actions.ts`       |
-| Selection image capture lifecycle              | `packages/widget/src/selection/selection-capture.ts`       |
-| Browser interaction reducer                    | `packages/widget/src/selection/state.ts`                   |
-| Open and History UI                            | `packages/widget/src/selection/components/`                |
+| Concern                                        | Source                                                                          |
+| ---------------------------------------------- | ------------------------------------------------------------------------------- |
+| Aggregate, records, transitions, and admission | `packages/marimo-lens/src/marimo_lens/_selection/state.py`                      |
+| Use cases, state pointer, and publication      | `packages/marimo-lens/src/marimo_lens/_session/session.py`                      |
+| Python composition and command translation     | `packages/marimo-lens/src/marimo_lens/_widget/lens.py`, `commands.py`           |
+| Python validation models                       | `packages/marimo-lens/src/marimo_lens/_schema/selection.py`                     |
+| Browser state schemas                          | `packages/protocol/src/contracts/`                                              |
+| Browser mutation orchestration                 | `packages/widget/src/selection/selection-actions.ts`, `revisioned-mutations.ts` |
+| Selection image capture lifecycle              | `packages/widget/src/selection/selection-capture.ts`                            |
+| Browser interaction reducer                    | `packages/widget/src/selection/state.ts`                                        |
+| Open and History UI                            | `packages/widget/src/dock/`, `history/`, `selection/components/`                |

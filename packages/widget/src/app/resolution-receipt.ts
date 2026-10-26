@@ -7,7 +7,7 @@ import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import type { UiAction } from "@/selection/state";
 import type { TargetAttentionKind } from "@/transient/target-attention";
 
-import { targetBelongsToDocument } from "@/notebook/selection-target";
+import { targetBelongsToDocument } from "@/notebook/document-identity";
 import { focusSelectionOrDock } from "@/ui/focus";
 
 type ResolutionReceiptOptions = {

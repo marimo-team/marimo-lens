@@ -6,7 +6,7 @@ import pydoc
 import subprocess
 import sys
 import traceback
-from collections.abc import Mapping, Sequence
+from importlib import import_module
 from importlib.metadata import distribution
 from types import SimpleNamespace
 from typing import cast
@@ -15,9 +15,12 @@ import agent_plugins as ap
 import marimo as mo
 import marimo._code_mode as code_mode
 import pytest
-from marimo_lens import ActivityHandle, Lens, LensContext, LensError, agent
+from marimo_lens import Lens, LensError, agent
+from marimo_lens._marimo.adapter import MarimoRuntimeAdapter
+from marimo_lens._protocol.messages import PROTOCOL_VERSION
 
-from tests.support.factories import png
+from tests.support.browser import BrowserLens
+from tests.support.factories import png, selection
 
 
 class _RuntimeScope:
@@ -46,21 +49,15 @@ def test_agent_module_exports_the_handoff_surface() -> None:
     }
 
 
-def test_marimo_code_mode_discovers_the_lens_capability() -> None:
-    assert code_mode.capabilities()["lens"] == "marimo_lens.agent"
-
-
-def test_agent_capability_entry_point_loads_the_instruction_module() -> None:
-    capabilities = [
+def test_marimo_code_mode_loads_the_registered_lens_capability() -> None:
+    [capability] = [
         entry_point
         for entry_point in distribution("marimo-lens").entry_points
         if entry_point.group == "marimo.agent.capability"
     ]
 
-    assert [(entry.name, entry.value) for entry in capabilities] == [
-        ("lens", "marimo_lens.agent")
-    ]
-    assert capabilities[0].load() is agent
+    assert (capability.name, capability.value) == ("lens", "marimo_lens.agent")
+    assert capability.load() is import_module(code_mode.capabilities()["lens"])
 
 
 def test_agent_resources_resolve_the_packaged_lens_skill() -> None:
@@ -76,18 +73,33 @@ def test_agent_resources_resolve_the_packaged_lens_skill() -> None:
     assert skill.frontmatter.splitlines()[0] == "name: marimo-lens"
 
 
-def test_agent_module_help_contains_the_installed_core_briefing() -> None:
+def test_capability_help_contains_the_installed_core_briefing() -> None:
     plugin = agent.plugin()
     skill = agent.skill()
-    rendered = pydoc.render_doc(agent)
+    capability = import_module(code_mode.capabilities()["lens"])
+    rendered = pydoc.plain(pydoc.render_doc(capability))
     briefing = ap.read("marimo-lens")
+    instructions = capability.__doc__
+    inventory = briefing.split("```text\n", 1)[1].split("\n```", 1)[0]
 
     assert str(plugin.path) in rendered
     assert str(skill / "SKILL.md") in rendered
-    assert agent.__doc__ == briefing
+    assert instructions is not None
+    assert instructions == briefing
+    assert inventory in instructions
+    assert skill.source in instructions
     assert skill.source in briefing
-    assert "## Explain the notebook with a Trail" in rendered
-    assert "references/selections.md" in rendered
+    assert all(line.strip() in rendered for line in skill.body.splitlines())
+    for resource in (
+        "plugin.json",
+        "openai.yaml",
+        "selections.md",
+        "setup.md",
+        "targets.md",
+        "workflow.md",
+        "SKILL.md",
+    ):
+        assert resource in rendered
 
 
 @pytest.mark.parametrize(
@@ -118,11 +130,19 @@ def test_package_import_exposes_agent_resources_and_help(import_statement: str) 
     assert "marimo_lens.agent" in result.stdout
 
 
-def test_module_help_carries_the_skill_through_a_windows_code_page() -> None:
+def test_capability_help_carries_the_skill_through_a_windows_code_page() -> None:
     # A Windows kernel whose output is redirected reports the locale code page,
     # and pydoc's help() escapes characters that code page cannot encode.
     result = subprocess.run(
-        [sys.executable, "-c", "import marimo_lens\nhelp(marimo_lens.agent)"],
+        [
+            sys.executable,
+            "-c",
+            (
+                "import importlib\n"
+                "import marimo._code_mode as cm\n"
+                "help(importlib.import_module(cm.capabilities()['lens']))"
+            ),
+        ],
         capture_output=True,
         env={**os.environ, "PYTHONIOENCODING": "cp1252"},
         check=True,
@@ -146,14 +166,23 @@ def test_package_import_defers_reading_agent_resources() -> None:
                 "def unavailable(*args, **kwargs):\n"
                 "    raise AssertionError('Unexpected resource access')\n"
                 "ap.read = ap.locate = unavailable\n"
+                "from importlib import import_module\n"
+                "from importlib.metadata import distribution\n"
+                "import marimo._code_mode as cm\n"
                 "import marimo_lens\n"
                 "assert callable(marimo_lens.agent.connect)\n"
+                "module_name = cm.capabilities()['lens']\n"
+                "capability = next(\n"
+                "    entry for entry in distribution('marimo-lens').entry_points\n"
+                "    if entry.group == 'marimo.agent.capability' and entry.name == 'lens'\n"
+                ").load()\n"
+                "assert capability is import_module(module_name)\n"
                 "ap.read, ap.locate = read, locate\n"
                 "plugin = marimo_lens.agent.plugin()\n"
                 "skill = marimo_lens.agent.skill()\n"
                 "assert plugin.manifest.name == 'marimo-lens'\n"
                 "assert skill == plugin.skill('marimo-lens')\n"
-                "assert skill.source in marimo_lens.agent.__doc__\n"
+                "assert skill.source in capability.__doc__\n"
             ),
         ],
         capture_output=True,
@@ -216,22 +245,16 @@ def test_agent_handoff_matches_documented_signatures() -> None:
     assert activity_duration.default is None
 
 
-def _set_mounted(lens: Lens, *, mounted: bool = True) -> None:
+def _unmount(lens: Lens) -> None:
     lens._handle_custom_msg(
         {
             "protocol": "marimo-lens.event",
-            "version": 7,
-            "type": f"output.capture.{'ready' if mounted else 'unready'}",
+            "version": PROTOCOL_VERSION,
+            "type": "output.capture.unready",
             "payload": {},
         },
         [],
     )
-
-
-def _mounted_lens() -> Lens:
-    lens = Lens()
-    _set_mounted(lens)
-    return lens
 
 
 def _code_mode_context(**values: object) -> SimpleNamespace:
@@ -248,40 +271,6 @@ def _marimo_wrapper(lens: Lens, monkeypatch: pytest.MonkeyPatch) -> object:
     with monkeypatch.context() as construction:
         construction.setattr(context_module, "get_context", unavailable)
         return mo.ui.anywidget(lens)
-
-
-def _lens_context(
-    *,
-    revision: int = 4,
-    note: str = "Make this blue",
-    images: Mapping[str, bytes] | None = None,
-) -> LensContext:
-    return LensContext(
-        {
-            "revision": revision,
-            "notebook": {"path": "/workspace/demo.py", "available": True},
-            "currentSelectionId": "selection-1",
-            "selections": [
-                {
-                    "id": "selection-1",
-                    "label": "S1",
-                    "note": note,
-                    "target": {
-                        "kind": "notebook",
-                        "cellIds": ["cell-view"],
-                        "documentId": "document-1",
-                        "documentPath": "/",
-                    },
-                    "cells": [{"id": "cell-view", "status": "available"}],
-                    "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
-                    "domHint": {"tag": "svg", "text": "Quarterly revenue"},
-                    "snapshot": {"status": "available"},
-                }
-            ],
-        },
-        "full Lens context",
-        images or {},
-    )
 
 
 def test_add_lens_cell_requires_a_code_mode_context() -> None:
@@ -357,7 +346,7 @@ def test_add_lens_cell_reruns_its_cell_unless_it_holds_an_open_lens(
 
 
 def test_connect_preserves_identity_across_kernel_calls() -> None:
-    lens = _mounted_lens()
+    lens = BrowserLens()
 
     first = agent.connect()
     second = agent.connect(identity=first.identity)
@@ -385,7 +374,7 @@ def test_connect_uses_an_existing_lens_from_the_code_mode_context() -> None:
 def test_connect_deduplicates_context_and_browser_discovery(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    lens = _mounted_lens()
+    lens = BrowserLens()
     context = _code_mode_context(
         lens=lens,
         lens_alias=lens,
@@ -397,7 +386,7 @@ def test_connect_deduplicates_context_and_browser_discovery(
 
 
 def test_connect_prefers_the_unique_browser_ready_lens_in_context() -> None:
-    active = _mounted_lens()
+    active = BrowserLens()
     duplicate = Lens()
     context = _code_mode_context(active=active, duplicate=duplicate)
 
@@ -437,7 +426,7 @@ def test_discover_lists_candidates_for_explicit_reconnection(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     first = Lens()
-    second = _mounted_lens()
+    second = BrowserLens()
     context = _code_mode_context(
         first=first,
         alias=first,
@@ -489,7 +478,7 @@ def test_unavailable_connection_reports_its_code_in_the_traceback() -> None:
 
     # Code-mode transports return an uncaught error as its formatted traceback.
     assert traceback.format_exception_only(raised.value)[-1] == (
-        "marimo_lens.errors.LensError: lens_unavailable: "
+        "marimo_lens.LensError: lens_unavailable: "
         "No Lens is available in the active notebook.\n"
     )
 
@@ -515,7 +504,7 @@ def test_connect_requires_a_context_globals_mapping() -> None:
 
 
 def test_connect_tracks_the_browser_mount_lifecycle() -> None:
-    lens = Lens()
+    lens = BrowserLens(displayed=False)
     assert agent.discover() == ()
 
     with pytest.raises(LensError) as raised:
@@ -523,15 +512,15 @@ def test_connect_tracks_the_browser_mount_lifecycle() -> None:
 
     assert raised.value.code == "lens_unavailable"
 
-    _set_mounted(lens)
-    _set_mounted(lens)
+    lens.display()
+    lens.display()
     identity = agent.connect().identity
     assert [item.identity for item in agent.discover()] == [identity]
 
-    _set_mounted(lens, mounted=False)
+    _unmount(lens)
     assert agent.connect().identity == identity
 
-    _set_mounted(lens, mounted=False)
+    _unmount(lens)
     assert agent.discover() == ()
     with pytest.raises(LensError) as raised:
         agent.connect()
@@ -541,12 +530,12 @@ def test_connect_tracks_the_browser_mount_lifecycle() -> None:
 
 
 def test_connected_handle_does_not_retarget_after_replacement() -> None:
-    lens = _mounted_lens()
+    lens = BrowserLens()
     mounted = agent.connect()
     identity = mounted.identity
     lens.close()
 
-    replacement = _mounted_lens()
+    replacement = BrowserLens()
     with pytest.raises(LensError) as raised:
         mounted.context()
 
@@ -556,8 +545,8 @@ def test_connected_handle_does_not_retarget_after_replacement() -> None:
 
 
 def test_connect_reports_ambiguous_lenses() -> None:
-    first = _mounted_lens()
-    second = _mounted_lens()
+    first = BrowserLens()
+    second = BrowserLens()
 
     with pytest.raises(LensError) as raised:
         agent.connect()
@@ -575,12 +564,10 @@ def test_connect_scopes_mounted_lenses_by_ui_registry(
     second_scope = _RuntimeScope()
     _active_runtime.context = SimpleNamespace(ui_element_registry=first_scope)
 
-    first = Lens()
-    _set_mounted(first)
+    first = BrowserLens()
     first_identity = agent.connect().identity
     _active_runtime.context = SimpleNamespace(ui_element_registry=second_scope)
-    second = Lens()
-    _set_mounted(second)
+    second = BrowserLens()
     second_identity = agent.connect().identity
 
     assert second_identity != first_identity
@@ -610,9 +597,8 @@ def test_mount_discovery_degrades_when_runtime_scope_is_unavailable(
     import marimo._runtime.context as context_module
 
     monkeypatch.setattr(context_module, "get_context", get_context)
-    lens = Lens()
+    lens = BrowserLens()
 
-    _set_mounted(lens)
     with pytest.raises(LensError) as raised:
         agent.connect()
 
@@ -620,171 +606,64 @@ def test_mount_discovery_degrades_when_runtime_scope_is_unavailable(
     lens.close()
 
 
-def test_connect_requires_a_string_identity() -> None:
-    with pytest.raises(TypeError, match="identity must be a string or None"):
-        agent.connect(identity=cast(str | None, 1))
+@pytest.mark.parametrize(
+    ("identity", "error", "message"),
+    [
+        (1, TypeError, "identity must be a string or None"),
+        ("", ValueError, "identity must not be empty"),
+    ],
+    ids=["type", "empty"],
+)
+def test_connect_validates_the_identity(
+    identity: object, error: type[Exception], message: str
+) -> None:
+    with pytest.raises(error, match=message):
+        agent.connect(identity=cast(str | None, identity))
 
 
-def test_connect_requires_a_nonempty_identity() -> None:
-    with pytest.raises(ValueError, match="identity must not be empty"):
-        agent.connect(identity="")
-
-
-def test_context_returns_the_current_snapshot_and_png_bytes(
+def test_mounted_lens_drives_the_lens_it_connects_to(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    monkeypatch.setattr(
+        MarimoRuntimeAdapter, "cell_status", lambda _self, _cell_id: "available"
+    )
+    lens = BrowserLens()
     data = png()
-    lens = _mounted_lens()
-    context_value = _lens_context(images={"selection-1": data})
-    monkeypatch.setattr(Lens, "context", lambda _self: context_value)
+    lens.put(selection(), image=data)
     mounted = agent.connect()
 
-    assert mounted.context().revision == 4
-    assert mounted.context().images["selection-1"] == data
-    lens.close()
-
-
-def test_cell_image_forwards_the_raw_byte_contract(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    data = png(3, 2)
-    lens = _mounted_lens()
-    monkeypatch.setattr(Lens, "context", lambda _self: _lens_context())
-    calls: list[tuple[str, int]] = []
-
-    def cell_image(
-        _lens: Lens,
-        cell_id: str,
-        *,
-        expected_revision: int,
-    ) -> bytes:
-        calls.append((cell_id, expected_revision))
-        return data
-
-    monkeypatch.setattr(Lens, "_cell_image", cell_image)
-    mounted = agent.connect()
-
-    result = mounted.cell_image("cell-view", expected_revision=4)
-
-    assert result == data
-    assert calls == [("cell-view", 4)]
-    lens.close()
-
-
-def test_mounted_lens_forwards_attention_workflow(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[tuple[object, ...]] = []
-    lens = _mounted_lens()
-    activity = ActivityHandle("1" * 32)
-
-    def start_activity(
-        _self: Lens,
-        target: str,
-        *,
-        expected_revision: int | None = None,
-        duration_ms: int | None = None,
-        label: str | None = None,
-        message: str | None = None,
-    ) -> ActivityHandle:
-        calls.append(("start", target, expected_revision, duration_ms, label, message))
-        return activity
-
-    def stop_activity(_self: Lens, owner: ActivityHandle) -> None:
-        calls.append(("stop", owner))
-
-    def reveal(
-        _self: Lens,
-        target: str,
-        *,
-        expected_revision: int | None = None,
-        duration_ms: int,
-        label: str | None = None,
-        message: str | None = None,
-    ) -> None:
-        calls.append(("reveal", target, expected_revision, duration_ms, label, message))
-
-    monkeypatch.setattr(Lens, "start_activity", start_activity)
-    monkeypatch.setattr(Lens, "stop_activity", stop_activity)
-    monkeypatch.setattr(Lens, "reveal", reveal)
-    mounted = agent.connect()
-
-    returned = mounted.start_activity(
-        "cell-view",
-        label="Updating aggregation",
-        message="Applying the requested grouping.",
+    assert mounted.context().images == {"selection-1": data}
+    activity = mounted.start_activity(
+        "cell-view", label="Updating", message="Applying the grouping."
     )
-    mounted.stop_activity(returned)
-    mounted.reveal(
-        "cell-view",
-        label="Updated chart",
-        message="Updated the chart and verified its labels.",
-        duration_ms=8_000,
-    )
+    started = lens.sent[-1][0]["payload"]
+    mounted.stop_activity(activity)
+    stopped = lens.sent[-1][0]["payload"]
+    mounted.reveal("cell-view", duration_ms=8_000, label="Updated", message="Done.")
+    revealed = lens.sent[-1][0]["payload"]
+    with pytest.raises(LensError) as stale:
+        mounted.cell_image("cell-view", expected_revision=0)
+    assert mounted.cell_image("cell-view", expected_revision=1) is None
+    capture = lens.sent[-1][0]
 
-    assert calls == [
-        (
-            "start",
-            "cell-view",
-            None,
-            None,
-            "Updating aggregation",
-            "Applying the requested grouping.",
-        ),
-        ("stop", activity),
-        (
-            "reveal",
-            "cell-view",
-            None,
-            8_000,
-            "Updated chart",
-            "Updated the chart and verified its labels.",
-        ),
+    assert (started["label"], started["message"]) == (
+        "Updating",
+        "Applying the grouping.",
+    )
+    assert stopped == {"activityId": started["activityId"]}
+    assert revealed["durationMs"] == 8_000
+    assert revealed["steps"] == [
+        {
+            "address": {"kind": "cell", "cellId": "cell-view"},
+            "label": "Updated",
+            "message": "Done.",
+        }
     ]
-    lens.close()
-
-
-def test_mounted_lens_returns_revision_for_sequential_resolution_groups(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    calls: list[tuple[object, ...]] = []
-    lens = _mounted_lens()
-
-    def resolve(
-        _self: Lens,
-        selection_ids: str | Sequence[str],
-        *,
-        expected_revision: int,
-        summary: str | None = None,
-    ) -> int:
-        calls.append((selection_ids, expected_revision, summary))
-        return expected_revision + 1
-
-    monkeypatch.setattr(Lens, "resolve", resolve)
-    mounted = agent.connect()
-
-    revision = mounted.resolve(
-        "selection-1",
-        expected_revision=8,
-        summary="Updated the first request and verified the chart.",
+    assert stale.value.code == "revision_conflict"
+    assert (capture["type"], capture["payload"]) == (
+        "output.capture",
+        {"outputCellId": "cell-view"},
     )
-    revision = mounted.resolve(
-        "selection-2",
-        expected_revision=revision,
-        summary="Updated the second request and verified the chart.",
-    )
-
-    assert revision == 10
-    assert calls == [
-        (
-            "selection-1",
-            8,
-            "Updated the first request and verified the chart.",
-        ),
-        (
-            "selection-2",
-            9,
-            "Updated the second request and verified the chart.",
-        ),
-    ]
+    assert mounted.resolve("selection-1", expected_revision=1, summary="Done.") == 2
+    assert lens.synced_state()["history"][0]["summary"] == "Done."
     lens.close()

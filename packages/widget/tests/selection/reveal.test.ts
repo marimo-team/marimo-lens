@@ -17,7 +17,7 @@ describe("selection reveal", () => {
     const selection = selectionFixture();
     const dom = new NotebookDomAdapter(document);
 
-    expect(revealSelection(dom, selection, "smooth", null)).toBe(true);
+    expect(revealSelection(dom, selection, "smooth")).toBe(true);
     expect(scrollIntoView).toHaveBeenCalledWith({
       block: "center",
       inline: "nearest",
@@ -25,7 +25,7 @@ describe("selection reveal", () => {
     });
 
     output.getBoundingClientRect = () => new DOMRect(0, 100, 400, 200);
-    expect(revealSelection(dom, selection, "smooth", null)).toBe(false);
+    expect(revealSelection(dom, selection, "smooth")).toBe(false);
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
@@ -35,9 +35,9 @@ describe("selection reveal", () => {
     const selection = selectionFixture();
     const dom = new NotebookDomAdapter(document);
 
-    revealSelection(dom, selection, "instant", null);
+    revealSelection(dom, selection, "instant");
     vi.stubGlobal("matchMedia", () => ({ matches: true }));
-    revealSelection(dom, selection, "smooth", null);
+    revealSelection(dom, selection, "smooth");
 
     expect(scrollIntoView).toHaveBeenNthCalledWith(1, {
       block: "center",
@@ -63,7 +63,7 @@ describe("selection reveal", () => {
     const dom = new NotebookDomAdapter(document);
     const release = dom.registerHost(host);
 
-    expect(revealSelection(dom, selectionFixture(), "smooth", null)).toBe(true);
+    expect(revealSelection(dom, selectionFixture(), "smooth")).toBe(true);
     expect(scrollIntoView).toHaveBeenCalledWith({
       block: "center",
       inline: "nearest",

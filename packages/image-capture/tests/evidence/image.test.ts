@@ -1,12 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import {
-  anchorForDetail,
-  composeSelectionEvidence,
-  evidenceLayout,
-} from "../../src/evidence/evidence-layout";
+import { composeSelectionEvidence, evidenceLayout } from "../../src/evidence/evidence-layout";
 import { captureSelectionEvidence } from "../../src/evidence/evidence-source";
-import { relativeOutputBounds } from "../../src/evidence/geometry";
+import { anchorForDetail, relativeOutputBounds } from "../../src/evidence/geometry";
 import { createSnapshotCapture } from "../../src/evidence/image";
 import { captureRasterSize } from "../../src/evidence/png";
 import {

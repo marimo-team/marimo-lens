@@ -1,78 +1,35 @@
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 
+import { LensDock } from "@/dock/lens-dock";
 import { SelectionNoteEditor } from "@/selection/components/selection-note-editor";
 import { SelectionOverlay } from "@/selection/components/selection-overlay";
-import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
-import { LensDock } from "@/ui/components/lens-dock";
 import { LensStatus } from "@/ui/components/lens-status";
 
-import { selectionFixture } from "../support/fixtures";
+import { outputFixture, selectionFixture } from "../support/fixtures";
+import { LensTestProvider, lensState } from "../support/lens";
 import { NotebookDomTestProvider } from "../support/notebook-dom";
-
-let root: Root | null = null;
-
-afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
-  document.body.replaceChildren();
-});
+import { render } from "../support/render";
 
 describe("stable browser selectors", () => {
   test("exposes the selection-first interaction surface", () => {
-    const output = document.createElement("div");
-    output.id = "output-cell-1";
-    output.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
-    Object.defineProperties(output, {
-      scrollWidth: { configurable: true, value: 400 },
-      scrollHeight: { configurable: true, value: 240 },
-    });
-    document.body.appendChild(output);
-    const container = document.createElement("div");
-    document.body.appendChild(container);
+    outputFixture("cell-1", new DOMRect(20, 20, 400, 240));
     const selection = selectionFixture();
     const onActivate = vi.fn();
     const onEditNote = vi.fn();
-    const snapshotLoader = new SelectionSnapshotLoader(async () => {
-      throw new Error("Snapshot loading is not expected in this test");
+    const state = lensState({
+      selections: [selection],
+      currentSelectionId: selection.id,
+      availableSelectionIds: new Set([selection.id]),
+      sheet: { open: true },
     });
-    root = createRoot(container);
 
-    act(() => {
-      root?.render(
-        <NotebookDomTestProvider>
-          <LensDock
-            selections={[selection]}
-            history={[]}
-            currentSelectionId={selection.id}
-            availableSelectionIds={new Set([selection.id])}
-            selector={null}
-            armed={false}
-            listOpen
-            sheetTab="open"
-            focusedHistoryRevision={null}
-            clearPending={false}
-            historyClearPending={false}
-            capturingSelectionIds={new Set()}
-            busySelectionIds={new Set()}
-            interactionLocked={false}
-            onToggleArmed={() => {}}
-            onToggleList={() => {}}
-            onSheetTabChange={() => {}}
-            onOpenHistory={() => {}}
-            onClearSelections={() => {}}
-            onClearHistory={() => {}}
-            onReopenSelection={() => {}}
-            onActivateSelection={onActivate}
-            onEditNote={() => {}}
-            onDeleteSelection={() => {}}
-            snapshotLoader={snapshotLoader}
-          />
+    render(
+      <NotebookDomTestProvider>
+        <LensTestProvider state={state}>
+          <LensDock />
           <SelectionNoteEditor
             selection={selection}
-            selector={null}
-            initialNote={selection.note}
             saving={false}
             mutationPending={false}
             motion="instant"
@@ -83,11 +40,8 @@ describe("stable browser selectors", () => {
           <SelectionOverlay
             selections={[selection]}
             currentSelectionId={selection.id}
-            availableSelectionIds={new Set([selection.id])}
-            selector={null}
             workflow={{ mode: "idle" }}
             busySelectionIds={new Set()}
-            capturingSelectionIds={new Set()}
             onActivate={onActivate}
             onEditNote={onEditNote}
             onReposition={() => {}}
@@ -95,9 +49,9 @@ describe("stable browser selectors", () => {
             releaseAdjustment={() => {}}
           />
           <LensStatus message="Ready" />
-        </NotebookDomTestProvider>,
-      );
-    });
+        </LensTestProvider>
+      </NotebookDomTestProvider>,
+    );
 
     expect(document.querySelector("[data-marimo-lens-dock]")).not.toBeNull();
     expect(document.querySelector("[data-ml-select]")).not.toBeNull();

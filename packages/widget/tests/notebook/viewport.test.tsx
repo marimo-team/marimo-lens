@@ -1,17 +1,13 @@
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import { useViewportRevision } from "@/notebook/use-viewport-revision";
 import { intersectBounds } from "@/notebook/viewport";
 
 import { NotebookDomTestProvider } from "../support/notebook-dom";
-
-let root: Root | null = null;
+import { render } from "../support/render";
 
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   document.body.replaceChildren();
   vi.unstubAllGlobals();
 });
@@ -23,15 +19,10 @@ describe("viewport revision", () => {
     });
     vi.stubGlobal("cancelAnimationFrame", (frame: number) => window.clearTimeout(frame));
 
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-    act(() =>
-      root?.render(
-        <NotebookDomTestProvider>
-          <ViewportProbe />
-        </NotebookDomTestProvider>,
-      ),
+    const { container } = render(
+      <NotebookDomTestProvider>
+        <ViewportProbe />
+      </NotebookDomTestProvider>,
     );
     expect(container.textContent).toBe("0");
 

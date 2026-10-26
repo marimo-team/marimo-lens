@@ -1,17 +1,16 @@
-import type { SelectionAnchor, SelectionTarget, TargetSelector } from "@marimo-lens/protocol";
+import type { SelectionAnchor, SelectionTarget } from "@marimo-lens/protocol";
 
 import { useCallback, useEffect, useRef, type Dispatch, type RefObject } from "react";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
-import type { TargetSurface } from "@/notebook/selection-target";
+import type { TargetSurface } from "@/notebook/target-surface";
 import type { SelectionMotion, UiAction, UiState, WorkflowState } from "@/selection/state";
 
 import { createSelectionCursor, parentViewportPoint } from "@/notebook/interaction-documents";
 import { deepestElementFromEvent } from "@/notebook/output-root";
 import { targetInfo } from "@/notebook/target-info";
-import { anchorToViewport } from "@/selection/anchor";
-import { handleLensEscape } from "@/selection/escape";
-import { gestureAnchor, normalizedPoint } from "@/selection/state";
+import { anchorCenter, viewportToContent } from "@/selection/anchor";
+import { gestureAnchor } from "@/selection/state";
 import { focusDock, focusListTrigger, focusSelectionOrDock } from "@/ui/focus";
 
 export type BeginSelection = (
@@ -27,21 +26,12 @@ export function useDocumentInteractions(options: {
   uiRef: RefObject<UiState>;
   dispatch: Dispatch<UiAction>;
   dom: NotebookDomAdapter;
-  selector: TargetSelector;
   beginSelection: BeginSelection;
-  canceledPointerIds: RefObject<Set<number>>;
   cancelAdjustment: () => boolean;
 }): void {
-  const {
-    workflow,
-    uiRef,
-    dispatch,
-    dom,
-    selector,
-    beginSelection,
-    canceledPointerIds,
-    cancelAdjustment,
-  } = options;
+  const { workflow, uiRef, dispatch, dom, beginSelection, cancelAdjustment } = options;
+  // Escape cancels a drag before its release, which must not select.
+  const canceledPointerIds = useRef(new Set<number>());
   const interactionActive = workflow.mode === "armed" || workflow.mode === "dragging";
   const clickGuardCleanup = useRef<(() => void) | null>(null);
   const clearClickGuard = useCallback(() => {
@@ -81,13 +71,10 @@ export function useDocumentInteractions(options: {
     const surfaceOptions = {
       includeTargetFrames: interactionActive,
       lockSelectionGestures: interactionActive,
-      targetRoots: () => dom.listTargets(selector).map(({ element }) => element),
     };
     const detachSurfaces = dom.observeInteractionSurfaces(surfaceOptions, (surface) => {
       const targetForEvent = (event: Event) =>
-        surface.frame
-          ? dom.targetFromElement(surface.frame, selector)
-          : dom.targetFromEvent(event, selector);
+        surface.frame ? dom.targetFromElement(surface.frame) : dom.targetFromEvent(event);
 
       const setCursor = createSelectionCursor();
       let cursorElement: Element | null = null;
@@ -101,7 +88,7 @@ export function useDocumentInteractions(options: {
       const stopCursorLayout = interactionActive
         ? dom.subscribeLayout(() => {
             if (!cursorElement) return;
-            const target = dom.targetFromElement(surface.frame ?? cursorElement, selector);
+            const target = dom.targetFromElement(surface.frame ?? cursorElement);
             setCursor(target ? cursorElement : null);
           })
         : () => {};
@@ -165,7 +152,7 @@ export function useDocumentInteractions(options: {
         const frame = surface.frame ?? dom.iframeAtPoint(detailPoint, workflow.target);
         const candidate = frame ?? dom.deepestElementAtPoint(detailPoint.x, detailPoint.y);
         const detail =
-          candidate && dom.targetFromElement(candidate, selector)?.key === workflow.target.key
+          candidate && dom.targetFromElement(candidate)?.key === workflow.target.key
             ? candidate
             : surface.frame
               ? surface.frame
@@ -187,10 +174,36 @@ export function useDocumentInteractions(options: {
         dispatch({ type: "arm" });
       };
 
+      // Escape ends the innermost Lens interaction and returns focus to where
+      // it began. A canceled adjustment keeps focus on its marker or handle.
+      const escape = (workflow: WorkflowState): boolean => {
+        if (cancelAdjustment()) return true;
+        if (workflow.mode === "editingNote") {
+          dispatch({ type: "closeNote" });
+          focusSelectionOrDock(dom, workflow.selectionId);
+        } else if (uiRef.current.sheetOpen) {
+          dispatch({ type: "setSheetOpen", open: false });
+          focusListTrigger(dom);
+        } else if (workflow.mode === "armed" || workflow.mode === "dragging") {
+          if (workflow.mode === "dragging") {
+            const { pointerId, target } = workflow;
+            canceledPointerIds.current.add(pointerId);
+            if (target.element.hasPointerCapture(pointerId)) {
+              target.element.releasePointerCapture(pointerId);
+            }
+          }
+          dispatch({ type: "disarm" });
+          focusDock(dom);
+        } else {
+          return false;
+        }
+        return true;
+      };
+
       const onKeyDown = (event: KeyboardEvent) => {
         const workflow = uiRef.current.workflow;
         const target = eventTargetElement(event, surface.document);
-        // A focused image preview handles Escape before its containing selection sheet.
+        // A focused image preview handles Escape before its containing requests sheet.
         if (
           event.key === "Escape" &&
           target?.closest(
@@ -209,18 +222,11 @@ export function useDocumentInteractions(options: {
         ) {
           return;
         }
-        handleLensEscape(event, {
-          state: uiRef.current,
-          dispatch,
-          cancelDrag: (pointerId, output) => {
-            canceledPointerIds.current.add(pointerId);
-            if (output.hasPointerCapture(pointerId)) output.releasePointerCapture(pointerId);
-          },
-          cancelAdjustment,
-          focusSelection: (selectionId) => focusSelectionOrDock(dom, selectionId),
-          focusDock: () => focusDock(dom),
-          focusListTrigger: () => focusListTrigger(dom),
-        });
+        if (event.key === "Escape" && escape(workflow)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          return;
+        }
         if (event.defaultPrevented || workflow.mode !== "armed") return;
         if (event.key === "Tab") {
           dispatch({ type: "disarm" });
@@ -228,7 +234,7 @@ export function useDocumentInteractions(options: {
         }
         const lensUi = target?.closest("[data-marimo-lens-ui]");
         if (lensUi && !target?.closest("[data-ml-select]")) return;
-        navigateTargets(dom, selector, event, workflow, beginSelection, dispatch);
+        navigateTargets(dom, event, workflow, beginSelection, dispatch);
       };
 
       surface.document.addEventListener("pointerout", onPointerOut, true);
@@ -255,39 +261,17 @@ export function useDocumentInteractions(options: {
       detachSurfaces();
       if (interactionActive) markArmed(dom.document, false);
     };
-  }, [
-    beginSelection,
-    canceledPointerIds,
-    cancelAdjustment,
-    clearClickGuard,
-    dispatch,
-    dom,
-    guardNextClick,
-    interactionActive,
-    selector,
-    uiRef,
-  ]);
-}
-
-function anchorCenter(output: HTMLElement, anchor: SelectionAnchor): { x: number; y: number } {
-  const viewport = anchorToViewport(output, anchor);
-  return viewport.kind === "point"
-    ? viewport
-    : {
-        x: viewport.x + viewport.width / 2,
-        y: viewport.y + viewport.height / 2,
-      };
+  }, [beginSelection, cancelAdjustment, dispatch, dom, guardNextClick, interactionActive, uiRef]);
 }
 
 function navigateTargets(
   dom: NotebookDomAdapter,
-  selector: TargetSelector,
   event: KeyboardEvent,
   workflow: Extract<WorkflowState, { mode: "armed" }>,
   beginSelection: BeginSelection,
   dispatch: Dispatch<UiAction>,
 ): void {
-  const targets = dom.listTargets(selector);
+  const targets = dom.listTargets();
   if (targets.length === 0) return;
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
@@ -326,7 +310,7 @@ function navigateTargets(
       target.element,
       {
         kind: "point",
-        ...normalizedPoint(target.element, point),
+        ...viewportToContent(target.element, point.x, point.y),
       },
       detail,
       "instant",

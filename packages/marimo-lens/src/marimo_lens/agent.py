@@ -12,13 +12,12 @@ from typing import Protocol, cast
 
 import agent_plugins
 
-from ._marimo_runtime import current_runtime_scope
-from ._registry import mounted_lenses, open_lenses_from_cell
-from .activity import ActivityHandle
-from .context import LensContext, SelectionReference
-from .errors import LensError
-from .reveal import RevealStep
-from .widget import Lens
+from ._context.lens_context import LensContext
+from ._core.errors import LensError
+from ._core.types import ActivityHandle, RevealStep, SelectionReference
+from ._marimo.kernel import current_runtime_scope
+from ._widget.lens import Lens
+from ._widget.registry import mounted_lenses, open_lenses_from_cell
 
 _DISTRIBUTION_NAME = "marimo-lens"
 _SKILL_NAME = "marimo-lens"
@@ -215,9 +214,9 @@ class MountedLens:
         self._lens.reveal(
             target,
             expected_revision=expected_revision,
+            duration_ms=duration_ms,
             label=label,
             message=message,
-            duration_ms=duration_ms,
         )
 
 

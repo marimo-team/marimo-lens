@@ -6,21 +6,29 @@ import type {
   LensState,
   Selection,
   SelectionTarget,
+  TargetSelector,
 } from "@marimo-lens/protocol";
 
+import { WIDGET_TRANSPORT_VERSION } from "@marimo-lens/protocol";
 import { act, StrictMode, useLayoutEffect, useMemo, useReducer } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type { SelectionSnapshotCapture } from "@/selection/selection-capture";
 
 import { LensProtocolClient } from "@/anywidget/client";
+import { documentIdentity } from "@/notebook/document-identity";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
-import { documentIdentity, targetFromElement } from "@/notebook/selection-target";
+import { targetFromElement } from "@/notebook/selection-target";
 import { useSelectionActions } from "@/selection/selection-actions";
 import { INITIAL_UI_STATE, uiReducer, type UiState } from "@/selection/state";
 
-import { addressedSelectionFixture, selectionFixture } from "../support/fixtures";
+import {
+  addressedSelectionFixture,
+  deferred,
+  outputFixture,
+  selectionFixture,
+} from "../support/fixtures";
+import { render } from "../support/render";
 
 type Actions = ReturnType<typeof useSelectionActions>;
 const NOTEBOOK_TARGET: SelectionTarget = {
@@ -31,13 +39,14 @@ const NOTEBOOK_TARGET: SelectionTarget = {
 };
 
 const captureSnapshot = vi.fn<SelectionSnapshotCapture>();
-let root: Root | null = null;
+const NO_SELECTIONS: Selection[] = [];
+const NONE_AVAILABLE = new Set<string>();
+let view: ReturnType<typeof render> | null = null;
 let actions: Actions | null = null;
 let latestUi: UiState | null = null;
 
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
+  view = null;
   actions = null;
   latestUi = null;
   document.body.replaceChildren();
@@ -47,15 +56,10 @@ afterEach(() => {
 
 describe("selection mutations", () => {
   test("rejects a same-cell symbolic target change during capture", async () => {
-    const output = visibleOutput();
+    const { output, capture, stateRef } = setup();
     output.dataset.marimoLensCellId = "cell-1";
     output.dataset.marimoLensSelector = "summary.revenue";
     const target = targetFromElement(output, "[data-marimo-lens-cell-id]")!.target;
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
     act(() => actions?.beginSelection(target, output, { kind: "point", x: 0.4, y: 0.5 }, output));
     await flush();
     output.dataset.marimoLensSelector = "summary.cost";
@@ -63,13 +67,9 @@ describe("selection mutations", () => {
     await flush();
     expect(stateRef.current.selections[0]?.snapshot.status).toBe("failed");
   });
+
   test("commits on pointer release before capturing the automatic snapshot", async () => {
-    const output = visibleOutput();
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    const { output, capture, stateRef, protocol } = setup();
 
     act(() => beginPointSelection(output));
 
@@ -78,7 +78,7 @@ describe("selection mutations", () => {
       selectionId: "selection-fixed",
       motion: "animate",
     });
-    expect(latestUi?.pendingSelections[0]?.selection).toMatchObject({
+    expect(latestUi?.pendingSelections[0]).toMatchObject({
       label: "S1",
       note: "",
       snapshot: { status: "pending" },
@@ -104,11 +104,8 @@ describe("selection mutations", () => {
   });
 
   test("keeps a text-ready selection when initial capture fails", async () => {
-    const output = visibleOutput();
+    const { output, stateRef, protocol } = setup();
     captureSnapshot.mockResolvedValue(failedCapture());
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
 
     act(() => beginPointSelection(output));
     await flush();
@@ -121,7 +118,7 @@ describe("selection mutations", () => {
   });
 
   test("does not persist or announce an iframe-originated capture cancellation", async () => {
-    const output = visibleOutput();
+    const { output, stateRef, protocol } = setup();
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
     const frameWindow = frame.contentWindow?.self;
@@ -129,9 +126,6 @@ describe("selection mutations", () => {
     captureSnapshot.mockRejectedValue(
       new frameWindow.DOMException("Frame capture canceled", "AbortError"),
     );
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
 
     act(() => beginPointSelection(output));
     await flush();
@@ -143,15 +137,12 @@ describe("selection mutations", () => {
   });
 
   test("settles a pending image after persistence fails", async () => {
-    const output = visibleOutput();
+    const { output, stateRef, protocol } = setup();
     captureSnapshot.mockResolvedValue(availableCapture());
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
     const persist = protocol.putSelection.getMockImplementation()!;
     protocol.putSelection
       .mockImplementationOnce(persist)
       .mockRejectedValueOnce(new Error("Image persistence failed"));
-    mount(stateRef, protocol.client);
 
     act(() => beginPointSelection(output));
     await flush();
@@ -164,9 +155,7 @@ describe("selection mutations", () => {
   });
 
   test("commits optimistic state when unavailable output cancels queued capture", async () => {
-    const output = visibleOutput();
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
+    const { output, stateRef, protocol } = setup();
     const committed = deferred<void>();
     const persist = protocol.putSelection.getMockImplementation()!;
     protocol.putSelection.mockImplementationOnce(async (...args) => {
@@ -174,7 +163,6 @@ describe("selection mutations", () => {
       await committed.promise;
       return response;
     });
-    mount(stateRef, protocol.client);
 
     act(() => beginPointSelection(output));
     await act(async () => {
@@ -183,7 +171,7 @@ describe("selection mutations", () => {
     });
     expect(stateRef.current.selections).toHaveLength(1);
 
-    act(() => actions?.settleUnavailableSnapshot("selection-fixed"));
+    loseTargets(stateRef, protocol.client);
     committed.resolve();
     await flush();
 
@@ -191,102 +179,95 @@ describe("selection mutations", () => {
     expect(stateRef.current.selections[0]?.snapshot.status).toBe("failed");
   });
 
-  test("settles an initial snapshot when its output disappears", async () => {
-    const output = visibleOutput();
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+  test.each([
+    {
+      start: "an initial",
+      loss: "disappears",
+      status: "failed",
+      persisted: [
+        ["pending", "clear"],
+        ["failed", "clear"],
+      ],
+    },
+    {
+      start: "an initial",
+      loss: "is replaced",
+      status: "failed",
+      persisted: [
+        ["pending", "clear"],
+        ["failed", "clear"],
+      ],
+    },
+    {
+      start: "a repositioned",
+      loss: "disappears",
+      status: "outdated",
+      persisted: [["outdated", "preserve"]],
+    },
+    {
+      start: "a repositioned",
+      loss: "is replaced",
+      status: "outdated",
+      persisted: [["outdated", "preserve"]],
+    },
+  ] as const)(
+    "settles $start snapshot as $status when its output $loss",
+    async ({ start, loss, status, persisted }) => {
+      const prior = selectionFixture({ snapshot: availableCapture().snapshot.metadata });
+      const initial = start === "an initial";
+      const { output, capture, stateRef, protocol } = setup(
+        initial ? lensState() : lensState(2, [prior], prior.id, "S2"),
+      );
 
-    act(() => beginPointSelection(output));
+      act(() =>
+        initial
+          ? beginPointSelection(output)
+          : actions?.repositionSelection(prior, { kind: "point", x: 0.7, y: 0.6 }),
+      );
+      await flush();
+      const signal = captureSignal();
+      if (loss === "disappears") {
+        loseTargets(stateRef, protocol.client);
+        await flush();
+        // Only a pending image waits on its target. An outdated one keeps its prior pixels.
+        expect(signal.aborted).toBe(initial);
+      } else {
+        output.replaceWith(visibleOutput());
+        capture.resolve(availableCapture());
+        await flush();
+      }
+
+      expect(stateRef.current.selections[0]?.snapshot.status).toBe(status);
+      expect(
+        protocol.putSelection.mock.calls.map(([selection, imageAction, , bytes]) => [
+          selection.snapshot.status,
+          imageAction,
+          bytes,
+        ]),
+      ).toEqual(persisted.map(([snapshot, imageAction]) => [snapshot, imageAction, undefined]));
+    },
+  );
+
+  test("leaves settled images and other documents' images alone when targets go away", async () => {
+    const failed = selectionFixture({
+      snapshot: { status: "failed", capturedAt: "2026-07-14T12:00:00Z", error: "Unavailable." },
+    });
+    const elsewhere = selectionFixture({
+      id: "selection-2",
+      label: "S2",
+      target: { ...NOTEBOOK_TARGET, documentId: "other-document" },
+      snapshot: { status: "pending" },
+    });
+    const { stateRef, protocol } = setup(lensState(2, [failed, elsewhere], failed.id, "S3"));
+
+    loseTargets(stateRef, protocol.client);
     await flush();
-    const signal = captureSignal();
 
-    act(() => actions?.settleUnavailableSnapshot("selection-fixed"));
-    await flush();
-
-    expect(signal.aborted).toBe(true);
-    expect(stateRef.current.selections[0]?.snapshot.status).toBe("failed");
-    expect(protocol.putSelection.mock.calls[1]).toMatchObject([
-      { snapshot: { status: "failed" } },
-      "clear",
-      1,
-    ]);
-  });
-
-  test("retains an outdated snapshot when its replacement output disappears", async () => {
-    visibleOutput();
-    const prior = selectionFixture({ snapshot: availableCapture().snapshot.metadata });
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState(2, [prior], prior.id, "S2") };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
-
-    act(() => actions?.repositionSelection(prior, { kind: "point", x: 0.7, y: 0.6 }));
-    await flush();
-    const signal = captureSignal();
-
-    act(() => actions?.settleUnavailableSnapshot(prior.id));
-    await flush();
-
-    expect(signal.aborted).toBe(true);
-    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
-    expect(stateRef.current.selections[0]?.snapshot.status).toBe("outdated");
-  });
-
-  test("rejects marked pixels from a replaced canonical output root", async () => {
-    const output = visibleOutput();
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
-
-    act(() => beginPointSelection(output));
-    await flush();
-    output.replaceWith(replacementOutput());
-
-    capture.resolve(availableCapture());
-    await flush();
-
-    expect(stateRef.current.selections[0]?.snapshot.status).toBe("failed");
-    expect(protocol.putSelection.mock.calls[1]).toEqual([
-      expect.objectContaining({ snapshot: expect.objectContaining({ status: "failed" }) }),
-      "clear",
-      1,
-      undefined,
-    ]);
-  });
-
-  test("keeps prior pixels when a replacement root invalidates marked capture", async () => {
-    const output = visibleOutput();
-    const prior = selectionFixture({ snapshot: availableCapture().snapshot.metadata });
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState(2, [prior], prior.id, "S2") };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
-
-    act(() => actions?.repositionSelection(prior, { kind: "point", x: 0.7, y: 0.6 }));
-    await flush();
-    output.replaceWith(replacementOutput());
-
-    capture.resolve(availableCapture());
-    await flush();
-
-    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
-    expect(stateRef.current.selections[0]?.snapshot.status).toBe("outdated");
+    expect(protocol.putSelection).not.toHaveBeenCalled();
   });
 
   test("suppresses an automatic snapshot after its selection is resolved", async () => {
-    const output = visibleOutput();
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    const { output, capture, stateRef, protocol } = setup();
 
     act(() => beginPointSelection(output));
     await flush();
@@ -309,12 +290,7 @@ describe("selection mutations", () => {
   });
 
   test("suppresses a completed snapshot when canonical state removed the selection", async () => {
-    const output = visibleOutput();
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    const { output, capture, stateRef, protocol } = setup();
 
     act(() => beginPointSelection(output));
     await flush();
@@ -336,11 +312,7 @@ describe("selection mutations", () => {
   });
 
   test("does not start a queued automatic snapshot after resolution", async () => {
-    const output = visibleOutput();
-    captureSnapshot.mockResolvedValue(availableCapture());
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    const { output, protocol } = setup();
 
     act(() => {
       beginPointSelection(output);
@@ -354,11 +326,8 @@ describe("selection mutations", () => {
   });
 
   test("commits a selection when development mode replays effects", async () => {
-    const output = visibleOutput();
+    const { output, stateRef, protocol } = setup(lensState(), { strict: true });
     captureSnapshot.mockResolvedValue(failedCapture());
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client, true);
 
     act(() => beginPointSelection(output));
     await flush();
@@ -368,68 +337,50 @@ describe("selection mutations", () => {
     expect(stateRef.current.currentSelectionId).toBe("selection-fixed");
   });
 
-  test("settles a detached pending capture when deletion fails", async () => {
-    const output = visibleOutput();
-    const interrupted = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(interrupted.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    protocol.deleteSelection.mockRejectedValueOnce(new Error("Remove failed"));
-    mount(stateRef, protocol.client);
+  test.each([
+    {
+      mutation: "deletion",
+      fail: (protocol: TestProtocol) => protocol.deleteSelection,
+      run: (state: LensState) => actions?.deleteSelection(state.selections[0]!),
+    },
+    {
+      mutation: "clearing",
+      fail: (protocol: TestProtocol) => protocol.clearSelections,
+      run: () => actions?.clearSelections(),
+    },
+  ])("settles a detached pending capture when $mutation fails", async ({ fail, run }) => {
+    const { output, capture, stateRef, protocol } = setup();
+    fail(protocol).mockRejectedValueOnce(new Error("Mutation failed"));
 
     act(() => beginPointSelection(output));
     await flush();
     output.remove();
-    act(() => actions?.deleteSelection(stateRef.current.selections[0]!));
+    act(() => run(stateRef.current));
     await flush();
 
     expect(captureSnapshot).toHaveBeenCalledTimes(1);
     expect(stateRef.current.selections[0]?.snapshot.status).toBe("pending");
     expect(captureSignal().aborted).toBe(false);
 
-    interrupted.resolve(availableCapture());
+    capture.resolve(availableCapture());
     await flush();
     expect(protocol.putSelection).toHaveBeenCalledTimes(2);
     expect(stateRef.current.selections[0]?.snapshot.status).toBe("failed");
   });
 
-  test("settles detached pending captures when clearing fails", async () => {
-    const output = visibleOutput();
-    const interrupted = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(interrupted.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    protocol.clearSelections.mockRejectedValueOnce(new Error("Clear failed"));
-    mount(stateRef, protocol.client);
-
-    act(() => beginPointSelection(output));
-    await flush();
-    output.remove();
-    act(() => actions?.clearSelections());
-    await flush();
-
-    expect(captureSnapshot).toHaveBeenCalledTimes(1);
-    expect(stateRef.current.selections[0]?.snapshot.status).toBe("pending");
-    expect(captureSignal().aborted).toBe(false);
-
-    interrupted.resolve(availableCapture());
-    await flush();
-    expect(protocol.putSelection).toHaveBeenCalledTimes(2);
-    expect(stateRef.current.selections[0]?.snapshot.status).toBe("failed");
-  });
-
-  test("suppresses a pending capture after deletion succeeds", async () => {
-    const output = visibleOutput();
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+  test.each([
+    {
+      mutation: "deletion",
+      run: (state: LensState) => actions?.deleteSelection(state.selections[0]!),
+    },
+    { mutation: "clearing", run: () => actions?.clearSelections() },
+  ])("suppresses a pending capture after $mutation succeeds", async ({ run }) => {
+    const { output, capture, stateRef, protocol } = setup();
 
     act(() => beginPointSelection(output));
     await flush();
     const signal = captureSignal();
-    act(() => actions?.deleteSelection(stateRef.current.selections[0]!));
+    act(() => run(stateRef.current));
     await flush();
 
     expect(signal.aborted).toBe(true);
@@ -443,11 +394,7 @@ describe("selection mutations", () => {
   test("keeps another selection note open after deletion completes", async () => {
     const first = selectionFixture();
     const second = selectionFixture({ id: "selection-2", label: "S2" });
-    const stateRef = {
-      current: lensState(2, [first, second], second.id, "S3"),
-    };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    setup(lensState(2, [first, second], second.id, "S3"));
 
     act(() => actions?.openNote(second.id, "instant"));
     expect(latestUi?.workflow).toMatchObject({
@@ -464,37 +411,9 @@ describe("selection mutations", () => {
     });
   });
 
-  test("suppresses pending captures after clearing succeeds", async () => {
-    const output = visibleOutput();
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
-
-    act(() => beginPointSelection(output));
-    await flush();
-    const signal = captureSignal();
-    act(() => actions?.clearSelections());
-    await flush();
-
-    expect(signal.aborted).toBe(true);
-    capture.resolve(availableCapture());
-    await flush();
-    expect(stateRef.current.selections).toEqual([]);
-    expect(protocol.putSelection).toHaveBeenCalledTimes(1);
-    expect(latestUi?.announcement).not.toBe("Image ready.");
-  });
-
   test("aborts a pending raster when reposition starts its replacement", async () => {
-    const output = visibleOutput();
-    const firstCapture = deferred<CaptureResult>();
-    captureSnapshot
-      .mockReturnValueOnce(firstCapture.promise)
-      .mockResolvedValueOnce(failedCapture());
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    const { output, capture, stateRef, protocol } = setup();
+    captureSnapshot.mockReturnValueOnce(capture.promise).mockResolvedValueOnce(failedCapture());
 
     act(() => beginPointSelection(output));
     await flush();
@@ -514,18 +433,13 @@ describe("selection mutations", () => {
     expect(captureSignal(1).aborted).toBe(false);
     const committedCalls = protocol.putSelection.mock.calls.length;
 
-    firstCapture.resolve(availableCapture());
+    capture.resolve(availableCapture());
     await flush();
     expect(protocol.putSelection).toHaveBeenCalledTimes(committedCalls);
   });
 
   test("keeps the current raster when repositioning fails before replacement", async () => {
-    const output = visibleOutput();
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    const { output, capture, stateRef, protocol } = setup();
 
     act(() => beginPointSelection(output));
     await flush();
@@ -551,31 +465,31 @@ describe("selection mutations", () => {
   });
 
   test("aborts pending selection capture during teardown", async () => {
-    const output = visibleOutput();
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    const stateRef = { current: lensState() };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    const { output } = setup();
 
     act(() => beginPointSelection(output));
     await flush();
     const signal = captureSignal();
 
-    act(() => root?.unmount());
-    root = null;
+    view?.unmount();
 
     expect(signal.aborted).toBe(true);
+  });
+
+  test("keeps a pending capture running when the target selector changes", async () => {
+    const { output, stateRef, protocol } = setup();
+    act(() => beginPointSelection(output));
+    await flush();
+
+    rerender(stateRef, protocol.client, { selector: "[data-feedback-target]" });
+
+    expect(captureSignal().aborted).toBe(false);
   });
 
   test("activates an older selection and saves an empty optional note", async () => {
     const first = selectionFixture({ id: "selection-1", label: "S1", note: "Original" });
     const second = selectionFixture({ id: "selection-2", label: "S2" });
-    const stateRef = {
-      current: lensState(4, [first, second], "selection-2", "S3"),
-    };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    const { stateRef, protocol } = setup(lensState(4, [first, second], "selection-2", "S3"));
 
     act(() => actions?.openNote(first.id));
     await flush();
@@ -636,13 +550,8 @@ describe("selection mutations", () => {
   });
 
   test("retains an outdated prior snapshot when reposition capture fails", async () => {
-    visibleOutput();
     const prior = selectionFixture({ snapshot: availableCapture().snapshot.metadata });
-    const stateRef = { current: lensState(2, [prior], prior.id, "S2") };
-    const protocol = statefulProtocol(stateRef);
-    const capture = deferred<CaptureResult>();
-    captureSnapshot.mockReturnValue(capture.promise);
-    mount(stateRef, protocol.client);
+    const { capture, stateRef, protocol } = setup(lensState(2, [prior], prior.id, "S2"));
 
     act(() => actions?.repositionSelection(prior, { kind: "point", x: 0.7, y: 0.6 }));
     await flush();
@@ -663,24 +572,19 @@ describe("selection mutations", () => {
   });
 
   test("reopens an exact receipt as current and captures fresh pixels", async () => {
-    const output = visibleOutput();
     const receipt = addressedSelectionFixture();
+    const { output, stateRef, protocol } = setup(lensState(4, [], null, "S2", [receipt]));
     captureSnapshot.mockResolvedValue(availableCapture(receipt.selectionId));
-    const stateRef = {
-      current: lensState(4, [], null, "S2", [receipt]),
-    };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
 
     act(() => actions?.reopenSelection(receipt));
     await flush();
     await flush();
 
-    expect(protocol.reopenSelection).toHaveBeenCalledWith(
-      receipt.selectionId,
-      receipt.resolutionRevision,
-      4,
-    );
+    expect(protocol.reopenSelection).toHaveBeenCalledWith({
+      selectionId: receipt.selectionId,
+      resolutionRevision: receipt.resolutionRevision,
+      expectedRevision: 4,
+    });
     expect(stateRef.current.currentSelectionId).toBe(receipt.selectionId);
     expect(stateRef.current.history).toEqual([receipt]);
     expect(stateRef.current.selections[0]).toMatchObject({
@@ -689,17 +593,11 @@ describe("selection mutations", () => {
       label: receipt.label,
       note: receipt.note,
       target: receipt.target,
-      previousResolution: {
-        addressedAt: receipt.addressedAt,
-        summary: receipt.summary,
-      },
+      previousResolution: { addressedAt: receipt.addressedAt, summary: receipt.summary },
       snapshot: { status: "available" },
     });
     expect(captureSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({
-        selectionId: receipt.selectionId,
-        output,
-      }),
+      expect.objectContaining({ selectionId: receipt.selectionId, output }),
     );
     expect(latestUi?.sheetTab).toBe("open");
     expect(latestUi?.announcement).toBe("Image ready.");
@@ -708,11 +606,7 @@ describe("selection mutations", () => {
   test("clears addressed history while preserving open selections", async () => {
     const selection = selectionFixture();
     const receipt = addressedSelectionFixture();
-    const stateRef = {
-      current: lensState(4, [selection], selection.id, "S2", [receipt]),
-    };
-    const protocol = statefulProtocol(stateRef);
-    mount(stateRef, protocol.client);
+    const { stateRef, protocol } = setup(lensState(4, [selection], selection.id, "S2", [receipt]));
 
     act(() => actions?.clearHistory());
     await flush();
@@ -726,6 +620,19 @@ describe("selection mutations", () => {
   });
 });
 
+type TestProtocol = ReturnType<typeof statefulProtocol>;
+type SetupOptions = { strict?: boolean };
+
+function setup(state = lensState(), { strict = false }: SetupOptions = {}) {
+  const output = visibleOutput();
+  const capture = deferred<CaptureResult>();
+  captureSnapshot.mockReturnValue(capture.promise);
+  const stateRef = { current: state };
+  const protocol = statefulProtocol(stateRef);
+  mount(stateRef, protocol.client, strict);
+  return { output, capture, stateRef, protocol };
+}
+
 function mount(
   stateRef: { current: LensState },
   protocol: LensProtocolClient,
@@ -736,32 +643,46 @@ function mount(
     callback(0);
     return 1;
   });
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
   const harness = <Harness stateRef={stateRef} protocol={protocol} />;
-  act(() => root?.render(strict ? <StrictMode>{harness}</StrictMode> : harness));
+  view = render(strict ? <StrictMode>{harness}</StrictMode> : harness);
 }
 
-function rerender(stateRef: { current: LensState }, protocol: LensProtocolClient): void {
-  act(() => root?.render(<Harness stateRef={stateRef} protocol={protocol} />));
+function rerender(
+  stateRef: { current: LensState },
+  protocol: LensProtocolClient,
+  options: Omit<HarnessProps, "stateRef" | "protocol"> = {},
+): void {
+  view?.rerender(<Harness stateRef={stateRef} protocol={protocol} {...options} />);
 }
+
+/** Render the open selections as shown with targets this document no longer shows. */
+function loseTargets(stateRef: { current: LensState }, protocol: LensProtocolClient): void {
+  rerender(stateRef, protocol, { selections: stateRef.current.selections });
+}
+
+type HarnessProps = {
+  stateRef: { current: LensState };
+  protocol: LensProtocolClient;
+  selector?: TargetSelector;
+  selections?: Selection[];
+};
 
 function Harness({
   stateRef,
   protocol,
-}: {
-  stateRef: { current: LensState };
-  protocol: LensProtocolClient;
-}) {
+  selector = "[data-marimo-lens-cell-id]",
+  selections = NO_SELECTIONS,
+}: HarnessProps) {
   const [ui, dispatch] = useReducer(uiReducer, INITIAL_UI_STATE);
   const dom = useMemo(() => new NotebookDomAdapter(document), []);
+  dom.setSelector(selector);
   const hookActions = useSelectionActions({
     stateRef,
     dispatch,
     dom,
-    selector: "[data-marimo-lens-cell-id]",
     protocol,
+    selections,
+    availableSelectionIds: NONE_AVAILABLE,
     captureSnapshot,
   });
   useLayoutEffect(() => {
@@ -830,35 +751,29 @@ function statefulProtocol(stateRef: { current: LensState }) {
     });
   const reopenSelection = vi
     .spyOn(client, "reopenSelection")
-    .mockImplementation(
-      async (selectionId: string, resolutionRevision: number, expectedRevision: number) => {
-        expect(expectedRevision).toBe(stateRef.current.revision);
-        const receipt = stateRef.current.history.find(
-          (candidate) =>
-            candidate.selectionId === selectionId &&
-            candidate.resolutionRevision === resolutionRevision,
-        );
-        if (!receipt) throw new Error("Receipt fixture unavailable");
-        const revision = expectedRevision + 1;
-        stateRef.current = {
-          ...stateRef.current,
-          revision,
-          currentSelectionId: receipt.selectionId,
-          selections: [...stateRef.current.selections, reopenedSelection(receipt)],
-        };
-        return successResponse(revision);
-      },
-    );
+    .mockImplementation(async ({ selectionId, resolutionRevision, expectedRevision }) => {
+      expect(expectedRevision).toBe(stateRef.current.revision);
+      const receipt = stateRef.current.history.find(
+        (candidate) =>
+          candidate.selectionId === selectionId &&
+          candidate.resolutionRevision === resolutionRevision,
+      );
+      if (!receipt) throw new Error("Receipt fixture unavailable");
+      const revision = expectedRevision + 1;
+      stateRef.current = {
+        ...stateRef.current,
+        revision,
+        currentSelectionId: receipt.selectionId,
+        selections: [...stateRef.current.selections, reopenedSelection(receipt)],
+      };
+      return successResponse(revision);
+    });
   const clearHistory = vi
     .spyOn(client, "clearHistory")
     .mockImplementation(async (expectedRevision: number) => {
       expect(expectedRevision).toBe(stateRef.current.revision);
       const revision = expectedRevision + 1;
-      stateRef.current = {
-        ...stateRef.current,
-        revision,
-        history: [],
-      };
+      stateRef.current = { ...stateRef.current, revision, history: [] };
       return successResponse(revision);
     });
   return {
@@ -934,9 +849,7 @@ function reopenedSelection(receipt: AddressedSelection): Selection {
     target: receipt.target,
     createdAt: receipt.createdAt,
     anchor: receipt.anchor,
-    snapshot: {
-      status: "pending",
-    },
+    snapshot: { status: "pending" },
     previousResolution,
   };
   if (receipt.domHint) selection.domHint = receipt.domHint;
@@ -969,28 +882,10 @@ function beginPointSelection(output: HTMLElement): void {
 }
 
 function visibleOutput(): HTMLElement {
-  const output = document.createElement("div");
-  output.id = "output-cell-1";
-  output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 240);
-  Object.defineProperties(output, {
-    scrollWidth: { configurable: true, value: 400 },
-    scrollHeight: { configurable: true, value: 240 },
-  });
-  document.body.appendChild(output);
+  const output = outputFixture();
   Object.defineProperty(document, "elementsFromPoint", {
     configurable: true,
     value: () => [output],
-  });
-  return output;
-}
-
-function replacementOutput(): HTMLElement {
-  const output = document.createElement("div");
-  output.id = "output-cell-1";
-  output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 240);
-  Object.defineProperties(output, {
-    scrollWidth: { configurable: true, value: 400 },
-    scrollHeight: { configurable: true, value: 240 },
   });
   return output;
 }
@@ -1003,18 +898,10 @@ async function flush(): Promise<void> {
   });
 }
 
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
 function successResponse(revision: number): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 7,
+    version: WIDGET_TRANSPORT_VERSION,
     requestId: "request-1",
     ok: true,
     revision,

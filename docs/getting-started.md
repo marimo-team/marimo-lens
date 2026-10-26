@@ -331,7 +331,7 @@ mo.md(
 ```python marimo
 _starter_feedback = None
 if starter_walkthrough.value:
-    from marimo_lens._marimo_runtime import (
+    from marimo_lens._marimo.snapshot import (
         collect_runtime_snapshot as _collect_runtime_snapshot,
     )
 

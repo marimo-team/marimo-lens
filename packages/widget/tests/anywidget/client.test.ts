@@ -1,37 +1,37 @@
 import type { AnyModel } from "@anywidget/types";
 import type {
   AttentionEvent,
-  ClearSelectionsResponsePayload,
   ClientCommand,
-  LensCommand,
   LensResponse,
   OutputCaptureCommand,
   SelectionResolvedEvent,
-  TransportInput,
+  TransportValue,
 } from "@marimo-lens/protocol";
 
+import { WIDGET_TRANSPORT_VERSION } from "@marimo-lens/protocol";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type { OutputCaptureAsset } from "@/anywidget/transport";
 
 import { LensProtocolClient, LensProtocolError } from "@/anywidget/client";
 
-import { selectionFixture } from "../support/fixtures";
+import { resolvedSelectionFixture, selectionFixture } from "../support/fixtures";
 
 type OutputCaptureReadinessEvent = {
   protocol: "marimo-lens.event";
-  version: 7;
+  version: typeof WIDGET_TRANSPORT_VERSION;
   type: "output.capture.ready" | "output.capture.unready";
-  payload: ClearSelectionsResponsePayload;
+  payload: Record<string, never>;
 };
 
 type ModelMessage =
-  | LensCommand
+  | ClientCommand
+  | OutputCaptureCommand
   | LensResponse
   | SelectionResolvedEvent
   | AttentionEvent
   | OutputCaptureReadinessEvent;
-type MessageHandler = (message: TransportInput, buffers: DataView[]) => void;
+type MessageHandler = (message: TransportValue, buffers: DataView[]) => void;
 type SentMessage = { message: ModelMessage; buffers: ArrayBuffer[] };
 
 const models: FakeModel[] = [];
@@ -70,8 +70,10 @@ class FakeModel {
     models.push(this);
   }
 
-  emit(message: TransportInput, buffers: DataView[] = []): void {
-    for (const handler of this.handlers) handler(message, buffers);
+  emit(message: TransportValue | ModelMessage, buffers: DataView[] = []): void {
+    // SAFETY: fixtures hold only JSON values, as AnyWidget messages do.
+    const wire = message as TransportValue;
+    for (const handler of this.handlers) handler(wire, buffers);
   }
 
   asAnyModel(): AnyModel {
@@ -162,7 +164,7 @@ describe("Lens protocol client", () => {
     expect(handler).toHaveBeenCalledWith(command, expect.any(AbortSignal));
     expect(model.sent[0]?.message).toEqual({
       protocol: "marimo-lens.response",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       requestId: "capture-1",
       ok: true,
       revision: 7,
@@ -330,7 +332,7 @@ describe("Lens protocol client", () => {
     expect(handler).toHaveBeenCalledOnce();
     expect(model.sent[1]?.message).toEqual({
       protocol: "marimo-lens.response",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       requestId: "capture-1",
       ok: true,
       revision: 7,
@@ -375,6 +377,22 @@ describe("Lens protocol client", () => {
     client.dispose();
   });
 
+  test("rejects a selection whose image action and PNG disagree without sending it", async () => {
+    const model = new FakeModel();
+    const client = new LensProtocolClient(model.asAnyModel(), window);
+    const selection = selectionFixture();
+    client.start();
+
+    await expect(client.putSelection(selection, "replace", 3)).rejects.toMatchObject({
+      code: "invalid_command",
+    });
+    await expect(
+      client.putSelection(selection, "preserve", 3, new Uint8Array([137, 80, 78, 71])),
+    ).rejects.toMatchObject({ code: "invalid_command" });
+    expect(model.sent).toEqual([]);
+    client.dispose();
+  });
+
   test("sends exact addressed-history mutations", async () => {
     const model = new FakeModel();
     const client = new LensProtocolClient(model.asAnyModel(), window);
@@ -384,7 +402,11 @@ describe("Lens protocol client", () => {
         success(command, command.type === "selection.reopen" ? { selectionId: "selection-1" } : {}),
       );
 
-    await client.reopenSelection("selection-1", 4, 7);
+    await client.reopenSelection({
+      selectionId: "selection-1",
+      resolutionRevision: 4,
+      expectedRevision: 7,
+    });
     await client.clearHistory(8);
 
     expect(model.sent.map(({ message }) => message)).toMatchObject([
@@ -418,22 +440,16 @@ describe("Lens protocol client", () => {
     if (!command || !isClientCommand(command)) throw new Error("Expected Lens command");
     model.emit({
       protocol: "marimo-lens.event",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       type: "selection.resolved",
       revision: 4,
       payload: {
-        selections: [
-          {
-            selectionId: "selection-1",
-            label: "S1",
-            resolutionRevision: 4,
-          },
-        ],
+        selections: [resolvedSelectionFixture(selectionFixture(), 4)],
       },
     });
     model.emit({
       protocol: "marimo-lens.event",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       type: "attention.reveal",
       payload: {
         id: "reveal-1",
@@ -445,7 +461,7 @@ describe("Lens protocol client", () => {
     });
     model.emit({
       protocol: "marimo-lens.event",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       type: "attention.activity.start",
       payload: {
         activityId: "activity-1",
@@ -457,7 +473,7 @@ describe("Lens protocol client", () => {
     });
     model.emit({
       protocol: "marimo-lens.event",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       type: "attention.activity.stop",
       payload: { activityId: "activity-1" },
     });
@@ -476,7 +492,7 @@ describe("Lens protocol client", () => {
     ]);
     expect(attended.mock.calls[0]?.[0]).toEqual({
       protocol: "marimo-lens.event",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       type: "attention.reveal",
       payload: {
         id: "reveal-1",
@@ -500,17 +516,11 @@ describe("Lens protocol client", () => {
     const client = new LensProtocolClient(model.asAnyModel(), window);
     const event: SelectionResolvedEvent = {
       protocol: "marimo-lens.event",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       type: "selection.resolved",
       revision: 4,
       payload: {
-        selections: [
-          {
-            selectionId: "selection-1",
-            label: "S1",
-            resolutionRevision: 4,
-          },
-        ],
+        selections: [resolvedSelectionFixture(selectionFixture(), 4)],
       },
     };
     const second = vi.fn();
@@ -553,7 +563,7 @@ describe("Lens protocol client", () => {
     model.onCommand = (command) =>
       model.emit({
         protocol: "marimo-lens.response",
-        version: 7,
+        version: WIDGET_TRANSPORT_VERSION,
         requestId: command.requestId,
         ok: false,
         revision: 7,
@@ -592,7 +602,7 @@ describe("Lens protocol client", () => {
 function success(command: ClientCommand, payload: LensResponse["payload"] = {}): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 7,
+    version: WIDGET_TRANSPORT_VERSION,
     requestId: command.requestId,
     ok: true,
     revision: command.type === "snapshot.get" ? 4 : command.payload.expectedRevision + 1,
@@ -608,7 +618,7 @@ type OutputCaptureCommandOptions = {
 function outputCaptureCommand(overrides: OutputCaptureCommandOptions = {}): OutputCaptureCommand {
   return {
     protocol: "marimo-lens.command",
-    version: 7,
+    version: WIDGET_TRANSPORT_VERSION,
     requestId: overrides.requestId ?? "capture-1",
     type: "output.capture",
     payload: {
@@ -643,7 +653,7 @@ function captureFailure(
 ): LensResponse {
   return {
     protocol: "marimo-lens.response",
-    version: 7,
+    version: WIDGET_TRANSPORT_VERSION,
     requestId,
     ok: false,
     revision: 7,
@@ -655,7 +665,7 @@ function captureFailure(
 function readinessEvent(
   type: "output.capture.ready" | "output.capture.unready",
 ): OutputCaptureReadinessEvent {
-  return { protocol: "marimo-lens.event", version: 7, type, payload: {} };
+  return { protocol: "marimo-lens.event", version: WIDGET_TRANSPORT_VERSION, type, payload: {} };
 }
 
 function isReadinessEvent(message: ModelMessage): message is OutputCaptureReadinessEvent {

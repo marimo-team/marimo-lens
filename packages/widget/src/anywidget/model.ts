@@ -22,11 +22,9 @@ export type LensModel = {
 
 export function useLensModel(ownerWindow: Window): LensModel {
   const model = useModel<LensModelFields>();
-  const rawState = useModelValue(model, "_state");
-  const rawSelector = useModelValue(model, "_selector");
-  const css = useModelValue(model, "_css");
-  const state = useMemo(() => parseLensState(rawState), [rawState]);
-  const selector = useMemo(() => parseTargetSelector(rawSelector), [rawSelector]);
+  const state = useModelValue(model, "_state", parseLensState);
+  const selector = useModelValue(model, "_selector", parseTargetSelector);
+  const css = useModelValue(model, "_css", parseCss);
   const protocol = useMemo(() => new LensProtocolClient(model, ownerWindow), [model, ownerWindow]);
 
   useEffect(() => {
@@ -34,13 +32,18 @@ export function useLensModel(ownerWindow: Window): LensModel {
     return () => protocol.dispose();
   }, [protocol]);
 
-  return { state, css: css ?? "", protocol, selector };
+  return { state, css, protocol, selector };
 }
 
-function useModelValue<Key extends keyof LensModelFields>(
+function parseCss(value: string | undefined): string {
+  return value ?? "";
+}
+
+function useModelValue<Key extends keyof LensModelFields, Value>(
   model: AnyModel<LensModelFields>,
   key: Key,
-): LensModelFields[Key] {
+  parse: (value: LensModelFields[Key]) => Value,
+): Value {
   // Hosts can retain subscription teardown callbacks until the view closes.
   const subscribe = useCallback(
     (update: () => void) => {
@@ -49,6 +52,24 @@ function useModelValue<Key extends keyof LensModelFields>(
     },
     [model, key],
   );
-  const getSnapshot = useCallback(() => model.get(key), [model, key]);
+  const getSnapshot = useMemo(() => acceptedValue(model, key, parse), [model, key, parse]);
   return useSyncExternalStore(subscribe, getSnapshot);
+}
+
+// Parse each new trait value once, so the store hands React a stable snapshot.
+// A value that fails its contract throws to the view's error boundary.
+function acceptedValue<Key extends keyof LensModelFields, Value>(
+  model: AnyModel<LensModelFields>,
+  key: Key,
+  parse: (value: LensModelFields[Key]) => Value,
+): () => Value {
+  let raw: LensModelFields[Key] | undefined;
+  let accepted: { value: Value } | null = null;
+  return () => {
+    const next = model.get(key);
+    if (accepted && next === raw) return accepted.value;
+    accepted = { value: parse(next) };
+    raw = next;
+    return accepted.value;
+  };
 }

@@ -1,22 +1,18 @@
-import type { Selection, SelectionAnchor } from "@marimo-lens/protocol";
+import type { Selection, SelectionAnchor, TargetSelector } from "@marimo-lens/protocol";
 
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, onTestFinished, test, vi } from "vite-plus/test";
 
 import { targetFromElement } from "@/notebook/selection-target";
 import { SelectionOverlay } from "@/selection/components/selection-overlay";
 
 import { selectionFixture } from "../../support/fixtures";
 import { NotebookDomTestProvider } from "../../support/notebook-dom";
-
-let root: Root | null = null;
+import { render } from "../../support/render";
 
 beforeEach(() => vi.useFakeTimers());
 
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -36,10 +32,7 @@ describe("selection overlay", () => {
     expect(activeTarget).not.toBeNull();
 
     target.dataset.marimoLensCellId = "cell-2";
-    renderOverlay([], null, {
-      selector,
-      workflow: { mode: "armed", activeTarget: activeTarget! },
-    });
+    renderOverlay([], null, { workflow: { mode: "armed", activeTarget: activeTarget! } }, selector);
 
     const highlight = document.querySelector<HTMLElement>("[data-marimo-lens-output-highlight]");
     expect(highlight).not.toBeNull();
@@ -60,7 +53,6 @@ describe("selection overlay", () => {
   });
 
   test("attaches a marker to nested scroll content rendered after mount", async () => {
-    vi.stubGlobal("ResizeObserver", undefined);
     const output = setupOutput();
     const stream = document.createElement("div");
     document.body.append(stream);
@@ -120,10 +112,10 @@ describe("selection overlay", () => {
       anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.2, height: 0.3 },
     });
     renderOverlay([selection], selection.id);
+    const left = () =>
+      document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left;
+    expect(left()).toBe("100px");
 
-    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
-      "100px",
-    );
     Object.defineProperty(scroller, "scrollWidth", { configurable: true, value: 800 });
     scroller.scrollLeft = 40;
     await act(async () => {
@@ -132,9 +124,7 @@ describe("selection overlay", () => {
       vi.advanceTimersToNextFrame();
     });
 
-    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.left).toBe(
-      "60px",
-    );
+    expect(left()).toBe("60px");
   });
 
   test("discovers newly hittable nested content on scroll", async () => {
@@ -252,7 +242,114 @@ describe("selection overlay", () => {
       height: 0.3,
     });
   });
+
+  test("cancels a pointer resize when its handles unmount", () => {
+    stubPointerCapture();
+    setupOutput();
+    const selection = selectionFixture({
+      anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.3, height: 0.3 },
+    });
+    const registerAdjustment = vi.fn();
+    const releaseAdjustment = vi.fn();
+    const rerender = renderOverlay([selection], selection.id, {
+      registerAdjustment,
+      releaseAdjustment,
+    });
+    const rectMarker = () => document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]");
+
+    const southeast = document.querySelector<HTMLButtonElement>('[data-handle="se"]')!;
+    act(() => {
+      southeast.dispatchEvent(pointer("pointerdown", 200, 150, 7));
+      southeast.dispatchEvent(pointer("pointermove", 240, 150, 7));
+    });
+    expect(rectMarker()?.style.width).toBe("160px");
+
+    rerender({ currentSelectionId: null });
+
+    expect(document.querySelector("[data-marimo-lens-resize-handle]")).toBeNull();
+    expect(rectMarker()?.style.width).toBe("120px");
+    expect(releaseAdjustment).toHaveBeenCalledWith(registerAdjustment.mock.calls[0]?.[0]);
+  });
+
+  test("opens no note when a marker move canceled with Escape is released", () => {
+    stubPointerCapture();
+    setupOutput();
+    const selection = selectionFixture({ anchor: { kind: "point", x: 0.5, y: 0.5 } });
+    const registerAdjustment = vi.fn<(cancel: () => void) => void>();
+    const onEditNote = vi.fn();
+    const onReposition = vi.fn();
+    renderOverlay([selection], selection.id, { registerAdjustment, onEditNote, onReposition });
+    const marker = document.querySelector<HTMLButtonElement>(
+      '[data-marimo-lens-selection-id="selection-1"]',
+    )!;
+    act(() => {
+      marker.dispatchEvent(pointer("pointerdown", 220, 140, 7));
+      marker.dispatchEvent(pointer("pointermove", 228, 140, 7));
+    });
+
+    // Escape cancels the adjustment that the press registered.
+    act(() => registerAdjustment.mock.calls[0]![0]());
+    act(() => {
+      marker.dispatchEvent(pointer("pointerup", 228, 140, 7));
+      marker.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, detail: 1 }));
+    });
+
+    expect(onReposition).not.toHaveBeenCalled();
+    expect(onEditNote).not.toHaveBeenCalled();
+  });
+
+  test("cancels a marker drag when the dragged marker leaves the visible output", () => {
+    stubPointerCapture();
+    setupOutput({ scrollHeight: 800 });
+    const selection = selectionFixture({
+      anchor: { kind: "rect", x: 0.2, y: 0.1, width: 0.3, height: 0.1 },
+    });
+    const registerAdjustment = vi.fn();
+    const releaseAdjustment = vi.fn();
+    renderOverlay([selection], selection.id, { registerAdjustment, releaseAdjustment });
+    const marker = () =>
+      document.querySelector<HTMLButtonElement>('[data-marimo-lens-selection-id="selection-1"]');
+
+    const dragged = marker()!;
+    act(() => {
+      dragged.dispatchEvent(pointer("pointerdown", 150, 120, 7));
+      dragged.dispatchEvent(pointer("pointermove", 150, 320, 7));
+    });
+
+    expect(releaseAdjustment).toHaveBeenCalledWith(registerAdjustment.mock.calls[0]?.[0]);
+    expect(marker()).not.toBeNull();
+    expect(document.querySelector<HTMLElement>("[data-marimo-lens-rect-marker]")?.style.top).toBe(
+      "100px",
+    );
+  });
 });
+
+// jsdom leaves pointer capture unimplemented.
+function stubPointerCapture() {
+  const captured = new Set<number>();
+  const methods = {
+    setPointerCapture: (id: number) => void captured.add(id),
+    hasPointerCapture: (id: number) => captured.has(id),
+    releasePointerCapture: (id: number) => void captured.delete(id),
+  };
+  for (const [name, value] of Object.entries(methods)) {
+    Object.defineProperty(HTMLElement.prototype, name, { configurable: true, value });
+  }
+  onTestFinished(() => {
+    for (const name of Object.keys(methods)) Reflect.deleteProperty(HTMLElement.prototype, name);
+  });
+}
+
+function pointer(type: string, clientX: number, clientY: number, pointerId: number) {
+  return new PointerEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    button: 0,
+    clientX,
+    clientY,
+    pointerId,
+  });
+}
 
 function setupOutput({ scrollHeight = 240, scrollTop = 0 } = {}) {
   const output = document.createElement("div");
@@ -306,34 +403,26 @@ function renderOverlay(
   selections: Selection[],
   currentSelectionId: string | null,
   overrides: Partial<React.ComponentProps<typeof SelectionOverlay>> = {},
+  selector: TargetSelector = null,
 ) {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
-  const render = (next: Partial<React.ComponentProps<typeof SelectionOverlay>> = {}) => {
-    act(() => {
-      root?.render(
-        <NotebookDomTestProvider>
-          <SelectionOverlay
-            selections={selections}
-            currentSelectionId={currentSelectionId}
-            availableSelectionIds={new Set(selections.map(({ id }) => id))}
-            selector={null}
-            workflow={{ mode: "idle" }}
-            busySelectionIds={new Set()}
-            capturingSelectionIds={new Set()}
-            onActivate={() => {}}
-            onEditNote={() => {}}
-            onReposition={() => {}}
-            registerAdjustment={() => {}}
-            releaseAdjustment={() => {}}
-            {...overrides}
-            {...next}
-          />
-        </NotebookDomTestProvider>,
-      );
-    });
-  };
-  render();
-  return render;
+  const overlay = (next: Partial<React.ComponentProps<typeof SelectionOverlay>> = {}) => (
+    <NotebookDomTestProvider selector={selector}>
+      <SelectionOverlay
+        selections={selections}
+        currentSelectionId={currentSelectionId}
+        workflow={{ mode: "idle" }}
+        busySelectionIds={new Set()}
+        onActivate={() => {}}
+        onEditNote={() => {}}
+        onReposition={() => {}}
+        registerAdjustment={() => {}}
+        releaseAdjustment={() => {}}
+        {...overrides}
+        {...next}
+      />
+    </NotebookDomTestProvider>
+  );
+  const { rerender } = render(overlay());
+  return (next: Partial<React.ComponentProps<typeof SelectionOverlay>> = {}) =>
+    rerender(overlay(next));
 }

@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
-import { NotebookDomAdapter, NotebookDomProvider } from "@/notebook/notebook-dom";
+import { NotebookDomAdapter } from "@/notebook/notebook-dom";
+import { NotebookDomProvider } from "@/notebook/notebook-dom-context";
 import { LensThemeContext, observeLensTheme, type LensTheme } from "@/ui/theme";
 
 // Anywidget can mount views from separate app-module instances into one document.

@@ -1,9 +1,9 @@
 import * as stylex from "@stylexjs/stylex";
 import { useLayoutEffect, useRef, useState } from "react";
 
-import type { TargetSurface } from "@/notebook/selection-target";
+import type { TargetSurface } from "@/notebook/target-surface";
 
-import { useNotebookDom } from "@/notebook/notebook-dom";
+import { useNotebookDom } from "@/notebook/notebook-dom-context";
 import { targetInfo } from "@/notebook/target-info";
 import { intersectBounds } from "@/notebook/viewport";
 
@@ -42,9 +42,9 @@ export function TargetInfoLabel({ target, bounds }: { target: TargetSurface; bou
       );
     };
     place();
-    const observer = dom.window.ResizeObserver ? new dom.window.ResizeObserver(place) : null;
-    observer?.observe(label.current);
-    return () => observer?.disconnect();
+    const observer = new dom.window.ResizeObserver(place);
+    observer.observe(label.current);
+    return () => observer.disconnect();
   }, [
     bounds.left,
     bounds.top,

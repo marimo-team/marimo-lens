@@ -7,14 +7,11 @@ from typing import Any
 import anywidget
 import pytest
 import traitlets
-from marimo_lens._context import build_context
-from marimo_lens._marimo_runtime import (
-    collect_runtime_snapshot,
-    runtime_cell_status,
-)
-from marimo_lens._provenance import resolve_provenance
+from marimo_lens._marimo.snapshot import collect_runtime_snapshot, runtime_cell_status
+from marimo_lens._notebook.provenance import resolve_provenance
 
-from tests.support.factories import selection
+from tests.support.controls import cell, control_context, install_context
+from tests.support.factories import build_context, selection
 
 
 class ExampleWidget(anywidget.AnyWidget):
@@ -47,14 +44,14 @@ def test_runtime_collects_cells_edges_and_controls(
     widget = ExampleWidget()
     wrapped = mo.ui.anywidget(ExampleWidget())
     cells = {
-        "cell-data": _cell("chart = make_chart()", defs={"chart"}),
-        "cell-limit": _cell("limit = mo.ui.slider(0, 10)", defs={"limit"}),
-        "cell-widget": _cell("widget = ExampleWidget()", defs={"widget"}),
-        "cell-wrapped": _cell(
+        "cell-data": cell("chart = make_chart()", defs={"chart"}),
+        "cell-limit": cell("limit = mo.ui.slider(0, 10)", defs={"limit"}),
+        "cell-widget": cell("widget = ExampleWidget()", defs={"widget"}),
+        "cell-wrapped": cell(
             "wrapped = mo.ui.anywidget(ExampleWidget())",
             defs={"wrapped"},
         ),
-        "cell-view": _cell(
+        "cell-view": cell(
             "mo.vstack([chart, limit, widget, wrapped])",
             refs={"chart", "limit", "widget", "wrapped", "mo"},
         ),
@@ -90,7 +87,7 @@ def test_runtime_collects_cells_edges_and_controls(
         filename="/workspace/demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
 
     snapshot = collect_runtime_snapshot()
 
@@ -127,7 +124,7 @@ def test_runtime_and_lens_context_do_not_probe_unrelated_globals(
     wrapped_lens = mo.ui.anywidget(lens)
     context = SimpleNamespace(
         graph=SimpleNamespace(
-            cells={"cell-view": _cell("42")},
+            cells={"cell-view": cell("42")},
             definitions={},
             parents={"cell-view": set()},
         ),
@@ -139,10 +136,10 @@ def test_runtime_and_lens_context_do_not_probe_unrelated_globals(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
 
     try:
-        runtime = collect_runtime_snapshot()
+        runtime = collect_runtime_snapshot(tuple(context.graph.cells))
         lens_context = lens.context()
     finally:
         lens.close()
@@ -155,7 +152,7 @@ def test_runtime_and_lens_context_do_not_probe_unrelated_globals(
 def test_runtime_keeps_late_controls_until_context_relevance_is_known(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
     namespace: dict[str, object] = {
         f"unrelated_{index}": SimpleNamespace(value=index) for index in range(80)
@@ -167,7 +164,7 @@ def test_runtime_keeps_late_controls_until_context_relevance_is_known(
     }
     context = SimpleNamespace(
         graph=SimpleNamespace(
-            cells={"cell-view": _cell("limit", refs={"limit"})},
+            cells={"cell-view": cell("limit", refs={"limit"})},
             definitions=definitions,
             parents={"cell-view": set()},
         ),
@@ -175,7 +172,7 @@ def test_runtime_keeps_late_controls_until_context_relevance_is_known(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
     monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
 
     runtime = collect_runtime_snapshot(("cell-view",))
@@ -203,12 +200,12 @@ def test_targeted_runtime_never_reads_unrelated_widget_state(
     context = SimpleNamespace(
         graph=SimpleNamespace(
             cells={
-                "cell-limit": _cell("limit = mo.ui.slider(0, 10)", defs={"limit"}),
-                "cell-widget": _cell(
+                "cell-limit": cell("limit = mo.ui.slider(0, 10)", defs={"limit"}),
+                "cell-widget": cell(
                     "unrelated = TrackingWidget()",
                     defs={"unrelated"},
                 ),
-                "cell-view": _cell("render(limit.value)", refs={"limit"}),
+                "cell-view": cell("render(limit.value)", refs={"limit"}),
             },
             definitions={
                 "limit": {"cell-limit"},
@@ -224,7 +221,7 @@ def test_targeted_runtime_never_reads_unrelated_widget_state(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
 
     runtime = collect_runtime_snapshot(("cell-view",))
 
@@ -246,7 +243,7 @@ def test_targeted_runtime_materializes_at_most_sixty_four_cells(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
 
     runtime = collect_runtime_snapshot(("cell-999",))
     provenance = resolve_provenance(runtime, ["cell-999"])
@@ -276,7 +273,7 @@ def test_targeted_runtime_preserves_membership_for_omitted_producers(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
 
     runtime = collect_runtime_snapshot(cell_ids)
 
@@ -289,13 +286,13 @@ def test_targeted_runtime_preserves_membership_for_omitted_producers(
 def test_targeted_runtime_reads_only_sixteen_of_many_relevant_controls(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
     controls = {f"control_{index:02d}": _CountingControl(index) for index in range(80)}
     context = SimpleNamespace(
         graph=SimpleNamespace(
             cells={
-                "cell-view": _cell(
+                "cell-view": cell(
                     "render_controls()",
                     refs=set(controls),
                 )
@@ -307,7 +304,7 @@ def test_targeted_runtime_reads_only_sixteen_of_many_relevant_controls(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
     monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
 
     runtime = collect_runtime_snapshot(("cell-view",))
@@ -326,7 +323,7 @@ def test_targeted_runtime_reads_only_sixteen_of_many_relevant_controls(
 def test_targeted_runtime_retains_top_controls_for_each_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
     controls = {
         **{f"alpha_{index:02d}": _CountingControl(index) for index in range(20)},
@@ -337,8 +334,8 @@ def test_targeted_runtime_retains_top_controls_for_each_output(
     context = SimpleNamespace(
         graph=SimpleNamespace(
             cells={
-                "cell-alpha": _cell("alpha", refs=alpha_names),
-                "cell-beta": _cell("beta", refs=beta_names),
+                "cell-alpha": cell("alpha", refs=alpha_names),
+                "cell-beta": cell("beta", refs=beta_names),
             },
             definitions={},
             parents={"cell-alpha": set(), "cell-beta": set()},
@@ -347,7 +344,7 @@ def test_targeted_runtime_retains_top_controls_for_each_output(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
     monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
 
     runtime = collect_runtime_snapshot(("cell-alpha", "cell-beta"))
@@ -365,13 +362,13 @@ def test_targeted_runtime_retains_top_controls_for_each_output(
 def test_targeted_runtime_uses_exact_namespace_lookups(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
     control = _CountingControl(8)
     namespace = _ExactLookupMapping({"limit": control})
-    context = _control_context("limit", control)
+    context = control_context("limit", control)
     context.globals = namespace
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
     monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
 
     runtime = collect_runtime_snapshot(("cell-view",))
@@ -384,15 +381,15 @@ def test_targeted_runtime_uses_exact_namespace_lookups(
 def test_control_lookup_failure_is_scoped_to_its_output(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
     good = _CountingControl(8)
     namespace = _SelectiveLookupMapping({"good": good}, failures={"bad"})
     context = SimpleNamespace(
         graph=SimpleNamespace(
             cells={
-                "cell-bad": _cell("render(bad.value)", refs={"bad"}),
-                "cell-good": _cell("render(good.value)", refs={"good"}),
+                "cell-bad": cell("render(bad.value)", refs={"bad"}),
+                "cell-good": cell("render(good.value)", refs={"good"}),
             },
             definitions={},
             parents={"cell-bad": set(), "cell-good": set()},
@@ -401,7 +398,7 @@ def test_control_lookup_failure_is_scoped_to_its_output(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
     monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
 
     runtime = collect_runtime_snapshot(("cell-bad", "cell-good"))
@@ -433,8 +430,8 @@ def test_shared_control_lookup_failure_marks_each_output_once(
     context = SimpleNamespace(
         graph=SimpleNamespace(
             cells={
-                "cell-a": _cell("render(shared.value)", refs={"shared"}),
-                "cell-b": _cell("render(shared.value)", refs={"shared"}),
+                "cell-a": cell("render(shared.value)", refs={"shared"}),
+                "cell-b": cell("render(shared.value)", refs={"shared"}),
             },
             definitions={},
             parents={"cell-a": set(), "cell-b": set()},
@@ -443,13 +440,13 @@ def test_shared_control_lookup_failure_marks_each_output_once(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
 
     runtime = collect_runtime_snapshot(("cell-a", "cell-b"))
 
     assert runtime.controls == ()
     assert runtime.control_incomplete_output_ids == frozenset({"cell-a", "cell-b"})
-    assert namespace.lookups == ["shared"]
+    assert namespace.lookups.count("shared") == 1
 
 
 @pytest.mark.parametrize("globals_mode", ["unreadable", "non-mapping"])
@@ -458,12 +455,12 @@ def test_incomplete_globals_mark_current_control_sampling_incomplete(
     globals_mode: str,
 ) -> None:
     control = _CountingControl("Austria")
-    control_context = _control_context("country", control)
+    country_context = control_context("country", control)
     current_context = _GlobalsFailureContext(
-        control_context.graph,
+        country_context.graph,
         mode=globals_mode,
     )
-    _install_context(monkeypatch, current_context)
+    install_context(monkeypatch, current_context)
     current = collect_runtime_snapshot(("cell-view",))
 
     assert current.control_incomplete_output_ids == frozenset({"cell-view"})
@@ -473,18 +470,18 @@ def test_incomplete_globals_mark_current_control_sampling_incomplete(
 def test_control_definition_cell_ids_are_bounded(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
     control = _CountingControl(8)
     definition_cells = {
-        f"cell-control-{index}": _cell("shared = control()", defs={"shared"})
+        f"cell-control-{index}": cell("shared = control()", defs={"shared"})
         for index in range(20)
     }
     context = SimpleNamespace(
         graph=SimpleNamespace(
             cells={
                 **definition_cells,
-                "cell-view": _cell("render(shared.value)", refs={"shared"}),
+                "cell-view": cell("render(shared.value)", refs={"shared"}),
             },
             parents={
                 **{cell_id: set() for cell_id in definition_cells},
@@ -495,7 +492,7 @@ def test_control_definition_cell_ids_are_bounded(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
     monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
 
     runtime = collect_runtime_snapshot(("cell-view",))
@@ -507,14 +504,14 @@ def test_control_definition_cell_ids_are_bounded(
 def test_context_build_reuses_current_runtime_control_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
     control = _CountingControl(8)
-    context = _control_context("limit", control)
-    _install_context(monkeypatch, context)
+    context = control_context("limit", control)
+    install_context(monkeypatch, context)
     monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
 
-    runtime = collect_runtime_snapshot()
+    runtime = collect_runtime_snapshot(tuple(context.graph.cells))
     build_context(
         runtime,
         [selection(), selection(selection_id="selection-2", label="S2")],
@@ -531,8 +528,8 @@ def test_long_control_label_preserves_current_value(
     import marimo as mo
 
     limit = mo.ui.slider(0, 10, value=1, label="L" * 1_001)
-    context = _control_context("limit", limit)
-    _install_context(monkeypatch, context)
+    context = control_context("limit", limit)
+    install_context(monkeypatch, context)
 
     runtime = collect_runtime_snapshot(("cell-view",))
     _, text = build_context(
@@ -552,11 +549,11 @@ def test_long_control_label_preserves_current_value(
 def test_invalid_control_strings_are_redacted_in_current_context(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
     control = _CountingControl("\ud800")
-    context = _control_context("value", control)
-    _install_context(monkeypatch, context)
+    context = control_context("value", control)
+    install_context(monkeypatch, context)
     monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
 
     runtime = collect_runtime_snapshot(("cell-view",))
@@ -578,12 +575,12 @@ def test_long_control_names_are_bounded_in_current_context_text(
     monkeypatch: pytest.MonkeyPatch,
     name_length: int,
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
     name = "x" * name_length
     control = _CountingControl("Austria")
-    context = _control_context(name, control)
-    _install_context(monkeypatch, context)
+    context = control_context(name, control)
+    install_context(monkeypatch, context)
     monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
 
     runtime = collect_runtime_snapshot(("cell-view",))
@@ -610,7 +607,7 @@ def test_runtime_reports_unavailable_kernel(
 
     monkeypatch.setattr(context_module, "get_context", missing)
 
-    snapshot = collect_runtime_snapshot()
+    snapshot = collect_runtime_snapshot(())
 
     assert snapshot.available is False
     assert snapshot.cells == ()
@@ -623,7 +620,7 @@ def test_runtime_cell_status_reads_only_exact_graph_membership(
 ) -> None:
     lock = _RecordingLock()
     context = SimpleNamespace(graph=_LockedGraph(lock))
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
 
     assert runtime_cell_status("cell-view") == "available"
     assert runtime_cell_status("cell-other") == "missing"
@@ -641,64 +638,15 @@ def test_runtime_copies_graph_structures_while_holding_its_lock(
         filename="demo.py",
         cell_id="cell-lens",
     )
-    _install_context(monkeypatch, context)
+    install_context(monkeypatch, context)
 
-    snapshot = collect_runtime_snapshot()
+    snapshot = collect_runtime_snapshot(("cell-view",))
 
     assert lock.entries == 1
     assert snapshot.cells[0].id == "cell-view"
     assert snapshot.cells[0].runtime_state == "idle"
     assert snapshot.cells[0].run_result_status == "success"
     assert snapshot.cells[0].stale is False
-
-
-def _install_context(monkeypatch: pytest.MonkeyPatch, context: Any) -> None:
-    import marimo._runtime.context as context_module
-
-    monkeypatch.setattr(context_module, "get_context", lambda: context)
-
-
-def _control_context(name: str, control: object) -> SimpleNamespace:
-    return SimpleNamespace(
-        graph=SimpleNamespace(
-            cells={
-                "cell-control": _cell(
-                    f"{name} = control()",
-                    defs={name},
-                ),
-                "cell-view": _cell(
-                    f"render({name}.value)",
-                    refs={name},
-                ),
-            },
-            definitions={name: {"cell-control"}},
-            parents={
-                "cell-control": set(),
-                "cell-view": {"cell-control"},
-            },
-        ),
-        globals={name: control},
-        filename="demo.py",
-        cell_id="cell-lens",
-    )
-
-
-def _cell(
-    code: str,
-    *,
-    defs: set[str] | None = None,
-    refs: set[str] | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        code=code,
-        defs=defs or set(),
-        refs=refs or set(),
-        language="python",
-        runtime_state="idle",
-        run_result_status="success",
-        stale=False,
-        config=SimpleNamespace(disabled=False),
-    )
 
 
 class _RecordingLock:

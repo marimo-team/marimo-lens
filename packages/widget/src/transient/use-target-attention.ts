@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
-import { targetBelongsToDocument } from "@/notebook/selection-target";
+import { targetBelongsToDocument } from "@/notebook/document-identity";
 import {
   cellAddressTarget,
   type TargetAttentionPresentation,
@@ -18,7 +18,6 @@ export function useTargetAttention(
   protocol: LensProtocolClient,
   dom: NotebookDomAdapter,
   state: LensState,
-  selector: string | null,
 ) {
   const [presentation, setPresentation] = useState<TargetAttentionPresentation | null>(null);
   const pending = useRef<PendingAttentionEvent[]>([]);
@@ -42,7 +41,7 @@ export function useTargetAttention(
             candidate.type !== "attention.activity.start" ||
             candidate.payload.activityId !== event.payload.activityId,
         );
-        controller.stopActivity(event);
+        controller.stopActivity(event.payload.activityId);
         setAttentionEventSequence((current) => current + 1);
         return;
       }
@@ -73,7 +72,7 @@ export function useTargetAttention(
           ? event.payload.steps.map((step) => step.address)
           : [event.payload.address];
       const locators = addresses.map((address) =>
-        resolveTarget(address, event.type === "attention.reveal", state, selector, dom),
+        resolveTarget(address, event.type === "attention.reveal", state, dom),
       );
       if (!locators.every((locator): locator is TargetLocator => locator !== null)) continue;
       const targets = locators;
@@ -85,12 +84,12 @@ export function useTargetAttention(
         focusDock(dom);
       }
       if (event.type === "attention.activity.start") {
-        controller.startActivity(event, targets[0]!);
+        controller.startActivity(event.payload, targets[0]!);
       } else {
-        controller.reveal(event, targets);
+        controller.reveal(event.payload, targets);
       }
     }
-  }, [attentionEventSequence, controller, dom, selector, state]);
+  }, [attentionEventSequence, controller, dom, state]);
   return presentation;
 }
 
@@ -103,7 +102,6 @@ function resolveTarget(
   address: AttentionAddress,
   includeHistory: boolean,
   state: LensState,
-  selector: string | null,
   dom: NotebookDomAdapter,
 ): TargetLocator | null {
   if (address.kind === "cell") {
@@ -126,9 +124,10 @@ function resolveTarget(
         )
       : undefined);
   if (!selection || !targetBelongsToDocument(selection.target, dom.document)) return null;
+  const { target } = selection;
   return {
     kind: "selection",
     label: selection.label,
-    resolve: () => dom.getTarget(selection.target, selector)?.element ?? null,
+    resolve: () => dom.getTarget(target)?.element ?? null,
   };
 }

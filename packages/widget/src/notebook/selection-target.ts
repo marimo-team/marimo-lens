@@ -1,10 +1,8 @@
 import type { SelectionTarget, TargetSelector } from "@marimo-lens/protocol";
 
-import { parseSelectionTarget } from "@marimo-lens/protocol";
-
 import type { OutputCell } from "@/notebook/types";
 
-import { indexDocumentIds } from "@/notebook/document-ids";
+import { composedParent, isElement } from "@/notebook/open-tree";
 import {
   containsLensHost,
   getOutputCell,
@@ -14,32 +12,24 @@ import {
   outputCellFromRoot,
   outputlessCellFromRoot,
 } from "@/notebook/output-root";
-import { notebookSources } from "@/notebook/projection-sources";
+import { indexDocumentIds, notebookSources } from "@/notebook/projection-sources";
 
-// Authored targets and published projection sources belong to each document,
-// including when one default Lens model is shared by several views.
-const REGION_SELECTOR =
-  "[data-marimo-lens-target], [data-marimo-lens-inputs], " +
-  ":has(> [hidden][data-marimo-lens-cell-id])";
-export const DECLARED_TARGET_SELECTOR = `${REGION_SELECTOR}, [data-marimo-lens-cell-id]`;
-export const TARGET_SCOPE = "[data-marimo-lens-scope]";
+import { documentIdentity, documentPath, targetBelongsToDocument } from "./document-identity";
+import {
+  DECLARED_TARGET_SELECTOR,
+  REGION_SELECTOR,
+  TARGET_SCOPE,
+  isHTMLElement,
+  isLensUi,
+  isVisible,
+  matchesSelector,
+  queryTarget,
+  queryTargets,
+  surface,
+  type TargetSurface,
+} from "./target-surface";
 
 const DOCUMENT_POSITION_FOLLOWING = 4;
-const DOCUMENT_ID: unique symbol = Symbol.for("marimo-lens.document-id.v1");
-const TARGET_IDS: unique symbol = Symbol.for("marimo-lens.target-ids.v1");
-
-declare global {
-  interface Document {
-    [DOCUMENT_ID]?: string;
-    [TARGET_IDS]?: WeakMap<HTMLElement, string>;
-  }
-}
-
-export type TargetSurface = {
-  key: string;
-  target: SelectionTarget;
-  element: HTMLElement;
-};
 
 export function targetFromEvent(event: Event, selector: TargetSelector): TargetSurface | null {
   if (event.composedPath().some((item) => isElement(item) && isLensUi(item))) return null;
@@ -55,7 +45,7 @@ export function targetFromElement(
   while (current) {
     if (isLensUi(current)) return null;
     elements.push(current);
-    current = parentInOpenTree(current);
+    current = composedParent(current);
   }
   return bestTarget(elements, selector);
 }
@@ -77,13 +67,6 @@ export function getTargetSurface(
   return current?.element === element && current.key === surface(target, element)?.key
     ? current
     : null;
-}
-
-export function targetBelongsToDocument(target: SelectionTarget, ownerDocument: Document): boolean {
-  return (
-    target.documentId === documentIdentity(ownerDocument) &&
-    target.documentPath === documentPath(ownerDocument)
-  );
 }
 
 export function listTargetSurfaces(
@@ -149,11 +132,7 @@ export function listTargetSurfaces(
 
   return [...strongest.values()]
     .filter(({ priority, surface }) => {
-      for (
-        let parent = parentInOpenTree(surface.element);
-        parent;
-        parent = parentInOpenTree(parent)
-      ) {
+      for (let parent = composedParent(surface.element); parent; parent = composedParent(parent)) {
         const ancestor = isHTMLElement(parent) ? strongest.get(parent) : undefined;
         if (ancestor && ancestor.priority > priority) return false;
       }
@@ -161,11 +140,6 @@ export function listTargetSurfaces(
     })
     .map(({ surface }) => surface)
     .sort((left, right) => documentOrder(left.element, right.element));
-}
-
-function parentInOpenTree(element: Element): Element | null {
-  const root = element.getRootNode();
-  return element.parentElement ?? (isShadowRoot(root) ? root.host : null);
 }
 
 export function validateTargetSelector(ownerDocument: Document, selector: TargetSelector): void {
@@ -227,6 +201,19 @@ function configuredDomTarget(element: Element, selector: TargetSelector): Target
     (selector && matchesSelector(element, selector))
     ? domTarget(element)
     : null;
+}
+
+function documentOrder(left: Element, right: Element): number {
+  if (left === right) return 0;
+  return left.compareDocumentPosition(right) & DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+}
+
+const TARGET_IDS: unique symbol = Symbol.for("marimo-lens.target-ids.v1");
+
+declare global {
+  interface Document {
+    [TARGET_IDS]?: WeakMap<HTMLElement, string>;
+  }
 }
 
 type ScopedPosition = {
@@ -347,59 +334,6 @@ function domSelector(
   return `[${attribute}="${id}"]`;
 }
 
-function surface(target: SelectionTarget, element: HTMLElement): TargetSurface | null {
-  try {
-    const parsed = parseSelectionTarget(target);
-    return { key: JSON.stringify(parsed), target: parsed, element };
-  } catch {
-    return null;
-  }
-}
-
-function queryTarget(ownerDocument: Document, selector: string): HTMLElement | null {
-  const matches = queryTargets(ownerDocument, selector);
-  return matches.length === 1 ? matches[0]! : null;
-}
-
-function queryTargets(ownerDocument: Document, selector: string): HTMLElement[] {
-  try {
-    return Array.from(ownerDocument.querySelectorAll(selector)).filter(isHTMLElement);
-  } catch {
-    return [];
-  }
-}
-
-function matchesSelector(element: Element, selector: string): boolean {
-  try {
-    return element.matches(selector);
-  } catch {
-    return false;
-  }
-}
-
-function documentOrder(left: Element, right: Element): number {
-  if (left === right) return 0;
-  return left.compareDocumentPosition(right) & DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
-}
-
-function documentPath(ownerDocument: Document): string {
-  return ownerDocument.location?.pathname || "/";
-}
-
-export function documentIdentity(ownerDocument: Document): string {
-  const existing = ownerDocument[DOCUMENT_ID];
-  if (existing) return existing;
-  const ownerWindow = ownerDocument.defaultView;
-  if (!ownerWindow) throw new Error("Lens requires a browser window");
-  const id =
-    ownerWindow.crypto.randomUUID?.() ??
-    `${ownerWindow.Date.now().toString(36)}-${ownerWindow.Math.random().toString(36).slice(2, 10)}`;
-  const created = `document:${id}`;
-  // AnyWidget module instances share target identity for the lifetime of the document.
-  Object.defineProperty(ownerDocument, DOCUMENT_ID, { value: created });
-  return created;
-}
-
 function escapeIdentifier(value: string, ownerDocument: Document): string {
   const escape = ownerDocument.defaultView?.CSS?.escape;
   if (escape) return escape(value);
@@ -407,32 +341,4 @@ function escapeIdentifier(value: string, ownerDocument: Document): string {
     /[^a-zA-Z0-9_-]/g,
     (character) => `\\${character.codePointAt(0)!.toString(16)} `,
   );
-}
-
-function isLensUi(element: Element): boolean {
-  return element.closest("[data-marimo-lens-ui]") !== null;
-}
-
-function isVisible(element: HTMLElement): boolean {
-  const ownerWindow = element.ownerDocument.defaultView;
-  if (!ownerWindow) return false;
-  const style = ownerWindow.getComputedStyle(element);
-  const rect = element.getBoundingClientRect();
-  return (
-    style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
-  );
-}
-
-function isHTMLElement(element: Element | null): element is HTMLElement {
-  if (!element) return false;
-  const ownerWindow = element.ownerDocument.defaultView;
-  return ownerWindow !== null && element instanceof ownerWindow.HTMLElement;
-}
-
-function isElement(value: EventTarget | null): value is Element {
-  return value !== null && "nodeType" in value && value.nodeType === 1;
-}
-
-function isShadowRoot(value: Node): value is ShadowRoot {
-  return value.nodeType === 11 && "host" in value;
 }

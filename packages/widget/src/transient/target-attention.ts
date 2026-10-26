@@ -1,9 +1,4 @@
-import type {
-  AttentionActivityStartEvent,
-  AttentionActivityStopEvent,
-  AttentionRevealEvent,
-  Trail,
-} from "@marimo-lens/protocol";
+import type { AttentionActivityStartEvent, Trail } from "@marimo-lens/protocol";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
@@ -98,22 +93,21 @@ export class TargetAttentionController {
     this.#onChange = onChange;
   }
 
-  startActivity(event: AttentionActivityStartEvent, locator: TargetLocator): void {
+  startActivity(activity: AttentionActivityStartEvent["payload"], locator: TargetLocator): void {
     this.#trail = null;
     this.#start(
       {
         kind: "activity",
-        activityId: event.payload.activityId,
-        durationMs: event.payload.durationMs ?? null,
-        label: event.payload.label ?? null,
-        message: event.payload.message ?? null,
+        activityId: activity.activityId,
+        durationMs: activity.durationMs ?? null,
+        label: activity.label ?? null,
+        message: activity.message ?? null,
       },
       locator,
     );
   }
 
-  reveal(event: AttentionRevealEvent, locators: TargetLocator[]): void {
-    const route = event.payload;
+  reveal(route: Trail, locators: TargetLocator[]): void {
     this.#trail = {
       route,
       locators,
@@ -124,9 +118,9 @@ export class TargetAttentionController {
     this.#showTrail(this.#trail);
   }
 
-  stopActivity(event: AttentionActivityStopEvent): void {
+  stopActivity(activityId: string): void {
     const active = this.#active;
-    if (active?.kind === "activity" && active.activityId === event.payload.activityId) {
+    if (active?.kind === "activity" && active.activityId === activityId) {
       this.#clear(true);
     }
   }
@@ -385,9 +379,8 @@ export class TargetAttentionController {
     active.resizeObserver = null;
     active.observedTarget = target;
     active.observedTargetSize = target ? targetSize(target) : null;
-    const ResizeObserverClass = this.#dom.window.ResizeObserver;
-    if (!target || !ResizeObserverClass) return;
-    active.resizeObserver = new ResizeObserverClass(() => {
+    if (!target) return;
+    active.resizeObserver = new this.#dom.window.ResizeObserver(() => {
       if (this.#active !== active || active.observedTarget !== target) return;
       const size = targetSize(target);
       const changed = !sameSize(active.observedTargetSize, size);

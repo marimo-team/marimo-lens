@@ -1,25 +1,24 @@
 import { act, useCallback, useLayoutEffect, useMemo, useReducer, useRef } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type { UiState } from "@/selection/state";
 
+import { documentIdentity } from "@/notebook/document-identity";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
-import { documentIdentity } from "@/notebook/selection-target";
 import { useDocumentInteractions, type BeginSelection } from "@/selection/document-interactions";
-import { uiReducer } from "@/selection/state";
+import { INITIAL_UI_STATE, uiReducer } from "@/selection/state";
 import { LensStatus } from "@/ui/components/lens-status";
 
-let root: Root | null = null;
+import { outputFixture } from "../support/fixtures";
+import { render } from "../support/render";
 
 afterEach(() => {
   vi.useRealTimers();
-  act(() => root?.unmount());
-  root = null;
   document.body.replaceChildren();
   Reflect.deleteProperty(document, "elementsFromPoint");
   delete document.documentElement.dataset.marimoLensArmed;
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("document selection interactions", () => {
@@ -73,7 +72,7 @@ describe("document selection interactions", () => {
     document.body.appendChild(cell);
     mount(vi.fn<BeginSelection>(), {
       initialState: {
-        ...INITIAL_STATE,
+        ...INITIAL_UI_STATE,
         workflow: { mode: "editingNote", selectionId: "selection-1", motion: "instant" },
       },
     });
@@ -87,6 +86,80 @@ describe("document selection interactions", () => {
 
     expect(fromNotebook.defaultPrevented).toBe(false);
     expect(fromLens.defaultPrevented).toBe(true);
+    expect(workflowMode()).toBe("idle");
+  });
+
+  test.each([
+    {
+      name: "cancels an adjustment before anything else",
+      state: { ...INITIAL_UI_STATE, workflow: { mode: "armed", activeTarget: null } },
+      adjusting: true,
+      mode: "armed",
+      sheetOpen: false,
+      focus: null,
+    },
+    {
+      name: "closes the note and focuses its selection",
+      state: {
+        ...INITIAL_UI_STATE,
+        workflow: { mode: "editingNote", selectionId: "selection-1", motion: "instant" },
+      },
+      adjusting: false,
+      mode: "idle",
+      sheetOpen: false,
+      focus: '[data-marimo-lens-selection-id="selection-1"]',
+    },
+    {
+      name: "closes the requests sheet and focuses Requests",
+      state: { ...INITIAL_UI_STATE, sheetOpen: true },
+      adjusting: false,
+      mode: "idle",
+      sheetOpen: false,
+      focus: "[data-ml-list]",
+    },
+    {
+      name: "leaves selection mode and focuses Select",
+      state: { ...INITIAL_UI_STATE, workflow: { mode: "armed", activeTarget: null } },
+      adjusting: false,
+      mode: "idle",
+      sheetOpen: false,
+      focus: "[data-ml-select]",
+    },
+  ] satisfies {
+    name: string;
+    state: UiState;
+    adjusting: boolean;
+    mode: string;
+    sheetOpen: boolean;
+    focus: string | null;
+  }[])("Escape $name", ({ state, adjusting, mode, sheetOpen, focus }) => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    mount(vi.fn<BeginSelection>(), { initialState: state, adjusting });
+
+    const event = pressSelectKey("Escape");
+
+    expect(event.defaultPrevented).toBe(true);
+    expect(workflowMode()).toBe(mode);
+    expect(document.querySelector<HTMLElement>("[data-sheet-open]")?.dataset.sheetOpen).toBe(
+      String(sheetOpen),
+    );
+    expect(document.activeElement).toBe(focus ? document.querySelector(focus) : document.body);
+  });
+
+  test("Escape cancels a drag before disarming", () => {
+    const output = visibleOutput();
+    output.hasPointerCapture = vi.fn((pointerId: number) => pointerId === 7);
+    mount(vi.fn<BeginSelection>());
+    arm();
+    void act(() => output.dispatchEvent(pointer("pointerdown", 40, 50, 7)));
+    expect(workflowMode()).toBe("dragging");
+
+    pressSelectKey("Escape");
+
+    expect(output.releasePointerCapture).toHaveBeenCalledWith(7);
     expect(workflowMode()).toBe("idle");
   });
 
@@ -335,20 +408,18 @@ describe("document selection interactions", () => {
 type MountOptions = {
   deactivateAfterSelection?: boolean;
   initialState?: UiState;
+  /** Whether a marker or handle adjustment is in progress for Escape to cancel. */
+  adjusting?: boolean;
 };
 
 function mount(beginSelection: BeginSelection, options: MountOptions = {}): void {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-  root = createRoot(container);
-  act(() =>
-    root?.render(
-      <Harness
-        beginSelection={beginSelection}
-        deactivateAfterSelection={options.deactivateAfterSelection ?? false}
-        initialState={options.initialState ?? INITIAL_STATE}
-      />,
-    ),
+  render(
+    <Harness
+      beginSelection={beginSelection}
+      deactivateAfterSelection={options.deactivateAfterSelection ?? false}
+      initialState={options.initialState ?? INITIAL_UI_STATE}
+      adjusting={options.adjusting ?? false}
+    />,
   );
 }
 
@@ -356,15 +427,16 @@ function Harness({
   beginSelection,
   deactivateAfterSelection,
   initialState,
+  adjusting,
 }: {
   beginSelection: BeginSelection;
   deactivateAfterSelection: boolean;
   initialState: UiState;
+  adjusting: boolean;
 }) {
   const [ui, dispatch] = useReducer(uiReducer, initialState);
   const uiRef = useRef(ui);
-  const canceledPointerIds = useRef(new Set<number>());
-  const cancelAdjustment = useCallback(() => false, []);
+  const cancelAdjustment = useCallback(() => adjusting, [adjusting]);
   const dom = useMemo(() => new NotebookDomAdapter(document), []);
   useLayoutEffect(() => {
     uiRef.current = ui;
@@ -381,9 +453,7 @@ function Harness({
     uiRef,
     dispatch,
     dom,
-    selector: null,
     beginSelection: handleSelection,
-    canceledPointerIds,
     cancelAdjustment,
   });
   return (
@@ -399,8 +469,14 @@ function Harness({
       >
         Select
       </button>
+      <button type="button" data-marimo-lens-ui data-ml-list>
+        Requests
+      </button>
+      <button type="button" data-marimo-lens-ui data-marimo-lens-selection-id="selection-1">
+        S1
+      </button>
       <LensStatus message={ui.announcement} />
-      <output data-workflow-mode={ui.workflow.mode} />
+      <output data-workflow-mode={ui.workflow.mode} data-sheet-open={ui.sheetOpen} />
     </>
   );
 }
@@ -419,9 +495,7 @@ type VisibleOutputOptions = {
 };
 
 function visibleOutput({ id = "cell-1", title }: VisibleOutputOptions = {}): HTMLElement {
-  const output = document.createElement("div");
-  output.id = `output-${id}`;
-  output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 200);
+  const output = outputFixture(id, new DOMRect(0, 0, 400, 200));
   if (title) {
     const heading = document.createElement("h2");
     heading.textContent = title;
@@ -433,7 +507,6 @@ function visibleOutput({ id = "cell-1", title }: VisibleOutputOptions = {}): HTM
     hasPointerCapture: vi.fn(() => false),
     releasePointerCapture: vi.fn(),
   });
-  document.body.appendChild(output);
   Object.defineProperty(document, "elementsFromPoint", {
     configurable: true,
     value: () => [output],
@@ -478,16 +551,3 @@ function pointer(
     pointerType,
   });
 }
-
-const INITIAL_STATE: UiState = {
-  workflow: { mode: "idle" },
-  pendingSelections: [],
-  optimisticCurrentSelectionId: null,
-  busySelectionIds: [],
-  clearPending: false,
-  historyClearPending: false,
-  listOpen: false,
-  sheetTab: "open",
-  focusedHistoryRevision: null,
-  announcement: "",
-};

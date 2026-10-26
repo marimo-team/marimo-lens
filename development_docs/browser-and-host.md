@@ -12,7 +12,7 @@ the browser packages.
 
 ## Notebook output roots
 
-`packages/widget/src/notebook/output-root-rules.ts` maps supported rendered
+`packages/widget/src/notebook/output-root.ts` maps supported rendered
 hosts to exact graph cell IDs.
 
 The current rules recognize:
@@ -120,14 +120,14 @@ The document locator stays in agent context. The source signature controls reatt
 uses the event composed path for pointer targeting and walks across open shadow
 hosts for element targeting.
 
-One located `TargetSurface` contains:
+`target-surface.ts` defines the located `TargetSurface`, which contains:
 
 - A validated target record.
 - Its current `HTMLElement`.
 - A stable serialized key for browser reconciliation.
 
-A stored target belongs to a document only when both its opaque document ID and
-pathname match. The pathname comes from `document.location.pathname`. Query and
+`document-identity.ts` owns the document rule. A stored target belongs to a
+document only when both its opaque document ID and pathname match. The pathname comes from `document.location.pathname`. Query and
 fragment changes do not create a new stored path. Replacing the browser document
 creates a new opaque ID even when the pathname remains the same.
 
@@ -179,7 +179,7 @@ remain stable while the available selection IDs are unchanged.
 
 Keep target discovery in `notebook/selection-target.ts`, canonical output
 discovery in `notebook/output-root*.ts`, and document operations in
-`notebook-dom.tsx`. A feature should not bypass these paths with an unrelated
+`notebook-dom.ts`. A feature should not bypass these paths with an unrelated
 query or ambient global.
 
 ## UI style isolation
@@ -344,17 +344,17 @@ The owner-realm and iframe cases are the compatibility contract.
 
 | Capability                                | Seam                                                                 |
 | ----------------------------------------- | -------------------------------------------------------------------- |
-| marimo graph and cell status              | `packages/marimo-lens/src/marimo_lens/_marimo_runtime.py`            |
-| Native marimo control state               | `packages/marimo-lens/src/marimo_lens/_marimo_control_state.py`      |
-| Widget-aware Python disposal              | `Lens._bind_comm_close()` in `widget.py`                             |
+| marimo graph and cell status              | `packages/marimo-lens/src/marimo_lens/_marimo/snapshot.py`           |
+| Native marimo control state               | `packages/marimo-lens/src/marimo_lens/_marimo/controls.py`           |
+| Widget-aware Python disposal              | `Lens._bind_comm_close()` in `_widget/lens.py`                       |
 | AnyWidget model and messages              | `packages/widget/src/anywidget/`                                     |
-| Output-root rules                         | `packages/widget/src/notebook/output-root-rules.ts`                  |
-| Document operations and target navigation | `packages/widget/src/notebook/notebook-dom.tsx`                      |
+| Output-root rules                         | `packages/widget/src/notebook/output-root.ts`                        |
+| Document operations and target navigation | `packages/widget/src/notebook/notebook-dom.ts`                       |
 | Target construction and reattachment      | `packages/widget/src/notebook/selection-target.ts`                   |
 | Document and open-tree interaction        | `packages/widget/src/notebook/interaction-documents.ts`              |
 | Target attention                          | `packages/widget/src/transient/target-attention.ts`                  |
 | DOM rasterization                         | `packages/image-capture/src/evidence/` and the `html-to-image` patch |
-| Browser-to-Python selection requests      | `packages/widget/src/anywidget/request-client.ts`                    |
+| Browser-to-Python selection requests      | `packages/widget/src/anywidget/client.ts`                            |
 
 Adopt a new native marimo or AnyWidget capability by replacing the narrow seam
 that owns it. Preserve target identity, selection state, protocol, and public

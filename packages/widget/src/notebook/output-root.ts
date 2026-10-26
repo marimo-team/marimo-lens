@@ -1,7 +1,65 @@
 import type { OutputCell } from "@/notebook/types";
 
-import { containsOpenTree } from "@/notebook/open-tree";
-import { OUTPUT_ROOT_SELECTOR, resolveOutputRoot } from "@/notebook/output-root-rules";
+import {
+  composedClosest,
+  composedParent,
+  containsOpenTree,
+  descendantElements,
+  isElement,
+  isShadowRoot,
+} from "@/notebook/open-tree";
+import { isHTMLElement, isVisible } from "@/notebook/target-surface";
+
+const CONFIGURED_OUTPUT_CELL_ATTRIBUTE = "data-marimo-lens-output-cell-id";
+export const OUTPUT_ROOT_SELECTOR = [
+  `[${CONFIGURED_OUTPUT_CELL_ATTRIBUTE}]`,
+  '[id^="output-"]',
+  "marimo-island[data-cell-id]",
+].join(",");
+
+const OUTPUT_ID_PREFIX = "output-";
+
+type ResolvedOutputRoot = {
+  id: string;
+  root: HTMLElement;
+  element: HTMLElement;
+};
+
+function resolveOutputRoot(element: Element): ResolvedOutputRoot | null {
+  if (!isHTMLElement(element)) return null;
+
+  const configuredId = cellIdFromAttribute(element, CONFIGURED_OUTPUT_CELL_ATTRIBUTE);
+  if (configuredId) return { id: configuredId, root: element, element };
+
+  if (element.id.startsWith(OUTPUT_ID_PREFIX)) {
+    const id = element.id.slice(OUTPUT_ID_PREFIX.length);
+    return id ? { id, root: element, element } : null;
+  }
+
+  if (element.matches("marimo-island[data-cell-id]")) {
+    const id = cellIdFromAttribute(element, "data-cell-id");
+    return id ? { id, root: element, element: islandOutputElement(element) } : null;
+  }
+
+  return null;
+}
+
+function islandOutputElement(island: HTMLElement): HTMLElement {
+  const output = island.querySelector(".output, marimo-cell-output");
+  if (!isHTMLElement(output)) return island;
+
+  const children = Array.from(output.children).filter(isHTMLElement);
+  if (children.length !== 1) return output;
+
+  const child = children[0];
+  const ownerWindow = child?.ownerDocument.defaultView;
+  return child && ownerWindow?.getComputedStyle(child).display !== "contents" ? child : output;
+}
+
+function cellIdFromAttribute(element: Element, attribute: string): string | null {
+  const value = element.getAttribute(attribute)?.trim();
+  return value ? value : null;
+}
 
 const LENS_OUTPUT_REGISTRY: unique symbol = Symbol.for("marimo-lens.output-registry.v2");
 
@@ -32,27 +90,6 @@ export function registerLensHostOutput(host: Element): () => void {
       delete ownerDocument[LENS_OUTPUT_REGISTRY];
     }
   };
-}
-
-export function outputCellFromElement(element: Element | null): OutputCell | null {
-  let current: Element | null = element;
-  while (current) {
-    const cell = outputCellFromRoot(current);
-    if (cell) return cell;
-    const root = current.getRootNode();
-    current = current.parentElement ?? (isShadowRoot(root) ? root.host : null);
-  }
-  return null;
-}
-
-export function outputCellFromEvent(event: Event): OutputCell | null {
-  for (const item of event.composedPath()) {
-    if (!isElement(item)) continue;
-    if (item.closest("[data-marimo-lens-ui]")) return null;
-    const cell = outputCellFromRoot(item);
-    if (cell) return cell;
-  }
-  return isElement(event.target) ? outputCellFromElement(event.target) : null;
 }
 
 export function getOutputCell(ownerDocument: Document, outputCellId: string): OutputCell | null {
@@ -108,10 +145,6 @@ export function listOutputlessCells(
   return cells;
 }
 
-export function listOutputCells(ownerDocument: Document): OutputCell[] {
-  return listOutputRoots(ownerDocument).filter((cell) => isVisible(cell.element));
-}
-
 export function listOutputRoots(ownerDocument: Document): OutputCell[] {
   const cells: OutputCell[] = [];
   for (const root of outputRoots(ownerDocument)) {
@@ -123,7 +156,7 @@ export function listOutputRoots(ownerDocument: Document): OutputCell[] {
 
 function* outputRoots(root: ParentNode): Generator<Element> {
   const candidates = new Set(root.querySelectorAll(OUTPUT_ROOT_SELECTOR));
-  for (const element of root.querySelectorAll("*")) {
+  for (const element of descendantElements(root)) {
     if (candidates.has(element)) yield element;
     if (element.shadowRoot) yield* outputRoots(element.shadowRoot);
   }
@@ -172,8 +205,7 @@ function owningOutputRoot(element: Element): HTMLElement | null {
   while (current) {
     const resolved = resolveOutputRoot(current);
     if (resolved) return resolved.root;
-    const root = current.getRootNode();
-    current = current.parentElement ?? (isShadowRoot(root) ? root.host : null);
+    current = composedParent(current);
   }
   return null;
 }
@@ -213,34 +245,5 @@ function isInsideShadowHost(element: Element, output: HTMLElement): boolean {
 }
 
 function isLensUi(element: Element): boolean {
-  let current: Element | null = element;
-  while (current) {
-    if (current.matches("[data-marimo-lens-ui]")) return true;
-    const root = current.getRootNode();
-    current = current.parentElement ?? (isShadowRoot(root) ? root.host : null);
-  }
-  return false;
-}
-
-function isVisible(element: HTMLElement): boolean {
-  const ownerWindow = element.ownerDocument.defaultView;
-  if (!ownerWindow) return false;
-  const style = ownerWindow.getComputedStyle(element);
-  const rect = element.getBoundingClientRect();
-  return (
-    style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0
-  );
-}
-
-function isHTMLElement(element: Element): element is HTMLElement {
-  const ownerWindow = element.ownerDocument.defaultView;
-  return ownerWindow !== null && element instanceof ownerWindow.HTMLElement;
-}
-
-function isElement(value: EventTarget | null): value is Element {
-  return value !== null && "nodeType" in value && value.nodeType === 1;
-}
-
-function isShadowRoot(value: Node): value is ShadowRoot {
-  return value.nodeType === 11 && "host" in value;
+  return composedClosest(element, "[data-marimo-lens-ui]") !== null;
 }

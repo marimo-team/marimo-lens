@@ -83,31 +83,26 @@ describe("focus restoration", () => {
     expect(document.activeElement).not.toBe(replacement);
   });
 
-  test("returns to the collapsed Lens tab after a selection disappears", () => {
+  test.each([
+    {
+      dock: "collapsed",
+      fallback: "its tab",
+      controls: '<button disabled></button><button data-ml-dock-tab id="fallback"></button>',
+    },
+    {
+      dock: "expanded",
+      fallback: "its first enabled control",
+      controls: '<button disabled></button><button id="fallback"></button><button></button>',
+    },
+  ])("returns to $fallback of the $dock dock after a selection disappears", ({ controls }) => {
     const dock = document.createElement("aside");
     dock.setAttribute("data-marimo-lens-dock", "");
-    const tab = document.createElement("button");
-    tab.setAttribute("data-ml-dock-tab", "");
-    dock.appendChild(tab);
+    dock.innerHTML = controls;
     document.body.appendChild(dock);
 
     focusSelectionOrDock(dom, "selection-1");
 
-    expect(document.activeElement).toBe(tab);
-  });
-
-  test("returns to the first enabled dock control when Lens is expanded", () => {
-    const dock = document.createElement("aside");
-    dock.setAttribute("data-marimo-lens-dock", "");
-    const disabled = document.createElement("button");
-    disabled.disabled = true;
-    const enabled = document.createElement("button");
-    dock.append(disabled, enabled);
-    document.body.appendChild(dock);
-
-    focusSelectionOrDock(dom, "selection-1");
-
-    expect(document.activeElement).toBe(enabled);
+    expect(document.activeElement).toBe(document.getElementById("fallback"));
   });
 
   test("restores focus inside the mounted notebook document", () => {

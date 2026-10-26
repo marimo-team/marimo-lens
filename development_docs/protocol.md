@@ -10,17 +10,21 @@ rendering reference is client-supplied evidence, separate from notebook sources.
 
 ## Authorities
 
-| Contract                                | Owner                                                       |
-| --------------------------------------- | ----------------------------------------------------------- |
-| TypeScript state and transport schemas  | `packages/protocol/src/contracts.ts`                        |
-| TypeScript bounded text                 | `packages/protocol/src/bounded-text.ts`                     |
-| Python transport models                 | `packages/marimo-lens/src/marimo_lens/_protocol_models.py`  |
-| Python message parsing and construction | `packages/marimo-lens/src/marimo_lens/_protocol.py`         |
-| Browser request correlation             | `packages/widget/src/anywidget/request-client.ts`           |
-| Browser event routing                   | `packages/widget/src/anywidget/event-router.ts`             |
-| Browser reverse capture                 | `packages/widget/src/anywidget/output-capture-transport.ts` |
-| Python command execution                | `packages/marimo-lens/src/marimo_lens/widget.py`            |
-| Python reverse-capture mailbox          | `packages/marimo-lens/src/marimo_lens/_output_capture.py`   |
+| Contract                                | Owner                                                        |
+| --------------------------------------- | ------------------------------------------------------------ |
+| TypeScript state and transport schemas  | `packages/protocol/src/contracts/`                           |
+| TypeScript bounded text                 | `packages/protocol/src/bounded-text.ts`                      |
+| Python transport models                 | `packages/marimo-lens/src/marimo_lens/_protocol/messages.py` |
+| Python selection models                 | `packages/marimo-lens/src/marimo_lens/_schema/`              |
+| Python message parsing and construction | `packages/marimo-lens/src/marimo_lens/_protocol/codec.py`    |
+| Browser request correlation and events  | `packages/widget/src/anywidget/client.ts`                    |
+| Browser reverse capture                 | `packages/widget/src/anywidget/output-capture-transport.ts`  |
+| Python command execution                | `packages/marimo-lens/src/marimo_lens/_widget/commands.py`   |
+| Python reverse-capture mailbox          | `packages/marimo-lens/src/marimo_lens/_widget/capture.py`    |
+
+`contracts/` splits the TypeScript schemas by subject: `transport.ts` holds the
+envelope and bounded scalars, then `selection.ts` (selections, History, and Lens
+state), `commands.ts`, and `events.ts` build on it.
 
 The Python and TypeScript models intentionally duplicate the wire schema. Their
 tests are the parity contract. Do not make one language permissive to avoid
@@ -161,7 +165,7 @@ Three time bounds protect different stages:
 
 | Bound                     | Value      | Owner                    |
 | ------------------------- | ---------- | ------------------------ |
-| Browser selection request | 20 seconds | `RequestClient`          |
+| Browser selection request | 20 seconds | `LensProtocolClient`     |
 | Browser output raster     | 15 seconds | `OutputCaptureTransport` |
 | Python output mailbox     | 20 seconds | `OutputCaptureSlot`      |
 
@@ -196,8 +200,8 @@ Use this sequence for a field, command, event, response, bound, or version
 change:
 
 1. State the new behavior and which side owns it.
-2. Update TypeScript schemas in `packages/protocol/src/contracts.ts`.
-3. Update Python models in `_protocol_models.py`.
+2. Update TypeScript schemas in `packages/protocol/src/contracts/`.
+3. Update Python models in `_protocol/messages.py` or `_schema/`.
 4. Update TypeScript and Python constructors or parsers.
 5. Update browser and Python handlers.
 6. Update buffer validation when binary payloads change.
