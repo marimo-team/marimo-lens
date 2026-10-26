@@ -9,8 +9,10 @@ import {
 } from "@/app/use-lens-controller";
 import { LensContext } from "@/context/lens-context";
 import { LensDock } from "@/dock/lens-dock";
+import { EarlierRequests } from "@/history/earlier-requests";
 import { SelectionNoteEditor } from "@/selection/components/selection-note-editor";
 import { SelectionOverlay } from "@/selection/components/selection-overlay";
+import { ReceiptAnnouncement } from "@/transient/resolution-receipt";
 import {
   TargetAttentionAnnouncement,
   TargetAttentionFallback,
@@ -29,7 +31,7 @@ export function MarimoLensContent({
 }) {
   const lens = useLensController(dependencies);
   const { state } = lens.context;
-  const { presentation } = lens;
+  const { presentation } = lens.attention;
   const surface = useAttentionSurface(presentation, lens.dom.window);
   const trailControls =
     presentation?.trail && !state.sheet.open && !lens.note ? (
@@ -80,10 +82,13 @@ export function MarimoLensContent({
               focusSelectionOrDock(lens.dom, note.selection.id);
             }}
             onDelete={() => selectionActions.deleteSelection(note.selection)}
-          />
+          >
+            <EarlierRequests selection={note.selection} />
+          </SelectionNoteEditor>
         ) : null}
 
         <LensStatus message={lens.ui.announcement} />
+        <ReceiptAnnouncement event={lens.announcedReceipt} />
         <TargetAttentionAnnouncement presentation={presentation} />
       </LensPortal>
     </LensContext>

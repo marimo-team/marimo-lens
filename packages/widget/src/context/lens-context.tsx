@@ -1,17 +1,27 @@
-import type { AddressedSelection, Selection, SelectionResolvedEvent } from "@marimo-lens/protocol";
+import type {
+  ChatRequest,
+  HistoryEntry,
+  HistoryState,
+  Selection,
+  SelectionResolvedEvent,
+} from "@marimo-lens/protocol";
 
 import { createContext, use } from "react";
 
+import type { SnapshotAsset } from "@/anywidget/client";
 import type { RevealMotion } from "@/selection/reveal";
-import type { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
 import type { SelectionMotion, RequestSheetTab } from "@/selection/state";
+
+import type { RecordIndex } from "./record-index";
 
 /** The requests sheet as the dock shows it. */
 export type LensSheet = {
   open: boolean;
   tab: RequestSheetTab;
-  /** The History receipt to focus when the sheet opens on History. */
-  focusedHistoryRevision: number | null;
+  /** The History entry to focus when the sheet opens on History. */
+  focusedHistoryKey: string | null;
+  /** History lists only the requests that shaped the current selection. */
+  shapedOnly: boolean;
 };
 
 export type LensState = {
@@ -19,11 +29,14 @@ export type LensState = {
   currentSelectionId: string | null;
   availableSelectionIds: ReadonlySet<string>;
   busySelectionIds: ReadonlySet<string>;
-  history: readonly AddressedSelection[];
+  /** The runtime's open chat requests. */
+  chats: readonly ChatRequest[];
+  /** Null for a Lens that shows no History. */
+  history: HistoryState | null;
+  record: RecordIndex;
   armed: boolean;
   interactionLocked: boolean;
   clearPending: boolean;
-  historyClearPending: boolean;
   sheet: LensSheet;
   receipt: SelectionResolvedEvent | null;
 };
@@ -32,18 +45,21 @@ export type LensActions = {
   toggleArmed: () => void;
   toggleSheet: () => void;
   setSheetTab: (tab: RequestSheetTab) => void;
+  setShapedOnly: (enabled: boolean) => void;
   openResolution: (event: SelectionResolvedEvent) => void;
   activateSelection: (selection: Selection, motion: RevealMotion) => void;
   editNote: (selection: Selection, motion: SelectionMotion) => void;
   deleteSelection: (selection: Selection) => void;
   clearSelections: () => void;
-  clearHistory: () => void;
-  reopen: (receipt: AddressedSelection) => void;
+  reopen: (entry: HistoryEntry) => void;
+  revealCells: (entry: HistoryEntry) => void;
+  dismissReceipt: (event: SelectionResolvedEvent) => void;
   setReceiptInteraction: (event: SelectionResolvedEvent, active: boolean) => void;
 };
 
 export type LensMeta = {
-  snapshotLoader: SelectionSnapshotLoader;
+  loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>;
+  loadHistoryImage: (sha256: string) => Promise<Uint8Array<ArrayBuffer>>;
 };
 
 export type LensContextValue = {
@@ -54,8 +70,8 @@ export type LensContextValue = {
 
 /**
  * The Lens's state, actions, and services. The app provides it, and the dock,
- * History, and receipt read it, so they render the same selections however
- * the provider produces them.
+ * History, and receipt read it, so they render the same requests and record
+ * however the provider produces them.
  */
 export const LensContext = createContext<LensContextValue | null>(null);
 

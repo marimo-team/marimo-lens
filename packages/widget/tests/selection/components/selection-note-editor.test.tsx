@@ -32,6 +32,40 @@ describe("selection note editor", () => {
     expect(onSave).toHaveBeenCalledWith("");
   });
 
+  test("names the target and its producing cell in the header", () => {
+    renderEditor(
+      selectionFixture({
+        description: { label: "Vega visualization", detail: "revenue_chart" },
+      }),
+      vi.fn(),
+    );
+
+    expect(document.querySelector("header")?.textContent).toContain(
+      "Vega visualization · revenue_chart",
+    );
+  });
+
+  // Browsers move focus to the page when the focused control becomes disabled.
+  test("keeps the note field focusable and its actions inert while a save is pending", () => {
+    const onSave = vi.fn<(note: string) => void>();
+    const selection = selectionFixture({ note: "" });
+    const { rerender } = renderEditor(selection, onSave);
+    const textarea = document.querySelector("textarea")!;
+    expect(document.activeElement).toBe(textarea);
+
+    rerender(withNotebookDom(editor(selection, onSave, { saving: true, mutationPending: true })));
+    const done = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
+      (button) => button.textContent === "Saving…",
+    )!;
+    act(() => done.click());
+
+    expect(textarea.disabled).toBe(false);
+    expect(textarea.readOnly).toBe(true);
+    expect(done.disabled).toBe(false);
+    expect(done.getAttribute("aria-disabled")).toBe("true");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
   test("saves the draft once per Control+Enter or Meta+Enter press from any editor control", () => {
     const onSave = vi.fn<(note: string) => void>();
     const onCancel = vi.fn();
@@ -91,16 +125,6 @@ describe("selection note editor", () => {
     expect(textarea.selectionStart).toBe(selection.note.length);
   });
 
-  test("renders as a nonmodal dialog", () => {
-    const { unmount } = renderEditor(selectionFixture(), () => {});
-    const editor = document.querySelector<HTMLDialogElement>("[data-marimo-lens-note-editor]")!;
-
-    expect(editor.open).toBe(true);
-
-    unmount();
-    expect(document.querySelector("[data-marimo-lens-note-editor]")).toBeNull();
-  });
-
   test("keeps Tab within the note editor", () => {
     renderEditor(selectionFixture(), () => {});
     const editor = document.querySelector<HTMLElement>("[data-marimo-lens-note-editor]")!;
@@ -128,18 +152,6 @@ describe("selection note editor", () => {
       );
     });
     expect(document.activeElement).toBe(done);
-  });
-
-  test("identifies a region selection in the metadata row", () => {
-    renderEditor(
-      selectionFixture({
-        anchor: { kind: "rect", x: 0.1, y: 0.2, width: 0.4, height: 0.3 },
-      }),
-      () => {},
-    );
-
-    const editor = document.querySelector<HTMLElement>("[data-marimo-lens-note-editor]")!;
-    expect(editor.querySelector("svg title")?.textContent).toBe("Region selection");
   });
 
   test("routes cancel and removal through the note workflow", () => {

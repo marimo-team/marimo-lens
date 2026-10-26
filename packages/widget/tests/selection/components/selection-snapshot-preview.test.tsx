@@ -8,7 +8,6 @@ import type { SnapshotAsset } from "@/anywidget/client";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import { NotebookDomProvider } from "@/notebook/notebook-dom-context";
 import { SnapshotPreviewButton } from "@/selection/components/selection-snapshot-preview";
-import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
 
 import { deferred, selectionFixture } from "../../support/fixtures";
 import { render } from "../../support/render";
@@ -23,34 +22,23 @@ afterEach(() => {
 });
 
 describe("selection snapshot preview", () => {
-  test("shows the exact stored image when the trigger receives focus", async () => {
+  test("loads the selection's stored image when the trigger receives focus", async () => {
     const selection = selectionFixture();
-    const asset = storedAsset(selection);
-    const loadSnapshot = vi.fn(async () => asset);
-    const createObjectURL = vi.fn(() => "blob:marimo-lens-snapshot");
-    const revokeObjectURL = vi.fn();
-    vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
+    const loadSnapshot = vi.fn(async () => storedAsset(selection));
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: () => "blob:marimo-lens-snapshot",
+      revokeObjectURL: () => {},
+    });
 
-    const view = renderPreview(loadSnapshot);
+    renderPreview(loadSnapshot, selection);
     const trigger = document.querySelector<HTMLButtonElement>("button[aria-haspopup='dialog']")!;
-    const wrapper = trigger.closest("[data-marimo-lens-snapshot-trigger]");
-    expect(wrapper?.getAttribute("data-status")).toBe("ready");
-    trigger.getBoundingClientRect = () => new DOMRect(900, 500, 40, 20);
     await act(async () => trigger.focus());
 
     expect(loadSnapshot).toHaveBeenCalledWith(selection.id);
-    const preview = document.querySelector<HTMLElement>("[data-marimo-lens-snapshot-preview]")!;
-    expect(preview.getAttribute("aria-label")).toBe("Selection image for S1");
     expect(document.querySelector<HTMLImageElement>("[data-marimo-lens-snapshot-image]")?.src).toBe(
       "blob:marimo-lens-snapshot",
     );
-    expect(document.body.textContent).toContain(
-      "This annotated image is available to vision-capable agents.",
-    );
-    expect(createObjectURL).toHaveBeenCalledOnce();
-
-    view.unmount();
-    expect(revokeObjectURL).toHaveBeenCalledWith("blob:marimo-lens-snapshot");
   });
 
   test("creates and releases snapshot URLs through the preview document", async () => {
@@ -82,12 +70,7 @@ describe("selection snapshot preview", () => {
       },
     });
 
-    const view = renderPreviews(
-      new SelectionSnapshotLoader(async () => asset),
-      selection,
-      1,
-      ownerDocument,
-    );
+    const view = renderPreviews(async () => asset, selection, 1, ownerDocument);
     const trigger = ownerDocument.querySelector<HTMLButtonElement>(
       "button[aria-haspopup='dialog']",
     )!;
@@ -169,9 +152,9 @@ describe("selection snapshot preview", () => {
 
   test("announces pending icon-only image state", () => {
     renderPreviews(
-      new SelectionSnapshotLoader(async () => {
+      async () => {
         throw new Error("Snapshot loading is not expected");
-      }),
+      },
       selectionFixture({ snapshot: { status: "pending" } }),
       2,
     );
@@ -183,7 +166,7 @@ describe("selection snapshot preview", () => {
     expect(iconStatus?.getAttribute("aria-label")).toBe("Preparing image");
   });
 
-  test("shares snapshot bytes across marker and sheet previews, then reloads after close", async () => {
+  test("releases the image on close and reloads it when the preview opens again", async () => {
     const selection = selectionFixture();
     const asset = storedAsset(selection);
     const first = deferred<SnapshotAsset>();
@@ -192,63 +175,37 @@ describe("selection snapshot preview", () => {
       .fn<(selectionId: string) => Promise<SnapshotAsset>>()
       .mockImplementationOnce(() => first.promise)
       .mockImplementationOnce(() => second.promise);
-    const snapshotLoader = new SelectionSnapshotLoader(loadSnapshot);
     const createObjectURL = vi
       .fn<(blob: Blob) => string>()
       .mockReturnValueOnce("blob:preview-1")
-      .mockReturnValueOnce("blob:preview-2")
-      .mockReturnValueOnce("blob:preview-3")
-      .mockReturnValueOnce("blob:preview-4");
+      .mockReturnValueOnce("blob:preview-2");
     const revokeObjectURL = vi.fn();
     vi.stubGlobal("URL", { ...URL, createObjectURL, revokeObjectURL });
 
-    renderPreviews(snapshotLoader, selection, 3);
-    const triggers = Array.from(
-      document.querySelectorAll<HTMLButtonElement>("button[aria-haspopup='dialog']"),
-    );
-    await act(async () => {
-      triggers[0]?.click();
-      triggers[1]?.click();
-      await Promise.resolve();
-    });
-
-    expect(loadSnapshot).toHaveBeenCalledOnce();
+    renderPreview(loadSnapshot, selection);
+    const trigger = document.querySelector<HTMLButtonElement>("button[aria-haspopup='dialog']")!;
+    await act(async () => trigger.click());
     expect(loadSnapshot).toHaveBeenCalledWith(selection.id);
 
     await act(async () => {
       first.resolve(asset);
       await first.promise;
     });
-
-    expect(document.querySelectorAll("[data-marimo-lens-snapshot-image]")).toHaveLength(2);
-    expect(createObjectURL).toHaveBeenCalledTimes(2);
-
-    await act(async () => triggers[2]?.click());
-    expect(loadSnapshot).toHaveBeenCalledOnce();
-    expect(document.querySelectorAll("[data-marimo-lens-snapshot-image]")).toHaveLength(3);
-    expect(createObjectURL).toHaveBeenCalledTimes(3);
-
-    const closeButtons = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('[aria-label="Close preview"]'),
+    expect(document.querySelector<HTMLImageElement>("[data-marimo-lens-snapshot-image]")?.src).toBe(
+      "blob:preview-1",
     );
-    act(() => {
-      for (const button of closeButtons) button.click();
-    });
 
-    expect(revokeObjectURL).toHaveBeenCalledTimes(3);
+    act(() => document.querySelector<HTMLButtonElement>('[aria-label="Close preview"]')?.click());
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:preview-1");
 
-    await act(async () => {
-      triggers[0]?.click();
-      await Promise.resolve();
-    });
+    await act(async () => trigger.click());
     expect(loadSnapshot).toHaveBeenCalledTimes(2);
-
     await act(async () => {
       second.resolve(asset);
       await second.promise;
     });
     expect(document.querySelector<HTMLImageElement>("[data-marimo-lens-snapshot-image]")?.src).toBe(
-      "blob:preview-4",
+      "blob:preview-2",
     );
   });
 });
@@ -257,11 +214,11 @@ function renderPreview(
   loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>,
   selection = selectionFixture(),
 ) {
-  return renderPreviews(new SelectionSnapshotLoader(loadSnapshot), selection, 1);
+  renderPreviews(loadSnapshot, selection, 1);
 }
 
 function renderPreviews(
-  snapshotLoader: SelectionSnapshotLoader,
+  loadSnapshot: (selectionId: string) => Promise<SnapshotAsset>,
   selection: ReturnType<typeof selectionFixture>,
   count: number,
   ownerDocument = document,
@@ -271,13 +228,7 @@ function renderPreviews(
   return render(
     <NotebookDomProvider adapter={adapter}>
       {Array.from({ length: count }, (_, index) => (
-        <SnapshotPreviewButton
-          key={index}
-          selection={selection}
-          capturing={false}
-          variant={index % 2 === 0 ? "label" : "icon"}
-          snapshotLoader={snapshotLoader}
-        />
+        <SnapshotPreviewButton key={index} selection={selection} loadSnapshot={loadSnapshot} />
       ))}
     </NotebookDomProvider>,
     ownerDocument,

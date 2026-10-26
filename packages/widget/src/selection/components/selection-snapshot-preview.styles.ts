@@ -1,6 +1,6 @@
 import * as stylex from "@stylexjs/stylex";
 
-import { colors, media } from "../../styles/tokens.stylex";
+import { colors } from "../../styles/tokens.stylex";
 
 export const snapshotStyles = stylex.create({
   trigger: {
@@ -17,12 +17,5 @@ export const snapshotStyles = stylex.create({
   },
   triggerIcon: {
     justifyContent: "center",
-  },
-  triggerButton: {
-    minHeight: { default: 28, [media.coarsePointer]: 44 },
-    padding: "0 7px",
-    gap: 5,
-    fontSize: 11,
-    fontWeight: 600,
   },
 });

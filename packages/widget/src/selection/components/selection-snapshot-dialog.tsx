@@ -4,19 +4,13 @@ import type { RefObject } from "react";
 import * as stylex from "@stylexjs/stylex";
 import { AlertCircle, LoaderCircle, X } from "lucide-react";
 
-import type { SnapshotAsset } from "@/anywidget/client";
 import type { AnchoredSurfacePosition } from "@/ui/anchored-surface";
+import type { ObjectUrl } from "@/ui/use-object-url";
 
+import { errorMessage } from "@/anywidget/error";
 import { iconButtonStyles, ui } from "@/styles/primitives";
 
 import { snapshotDialogStyles } from "./selection-snapshot-dialog.styles";
-
-export type LoadedSnapshot = {
-  key: string;
-  asset: SnapshotAsset;
-  url: string;
-  urlApi: Pick<typeof URL, "createObjectURL" | "revokeObjectURL">;
-};
 
 export function SnapshotPreviewDialog({
   surfaceRef,
@@ -24,9 +18,7 @@ export function SnapshotPreviewDialog({
   snapshot,
   position,
   motion,
-  current,
-  loading,
-  error,
+  image,
   onPointerEnter,
   onPointerLeave,
   onClose,
@@ -36,9 +28,7 @@ export function SnapshotPreviewDialog({
   snapshot: StoredSnapshot;
   position: AnchoredSurfacePosition;
   motion: "animate" | "instant";
-  current: LoadedSnapshot | null;
-  loading: boolean;
-  error: string | null;
+  image: ObjectUrl | null;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
   onClose: () => void;
@@ -84,18 +74,18 @@ export function SnapshotPreviewDialog({
       <div
         {...stylex.props(snapshotDialogStyles.image)}
         data-marimo-lens-snapshot-image-container
-        aria-busy={loading ? "true" : undefined}
+        aria-busy={image === null ? "true" : undefined}
       >
-        {current ? (
+        {image && "url" in image ? (
           <img
             {...stylex.props(snapshotDialogStyles.bitmap)}
             data-marimo-lens-snapshot-image
-            src={current.url}
-            width={current.asset.snapshot.width}
-            height={current.asset.snapshot.height}
+            src={image.url}
+            width={snapshot.width}
+            height={snapshot.height}
             alt={`Captured output for ${selectionLabel}`}
           />
-        ) : loading ? (
+        ) : image === null ? (
           <span {...stylex.props(snapshotDialogStyles.imageStatus)}>
             <LoaderCircle {...stylex.props(ui.spin)} size={16} aria-hidden="true" /> Loading image…
           </span>
@@ -104,7 +94,8 @@ export function SnapshotPreviewDialog({
             {...stylex.props(snapshotDialogStyles.imageStatus, snapshotDialogStyles.imageError)}
             data-status="failed"
           >
-            <AlertCircle size={16} aria-hidden="true" /> {error ?? "Image unavailable"}
+            <AlertCircle size={16} aria-hidden="true" />{" "}
+            {errorMessage(image.error, "Snapshot could not be loaded")}
           </span>
         )}
       </div>

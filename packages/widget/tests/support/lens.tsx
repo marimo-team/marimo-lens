@@ -3,28 +3,33 @@ import type { ReactNode } from "react";
 import type { LensActions, LensMeta, LensSheet, LensState } from "@/context/lens-context";
 
 import { LensContext } from "@/context/lens-context";
-import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
+import { indexRecord } from "@/context/record-index";
 
-/** A Lens state with no selections and no History. */
+import { historyFixture } from "./fixtures";
+
+/** A Lens state with History and no requests. `record` follows `history`. */
 export function lensState(
-  overrides: Omit<Partial<LensState>, "sheet"> & { sheet?: Partial<LensSheet> } = {},
+  overrides: Omit<Partial<LensState>, "sheet" | "record"> & { sheet?: Partial<LensSheet> } = {},
 ): LensState {
+  const history = overrides.history === undefined ? historyFixture() : overrides.history;
   return {
     selections: [],
     currentSelectionId: null,
     availableSelectionIds: new Set(),
     busySelectionIds: new Set(),
-    history: [],
+    chats: [],
     armed: false,
     interactionLocked: false,
     clearPending: false,
-    historyClearPending: false,
     receipt: null,
     ...overrides,
+    history,
+    record: indexRecord(history),
     sheet: {
       open: false,
       tab: "open",
-      focusedHistoryRevision: null,
+      focusedHistoryKey: null,
+      shapedOnly: false,
       ...overrides.sheet,
     },
   };
@@ -36,13 +41,15 @@ export function lensActions(overrides: Partial<LensActions> = {}): LensActions {
     toggleArmed: ignore,
     toggleSheet: ignore,
     setSheetTab: ignore,
+    setShapedOnly: ignore,
     openResolution: ignore,
     activateSelection: ignore,
     editNote: ignore,
     deleteSelection: ignore,
     clearSelections: ignore,
-    clearHistory: ignore,
     reopen: ignore,
+    revealCells: ignore,
+    dismissReceipt: ignore,
     setReceiptInteraction: ignore,
     ...overrides,
   };
@@ -50,12 +57,12 @@ export function lensActions(overrides: Partial<LensActions> = {}): LensActions {
 
 export function lensMeta(overrides: Partial<LensMeta> = {}): LensMeta {
   return {
-    snapshotLoader: new SelectionSnapshotLoader(() =>
-      Promise.reject(new Error("Snapshot fixture unavailable")),
-    ),
+    loadSnapshot: () => Promise.reject(new Error("Snapshot fixture unavailable")),
+    loadHistoryImage: () => Promise.reject(new Error("no image")),
     ...overrides,
   };
 }
+
 export function LensTestProvider({
   state,
   actions = lensActions(),

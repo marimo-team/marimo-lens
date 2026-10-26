@@ -2,7 +2,7 @@ import type { Selection } from "@marimo-lens/protocol";
 
 import * as stylex from "@stylexjs/stylex";
 import { Trash2 } from "lucide-react";
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { useNotebookDom } from "@/notebook/notebook-dom-context";
 import { anchorToViewport } from "@/selection/anchor";
@@ -22,6 +22,8 @@ type SelectionNoteEditorProps = {
   onSave: (note: string) => void;
   onCancel: () => void;
   onDelete: () => void;
+  /** Context shown between the note and the actions. */
+  children?: ReactNode;
 };
 
 export function SelectionNoteEditor({
@@ -33,12 +35,18 @@ export function SelectionNoteEditor({
   onSave,
   onCancel,
   onDelete,
+  children,
 }: SelectionNoteEditorProps) {
   const surfaceRef = useRef<HTMLDialogElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState(selection.note);
   const fieldId = useId();
   const errorId = useId();
+  // Busy controls stay focusable, so a click while a mutation runs does nothing.
+  const unlessPending = (action: () => void) => () => {
+    if (!mutationPending) action();
+  };
+  const save = unlessPending(() => onSave(draft));
   const dom = useNotebookDom();
   const anchor = editorAnchor(dom.getTarget(selection.target)?.element ?? null, selection);
   const position = useAnchoredSurface({
@@ -85,7 +93,7 @@ export function SelectionNoteEditor({
         if (isSaveShortcut(event.nativeEvent)) {
           event.preventDefault();
           event.stopPropagation();
-          if (!mutationPending) onSave(draft);
+          save();
           return;
         }
         keepTabInside(event, dom.activeElement);
@@ -104,7 +112,7 @@ export function SelectionNoteEditor({
         maxLength={4_000}
         rows={3}
         placeholder="Add a note (optional)"
-        disabled={mutationPending}
+        readOnly={mutationPending}
         aria-invalid={saveError ? "true" : undefined}
         aria-describedby={saveError ? errorId : undefined}
         onChange={(event) => setDraft(event.currentTarget.value)}
@@ -116,12 +124,14 @@ export function SelectionNoteEditor({
         </p>
       ) : null}
 
+      {children}
+
       <footer {...stylex.props(noteEditorStyles.footer)}>
         <button
           {...stylex.props(...iconButtonStyles, ui.danger)}
           type="button"
-          onClick={onDelete}
-          disabled={mutationPending}
+          onClick={unlessPending(onDelete)}
+          aria-disabled={mutationPending || undefined}
           aria-label={`Remove selection ${selection.label}`}
           title="Remove selection"
         >
@@ -131,16 +141,16 @@ export function SelectionNoteEditor({
           <button
             {...stylex.props(...buttonStyles)}
             type="button"
-            onClick={onCancel}
-            disabled={mutationPending}
+            onClick={unlessPending(onCancel)}
+            aria-disabled={mutationPending || undefined}
           >
             Cancel
           </button>
           <button
             {...stylex.props(...buttonStyles, ui.primary)}
             type="button"
-            onClick={() => onSave(draft)}
-            disabled={mutationPending}
+            onClick={save}
+            aria-disabled={mutationPending || undefined}
             aria-keyshortcuts="Control+Enter Meta+Enter"
           >
             {saving ? "Saving…" : "Done"}
@@ -152,12 +162,14 @@ export function SelectionNoteEditor({
 }
 
 function NoteEditorHeader({ selection }: { selection: Selection }) {
+  const { label, detail } = selection.description;
   return (
     <header {...stylex.props(noteEditorStyles.header)}>
       <span {...stylex.props(ui.mono, noteEditorStyles.selection)}>{selection.label}</span>
       <span aria-hidden="true">·</span>
       <span {...stylex.props(noteEditorStyles.target)} title={selectionTitle(selection)}>
-        <span {...stylex.props(ui.mono)}>{selection.description.label}</span>
+        <span {...stylex.props(ui.mono)}>{label}</span>
+        {detail ? <span {...stylex.props(noteEditorStyles.detail)}> · {detail}</span> : null}
       </span>
       <SelectionKindMark kind={selection.anchor.kind} push />
     </header>

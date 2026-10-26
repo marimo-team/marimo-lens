@@ -89,7 +89,9 @@ function targetPresentation(target: Pick<TargetSurface, "target" | "element">): 
     ? undefined
     : (heading?.textContent ?? labelled?.getAttribute("aria-label"))?.replace(/\s+/g, " ").trim();
   const cells = target.target.cellIds.length
-    ? `Cell ${target.target.cellIds.join(", ")}`
+    ? target.target.cellIds
+        .map((cellId) => cellName(target.element.ownerDocument, cellId) ?? `Cell ${cellId}`)
+        .join(", ")
     : undefined;
   const info: TargetInfo = {
     label: boundedUtf16(
@@ -99,4 +101,19 @@ function targetPresentation(target: Pick<TargetSurface, "target" | "element">): 
   };
   if (cells && info.label !== cells) info.detail = boundedUtf16(cells, 512);
   return info;
+}
+
+/**
+ * Name a cell as marimo's editor shows it. marimo stores a top-level function
+ * or class cell under its name with a `*` prefix, and calls unnamed cells `_`.
+ */
+function cellName(ownerDocument: Document, cellId: string): string | null {
+  for (const cell of ownerDocument.querySelectorAll<HTMLElement>(
+    "[data-cell-id][data-cell-name]",
+  )) {
+    if (cell.dataset.cellId !== cellId) continue;
+    const name = cell.dataset.cellName?.replace(/^\*/, "");
+    return name && name !== "_" && name !== "__" ? name : null;
+  }
+  return null;
 }

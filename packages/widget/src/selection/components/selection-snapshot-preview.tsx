@@ -1,43 +1,79 @@
-import type { Selection } from "@marimo-lens/protocol";
+import type { Selection, StoredSnapshot } from "@marimo-lens/protocol";
+import type { FocusEvent, KeyboardEvent, MouseEvent } from "react";
 
 import * as stylex from "@stylexjs/stylex";
 import { AlertCircle, Clock3, Image as ImageIcon, LoaderCircle } from "lucide-react";
-import { useCallback, useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
 
-import type {
-  SelectionSnapshotLease,
-  SelectionSnapshotLoader,
-} from "@/selection/selection-snapshot-loader";
+import type { SnapshotAsset } from "@/anywidget/client";
 
-import { errorMessage } from "@/anywidget/error";
 import { useNotebookDom } from "@/notebook/notebook-dom-context";
 import { iconButtonStyles, ui } from "@/styles/primitives";
-import { useAnchoredSurface, type AnchoredSurfaceAnchor } from "@/ui/anchored-surface";
+import { useAnchoredSurface } from "@/ui/anchored-surface";
+import { useObjectUrl } from "@/ui/use-object-url";
 
-import { SnapshotPreviewDialog, type LoadedSnapshot } from "./selection-snapshot-dialog";
+import { SnapshotPreviewDialog } from "./selection-snapshot-dialog";
 import { snapshotStyles } from "./selection-snapshot-preview.styles";
+
+type LoadSnapshot = (selectionId: string) => Promise<SnapshotAsset>;
 
 type SnapshotPreviewButtonProps = {
   selection: Selection;
-  capturing: boolean;
-  variant?: "icon" | "label";
-  snapshotLoader: SelectionSnapshotLoader;
+  loadSnapshot: LoadSnapshot;
 };
 
-type SnapshotAssetController = {
-  current: LoadedSnapshot | null;
-  loading: boolean;
-  error: string | null;
-  ensureLoaded: () => Promise<void>;
-  release: () => void;
-};
+/** Preview a selection's stored image, or say that it is still capturing or unavailable. */
+export function SnapshotPreviewButton({ selection, loadSnapshot }: SnapshotPreviewButtonProps) {
+  const snapshot = selection.snapshot;
+  if (snapshot.status === "available" || snapshot.status === "outdated") {
+    return (
+      <StoredSnapshotPreview
+        selection={selection}
+        snapshot={snapshot}
+        loadSnapshot={loadSnapshot}
+      />
+    );
+  }
+  return <SnapshotStatusMark pending={snapshot.status === "pending"} />;
+}
 
-export function SnapshotPreviewButton({
+function SnapshotStatusMark({ pending }: { pending: boolean }) {
+  const label = pending ? "Preparing image" : "Image unavailable";
+  return (
+    <output
+      {...stylex.props(
+        snapshotStyles.trigger,
+        snapshotStyles.triggerIcon,
+        !pending && snapshotStyles.triggerFailed,
+      )}
+      data-marimo-lens-snapshot-trigger
+      data-status={pending ? "capturing" : "failed"}
+      title={label}
+      aria-label={label}
+    >
+      {pending ? (
+        <LoaderCircle {...stylex.props(ui.spin)} size={13} aria-hidden="true" />
+      ) : (
+        <AlertCircle size={13} aria-hidden="true" />
+      )}
+    </output>
+  );
+}
+
+/**
+ * Open the preview on hover after a short delay, at once on focus, and pinned
+ * on click. A pinned preview stays until a click outside, Escape, or a second
+ * click, and the image loads only while the preview is open.
+ */
+function StoredSnapshotPreview({
   selection,
-  capturing,
-  variant = "label",
-  snapshotLoader,
-}: SnapshotPreviewButtonProps) {
+  snapshot,
+  loadSnapshot,
+}: {
+  selection: Selection;
+  snapshot: StoredSnapshot;
+  loadSnapshot: LoadSnapshot;
+}) {
   const dom = useNotebookDom();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -46,23 +82,21 @@ export function SnapshotPreviewButton({
   const closeTimer = useRef<number | null>(null);
   const timerWindow = useRef<Window | null>(null);
   const suppressFocusOpen = useRef(false);
-  const openSnapshotKey = useRef("");
   const [open, setOpen] = useState(false);
+  // The trigger as state, so placement reads no ref while rendering.
   const [anchorElement, setAnchorElement] = useState<HTMLButtonElement | null>(null);
   const [pinned, setPinned] = useState(false);
   const [motion, setMotion] = useState<"animate" | "instant">("animate");
-  const snapshot = selection.snapshot;
-  const stored = snapshot.status === "available" || snapshot.status === "outdated";
-  const snapshotKey = stored ? `${selection.id}:${snapshot.sha256}` : "";
-  const { current, loading, error, ensureLoaded, release } = useSnapshotAsset({
-    selectionId: selection.id,
-    snapshotKey,
-    sha256: stored ? snapshot.sha256 : "",
-    stored,
-    snapshotLoader,
-    triggerRef,
+  const image = useObjectUrl(open ? `${selection.id}:${snapshot.sha256}` : null, async () => {
+    const asset = await loadSnapshot(selection.id);
+    if (asset.snapshot.sha256 !== snapshot.sha256) {
+      throw new Error("Snapshot changed before the preview loaded");
+    }
+    return asset.bytes;
   });
-  const anchor = elementAnchor(anchorElement);
+  const anchor = anchorElement
+    ? { element: anchorElement, rect: anchorElement.getBoundingClientRect() }
+    : null;
   const position = useAnchoredSurface({
     anchor,
     open,
@@ -83,11 +117,9 @@ export function SnapshotPreviewButton({
 
   const close = useCallback(() => {
     clearTimers();
-    openSnapshotKey.current = "";
-    release();
     setOpen(false);
     setPinned(false);
-  }, [clearTimers, release]);
+  }, [clearTimers]);
   const closeFromOutside = useEffectEvent(close);
   const closeAndRestoreFocus = useCallback(() => {
     close();
@@ -103,157 +135,117 @@ export function SnapshotPreviewButton({
       setMotion(nextMotion);
       setAnchorElement(triggerRef.current);
       setOpen(true);
-      openSnapshotKey.current = snapshotKey;
-      void ensureLoaded();
     },
-    [clearTimers, ensureLoaded, snapshotKey],
+    [clearTimers],
   );
 
-  const scheduleOpen = useCallback(() => {
-    clearTimers();
-    const ownerWindow = triggerRef.current?.ownerDocument.defaultView;
-    if (!ownerWindow) return;
-    timerWindow.current = ownerWindow;
-    openTimer.current = ownerWindow.setTimeout(() => show("animate"), 180);
-  }, [clearTimers, show]);
-
+  const schedule = useCallback(
+    (timer: typeof openTimer, run: () => void, delay: number) => {
+      clearTimers();
+      const ownerWindow = triggerRef.current?.ownerDocument.defaultView;
+      if (!ownerWindow) return;
+      timerWindow.current = ownerWindow;
+      timer.current = ownerWindow.setTimeout(run, delay);
+    },
+    [clearTimers],
+  );
   const scheduleClose = useCallback(() => {
-    clearTimers();
-    if (pinned) return;
-    const ownerWindow = triggerRef.current?.ownerDocument.defaultView;
-    if (!ownerWindow) return;
-    timerWindow.current = ownerWindow;
-    closeTimer.current = ownerWindow.setTimeout(close, 120);
-  }, [clearTimers, close, pinned]);
-
-  useEffect(() => {
-    if (!open || openSnapshotKey.current === snapshotKey) return;
-    openSnapshotKey.current = snapshotKey;
-    void ensureLoaded();
-  }, [ensureLoaded, open, snapshotKey]);
+    if (pinned) clearTimers();
+    else schedule(closeTimer, close, 120);
+  }, [clearTimers, close, pinned, schedule]);
 
   useEffect(() => {
     if (!pinned) return undefined;
     const ownerDocument = wrapperRef.current?.ownerDocument;
     if (!ownerDocument) return undefined;
     const onPointerDown = (event: PointerEvent) => {
-      if (!event.composedPath().includes(wrapperRef.current!)) {
-        closeFromOutside();
-      }
+      if (!event.composedPath().includes(wrapperRef.current!)) closeFromOutside();
     };
     ownerDocument.addEventListener("pointerdown", onPointerDown, true);
     return () => ownerDocument.removeEventListener("pointerdown", onPointerDown, true);
   }, [pinned]);
 
-  useEffect(
-    () => () => {
-      clearTimers();
-    },
-    [clearTimers],
-  );
+  useEffect(() => () => clearTimers(), [clearTimers]);
 
-  if (!stored) {
-    const pending = capturing || snapshot.status === "pending";
-    return (
-      <output
-        {...stylex.props(
-          snapshotStyles.trigger,
-          variant === "icon" && snapshotStyles.triggerIcon,
-          !pending && snapshotStyles.triggerFailed,
-        )}
-        data-marimo-lens-snapshot-trigger
-        data-status={pending ? "capturing" : "failed"}
-        title={pending ? "Preparing image" : "Image unavailable"}
-        aria-label={pending ? "Preparing image" : "Image unavailable"}
-      >
-        {pending ? (
-          <LoaderCircle {...stylex.props(ui.spin)} size={13} aria-hidden="true" />
-        ) : (
-          <AlertCircle size={13} aria-hidden="true" />
-        )}
-        {variant === "label" ? (pending ? "Preparing image…" : "Image unavailable") : null}
-      </output>
-    );
-  }
+  const onTriggerPointerEnter = () => {
+    if (!pinned) schedule(openTimer, () => show("animate"), 180);
+  };
+  const onTriggerFocus = () => {
+    if (suppressFocusOpen.current) {
+      suppressFocusOpen.current = false;
+      return;
+    }
+    show("instant");
+  };
+  const onTriggerBlur = (event: FocusEvent<HTMLButtonElement>) => {
+    if (
+      isNode(event.relatedTarget, event.currentTarget.ownerDocument) &&
+      wrapperRef.current?.contains(event.relatedTarget)
+    ) {
+      return;
+    }
+    if (!pinned) close();
+  };
+  const onTriggerKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== "Escape" || !open) return;
+    event.preventDefault();
+    close();
+    triggerRef.current?.focus({ preventScroll: true });
+  };
+  const onTriggerClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (open && pinned) {
+      close();
+      return;
+    }
+    setPinned(true);
+    show("animate");
+    // A keyboard click moves focus into the pinned preview.
+    if (event.detail === 0 && dom.activeElement === event.currentTarget) {
+      event.currentTarget.ownerDocument.defaultView?.queueMicrotask(() => {
+        wrapperRef.current
+          ?.querySelector<HTMLButtonElement>('[aria-label="Close preview"]')
+          ?.focus({ preventScroll: true });
+      });
+    }
+  };
+
+  const closeWhenFocusLeaves = (event: FocusEvent<HTMLDivElement>) => {
+    if (
+      pinned &&
+      (!isNode(event.relatedTarget, event.currentTarget.ownerDocument) ||
+        !event.currentTarget.contains(event.relatedTarget))
+    ) {
+      close();
+    }
+  };
 
   const outdated = snapshot.status === "outdated";
   const label = outdated ? "View previous image" : "View image";
+  const Icon = outdated ? Clock3 : ImageIcon;
   return (
     <div
       ref={wrapperRef}
-      {...stylex.props(snapshotStyles.trigger, variant === "icon" && snapshotStyles.triggerIcon)}
+      {...stylex.props(snapshotStyles.trigger, snapshotStyles.triggerIcon)}
       data-marimo-lens-snapshot-trigger
       data-status={outdated ? "outdated" : "ready"}
-      onBlur={(event) => {
-        if (
-          pinned &&
-          (!isNode(event.relatedTarget, event.currentTarget.ownerDocument) ||
-            !event.currentTarget.contains(event.relatedTarget))
-        ) {
-          close();
-        }
-      }}
+      onBlur={closeWhenFocusLeaves}
     >
       <button
         ref={triggerRef}
-        {...stylex.props(
-          ...(variant === "icon"
-            ? iconButtonStyles
-            : [ui.interactive, ui.pressable, ui.control, snapshotStyles.triggerButton]),
-        )}
+        {...stylex.props(...iconButtonStyles)}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label={`${label} for ${selection.label}.`}
         title={label}
-        onPointerEnter={() => {
-          if (!pinned) scheduleOpen();
-        }}
+        onPointerEnter={onTriggerPointerEnter}
         onPointerLeave={scheduleClose}
-        onFocus={() => {
-          if (suppressFocusOpen.current) {
-            suppressFocusOpen.current = false;
-            return;
-          }
-          show("instant");
-        }}
-        onBlur={(event) => {
-          if (
-            isNode(event.relatedTarget, event.currentTarget.ownerDocument) &&
-            wrapperRef.current?.contains(event.relatedTarget)
-          ) {
-            return;
-          }
-          if (!pinned) close();
-        }}
-        onKeyDown={(event) => {
-          if (event.key !== "Escape" || !open) return;
-          event.preventDefault();
-          close();
-          triggerRef.current?.focus({ preventScroll: true });
-        }}
-        onClick={(event) => {
-          if (open && pinned) {
-            close();
-            return;
-          }
-          setPinned(true);
-          show("animate");
-          if (event.detail === 0 && dom.activeElement === event.currentTarget) {
-            event.currentTarget.ownerDocument.defaultView?.queueMicrotask(() => {
-              wrapperRef.current
-                ?.querySelector<HTMLButtonElement>('[aria-label="Close preview"]')
-                ?.focus({ preventScroll: true });
-            });
-          }
-        }}
+        onFocus={onTriggerFocus}
+        onBlur={onTriggerBlur}
+        onKeyDown={onTriggerKeyDown}
+        onClick={onTriggerClick}
       >
-        {outdated ? (
-          <Clock3 size={variant === "icon" ? 15 : 13} aria-hidden="true" />
-        ) : (
-          <ImageIcon size={variant === "icon" ? 15 : 13} aria-hidden="true" />
-        )}
-        {variant === "label" ? label : null}
+        <Icon size={15} aria-hidden="true" />
       </button>
 
       {open ? (
@@ -263,9 +255,7 @@ export function SnapshotPreviewButton({
           snapshot={snapshot}
           position={position}
           motion={motion}
-          current={current}
-          loading={loading}
-          error={error}
+          image={image}
           onPointerEnter={clearTimers}
           onPointerLeave={scheduleClose}
           onClose={closeAndRestoreFocus}
@@ -275,116 +265,7 @@ export function SnapshotPreviewButton({
   );
 }
 
-function useSnapshotAsset({
-  selectionId,
-  snapshotKey,
-  sha256,
-  stored,
-  snapshotLoader,
-  triggerRef,
-}: {
-  selectionId: string;
-  snapshotKey: string;
-  sha256: string;
-  stored: boolean;
-  snapshotLoader: SelectionSnapshotLoader;
-  triggerRef: RefObject<HTMLButtonElement | null>;
-}): SnapshotAssetController {
-  const loadGeneration = useRef(0);
-  const leaseRef = useRef<{
-    key: string;
-    lease: SelectionSnapshotLease;
-    load: Promise<void>;
-  } | null>(null);
-  const loadedRef = useRef<LoadedSnapshot | null>(null);
-  const [loaded, setLoaded] = useState<LoadedSnapshot | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const dispose = useCallback((updateState: boolean) => {
-    loadGeneration.current += 1;
-    leaseRef.current?.lease.release();
-    leaseRef.current = null;
-    if (loadedRef.current) {
-      loadedRef.current.urlApi.revokeObjectURL(loadedRef.current.url);
-    }
-    loadedRef.current = null;
-    if (!updateState) return;
-    setLoaded(null);
-    setLoading(false);
-    setError(null);
-  }, []);
-
-  const release = useCallback(() => dispose(true), [dispose]);
-
-  const ensureLoaded = useCallback((): Promise<void> => {
-    if (!stored) {
-      dispose(true);
-      return Promise.resolve();
-    }
-    if (loadedRef.current?.key === snapshotKey) return Promise.resolve();
-    const existing = leaseRef.current;
-    if (existing?.key === snapshotKey) return existing.load;
-
-    dispose(true);
-    const generation = loadGeneration.current + 1;
-    loadGeneration.current = generation;
-    setLoading(true);
-    setError(null);
-    const lease = snapshotLoader.acquire(selectionId, sha256);
-    const active = {
-      key: snapshotKey,
-      lease,
-      load: Promise.resolve(),
-    };
-    active.load = (async () => {
-      try {
-        const asset = await lease.asset;
-        if (loadGeneration.current !== generation || leaseRef.current !== active) return;
-        const ownerWindow = triggerRef.current?.ownerDocument.defaultView;
-        if (!ownerWindow) throw new Error("Snapshot preview is detached from its document");
-        const urlApi = ownerWindow.URL;
-        const url = urlApi.createObjectURL(
-          new ownerWindow.Blob([copyArrayBuffer(asset.bytes)], {
-            type: asset.snapshot.mediaType,
-          }),
-        );
-        const next = { key: snapshotKey, asset, url, urlApi };
-        loadedRef.current = next;
-        setLoaded(next);
-      } catch (caught) {
-        if (loadGeneration.current !== generation || leaseRef.current !== active) return;
-        setError(errorMessage(caught, "Snapshot could not be loaded"));
-      } finally {
-        if (loadGeneration.current === generation && leaseRef.current === active) setLoading(false);
-      }
-    })();
-    leaseRef.current = active;
-    return active.load;
-  }, [dispose, selectionId, sha256, snapshotKey, snapshotLoader, stored, triggerRef]);
-
-  useEffect(() => () => dispose(false), [dispose]);
-
-  return {
-    current: loaded?.key === snapshotKey ? loaded : null,
-    loading,
-    error,
-    ensureLoaded,
-    release,
-  };
-}
-
-function elementAnchor(element: Element | null): AnchoredSurfaceAnchor | null {
-  return element ? { element, rect: element.getBoundingClientRect() } : null;
-}
-
 function isNode(value: EventTarget | null, ownerDocument: Document): value is Node {
   const NodeConstructor = ownerDocument.defaultView?.Node;
   return NodeConstructor ? value instanceof NodeConstructor : false;
-}
-
-function copyArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer;
 }

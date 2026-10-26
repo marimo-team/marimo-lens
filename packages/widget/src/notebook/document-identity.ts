@@ -34,3 +34,15 @@ export function targetBelongsToDocument(target: SelectionTarget, ownerDocument: 
     target.documentPath === documentPath(ownerDocument)
   );
 }
+
+/** Return `target` as owned by `ownerDocument`, as a reopened record entry is. */
+export function targetInDocument<Target extends SelectionTarget>(
+  target: Target,
+  ownerDocument: Document,
+): Target {
+  return {
+    ...target,
+    documentId: documentIdentity(ownerDocument),
+    documentPath: documentPath(ownerDocument),
+  };
+}

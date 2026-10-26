@@ -1,7 +1,7 @@
 import type { AnyModel } from "@anywidget/types";
 import type { CaptureResult } from "@marimo-lens/image-capture";
 import type {
-  AddressedSelection,
+  HistoryEntry,
   LensResponse,
   LensState,
   Selection,
@@ -20,11 +20,11 @@ import { documentIdentity } from "@/notebook/document-identity";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import { targetFromElement } from "@/notebook/selection-target";
 import { useSelectionActions } from "@/selection/selection-actions";
-import { INITIAL_UI_STATE, uiReducer, type UiState } from "@/selection/state";
+import { INITIAL_UI_STATE, uiReducer, type UiAction, type UiState } from "@/selection/state";
 
 import {
-  addressedSelectionFixture,
   deferred,
+  historyEntryFixture,
   outputFixture,
   selectionFixture,
 } from "../support/fixtures";
@@ -44,11 +44,13 @@ const NONE_AVAILABLE = new Set<string>();
 let view: ReturnType<typeof render> | null = null;
 let actions: Actions | null = null;
 let latestUi: UiState | null = null;
+let dispatchUi: ((action: UiAction) => void) | null = null;
 
 afterEach(() => {
   view = null;
   actions = null;
   latestUi = null;
+  dispatchUi = null;
   document.body.replaceChildren();
   captureSnapshot.mockReset();
   vi.unstubAllGlobals();
@@ -391,6 +393,19 @@ describe("selection mutations", () => {
     expect(latestUi?.announcement).not.toBe("Image ready.");
   });
 
+  test("keeps the requests sheet open after removing one of several selections", async () => {
+    const first = selectionFixture();
+    const second = selectionFixture({ id: "selection-2", label: "S2" });
+    setup(lensState(2, [first, second], first.id, "S3"));
+    act(() => dispatchUi?.({ type: "toggleSheet" }));
+
+    act(() => actions?.deleteSelection(first));
+    await flush();
+
+    expect(latestUi?.sheetOpen).toBe(true);
+    expect(latestUi?.announcement).toBe("S1 removed.");
+  });
+
   test("keeps another selection note open after deletion completes", async () => {
     const first = selectionFixture();
     const second = selectionFixture({ id: "selection-2", label: "S2" });
@@ -571,64 +586,50 @@ describe("selection mutations", () => {
     );
   });
 
-  test("reopens an exact receipt as current and captures fresh pixels", async () => {
-    const receipt = addressedSelectionFixture();
-    const { output, stateRef, protocol } = setup(lensState(4, [], null, "S2", [receipt]));
-    captureSnapshot.mockResolvedValue(availableCapture(receipt.selectionId));
+  test("reopens a History entry in this document and captures fresh pixels", async () => {
+    const entry = historyEntryFixture();
+    const { output, stateRef, protocol } = setup(lensState(4, [], null, "S2"), {
+      history: [entry],
+    });
+    captureSnapshot.mockResolvedValue(availableCapture(entry.id));
 
-    act(() => actions?.reopenSelection(receipt));
+    act(() => actions?.reopenSelection(entry));
     await flush();
     await flush();
 
     expect(protocol.reopenSelection).toHaveBeenCalledWith({
-      selectionId: receipt.selectionId,
-      resolutionRevision: receipt.resolutionRevision,
+      selectionId: entry.id,
+      resolvedAt: entry.resolvedAt,
+      documentId: documentIdentity(document),
+      documentPath: "/",
       expectedRevision: 4,
     });
-    expect(stateRef.current.currentSelectionId).toBe(receipt.selectionId);
-    expect(stateRef.current.history).toEqual([receipt]);
+    expect(stateRef.current.currentSelectionId).toBe(entry.id);
     expect(stateRef.current.selections[0]).toMatchObject({
-      id: receipt.selectionId,
-      description: receipt.description,
-      label: receipt.label,
-      note: receipt.note,
-      target: receipt.target,
-      previousResolution: { addressedAt: receipt.addressedAt, summary: receipt.summary },
+      id: entry.id,
+      label: entry.label,
+      note: entry.note,
+      target: entry.selection?.target,
+      previousResolution: { resolvedAt: entry.resolvedAt, summary: entry.summary },
       snapshot: { status: "available" },
     });
     expect(captureSnapshot).toHaveBeenCalledWith(
-      expect.objectContaining({ selectionId: receipt.selectionId, output }),
+      expect.objectContaining({ selectionId: entry.id, output }),
     );
     expect(latestUi?.sheetTab).toBe("open");
     expect(latestUi?.announcement).toBe("Image ready.");
   });
-
-  test("clears addressed history while preserving open selections", async () => {
-    const selection = selectionFixture();
-    const receipt = addressedSelectionFixture();
-    const { stateRef, protocol } = setup(lensState(4, [selection], selection.id, "S2", [receipt]));
-
-    act(() => actions?.clearHistory());
-    await flush();
-
-    expect(protocol.clearHistory).toHaveBeenCalledWith(4);
-    expect(stateRef.current.history).toEqual([]);
-    expect(stateRef.current.selections).toEqual([selection]);
-    expect(stateRef.current.currentSelectionId).toBe(selection.id);
-    expect(latestUi?.sheetTab).toBe("open");
-    expect(latestUi?.announcement).toBe("History cleared.");
-  });
 });
 
 type TestProtocol = ReturnType<typeof statefulProtocol>;
-type SetupOptions = { strict?: boolean };
+type SetupOptions = { strict?: boolean; history?: HistoryEntry[] };
 
-function setup(state = lensState(), { strict = false }: SetupOptions = {}) {
+function setup(state = lensState(), { strict = false, history = [] }: SetupOptions = {}) {
   const output = visibleOutput();
   const capture = deferred<CaptureResult>();
   captureSnapshot.mockReturnValue(capture.promise);
   const stateRef = { current: state };
-  const protocol = statefulProtocol(stateRef);
+  const protocol = statefulProtocol(stateRef, history);
   mount(stateRef, protocol.client, strict);
   return { output, capture, stateRef, protocol };
 }
@@ -688,11 +689,12 @@ function Harness({
   useLayoutEffect(() => {
     actions = hookActions;
     latestUi = ui;
-  }, [hookActions, ui]);
+    dispatchUi = dispatch;
+  }, [dispatch, hookActions, ui]);
   return null;
 }
 
-function statefulProtocol(stateRef: { current: LensState }) {
+function statefulProtocol(stateRef: { current: LensState }, history: HistoryEntry[] = []) {
   const client = protocolClient();
   const putSelection = vi
     .spyOn(client, "putSelection")
@@ -710,7 +712,6 @@ function statefulProtocol(stateRef: { current: LensState }) {
           nextLabel: created ? nextLabel(selection.label) : stateRef.current.nextLabel,
           currentSelectionId: created ? "selection-fixed" : stateRef.current.currentSelectionId,
           selections,
-          history: stateRef.current.history,
         };
         return successResponse(revision);
       },
@@ -751,29 +752,19 @@ function statefulProtocol(stateRef: { current: LensState }) {
     });
   const reopenSelection = vi
     .spyOn(client, "reopenSelection")
-    .mockImplementation(async ({ selectionId, resolutionRevision, expectedRevision }) => {
+    .mockImplementation(async ({ selectionId, resolvedAt, expectedRevision }) => {
       expect(expectedRevision).toBe(stateRef.current.revision);
-      const receipt = stateRef.current.history.find(
-        (candidate) =>
-          candidate.selectionId === selectionId &&
-          candidate.resolutionRevision === resolutionRevision,
+      const entry = history.find(
+        (candidate) => candidate.id === selectionId && candidate.resolvedAt === resolvedAt,
       );
-      if (!receipt) throw new Error("Receipt fixture unavailable");
+      if (!entry) throw new Error("History fixture unavailable");
       const revision = expectedRevision + 1;
       stateRef.current = {
         ...stateRef.current,
         revision,
-        currentSelectionId: receipt.selectionId,
-        selections: [...stateRef.current.selections, reopenedSelection(receipt)],
+        currentSelectionId: entry.id,
+        selections: [...stateRef.current.selections, reopenedSelection(entry)],
       };
-      return successResponse(revision);
-    });
-  const clearHistory = vi
-    .spyOn(client, "clearHistory")
-    .mockImplementation(async (expectedRevision: number) => {
-      expect(expectedRevision).toBe(stateRef.current.revision);
-      const revision = expectedRevision + 1;
-      stateRef.current = { ...stateRef.current, revision, history: [] };
       return successResponse(revision);
     });
   return {
@@ -783,7 +774,6 @@ function statefulProtocol(stateRef: { current: LensState }) {
     deleteSelection,
     clearSelections,
     reopenSelection,
-    clearHistory,
   };
 }
 
@@ -811,9 +801,8 @@ function lensState(
   selections: Selection[] = [],
   currentSelectionId: string | null = null,
   next = "S1",
-  history: AddressedSelection[] = [],
 ): LensState {
-  return { revision, nextLabel: next, currentSelectionId, selections, history };
+  return { revision, nextLabel: next, currentSelectionId, selections };
 }
 
 function availableCapture(
@@ -836,24 +825,24 @@ function availableCapture(
   };
 }
 
-function reopenedSelection(receipt: AddressedSelection): Selection {
+function reopenedSelection(entry: HistoryEntry): Selection {
+  const recorded = entry.selection;
+  if (!recorded || !entry.label) throw new Error("History entry is not a selection");
   const previousResolution: NonNullable<Selection["previousResolution"]> = {
-    addressedAt: receipt.addressedAt,
+    resolvedAt: entry.resolvedAt,
   };
-  if (receipt.summary) previousResolution.summary = receipt.summary;
-  const selection: Selection = {
-    id: receipt.selectionId,
-    description: receipt.description,
-    label: receipt.label,
-    note: receipt.note,
-    target: receipt.target,
-    createdAt: receipt.createdAt,
-    anchor: receipt.anchor,
+  if (entry.summary) previousResolution.summary = entry.summary;
+  return {
+    id: entry.id,
+    description: recorded.description,
+    label: entry.label,
+    note: entry.note,
+    target: recorded.target,
+    createdAt: entry.openedAt,
+    anchor: recorded.anchor,
     snapshot: { status: "pending" },
     previousResolution,
   };
-  if (receipt.domHint) selection.domHint = receipt.domHint;
-  return selection;
 }
 
 function captureSignal(index = 0): AbortSignal {

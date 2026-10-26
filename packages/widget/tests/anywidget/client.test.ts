@@ -393,7 +393,7 @@ describe("Lens protocol client", () => {
     client.dispose();
   });
 
-  test("sends exact addressed-history mutations", async () => {
+  test("sends History reopen and refresh commands", async () => {
     const model = new FakeModel();
     const client = new LensProtocolClient(model.asAnyModel(), window);
     client.start();
@@ -404,23 +404,27 @@ describe("Lens protocol client", () => {
 
     await client.reopenSelection({
       selectionId: "selection-1",
-      resolutionRevision: 4,
+      resolvedAt: "2026-07-23T08:00:00Z",
+      documentId: "document-2",
+      documentPath: "/notebook",
       expectedRevision: 7,
     });
-    await client.clearHistory(8);
+    await client.refreshHistory();
 
     expect(model.sent.map(({ message }) => message)).toMatchObject([
       {
         type: "selection.reopen",
         payload: {
           selectionId: "selection-1",
-          resolutionRevision: 4,
+          resolvedAt: "2026-07-23T08:00:00Z",
+          documentId: "document-2",
+          documentPath: "/notebook",
           expectedRevision: 7,
         },
       },
       {
-        type: "history.clear",
-        payload: { expectedRevision: 8 },
+        type: "history.refresh",
+        payload: {},
       },
     ]);
     client.dispose();
@@ -444,7 +448,8 @@ describe("Lens protocol client", () => {
       type: "selection.resolved",
       revision: 4,
       payload: {
-        selections: [resolvedSelectionFixture(selectionFixture(), 4)],
+        selections: [resolvedSelectionFixture()],
+        resolvedAt: "2026-07-23T08:00:00Z",
       },
     });
     model.emit({
@@ -520,7 +525,8 @@ describe("Lens protocol client", () => {
       type: "selection.resolved",
       revision: 4,
       payload: {
-        selections: [resolvedSelectionFixture(selectionFixture(), 4)],
+        selections: [resolvedSelectionFixture()],
+        resolvedAt: "2026-07-23T08:00:00Z",
       },
     };
     const second = vi.fn();
@@ -605,7 +611,12 @@ function success(command: ClientCommand, payload: LensResponse["payload"] = {}):
     version: WIDGET_TRANSPORT_VERSION,
     requestId: command.requestId,
     ok: true,
-    revision: command.type === "snapshot.get" ? 4 : command.payload.expectedRevision + 1,
+    revision:
+      command.type === "snapshot.get" ||
+      command.type === "history.refresh" ||
+      command.type === "history.image"
+        ? 4
+        : command.payload.expectedRevision + 1,
     payload,
   };
 }

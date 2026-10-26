@@ -12,8 +12,10 @@ export const ui = stylex.create({
     borderWidth: 0,
     color: "inherit",
     font: "inherit",
-    cursor: { default: "pointer", ":disabled": "default" },
-    opacity: { default: 1, ":disabled": 0.48 },
+    // A busy control that holds focus stays enabled with aria-disabled, since
+    // disabling it would drop focus to the page.
+    cursor: { default: "pointer", ":is(:disabled, [aria-disabled='true'])": "default" },
+    opacity: { default: 1, ":is(:disabled, [aria-disabled='true'])": 0.48 },
     WebkitTapHighlightColor: "transparent",
     outline: { ":focus-visible": `2px solid ${colors.focus}` },
     outlineOffset: { ":focus-visible": "2px" },

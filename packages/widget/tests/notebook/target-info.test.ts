@@ -35,6 +35,23 @@ test("an output-less cell is labeled by its cell ID over editor chrome labels", 
   expect(targetInfo(target)).toEqual({ label: "Cell rates" });
 });
 
+test.each([
+  ["discount_rates", "discount_rates"],
+  ["*net_by_store", "net_by_store"],
+  ["_", "Cell rates"],
+])("a cell that marimo names %s is labeled %s", (name, label) => {
+  document.body.innerHTML = `
+    <div id="cell-rates" data-cell-id="rates" data-cell-name="${name}">
+      <div class="cm-line">discount_rate = 0.07</div>
+    </div>
+  `;
+  const cell = document.getElementById("cell-rates")!;
+  cell.getBoundingClientRect = () => new DOMRect(0, 0, 400, 60);
+  const target = targetFromElement(cell.querySelector(".cm-line"), null)!;
+
+  expect(targetInfo(target).label).toBe(label);
+});
+
 test("a target names the part of a media file it shows", () => {
   document.body.innerHTML = `
     <div id="square" data-marimo-lens-target data-marimo-lens-label="Square"

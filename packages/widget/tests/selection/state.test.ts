@@ -5,6 +5,19 @@ import { INITIAL_UI_STATE, gestureAnchor, uiReducer } from "@/selection/state";
 import { selectionFixture } from "../support/fixtures";
 
 describe("selection workflow", () => {
+  test("opens the requests sheet on Open whichever tab it closed on", () => {
+    const onHistory = uiReducer(uiReducer(INITIAL_UI_STATE, { type: "toggleSheet" }), {
+      type: "setSheetTab",
+      tab: "history",
+    });
+    const closed = uiReducer(onHistory, { type: "toggleSheet" });
+
+    const reopened = uiReducer(closed, { type: "toggleSheet" });
+
+    expect(closed.sheetOpen).toBe(false);
+    expect(reopened).toMatchObject({ sheetOpen: true, sheetTab: "open" });
+  });
+
   test.each([
     { gesture: "pointer release", motion: undefined, expected: "animate" },
     { gesture: "keyboard selection", motion: "instant", expected: "instant" },
@@ -26,19 +39,6 @@ describe("selection workflow", () => {
       expect(queued.announcement).toBe("S1 selected.");
     },
   );
-
-  test("commits a pending selection and preserves it as current", () => {
-    const selection = selectionFixture({ note: "", snapshot: { status: "pending" } });
-    const queued = uiReducer(INITIAL_UI_STATE, { type: "selectionQueued", selection });
-    const committed = uiReducer(queued, {
-      type: "selectionSettled",
-      selectionId: selection.id,
-      announcement: "S1 selected.",
-    });
-
-    expect(committed.pendingSelections).toEqual([]);
-    expect(committed.optimisticCurrentSelectionId).toBeNull();
-  });
 
   test("opens optional note editing without changing selection identity", () => {
     const editing = uiReducer(INITIAL_UI_STATE, {
@@ -85,7 +85,6 @@ describe("selection workflow", () => {
     });
     const reopened = uiReducer(activated, {
       type: "historyReopened",
-      selectionId: "selection-1",
       label: "S1",
     });
 

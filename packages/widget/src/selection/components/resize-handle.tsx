@@ -73,7 +73,7 @@ export function ResizeHandleButton({
       data-marimo-lens-resize-handle
       data-handle={handle}
       type="button"
-      disabled={disabled}
+      aria-disabled={disabled || undefined}
       aria-label={`Resize selection ${selection.label} from ${HANDLE_NAMES[handle]}. Use arrow keys.`}
       aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
       onClick={(event) => {

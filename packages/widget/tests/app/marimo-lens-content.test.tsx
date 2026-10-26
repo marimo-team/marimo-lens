@@ -1,8 +1,8 @@
 import type {
-  AddressedSelection,
   AttentionActivityStartEvent,
   AttentionEvent,
   AttentionRevealEvent,
+  HistoryEntry,
   LensState,
   OutputCaptureCommand,
   Selection,
@@ -24,7 +24,13 @@ import { MarimoLensContent as Content } from "@/app/marimo-lens-content";
 import { documentIdentity } from "@/notebook/document-identity";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
-import { deferred, resolvedEventFixture, selectionFixture } from "../support/fixtures";
+import {
+  deferred,
+  historyEntryFixture,
+  resolvedEventFixture,
+  historyFixture,
+  selectionFixture,
+} from "../support/fixtures";
 import { NotebookDomTestProvider } from "../support/notebook-dom";
 import { render } from "../support/render";
 
@@ -85,7 +91,6 @@ function actionsFor(dispatch: (action: UiAction) => void) {
     deleteSelection: vi.fn(),
     clearSelections: vi.fn(),
     reopenSelection: vi.fn(),
-    clearHistory: vi.fn(),
     repositionSelection: vi.fn(),
     invalidateSnapshotCapture: vi.fn(),
   };
@@ -378,74 +383,6 @@ describe("marimo-lens content", () => {
     expect(indicator()?.dataset.targetLabel).toBe("newer");
   });
 
-  test("presents queued selection attention after a skipped model revision", () => {
-    target("authored-summary", new DOMRect(20, 80, 400, 240), { className: "lens-target" });
-    const selection = selectionFixture({ target: domTarget("#authored-summary") });
-    const view = mount({ state: canonicalState({ revision: 2 }), selector: ".lens-target" });
-
-    view.emit(
-      activity({ activityId: "activity-authored", address: selectionAddress(selection.id) }),
-    );
-
-    view.update({ state: canonicalState({ revision: 4, selections: [selection] }) });
-
-    expect(indicator()?.dataset.targetKind).toBe("selection");
-    expect(indicator()?.dataset.targetLabel).toBe("S1");
-  });
-
-  test("presents activity against a stored notebook selection", () => {
-    const selection = selectionFixture();
-    const output = target(`output-${selection.target.cellIds[0]}`, new DOMRect(20, 80, 400, 240));
-    const view = mount({ state: canonicalState({ selections: [selection] }) });
-
-    view.emit(
-      activity({ activityId: "activity-notebook", address: selectionAddress(selection.id) }),
-    );
-
-    expect(indicator()?.dataset.targetKind).toBe("selection");
-    expect(indicator()?.dataset.targetLabel).toBe("S1");
-
-    view.emit(selectionReveal(selection.id));
-    expect(output.scrollIntoView).toHaveBeenCalledOnce();
-  });
-
-  test("keeps selection activity while an authored target is replaced", () => {
-    vi.useFakeTimers();
-    const selection = selectionFixture({ target: domTarget("#authored-summary") });
-    const view = mount({
-      state: canonicalState({ selections: [selection] }),
-      selector: ".lens-target",
-    });
-    const authored = target("authored-summary", new DOMRect(20, 80, 400, 240), {
-      className: "lens-target",
-    });
-
-    view.emit(
-      activity({
-        activityId: "activity-authored",
-        address: selectionAddress(selection.id),
-        label: "Updating page",
-      }),
-    );
-    expect(indicator()).not.toBeNull();
-
-    act(() => {
-      authored.remove();
-      window.dispatchEvent(new Event("scroll"));
-      vi.advanceTimersByTime(20);
-    });
-    expect(indicator()).toBeNull();
-    expect(query("[data-marimo-lens-target-attention-notice]")).not.toBeNull();
-
-    target("authored-summary", new DOMRect(20, 80, 400, 240), { className: "lens-target" });
-    act(() => {
-      window.dispatchEvent(new Event("scroll"));
-      vi.advanceTimersByTime(20);
-    });
-    expect(indicator()).not.toBeNull();
-    expect(query("[data-marimo-lens-target-attention-notice]")).toBeNull();
-  });
-
   test("preserves pending attention for each document", () => {
     const primaryFrame = document.createElement("iframe");
     const secondaryFrame = document.createElement("iframe");
@@ -553,18 +490,19 @@ describe("marimo-lens content", () => {
 
     expect(invalidateSnapshotCapture).toHaveBeenCalledWith(selection.id);
     expect(receipt()).toBeNull();
-    expect(query("[data-marimo-lens-status]")?.textContent).toBe("");
+    expect(query("[data-marimo-lens-receipt-status]")?.textContent).toBe("");
 
     view.update({
-      state: canonicalState({ revision: 4, history: [addressedReceipt(selection, event)] }),
+      state: canonicalState({ revision: 4 }),
+      history: historyFixture([historyEntry(selection, event)]),
     });
 
     expect(receipt()?.textContent).toContain("S1AddressedUpdated the chart.");
     expect(receipt()?.closest("[aria-live]")).toBeNull();
-    expect(query("[data-marimo-lens-status]")?.textContent).toBe(
+    expect(query("[data-marimo-lens-receipt-status]")?.textContent).toBe(
       "S1 addressed. Updated the chart.",
     );
-    expect(query("[data-marimo-lens-selection-list]")).toBeNull();
+    expect(query("[data-marimo-lens-requests]")).toBeNull();
 
     const presented = receipt();
     act(() => presented?.focus());
@@ -575,9 +513,11 @@ describe("marimo-lens content", () => {
 
     act(() => presented?.click());
     expect(query('[role="tab"][aria-selected="true"]')?.textContent).toContain("History");
-    expect(new NotebookDomAdapter(document).activeElement?.getAttribute("aria-label")).toBe(
-      "Reopen S1",
-    );
+    expect(
+      new NotebookDomAdapter(document).activeElement?.closest<HTMLElement>(
+        "[data-marimo-lens-history-key]",
+      )?.dataset.marimoLensHistoryKey,
+    ).toBe(`selection-1@${event.payload.resolvedAt}`);
 
     view.resolve(
       resolvedEvent({
@@ -614,9 +554,7 @@ describe("marimo-lens content", () => {
       durationMs: 4_000,
     });
     if (!coalesced) view.emit(trail);
-    view.set({
-      state: canonicalState({ revision: 4, history: [addressedReceipt(selection, event)] }),
-    });
+    view.set({ state: canonicalState({ revision: 4 }) });
     act(() => {
       if (coalesced) view.attention.emit(trail);
       view.resolutions.emit(event);
@@ -683,8 +621,8 @@ describe("marimo-lens content", () => {
       : selectionFixture({
           target: { ...selectionFixture().target, documentId: "another-document" },
         });
-    const history = [addressedReceipt(selection, resolvedEvent({ revision }))];
-    const view = mountHeldReveal(canonicalState({ revision: 4, history }));
+    const view = mountHeldReveal(canonicalState({ revision: 4 }));
+    view.resolve(resolvedEvent({ revision, selections: [selection] }));
     view.emit(
       kind === "activity"
         ? activity({ address: selectionAddress(selection.id), activityId: "completed-activity" })
@@ -694,73 +632,100 @@ describe("marimo-lens content", () => {
     expect(indicator()).toBeNull();
   });
 
-  test("presents a resolution receipt only in the selection's document", () => {
-    const primaryFrame = document.createElement("iframe");
-    const secondaryFrame = document.createElement("iframe");
-    document.body.append(primaryFrame, secondaryFrame);
-    const primaryDocument = primaryFrame.contentDocument!;
-    const secondaryDocument = secondaryFrame.contentDocument!;
-    target("secondary-target", new DOMRect(20, 80, 400, 240), {
-      className: "lens-target",
-      ownerDocument: secondaryDocument,
-    });
-    const selection = selectionFixture({
-      target: domTarget("#secondary-target", secondaryDocument),
-    });
-    const event = resolvedEvent();
-    const resolutions = eventStream<SelectionResolvedEvent>();
-    currentModel = lensModel({
-      state: canonicalState({ selections: [selection] }),
-      selector: ".lens-target",
-      protocol: protocolClient({ onSelectionResolved: resolutions.subscribe }),
-    });
-    const primary = mountContentInDocument(primaryDocument);
-    const secondary = mountContentInDocument(secondaryDocument);
+  test("reveals a selection that left the state from its resolved event", () => {
+    const selection = selectionFixture();
+    const later = selectionFixture({ id: "selection-2", label: "S2" });
+    const view = mountHeldReveal(canonicalState({ revision: 5, selections: [later] }));
+    view.resolve(resolvedEvent({ revision: 4, selections: [selection] }));
 
-    act(() => resolutions.emit(event));
-    currentModel = {
-      ...currentModel,
-      state: canonicalState({ revision: 4, history: [addressedReceipt(selection, event)] }),
-    };
-    primary.render();
-    secondary.render();
+    view.emit(selectionReveal(selection.id));
 
-    expect(query("[data-marimo-lens-resolution-receipt]", primaryDocument)).toBeNull();
-    expect(
-      query("[data-marimo-lens-resolution-receipt]", secondaryDocument)?.textContent,
-    ).toContain("S1Addressed");
-    primary.unmount();
-    secondary.unmount();
+    expect(view.output.scrollIntoView).toHaveBeenCalledOnce();
+    expect(indicator()?.dataset.targetLabel).toBe("S1");
   });
 
-  test("presents a newly addressed receipt after timed activity finishes", () => {
+  test("holds a reveal of a reopened selection until its new resolved event arrives", () => {
+    const selection = selectionFixture();
+    const view = mountHeldReveal(canonicalState({ selections: [selection] }));
+    view.resolve(resolvedEvent({ revision: 2, selections: [selection] }));
+
+    view.set({ state: canonicalState({ revision: 4 }) });
+    act(() => {
+      view.attention.emit(selectionReveal(selection.id));
+      lens?.root.render(<MarimoLensContent />);
+    });
+    expect(indicator()).toBeNull();
+
+    view.resolve(resolvedEvent({ revision: 4, selections: [selection] }));
+
+    expect(view.output.scrollIntoView).toHaveBeenCalledOnce();
+    expect(indicator()?.dataset.targetLabel).toBe("S1");
+  });
+
+  test("stops holding a reveal once a resolved event at the state revision leaves it out", () => {
+    const selection = selectionFixture();
+    const view = mountHeldReveal(canonicalState({ revision: 4 }), "output-cell-later");
+    act(() => {
+      view.attention.emit(selectionReveal(selection.id));
+      view.attention.emit(cellActivity("cell-later"));
+    });
+    expect(indicator()).toBeNull();
+
+    view.resolve(
+      resolvedEvent({
+        revision: 4,
+        selections: [selectionFixture({ id: "selection-2", label: "S2" })],
+      }),
+    );
+
+    expect(indicator()?.dataset.targetKind).toBe("cell");
+    expect(indicator()?.dataset.targetLabel).toBe("cell-later");
+  });
+
+  test("stops holding a reveal once the selection state moves past its resolve", () => {
+    const selection = selectionFixture();
+    const view = mountHeldReveal(canonicalState({ revision: 4 }), "output-cell-later");
+    view.resolve(resolvedEvent({ revision: 2, selections: [selection] }));
+    view.emit(selectionReveal(selection.id));
+
+    view.set({ state: canonicalState({ revision: 5 }) });
+    act(() => {
+      view.attention.emit(cellActivity("cell-later"));
+      lens?.root.render(<MarimoLensContent />);
+    });
+
+    expect(indicator()?.dataset.targetKind).toBe("cell");
+    expect(indicator()?.dataset.targetLabel).toBe("cell-later");
+  });
+
+  test("a reveal for a deleted selection stops blocking later cell activity", () => {
+    vi.useFakeTimers();
+    // Deleting S1 advanced the revision to 4, and a delete sends no resolved event.
+    const view = mountHeldReveal(canonicalState({ revision: 4 }), "output-cell-later");
+    view.emit(selectionReveal(selectionFixture().id));
+    view.emit(cellActivity("cell-later"));
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+
+    expect(indicator()?.dataset.targetLabel).toBe("cell-later");
+  });
+
+  test("announces a receipt once when a reveal covers it and ends", () => {
     vi.useFakeTimers();
     const selection = selectionFixture();
     const cellId = selection.target.cellIds[0]!;
-    const event = resolvedEvent({ summary: "Updated the chart." });
     target(`cell-${cellId}`);
     const view = mount({ state: canonicalState({ selections: [selection] }) });
+    view.resolve(resolvedEvent({ summary: "Updated the chart." }));
+    view.update({ state: canonicalState({ revision: 4 }) });
+    const status = () => query("[data-marimo-lens-receipt-status]")?.textContent;
+    expect(status()).toBe("S1 addressed. Updated the chart.");
 
-    view.emit(
-      activity({
-        activityId: "activity-4",
-        address: { kind: "cell", cellId },
-        durationMs: 4_000,
-        label: "Updating chart",
-      }),
-    );
-    view.resolve(event);
-    view.update({
-      state: canonicalState({ revision: 4, history: [addressedReceipt(selection, event)] }),
-    });
+    view.emit(reveal({ id: "reveal-1", steps: [{ address: { kind: "cell", cellId } }] }));
 
-    expect(indicator()).not.toBeNull();
     expect(receipt()).toBeNull();
-
-    void act(() => vi.advanceTimersByTime(4_120));
-
-    expect(indicator()).toBeNull();
-    expect(receipt()?.textContent).toContain("S1AddressedUpdated the chart.");
+    expect(status()).toBe("S1 addressed. Updated the chart.");
   });
 
   test("reconciles one resolution receipt for an atomic batch", () => {
@@ -772,11 +737,12 @@ describe("marimo-lens content", () => {
       state: canonicalState({ selections: [first, second], current: second.id }),
     });
 
-    const event = resolvedEvent({
-      selections: [first, second],
-      summary: "Updated and verified both requests.",
-    });
-    view.resolve(event);
+    view.resolve(
+      resolvedEvent({
+        selections: [first, second],
+        summary: "Updated and verified both requests.",
+      }),
+    );
 
     expect(invalidateSnapshotCapture.mock.calls.map(([selectionId]) => selectionId)).toEqual([
       first.id,
@@ -784,19 +750,133 @@ describe("marimo-lens content", () => {
     ]);
     expect(receipt()).toBeNull();
 
-    view.update({
-      state: canonicalState({
-        revision: 4,
-        history: [addressedReceipt(first, event), addressedReceipt(second, event)],
-      }),
-    });
+    view.update({ state: canonicalState({ revision: 4 }) });
 
     expect(receipt()?.textContent).toContain(
       "2 selectionsAddressedUpdated and verified both requests.",
     );
-    expect(query("[data-marimo-lens-status]")?.textContent).toBe(
+    expect(query("[data-marimo-lens-receipt-status]")?.textContent).toBe(
       "2 selections addressed. Updated and verified both requests.",
     );
+  });
+
+  test("keeps refreshing History while it is visible", async () => {
+    vi.useFakeTimers();
+    const protocol = protocolClient();
+    const refreshHistory = vi.spyOn(protocol, "refreshHistory").mockResolvedValue(refreshed());
+    mount({
+      state: canonicalState({ revision: 4 }),
+      history: historyFixture([historyEntry(selectionFixture(), resolvedEvent())]),
+      protocol,
+    });
+
+    const toggle = query<HTMLButtonElement>('[aria-label="Requests, 0 open, 1 in history"]');
+    await act(async () => toggle?.click());
+    expect(refreshHistory).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(refreshHistory).toHaveBeenCalledTimes(2);
+
+    act(() => toggle?.click());
+    act(() => {
+      vi.advanceTimersByTime(10_000);
+    });
+    expect(refreshHistory).toHaveBeenCalledTimes(2);
+  });
+
+  test("asks for History one request at a time, skips hidden pages, and stops on unmount", async () => {
+    vi.useFakeTimers();
+    const protocol = protocolClient();
+    let answer: (() => void) | undefined;
+    const refreshHistory = vi.spyOn(protocol, "refreshHistory").mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          answer = () => resolve(refreshed());
+        }),
+    );
+    mount({
+      state: canonicalState({ revision: 4 }),
+      history: historyFixture([historyEntry(selectionFixture(), resolvedEvent())]),
+      protocol,
+    });
+    await act(async () =>
+      query<HTMLButtonElement>('[aria-label="Requests, 0 open, 1 in history"]')?.click(),
+    );
+    expect(refreshHistory).toHaveBeenCalledTimes(1);
+
+    // Python has not answered, so neither the interval nor focus asks again.
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(refreshHistory).toHaveBeenCalledTimes(1);
+
+    await act(async () => answer?.());
+    const visibility = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(refreshHistory).toHaveBeenCalledTimes(1);
+
+    visibility.mockReturnValue("visible");
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(refreshHistory).toHaveBeenCalledTimes(2);
+
+    await act(async () => answer?.());
+    lens?.unmount();
+    await act(async () => {
+      vi.advanceTimersByTime(20_000);
+      window.dispatchEvent(new Event("focus"));
+    });
+    expect(refreshHistory).toHaveBeenCalledTimes(2);
+    visibility.mockRestore();
+  });
+
+  test("presents the batch selections this document owns with no History", () => {
+    const first = selectionFixture({
+      target: { ...selectionFixture().target, documentId: "another-document" },
+    });
+    const second = selectionFixture({ id: "selection-2", label: "S2" });
+    const view = mount({
+      state: canonicalState({ selections: [first, second], current: second.id }),
+      history: null,
+    });
+    view.resolve(resolvedEvent({ selections: [first, second], summary: "Updated both requests." }));
+
+    view.update({ state: canonicalState({ revision: 4 }) });
+
+    const presented = receipt();
+    expect(presented?.dataset.selectionId).toBe("selection-2");
+    expect(presented?.getAttribute("aria-label")).toBe("Dismiss receipt for S2");
+    expect(query("[data-marimo-lens-receipt-status]")?.textContent).toBe(
+      "S2 addressed. Updated both requests.",
+    );
+
+    act(() => presented?.click());
+    expect(receipt()).toBeNull();
+    expect(query("[data-marimo-lens-requests]")).toBeNull();
+  });
+
+  test("asks for no History and offers no History tab when the Lens shows no History", async () => {
+    vi.useFakeTimers();
+    const protocol = protocolClient();
+    const refreshHistory = vi.spyOn(protocol, "refreshHistory");
+    mount({
+      state: canonicalState({ revision: 2, selections: [selectionFixture()] }),
+      history: null,
+      protocol,
+    });
+
+    await act(async () => query<HTMLButtonElement>('[aria-label="Requests, 1 open"]')?.click());
+    await act(async () => {
+      vi.advanceTimersByTime(10_000);
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(query("[data-marimo-lens-requests]")).not.toBeNull();
+    expect(query("#marimo-lens-history-tab")).toBeNull();
+    expect(refreshHistory).not.toHaveBeenCalled();
   });
 
   test("keeps the receipt inside an open requests sheet", async () => {
@@ -806,20 +886,14 @@ describe("marimo-lens content", () => {
     await openRequestsSettled();
 
     view.resolve(resolvedEvent());
-    view.set({
-      state: canonicalState({
-        revision: 4,
-        selections: [second],
-        history: [addressedReceipt(first, resolvedEvent())],
-      }),
-    });
+    view.set({ state: canonicalState({ revision: 4, selections: [second] }) });
     await act(async () => {
       lens?.root.render(<MarimoLensContent />);
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    const sheet = query("[data-marimo-lens-selection-list]");
+    const sheet = query("[data-marimo-lens-requests]");
     expect(sheet).not.toBeNull();
     expect(receipt()).not.toBeNull();
     expect(sheet?.contains(receipt())).toBe(true);
@@ -836,13 +910,7 @@ describe("marimo-lens content", () => {
     );
 
     view.resolve(resolvedEvent());
-    view.set({
-      state: canonicalState({
-        revision: 4,
-        selections: [second],
-        history: [addressedReceipt(first, resolvedEvent())],
-      }),
-    });
+    view.set({ state: canonicalState({ revision: 4, selections: [second] }) });
     await act(async () => {
       lens?.root.render(<MarimoLensContent />);
       await Promise.resolve();
@@ -890,12 +958,7 @@ describe("marimo-lens content", () => {
     );
 
     view.resolve(resolvedEvent());
-    view.update({
-      state: canonicalState({
-        revision: 4,
-        history: [addressedReceipt(selection, resolvedEvent())],
-      }),
-    });
+    view.update({ state: canonicalState({ revision: 4 }) });
     act(() => frames.flush());
 
     expect(
@@ -908,19 +971,115 @@ describe("marimo-lens content", () => {
   test("preserves focus outside the resolved selection", () => {
     const unrelated = document.createElement("button");
     document.body.appendChild(unrelated);
-    const selection = selectionFixture();
-    const view = mount({ state: canonicalState({ selections: [selection] }) });
+    const view = mount({ state: canonicalState({ selections: [selectionFixture()] }) });
     unrelated.focus();
 
     view.resolve(resolvedEvent());
-    view.update({
-      state: canonicalState({
-        revision: 4,
-        history: [addressedReceipt(selection, resolvedEvent())],
-      }),
-    });
+    view.update({ state: canonicalState({ revision: 4 }) });
 
     expect(new NotebookDomAdapter(document).activeElement).toBe(unrelated);
+  });
+
+  test("marks Python's current selection after a reopened one resolves", () => {
+    const other = selectionFixture({ id: "other", label: "S2" });
+    const reopened = selectionFixture({ id: "reopened", label: "S1" });
+    target("output-cell-1", new DOMRect(0, 0, 400, 240));
+    currentActionsFor = (dispatch) => ({
+      ...actionsFor(dispatch),
+      reopenSelection: vi.fn(() => dispatch({ type: "historyReopened", label: "S1" })),
+    });
+    const view = mount({
+      state: canonicalState({ selections: [other] }),
+      history: historyFixture([historyEntryFixture({ id: "reopened", label: "S1" })]),
+    });
+    click("[data-ml-list]");
+    click("#marimo-lens-history-tab");
+    view.set({
+      state: canonicalState({
+        revision: 4,
+        selections: [other, reopened],
+        current: reopened.id,
+      }),
+    });
+    click('[aria-label="Reopen S1"]');
+    view.render();
+    expect(query("[data-marimo-lens-status]")?.textContent).toBe("S1 reopened.");
+
+    view.update({ state: canonicalState({ revision: 5, selections: [other] }) });
+    click("#marimo-lens-open-tab");
+    const row = query<HTMLButtonElement>('[aria-label^="Current selection S2"]');
+    expect(row?.getAttribute("aria-current")).toBe("true");
+  });
+
+  test("presents a receipt while the person's own History trail is showing", () => {
+    target("cell-cell-old");
+    const view = mount({
+      state: canonicalState({ selections: [selectionFixture()] }),
+      history: historyFixture([
+        historyEntryFixture({ id: "selection-old", label: "S7", cellIds: ["cell-old"] }),
+      ]),
+    });
+    click("[data-ml-list]");
+    click("#marimo-lens-history-tab");
+    click("[data-marimo-lens-history-reveal]");
+    expect(indicator()).not.toBeNull();
+
+    view.resolve(resolvedEvent({ summary: "Updated the chart." }));
+    view.update({ state: canonicalState({ revision: 4 }) });
+
+    expect(receipt()).not.toBeNull();
+  });
+
+  test("keeps focus on a trail control when the step's caption moves into the dock", () => {
+    vi.useFakeTimers();
+    target("cell-first", new DOMRect(20, 200, 500, 200));
+    // A cell taller than the viewport keeps its top above the gutter.
+    target("cell-second", new DOMRect(20, -400, 500, 2000));
+    const view = mount({ state: canonicalState({ revision: 0 }) });
+    view.emit(tour());
+    click('[aria-label="Next trail step"]');
+    expect(uiRoot().activeElement?.getAttribute("aria-label")).toBe("Next trail step");
+    act(() => {
+      vi.advanceTimersByTime(2_100);
+    });
+    expect(query("[data-marimo-lens-target-attention-notice]")).not.toBeNull();
+    expect(uiRoot().activeElement?.getAttribute("aria-label")).toBe("Next trail step");
+  });
+
+  test("returns focus to the dock when a timed trail ends under a focused control", () => {
+    vi.useFakeTimers();
+    for (const id of ["first", "second"]) target(`cell-${id}`, new DOMRect(20, 200, 500, 200));
+    const view = mount({ state: canonicalState({ revision: 0 }) });
+    view.emit(tour(3_000));
+    click('[aria-label="Next trail step"]');
+    expect(uiRoot().activeElement?.getAttribute("aria-label")).toBe("Next trail step");
+    act(() => {
+      vi.advanceTimersByTime(4_000);
+    });
+    expect(query('[aria-label="Next trail step"]')).toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+    expect(uiRoot().activeElement?.matches("[data-ml-select]")).toBe(true);
+  });
+
+  test("returns focus to Requests when Show cells closes the sheet", () => {
+    vi.useFakeTimers();
+    target("cell-cell-old");
+    mount({
+      history: historyFixture([
+        historyEntryFixture({ id: "selection-old", label: "S7", cellIds: ["cell-old"] }),
+      ]),
+    });
+    click("[data-ml-list]");
+
+    click("[data-marimo-lens-history-reveal]");
+    act(() => {
+      vi.advanceTimersByTime(50);
+    });
+
+    expect(query("[data-marimo-lens-requests]")).toBeNull();
+    expect(uiRoot().activeElement?.matches("[data-ml-list]")).toBe(true);
   });
 
   test("ends the note when its selection closes, so a reopened selection opens no editor", () => {
@@ -938,18 +1097,15 @@ describe("marimo-lens content", () => {
     expect(query("[data-marimo-lens-note-editor]")).toBeNull();
   });
 
-  test("keeps History showing when selections arrive after Open emptied", () => {
-    const selection = selectionFixture();
-    const history = [addressedReceipt(selectionFixture({ id: "selection-old" }), resolvedEvent())];
-    const view = mount({ state: canonicalState({ selections: [selection], history }) });
+  test("keeps History showing when requests arrive after Open emptied", () => {
+    const view = mount({
+      state: canonicalState({ selections: [selectionFixture()] }),
+      history: historyFixture([historyEntryFixture()]),
+    });
     click("[data-ml-list]");
-    view.update({ state: canonicalState({ revision: 4, history }) });
+    view.update({ state: canonicalState({ revision: 4 }) });
     view.update({
-      state: canonicalState({
-        revision: 5,
-        selections: [selectionFixture({ id: "selection-2", label: "S2" })],
-        history,
-      }),
+      chats: [{ id: "chat-1", note: "Why is Central low?", openedAt: "2026-07-14T10:06:00Z" }],
     });
 
     expect(query('[role="tab"][aria-selected="true"]')?.textContent).toContain("History");
@@ -959,12 +1115,12 @@ describe("marimo-lens content", () => {
     const selection = selectionFixture();
     const view = mount({ state: canonicalState({ selections: [selection] }) });
     click("[data-ml-list]");
-    expect(query("[data-marimo-lens-selection-list]")).not.toBeNull();
+    expect(query("[data-marimo-lens-requests]")).not.toBeNull();
 
     view.update({ state: canonicalState({ revision: 4 }) });
     view.update({ state: canonicalState({ revision: 5, selections: [selection] }) });
 
-    expect(query("[data-marimo-lens-selection-list]")).toBeNull();
+    expect(query("[data-marimo-lens-requests]")).toBeNull();
   });
 });
 
@@ -972,28 +1128,27 @@ type CanonicalStateOptions = {
   revision?: number;
   selections?: Selection[];
   current?: string | null;
-  history?: AddressedSelection[];
 };
 
 function canonicalState({
   revision = 3,
   selections = [],
   current = selections[0]?.id ?? null,
-  history = [],
 }: CanonicalStateOptions = {}): LensState {
   return {
     revision,
     nextLabel: `S${selections.length + 1}`,
     currentSelectionId: current,
     selections,
-    history,
   };
 }
 
 function lensModel(overrides: Partial<LensModel> = {}): LensModel {
   return {
     state: canonicalState(),
+    history: historyFixture(),
     css: "",
+    chats: [],
     selector: null,
     protocol: protocolClient(),
     ...overrides,
@@ -1035,10 +1190,10 @@ function mount(initial: Partial<LensModel> = {}) {
   };
 }
 
-/** Mount a Lens beside the output that a delayed selection reveal would scroll to. */
+/** Mount a Lens without History beside the output that a held reveal scrolls to. */
 function mountHeldReveal(state: LensState, outputId = "output-cell-1") {
   const output = target(outputId);
-  return { ...mount({ state }), output };
+  return { ...mount({ state, history: null }), output };
 }
 
 function mountCapture(release: () => void = vi.fn()) {
@@ -1118,27 +1273,52 @@ function cellActivity(cellId: string): AttentionEvent {
   return activity({ activityId: "activity-cell", address: { kind: "cell", cellId } });
 }
 
+function tour(durationMs?: number): AttentionEvent {
+  const payload: AttentionRevealEvent["payload"] = {
+    id: "tour",
+    steps: [
+      { address: { kind: "cell", cellId: "first" }, label: "Question" },
+      { address: { kind: "cell", cellId: "second" }, label: "Answer" },
+    ],
+  };
+  if (durationMs !== undefined) payload.durationMs = durationMs;
+  return reveal(payload);
+}
+
 function resolvedEvent(overrides: Parameters<typeof resolvedEventFixture>[0] = {}) {
   return resolvedEventFixture({ revision: 4, ...overrides });
 }
 
-/** The History receipt Python stores for `selection` once `event` resolves it. */
-function addressedReceipt(selection: Selection, event: SelectionResolvedEvent): AddressedSelection {
-  const resolved = event.payload.selections.find(({ selectionId }) => selectionId === selection.id);
-  const receipt: AddressedSelection = {
-    selectionId: selection.id,
-    description: selection.description,
+function historyEntry(selection: Selection, event: SelectionResolvedEvent): HistoryEntry {
+  const entry: HistoryEntry = {
+    id: selection.id,
+    channel: "selection",
     label: selection.label,
     note: selection.note,
-    target: selection.target,
-    createdAt: selection.createdAt,
-    addressedAt: "2026-07-23T08:00:00Z",
-    anchor: selection.anchor,
-    resolutionRevision: resolved?.resolutionRevision ?? event.revision,
+    openedAt: selection.createdAt,
+    resolvedAt: event.payload.resolvedAt,
+    revision: event.revision,
+    cellIds: selection.target.cellIds,
+    changes: [],
+    selection: {
+      target: selection.target,
+      anchor: selection.anchor,
+      description: selection.description,
+    },
   };
-  if (selection.domHint) receipt.domHint = selection.domHint;
-  if (event.payload.summary) receipt.summary = event.payload.summary;
-  return receipt;
+  if (event.payload.summary) entry.summary = event.payload.summary;
+  return entry;
+}
+
+function refreshed(): Awaited<ReturnType<LensProtocolClient["refreshHistory"]>> {
+  return {
+    protocol: "marimo-lens.response",
+    version: WIDGET_TRANSPORT_VERSION,
+    requestId: "refresh",
+    ok: true,
+    revision: 4,
+    payload: {},
+  };
 }
 
 function eventStream<Event>() {

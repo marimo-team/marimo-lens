@@ -2,42 +2,42 @@ import { useLayoutEffect, useRef, type RefObject } from "react";
 
 import type { RequestSheetTab } from "@/selection/state";
 
+import { useNotebookDom } from "@/notebook/notebook-dom-context";
+
 type SheetFocus = {
   open: boolean;
-  historyRevision: number | null;
+  historyKey: string | null;
 };
 
 export function useSheetFocus(
   dockRef: RefObject<HTMLElement | null>,
   open: boolean,
   sheetTab: RequestSheetTab,
-  focusedHistoryRevision: number | null,
+  focusedHistoryKey: string | null,
 ): void {
-  const sheetFocusRef = useRef<SheetFocus>({ open: false, historyRevision: null });
+  const dom = useNotebookDom();
+  const sheetFocusRef = useRef<SheetFocus>({ open: false, historyKey: null });
 
   useLayoutEffect(() => {
     const previous = sheetFocusRef.current;
     const shouldFocus =
       open &&
-      (!previous.open ||
-        (focusedHistoryRevision !== null && focusedHistoryRevision !== previous.historyRevision));
-    sheetFocusRef.current = { open, historyRevision: focusedHistoryRevision };
+      (!previous.open || (focusedHistoryKey !== null && focusedHistoryKey !== previous.historyKey));
+    sheetFocusRef.current = { open, historyKey: focusedHistoryKey };
     if (!shouldFocus) return;
     const dock = dockRef.current;
     const target =
       sheetTab === "history"
-        ? focusedHistoryRevision === null
+        ? focusedHistoryKey === null
           ? dock?.querySelector<HTMLElement>("#marimo-lens-history-tab")
           : (dock?.querySelector<HTMLElement>(
-              `[data-marimo-lens-history-revision="${focusedHistoryRevision}"] [data-marimo-lens-history-reopen]`,
+              `[data-marimo-lens-history-key="${dom.window.CSS.escape(focusedHistoryKey)}"] [data-marimo-lens-history-summary]`,
             ) ?? dock?.querySelector<HTMLElement>("#marimo-lens-history-tab"))
-        : (dock?.querySelector<HTMLElement>(
-            '[data-marimo-lens-selection-list] [aria-current="true"]',
-          ) ??
+        : (dock?.querySelector<HTMLElement>('[data-marimo-lens-requests] [aria-current="true"]') ??
           dock?.querySelector<HTMLElement>(
-            "[data-marimo-lens-selection-list] [data-marimo-lens-selection-summary]",
+            "[data-marimo-lens-requests] [data-marimo-lens-selection-summary]",
           ) ??
           dock?.querySelector<HTMLElement>("#marimo-lens-open-tab"));
     target?.focus();
-  }, [dockRef, focusedHistoryRevision, open, sheetTab]);
+  }, [dockRef, dom, focusedHistoryKey, open, sheetTab]);
 }

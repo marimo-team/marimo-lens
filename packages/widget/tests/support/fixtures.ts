@@ -1,5 +1,6 @@
 import type {
-  AddressedSelection,
+  HistoryEntry,
+  HistoryState,
   ResolvedSelection,
   Selection,
   SelectionResolvedEvent,
@@ -36,43 +37,20 @@ export function selectionFixture(overrides: Partial<Selection> = {}): Selection 
   };
 }
 
-export function addressedSelectionFixture(
-  overrides: Partial<AddressedSelection> = {},
-): AddressedSelection {
-  return {
-    selectionId: "selection-1",
-    label: "S1",
-    note: "Align this label",
-    description: { label: "Cell cell-1" },
-    target: {
-      kind: "notebook",
-      cellIds: ["cell-1"],
-      documentId: documentIdentity(document),
-      documentPath: "/",
-    },
-    createdAt: "2026-07-14T10:00:00Z",
-    addressedAt: "2026-07-23T08:00:00Z",
-    anchor: { kind: "point", x: 0.25, y: 0.5 },
-    summary: "Updated the label and verified the rendered output.",
-    resolutionRevision: 4,
-    ...overrides,
-  };
-}
-
 export function resolvedSelectionFixture(
   selection: Selection = selectionFixture(),
-  resolutionRevision = 2,
 ): ResolvedSelection {
   return {
     selectionId: selection.id,
     label: selection.label,
-    resolutionRevision,
+    target: selection.target,
   };
 }
 
 type ResolvedEventOptions = {
   revision?: number;
   selections?: Selection[];
+  resolvedAt?: string;
   summary?: string;
 };
 
@@ -80,10 +58,12 @@ type ResolvedEventOptions = {
 export function resolvedEventFixture({
   revision = 2,
   selections = [selectionFixture()],
+  resolvedAt = "2026-07-23T08:00:00Z",
   summary,
 }: ResolvedEventOptions = {}): SelectionResolvedEvent {
   const payload: SelectionResolvedEvent["payload"] = {
-    selections: selections.map((selection) => resolvedSelectionFixture(selection, revision)),
+    selections: selections.map((selection) => resolvedSelectionFixture(selection)),
+    resolvedAt,
   };
   if (summary) payload.summary = summary;
   return {
@@ -92,6 +72,45 @@ export function resolvedEventFixture({
     type: "selection.resolved",
     revision,
     payload,
+  };
+}
+
+export function historyEntryFixture(overrides: Partial<HistoryEntry> = {}): HistoryEntry {
+  return {
+    id: "selection-1",
+    channel: "selection",
+    label: "S1",
+    note: "Align this label",
+    summary: "Updated the label and verified the rendered output.",
+    openedAt: "2026-07-23T07:58:00Z",
+    resolvedAt: "2026-07-23T08:00:00Z",
+    revision: 4,
+    cellIds: ["cell-1"],
+    changes: [],
+    selection: {
+      target: {
+        kind: "notebook",
+        cellIds: ["cell-1"],
+        documentId: documentIdentity(document),
+        documentPath: "/",
+      },
+      anchor: { kind: "point", x: 0.25, y: 0.5 },
+      description: { label: "Cell cell-1" },
+    },
+    ...overrides,
+  };
+}
+
+export function historyFixture(
+  entries: HistoryEntry[] = [],
+  overrides: Partial<HistoryState> = {},
+): HistoryState {
+  return {
+    entries,
+    total: entries.length,
+    record: { status: "saved" },
+    cells: [],
+    ...overrides,
   };
 }
 
