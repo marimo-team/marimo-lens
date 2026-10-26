@@ -1,0 +1,21 @@
+packages/widget/tests/anywidget/client.test.ts
+  s_9bf88f92467853::t_d742d9c6de8a1e 380-389,391-395
+packages/widget/src/selection/anchor-frame.ts
+  s_9bf88f92467853::t_33b1fe551a1741 1-4,6-32,34-81,84-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "486dd72731206d8f8e5aefaaa3c6171d71cc401a",
+  "prompts": {},
+  "sessions": {
+    "s_9bf88f92467853": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fa73f9ef-c073-4b2b-8a9d-41baed0c55a7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
