@@ -1,10 +1,16 @@
-"""Single-slot browser output capture for agent consumers."""
+"""Single-slot browser output capture for agent consumers.
+
+A capture expires at a deadline that the next poll or browser reply checks.
+Nothing runs in the background, so the slot works where threads cannot start,
+such as marimo's Pyodide runtime.
+"""
 
 from __future__ import annotations
 
 import threading
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from time import monotonic
 from typing import Any
 from uuid import uuid4
 
@@ -26,7 +32,7 @@ class _Capture:
     request_id: str
     cell_id: str
     revision: int
-    timeout: threading.Timer
+    deadline: float
     image: bytes | None = None
     error_code: str | None = None
     error: str | None = None
@@ -43,7 +49,6 @@ class OutputCaptureSlot:
         "_record",
         "_revision",
         "_send",
-        "_timeout_seconds",
     )
 
     def __init__(
@@ -53,13 +58,11 @@ class OutputCaptureSlot:
         send: Callable[[dict[str, Any]], None],
         revision: Callable[[], int],
         cell_status: Callable[[str], RuntimeCellStatus],
-        timeout_seconds: float = CAPTURE_TIMEOUT_SECONDS,
     ) -> None:
         self._lock = lock
         self._send = send
         self._revision = revision
         self._cell_status = cell_status
-        self._timeout_seconds = timeout_seconds
         self._record: _Capture | None = None
         self._browser_ready = False
         self._closed = False
@@ -87,26 +90,8 @@ class OutputCaptureSlot:
                 return self._read(record)
             if record is not None and _capture_pending(record):
                 self._raise_busy(record)
-
-        cell_status = self._cell_status(cell_id)
-
-        with self._lock:
-            self._require_open()
-            revision = self._revision()
-            if revision != expected_revision:
-                self._release_record()
-                raise revision_conflict(expected_revision, revision)
-            record = self._record_for_revision(revision)
-            if (
-                record is not None
-                and record.cell_id == cell_id
-                and record.revision == expected_revision
-            ):
-                return self._read(record)
-            if record is not None and _capture_pending(record):
-                self._raise_busy(record)
             self._release_record()
-            require_cell(cell_status, revision=revision)
+            require_cell(self._cell_status(cell_id), revision=revision)
             if not self._browser_ready:
                 raise LensError(
                     "browser_unavailable",
@@ -119,19 +104,12 @@ class OutputCaptureSlot:
                 request_id=request_id,
                 cell_id=cell_id,
             )
-            timeout = threading.Timer(
-                self._timeout_seconds,
-                self._timed_out,
-                args=(request_id,),
-            )
-            timeout.daemon = True
             self._record = _Capture(
                 request_id=request_id,
                 cell_id=cell_id,
                 revision=revision,
-                timeout=timeout,
+                deadline=monotonic() + CAPTURE_TIMEOUT_SECONDS,
             )
-            timeout.start()
             try:
                 self._send(command)
             except Exception:  # noqa: BLE001 - transport callbacks are untrusted
@@ -167,7 +145,7 @@ class OutputCaptureSlot:
         buffers: Sequence[bytes | bytearray | memoryview],
     ) -> None:
         request_id = request_id_from(content)
-        if not request_id:
+        if request_id is None:
             return
         with self._lock:
             if self._closed:
@@ -179,6 +157,7 @@ class OutputCaptureSlot:
                 or record.image is not None
             ):
                 return
+            _expire(record)
             if record.error_code is not None:
                 return
             try:
@@ -200,7 +179,6 @@ class OutputCaptureSlot:
                     response.image,
                     buffers[0],
                 )
-                record.timeout.cancel()
             except (ProtocolError, Rejection) as error:
                 _fail_capture(record, code="capture_failed", message=str(error))
             except Exception:  # noqa: BLE001 - isolate malformed browser replies
@@ -232,25 +210,7 @@ class OutputCaptureSlot:
         self._release_record()
         return image
 
-    def _timed_out(self, request_id: str) -> None:
-        with self._lock:
-            record = self._record
-            if (
-                record is None
-                or record.request_id != request_id
-                or not _capture_pending(record)
-            ):
-                return
-            _fail_capture(
-                record,
-                code="capture_timeout",
-                message="The browser did not finish the cell capture in time.",
-            )
-
     def _release_record(self) -> None:
-        record = self._record
-        if record is not None:
-            record.timeout.cancel()
         self._record = None
 
     def _record_for_revision(self, revision: int) -> _Capture | None:
@@ -258,6 +218,8 @@ class OutputCaptureSlot:
         if record is not None and record.revision != revision:
             self._release_record()
             return None
+        if record is not None:
+            _expire(record)
         return record
 
     def _require_open(self) -> None:
@@ -289,8 +251,16 @@ def _capture_pending(record: _Capture) -> bool:
     return record.image is None and record.error_code is None
 
 
+def _expire(record: _Capture) -> None:
+    if _capture_pending(record) and monotonic() >= record.deadline:
+        _fail_capture(
+            record,
+            code="capture_timeout",
+            message="The browser did not finish the cell capture in time.",
+        )
+
+
 def _fail_capture(record: _Capture, *, code: str, message: str) -> None:
-    record.timeout.cancel()
     record.image = None
     record.error_code = code
     record.error = message

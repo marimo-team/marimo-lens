@@ -8,12 +8,13 @@ from typing import Any
 from .._protocol.codec import snapshot_metadata, success_response
 from .._protocol.messages import (
     ActivateSelectionCommand,
-    ClearHistoryCommand,
     ClearSelectionsCommand,
     ClientCommand,
     DeleteSelectionCommand,
+    GetHistoryImageCommand,
     GetSnapshotCommand,
     PutSelectionCommand,
+    RefreshHistoryCommand,
     ReopenSelectionCommand,
 )
 from .._schema.model import dump_model
@@ -55,6 +56,18 @@ def execute(
                 revision=state.revision,
                 payload={"selection": dump_model(committed)},
             ), ()
+        case GetHistoryImageCommand(payload=payload):
+            data = session.recorded_image(payload.sha256)
+            return success_response(
+                request_id=command.request_id,
+                revision=session.state.revision,
+                payload={"sha256": payload.sha256},
+            ), (data,)
+        case RefreshHistoryCommand():
+            session.refresh_history()
+            return success_response(
+                request_id=command.request_id, revision=session.state.revision
+            ), ()
         case ActivateSelectionCommand(payload=payload):
             selection_id = payload.selection_id
             state = session.activate_selection(
@@ -69,7 +82,9 @@ def execute(
             selection_id = payload.selection_id
             state = session.reopen_selection(
                 selection_id,
-                resolution_revision=payload.resolution_revision,
+                resolved_at=payload.resolved_at,
+                document_id=payload.document_id,
+                document_path=payload.document_path,
                 expected_revision=payload.expected_revision,
             )
         case ClearSelectionsCommand(payload=payload):
@@ -77,9 +92,6 @@ def execute(
             state = session.clear_selections(
                 expected_revision=payload.expected_revision
             )
-        case ClearHistoryCommand(payload=payload):
-            selection_id = None
-            state = session.clear_history(expected_revision=payload.expected_revision)
     return success_response(
         request_id=command.request_id,
         revision=state.revision,

@@ -23,7 +23,8 @@ import agent_plugins as ap
 print(ap.read("marimo-lens"))
 ```
 
-`help(marimo_lens.agent)` supplies the same core after `import marimo_lens`.
+Import `marimo_lens._capability` and call `help(marimo_lens._capability)`
+to read the installed core skill and resource inventory.
 Reuse a briefing already loaded from the same environment and installation.
 Use the installed `help(marimo._code_mode)` for notebook operations when that
 host contract has not been read yet.
@@ -37,7 +38,7 @@ Activate this workflow after the request identifies Lens work through a
 selection, output reference, overview, walkthrough, or co-creation of output
 that will receive Lens feedback.
 
-The [core skill](../SKILL.md#add-lens-when-missing) covers ordinary mounting.
+The [core skill](../SKILL.md#mounting-and-deeper-reference) covers ordinary mounting.
 Use this reference for a missing package, notebook connection, or custom host.
 
 If the browser reports that the tab is a reader, use the existing editor tab
@@ -51,15 +52,15 @@ notebooks, and sessions with `marimo pair notebook list`, then send each
 Python block in this skill as one execution:
 
 ```bash
-marimo pair execute --url http://localhost:2718 --file notebook.py --code-file - <<'PY'
+marimo pair execute --url http://localhost:2718 --session <session_id> --code-file - <<'PY'
 import json
 
 import marimo._code_mode as cm
 import marimo_lens
 
 mounted = marimo_lens.agent.connect(cm.get_context())
-snapshot = mounted.context()
-print(json.dumps({"identity": mounted.identity, "revision": snapshot.revision}))
+context = mounted.context()
+print(json.dumps({"identity": mounted.identity, "revision": context.revision}))
 PY
 ```
 
@@ -68,21 +69,23 @@ Use the marimo command the pair session already runs, such as
 first `help(cm)` call. That help lists `lens` under installed capabilities.
 
 - **Briefing.** Read this skill from the kernel with
-  `marimo pair execute ... -c 'import marimo_lens; help(marimo_lens.agent)'`.
+  `marimo pair execute ... -c 'import marimo_lens._capability; help(marimo_lens._capability)'`.
   It matches the Lens version that runs your calls. `help()` writes the skill
-  and the API reference to `stdout` itself, so it needs no `print()`.
+  to `stdout` itself, so it needs no `print()`.
 - **Results.** Printed text arrives in the JSON result's `stdout`, so print
   Lens results as JSON. A block that ends with an expression also returns that
   value's rendered HTML in `output`.
 - **Errors.** An uncaught `LensError` sets `success` to `false`, and the last
   `stderr` line reads `marimo_lens.LensError: <code>: <message>`. Route
   recovery by that code.
-- **Targeting.** Pass `--file` on every call of a multi-call workflow. Session
-  IDs change when the page reloads. The kernel and its Lens survive the reload,
-  so a saved Lens identity still connects.
+- **Targeting.** Pass `--session` with the `session_id` from
+  `marimo pair notebook list` on every call of a multi-call workflow. It stays
+  the same across page reloads, and a saved Lens identity still connects. A
+  kernel restart starts a new session, so list sessions again.
 - **Unknown outcome.** When `marimo pair` reports an unknown outcome, read
   fresh Lens context before repeating a mutation. A committed `resolve()` has
-  moved its selections to History and advanced the revision.
+  closed its requests. It advanced the revision when the batch held a
+  selection. A batch of chat requests leaves the revision unchanged.
 - **Concurrency.** A session runs one execution at a time. Run calls to
   different sessions concurrently.
 - **Images.** A printed image path is readable when the agent and kernel share
@@ -102,7 +105,8 @@ async with cm.get_context() as ctx:
 ```
 
 Wait for installation to complete. In a subsequent scratchpad call, check
-`cm.capabilities()` and read `help(marimo_lens.agent)` after `import marimo_lens`.
+`cm.capabilities()`, import `marimo_lens._capability`, and read
+`help(marimo_lens._capability)`.
 Continue in the same notebook session, then follow the core skill's mount
 recipe. Installation makes the package available. Displaying a Lens instance
 makes the dock available.
@@ -138,3 +142,6 @@ from marimo_lens import Lens
 lens = Lens()
 lens
 ```
+
+`Lens()` keeps no record. Mount one with a record only when the analyst asks,
+as the [core skill](../SKILL.md#mounting-and-deeper-reference) shows.

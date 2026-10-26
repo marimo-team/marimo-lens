@@ -1,14 +1,22 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import pathlib
 import struct
 import zlib
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from marimo_lens import LensContext, LensReferences
+from marimo_lens import LensContext, LensReferences, RecordedRequest
 from marimo_lens._context.build import standalone_text
 from marimo_lens._notebook.snapshot import RuntimeCell, RuntimeSnapshot
+from marimo_lens._record.lines import (
+    OpenRequest,
+    RecordHealth,
+    RecordLine,
+    build_line,
+)
 from marimo_lens._selection.references import build_references
 
 
@@ -125,13 +133,17 @@ def build_context(
     revision: int,
     current_selection_id: str | None,
 ) -> tuple[LensReferences, str]:
-    """Return the references and text a Lens builds."""
+    """Return the references and text an unsaved notebook's Lens builds."""
 
     references = build_references(
         runtime,
         selections,
         revision=revision,
         current_selection_id=current_selection_id,
+        record=RecordHealth(
+            "unsaved", "The notebook has no file name yet."
+        ).reference(),
+        code_hashes={},
     )
     return references, standalone_text(runtime, selections, current_selection_id)
 
@@ -140,15 +152,66 @@ def lens_context(
     references: Mapping[str, object],
     *,
     text: str = "",
+    brief: str = "",
     images: Mapping[str, bytes] | None = None,
+    history: Sequence[RecordedRequest] = (),
 ) -> LensContext:
     """Return a context with fixed references, as a code-mode fake would."""
 
     return LensContext._create(
         references=references,
+        request=None,
         text=lambda: text,
+        brief=lambda: brief,
+        history=lambda _cell_ids: list(history),
         images=images or {},
     )
+
+
+def record_line(
+    request_id: str,
+    before: Mapping[str, str] | RuntimeSnapshot,
+    after: Mapping[str, str] | RuntimeSnapshot,
+    *,
+    kernel: str = "a" * 16,
+    resolved_at: str = "2026-10-21T10:01:00+00:00",
+    trace: tuple[str, ...] = (),
+) -> RecordLine:
+    """Return the line of a chat request whose cells went from ``before`` to ``after``.
+
+    A mapping names each cell's code. The line keeps the code of the ``trace``
+    cells it pointed at.
+    """
+
+    def notebook(cells: Mapping[str, str] | RuntimeSnapshot) -> RuntimeSnapshot:
+        if isinstance(cells, RuntimeSnapshot):
+            return cells
+        return snapshot(*(cell(cell_id, code=code) for cell_id, code in cells.items()))
+
+    return build_line(
+        OpenRequest(
+            id=request_id,
+            channel="chat",
+            note="Change it",
+            opened_at="2026-10-21T10:00:00+00:00",
+            cell_ids=trace,
+            baseline=notebook(before),
+        ),
+        notebook(after),
+        kernel=kernel,
+        resolved_at=resolved_at,
+        revision=1,
+        summary=None,
+    )
+
+
+def record_lines(notebook: pathlib.Path) -> list[dict[str, Any]]:
+    """Return the record lines Lens wrote for the notebook file ``notebook``."""
+
+    path = notebook.parent / "__marimo__" / "lens" / f"{notebook.name}.jsonl"
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
 
 
 def _chunk(kind: bytes, data: bytes) -> bytes:

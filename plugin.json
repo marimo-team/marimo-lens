@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "marimo-lens",
-  "description": "Ground agent work in selected Marimo notebook outputs and their producing cells.",
+  "description": "Address and resolve analyst requests in live marimo notebooks, and keep an opt-in record of the cells each request changed.",
   "author": {
     "name": "Péter Ferenc Gyarmati",
     "email": "dev.petergy@gmail.com"

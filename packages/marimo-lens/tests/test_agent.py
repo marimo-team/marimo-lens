@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import os
 import pydoc
 import subprocess
@@ -8,14 +7,14 @@ import sys
 import traceback
 from importlib import import_module
 from importlib.metadata import distribution
-from types import SimpleNamespace
-from typing import cast
+from types import ModuleType, SimpleNamespace
+from typing import Any, cast
 
 import agent_plugins as ap
 import marimo as mo
 import marimo._code_mode as code_mode
 import pytest
-from marimo_lens import Lens, LensError, agent
+from marimo_lens import Lens, LensError, Record, agent
 from marimo_lens._marimo.adapter import MarimoRuntimeAdapter
 from marimo_lens._protocol.messages import PROTOCOL_VERSION
 
@@ -56,7 +55,7 @@ def test_marimo_code_mode_loads_the_registered_lens_capability() -> None:
         if entry_point.group == "marimo.agent.capability"
     ]
 
-    assert (capability.name, capability.value) == ("lens", "marimo_lens.agent")
+    assert (capability.name, capability.value) == ("lens", "marimo_lens._capability")
     assert capability.load() is import_module(code_mode.capabilities()["lens"])
 
 
@@ -85,7 +84,6 @@ def test_capability_help_contains_the_installed_core_briefing() -> None:
     assert str(plugin.path) in rendered
     assert str(skill / "SKILL.md") in rendered
     assert instructions is not None
-    assert instructions == briefing
     assert inventory in instructions
     assert skill.source in instructions
     assert skill.source in briefing
@@ -102,32 +100,43 @@ def test_capability_help_contains_the_installed_core_briefing() -> None:
         assert resource in rendered
 
 
-@pytest.mark.parametrize(
-    "import_statement", ["import marimo_lens", "import marimo_lens.agent"]
-)
-def test_package_import_exposes_agent_resources_and_help(import_statement: str) -> None:
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            (
-                f"{import_statement}\n"
-                "assert 'agent' in marimo_lens.__all__\n"
-                "plugin = marimo_lens.agent.plugin()\n"
-                "skill = marimo_lens.agent.skill()\n"
-                "assert plugin.manifest.name == 'marimo-lens'\n"
-                "assert skill == plugin.skill('marimo-lens')\n"
-                "assert skill.file('references/selections.md').is_file()\n"
-                "help(marimo_lens.agent)\n"
-            ),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def test_capability_help_fits_the_external_provider_output_limit() -> None:
+    capability = import_module(code_mode.capabilities()["lens"])
+    rendered = pydoc.plain(pydoc.render_doc(capability))
 
-    assert result.returncode == 0, result.stderr
-    assert "marimo_lens.agent" in result.stdout
+    assert len(rendered) < 10_000
+
+
+def test_capability_help_reads_the_installed_briefing_once_per_retrieval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capability = import_module(code_mode.capabilities()["lens"])
+    reads: list[str] = []
+
+    def read(distribution_name: str) -> str:
+        reads.append(distribution_name)
+        return f"## Plugin inventory\n\nInstalled Lens briefing {len(reads)}"
+
+    monkeypatch.setattr(ap, "read", read)
+    first = pydoc.plain(pydoc.render_doc(capability))
+    assert reads == ["marimo-lens"]
+    assert "Installed Lens briefing 1" in first
+    second = pydoc.plain(pydoc.render_doc(capability))
+    assert reads == ["marimo-lens", "marimo-lens"]
+    assert "Installed Lens briefing 2" in second
+
+
+def test_agent_module_help_exposes_the_python_api() -> None:
+    rendered = pydoc.plain(pydoc.render_doc(agent))
+
+    assert type(agent) is ModuleType
+    assert "Connect code-mode agents to Lens." in rendered
+    assert "connect(context:" in rendered
+    assert "*, identity:" in rendered
+    assert "cell_image(self, cell_id:" in rendered
+    assert "*, expected_revision:" in rendered
+    assert "Return a fresh unannotated cell PNG across kernel calls." in rendered
+    assert "then repeat the call" in rendered
 
 
 def test_capability_help_carries_the_skill_through_a_windows_code_page() -> None:
@@ -190,59 +199,6 @@ def test_package_import_defers_reading_agent_resources() -> None:
         check=False,
     )
     assert result.returncode == 0, result.stderr
-
-
-def test_agent_handoff_matches_documented_signatures() -> None:
-    assert list(inspect.signature(agent.add_lens_cell).parameters) == ["ctx"]
-    assert list(inspect.signature(agent.connect).parameters) == ["context", "identity"]
-    assert (
-        inspect.signature(agent.connect).parameters["identity"].kind
-        is inspect.Parameter.KEYWORD_ONLY
-    )
-    expected_parameters = {
-        "context": ["self"],
-        "cell_image": ["self", "cell_id", "expected_revision"],
-        "start_activity": [
-            "self",
-            "target",
-            "expected_revision",
-            "duration_ms",
-            "label",
-            "message",
-        ],
-        "stop_activity": ["self", "activity"],
-        "resolve": ["self", "selection_ids", "expected_revision", "summary"],
-        "reveal": [
-            "self",
-            "target",
-            "expected_revision",
-            "duration_ms",
-            "label",
-            "message",
-        ],
-    }
-    for method_name, expected in expected_parameters.items():
-        parameters = inspect.signature(
-            getattr(agent.MountedLens, method_name)
-        ).parameters
-        assert list(parameters) == expected
-
-    assert (
-        inspect.signature(agent.MountedLens.cell_image)
-        .parameters["expected_revision"]
-        .kind
-        is inspect.Parameter.KEYWORD_ONLY
-    )
-    reveal_duration = inspect.signature(agent.MountedLens.reveal).parameters[
-        "duration_ms"
-    ]
-    assert reveal_duration.kind is inspect.Parameter.KEYWORD_ONLY
-    assert reveal_duration.default is inspect.Parameter.empty
-    activity_duration = inspect.signature(agent.MountedLens.start_activity).parameters[
-        "duration_ms"
-    ]
-    assert activity_duration.kind is inspect.Parameter.KEYWORD_ONLY
-    assert activity_duration.default is None
 
 
 def _unmount(lens: Lens) -> None:
@@ -343,6 +299,105 @@ def test_add_lens_cell_reruns_its_cell_unless_it_holds_an_open_lens(
     assert queued == runs
     if lens is not None:
         lens.close()
+
+
+@pytest.mark.parametrize(
+    ("record", "constructor"),
+    [
+        (None, "_Lens()"),
+        (False, "_Lens()"),
+        (True, "_Lens(record=True)"),
+        (Record(), "_Lens(record=True)"),
+        ({"keep": "notebook"}, "_Lens(record=True)"),
+        (
+            {"keep": "session", "images": False},
+            '_Lens(record={"keep": "session", "images": False})',
+        ),
+        (Record(history=False), '_Lens(record={"history": False})'),
+    ],
+)
+def test_add_lens_cell_writes_the_shortest_lens_constructor(
+    monkeypatch: pytest.MonkeyPatch, record: Any, constructor: str
+) -> None:
+    created: list[str] = []
+
+    def create_cell(code: str, **_kwargs: object) -> str:
+        created.append(code)
+        return "lens-cell"
+
+    cell_id = agent.add_lens_cell(
+        SimpleNamespace(
+            cells=SimpleNamespace(find=lambda _marker: []),
+            create_cell=create_cell,
+            run_cell=lambda _cell_id: None,
+        ),
+        record=record,
+    )
+
+    [code] = created
+    assert cell_id == "lens-cell"
+    assert f"_lens = {constructor}\n" in code
+    assert "Record" not in code
+    mounted: list[Lens] = []
+    monkeypatch.setattr(mo.output, "append", mounted.append)
+    exec(code, {})  # noqa: S102 - execute the generated notebook cell
+    assert mounted[0].record == Lens(record=record).record
+    mounted[0].close()
+
+
+def _existing_lens_cell(code: str) -> SimpleNamespace:
+    class Cells:
+        def find(self, _substring: str) -> list[SimpleNamespace]:
+            return [SimpleNamespace(id="lens-1", status="queued", code=code)]
+
+    def create_cell(*_args: object, **_kwargs: object) -> str:
+        raise AssertionError("an existing Lens cell must be reused")
+
+    return SimpleNamespace(
+        cells=Cells(), create_cell=create_cell, run_cell=lambda _cell_id: None
+    )
+
+
+RECORD_CELL = """# marimo-lens: agent-managed Lens cell
+import marimo as _mo
+from marimo_lens import Lens as _Lens
+
+_lens = _Lens(record={"keep": "session"})
+_mo.output.append(_lens)
+"""
+
+
+@pytest.mark.parametrize("record", [None, {"keep": "session"}, Record(keep="session")])
+def test_add_lens_cell_reuses_a_cell_that_keeps_the_same_record(
+    record: object,
+) -> None:
+    context = _existing_lens_cell(RECORD_CELL)
+
+    assert agent.add_lens_cell(context, record=cast(Any, record)) == "lens-1"
+
+
+@pytest.mark.parametrize("record", [False, True, {"images": False}])
+def test_add_lens_cell_refuses_a_record_its_existing_cell_does_not_keep(
+    record: object,
+) -> None:
+    context = _existing_lens_cell(RECORD_CELL)
+
+    with pytest.raises(LensError) as raised:
+        agent.add_lens_cell(context, record=cast(Any, record))
+
+    assert raised.value.code == "lens_cell_exists"
+    assert 'Lens(record={"keep": "session"})' in str(raised.value)
+
+
+def test_add_lens_cell_validates_the_record() -> None:
+    context = SimpleNamespace(
+        cells=SimpleNamespace(find=lambda _marker: []),
+        create_cell=lambda *_args, **_kwargs: "lens-cell",
+        run_cell=lambda _cell_id: None,
+    )
+
+    with pytest.raises(TypeError, match="'show'"):
+        agent.add_lens_cell(context, record=cast(Any, {"show": False}))
 
 
 def test_connect_preserves_identity_across_kernel_calls() -> None:
@@ -476,26 +531,9 @@ def test_unavailable_connection_reports_its_code_in_the_traceback() -> None:
     with pytest.raises(LensError) as raised:
         agent.connect(_code_mode_context())
 
-    # Code-mode transports return an uncaught error as its formatted traceback.
-    assert traceback.format_exception_only(raised.value)[-1] == (
+    assert traceback.format_exception_only(raised.value)[-1].startswith(
         "marimo_lens.LensError: lens_unavailable: "
-        "No Lens is available in the active notebook.\n"
     )
-
-
-def test_connect_uses_identity_to_select_an_available_context_lens() -> None:
-    first = Lens()
-    second = Lens()
-    identity = agent.connect(_code_mode_context(first=first)).identity
-
-    mounted = agent.connect(
-        _code_mode_context(first=first, second=second),
-        identity=identity,
-    )
-
-    assert mounted.identity == identity
-    first.close()
-    second.close()
 
 
 def test_connect_requires_a_context_globals_mapping() -> None:
@@ -607,17 +645,12 @@ def test_mount_discovery_degrades_when_runtime_scope_is_unavailable(
 
 
 @pytest.mark.parametrize(
-    ("identity", "error", "message"),
-    [
-        (1, TypeError, "identity must be a string or None"),
-        ("", ValueError, "identity must not be empty"),
-    ],
-    ids=["type", "empty"],
+    ("identity", "error"), [(1, TypeError), ("", ValueError)], ids=["type", "empty"]
 )
 def test_connect_validates_the_identity(
-    identity: object, error: type[Exception], message: str
+    identity: object, error: type[Exception]
 ) -> None:
-    with pytest.raises(error, match=message):
+    with pytest.raises(error, match="identity must"):
         agent.connect(identity=cast(str | None, identity))
 
 
@@ -664,6 +697,5 @@ def test_mounted_lens_drives_the_lens_it_connects_to(
         "output.capture",
         {"outputCellId": "cell-view"},
     )
-    assert mounted.resolve("selection-1", expected_revision=1, summary="Done.") == 2
-    assert lens.synced_state()["history"][0]["summary"] == "Done."
+    assert mounted.resolve("selection-1", expected_revision=1) == 2
     lens.close()

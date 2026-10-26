@@ -36,6 +36,9 @@ def automatic_lens() -> Lens | None:
     None outside the editor or a notebook cell, while the runtime holds an open
     Lens, and when a notebook cell creates its own Lens. A Lens that a notebook
     cell creates later closes the automatic Lens.
+
+    The automatic Lens is ``Lens()`` and keeps no record. A notebook keeps one
+    with a cell that constructs ``Lens(record=True)``.
     """
 
     cell_id = current_cell_id()

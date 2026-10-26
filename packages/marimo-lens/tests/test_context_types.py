@@ -10,11 +10,19 @@ import pytest
 from marimo_lens import (
     ActivityHandle,
     CellReference,
+    ChatRequestReference,
+    Diagnostic,
     Lens,
     LensContext,
     LensError,
     LensReferences,
     NotebookReference,
+    Record,
+    RecordedChange,
+    RecordedImage,
+    RecordedRequest,
+    RecordOptions,
+    RequestReference,
     RevealStep,
     SelectionReference,
     SelectionTargetReference,
@@ -31,11 +39,19 @@ def test_package_exports_the_public_api() -> None:
     expected = {
         "ActivityHandle": ActivityHandle,
         "CellReference": CellReference,
+        "ChatRequestReference": ChatRequestReference,
+        "Diagnostic": Diagnostic,
         "Lens": Lens,
         "LensContext": LensContext,
         "LensError": LensError,
         "LensReferences": LensReferences,
         "NotebookReference": NotebookReference,
+        "Record": Record,
+        "RecordOptions": RecordOptions,
+        "RecordedChange": RecordedChange,
+        "RecordedImage": RecordedImage,
+        "RecordedRequest": RecordedRequest,
+        "RequestReference": RequestReference,
         "SelectionReference": SelectionReference,
         "SelectionTargetReference": SelectionTargetReference,
         "RevealStep": RevealStep,
@@ -64,10 +80,13 @@ def test_lens_error_reads_as_part_of_the_package() -> None:
 def test_context_exposes_typed_reference_dictionaries() -> None:
     references_getter = LensContext.references.fget
     current_getter = LensContext.current.fget
+    request_getter = LensContext.request.fget
     assert references_getter is not None
     assert current_getter is not None
+    assert request_getter is not None
     assert get_type_hints(references_getter)["return"] is LensReferences
     assert get_type_hints(current_getter)["return"] == SelectionReference | None
+    assert get_type_hints(request_getter)["return"] == RequestReference | None
     assert get_type_hints(LensReferences)["notebook"] is NotebookReference
     assert get_type_hints(LensReferences)["selections"] == list[SelectionReference]
     assert get_type_hints(NotebookReference)["path"] is str
@@ -100,19 +119,9 @@ def test_context_exposes_immutable_png_bytes_by_selection_id() -> None:
         cast(Any, context.images)["selection-2"] = b"other"
 
 
-def test_context_detaches_nested_references_from_its_input() -> None:
-    references = {
-        "revision": 3,
-        "currentSelectionId": "selection-1",
-        "selections": [{"id": "selection-1", "note": "Original note"}],
-    }
-    context = LensContext(references=references, text="", images={})
-
-    references["revision"] = 4
-    cast(list[dict[str, object]], references["selections"])[0]["note"] = "Changed note"
-
-    assert context.revision == 3
-    assert context.current == {"id": "selection-1", "note": "Original note"}
+def test_context_is_created_by_lens() -> None:
+    with pytest.raises(TypeError, match=r"Lens\.context\(\)"):
+        LensContext()
 
 
 def test_context_references_are_detached_from_lens_state() -> None:

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hashlib
-from collections.abc import Callable, Mapping, Sequence
-from typing import Any, ClassVar, cast
+import threading
+from collections.abc import Mapping, Sequence
+from typing import Any, cast
 
 import pytest
 from marimo_lens import LensError
@@ -23,42 +24,17 @@ class FailingCaptureLens(BrowserLens):
         super().send(content, buffers)
 
 
-class ManualTimer:
-    instances: ClassVar[list[ManualTimer]] = []
+class Clock:
+    """Stands in for the monotonic clock that capture deadlines read."""
 
-    def __init__(
-        self,
-        interval: float,
-        function: Callable[..., object],
-        args: tuple[object, ...] | None = None,
-        kwargs: dict[str, object] | None = None,
-    ) -> None:
-        self.interval = interval
-        self.function = function
-        self.args = args or ()
-        self.kwargs = kwargs or {}
-        self.daemon = False
-        self.started = False
-        self.cancelled = False
-        self.instances.append(self)
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import marimo_lens._widget.capture as capture_module
 
-    def start(self) -> None:
-        self.started = True
+        self.now = 1_000.0
+        monkeypatch.setattr(capture_module, "monotonic", lambda: self.now)
 
-    def cancel(self) -> None:
-        self.cancelled = True
-
-    def fire(self) -> None:
-        if self.started and not self.cancelled:
-            self.function(*self.args, **self.kwargs)
-
-
-def _manual_timers(monkeypatch: pytest.MonkeyPatch) -> list[ManualTimer]:
-    import marimo_lens._widget.capture as capture_module
-
-    ManualTimer.instances = []
-    monkeypatch.setattr(capture_module.threading, "Timer", ManualTimer)
-    return ManualTimer.instances
+    def pass_deadline(self) -> None:
+        self.now += 21.0
 
 
 def test_cell_image_reuses_pending_capture_and_consumes_completed_bytes(
@@ -82,26 +58,34 @@ def test_cell_image_reuses_pending_capture_and_consumes_completed_bytes(
     assert len(_capture_commands(lens)) == 2
 
 
-def test_revision_change_during_runtime_check_rejects_capture(
+def test_selection_change_waits_for_the_runtime_check(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from marimo_lens._marimo.adapter import MarimoRuntimeAdapter
 
     lens: BrowserLens
+    change = threading.Thread(
+        target=lambda: lens.put(selection(selection_id="selection-2", label="S2"))
+    )
 
     def check_cell(_runtime: MarimoRuntimeAdapter, _cell_id: str) -> str:
-        lens.put(selection(selection_id="selection-2", label="S2"))
+        change.start()
+        change.join(timeout=0.2)
+        assert change.is_alive()
         return "available"
 
     monkeypatch.setattr(MarimoRuntimeAdapter, "cell_status", check_cell)
     lens = BrowserLens()
     lens.put(selection())
 
+    assert lens._cell_image("cell-view", expected_revision=1) is None
+    change.join(timeout=5)
+
+    assert len(_capture_commands(lens)) == 1
     with pytest.raises(LensError) as raised:
         lens._cell_image("cell-view", expected_revision=1)
     assert raised.value.code == "revision_conflict"
     assert raised.value.revision == 2
-    assert _capture_commands(lens) == []
 
 
 @pytest.mark.parametrize(
@@ -218,20 +202,18 @@ def test_malformed_readiness_event_keeps_pending_capture_available(
 def test_timed_out_capture_ignores_a_late_response_and_frees_the_slot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    timers = _manual_timers(monkeypatch)
+    clock = Clock(monkeypatch)
     _install_runtime(monkeypatch, "cell-view", "cell-other")
     lens = BrowserLens()
     assert lens._cell_image("cell-view", expected_revision=0) is None
     command = _capture_commands(lens)[0]
-    timer = timers[-1]
 
-    timer.fire()
+    clock.pass_deadline()
     _reply(lens, command, data=png())
 
     with pytest.raises(LensError) as raised:
         lens._cell_image("cell-view", expected_revision=0)
     assert raised.value.code == "capture_timeout"
-    assert timer.daemon is True
     assert lens._cell_image("cell-other", expected_revision=0) is None
     assert len(_capture_commands(lens)) == 2
 
@@ -239,30 +221,29 @@ def test_timed_out_capture_ignores_a_late_response_and_frees_the_slot(
 def test_timed_out_capture_does_not_block_another_cell(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    timers = _manual_timers(monkeypatch)
+    clock = Clock(monkeypatch)
     _install_runtime(monkeypatch, "cell-view", "cell-other")
     lens = BrowserLens()
     assert lens._cell_image("cell-view", expected_revision=0) is None
 
-    timers[-1].fire()
+    clock.pass_deadline()
 
     assert lens._cell_image("cell-other", expected_revision=0) is None
     assert len(_capture_commands(lens)) == 2
 
 
-def test_timeout_callback_cannot_replace_completed_capture(
+def test_a_capture_completed_before_its_deadline_is_kept(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    timers = _manual_timers(monkeypatch)
+    clock = Clock(monkeypatch)
     _install_runtime(monkeypatch)
     lens = BrowserLens()
     data = png()
     assert lens._cell_image("cell-view", expected_revision=0) is None
     command = _capture_commands(lens)[0]
-    timer = timers[-1]
 
     _reply(lens, command, data=data)
-    timer.function(*timer.args, **timer.kwargs)
+    clock.pass_deadline()
 
     assert lens._cell_image("cell-view", expected_revision=0) == data
 
@@ -351,7 +332,6 @@ def test_capture_send_failure_raises_immediately(
 def test_close_releases_cell_image_capture(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    timers = _manual_timers(monkeypatch)
     _install_runtime(monkeypatch)
     lens = BrowserLens()
     assert lens._cell_image("cell-view", expected_revision=0) is None
@@ -364,7 +344,6 @@ def test_close_releases_cell_image_capture(
     with pytest.raises(LensError) as raised:
         slot.image("cell-view", expected_revision=0)
     assert raised.value.code == "lens_closed"
-    assert timers[-1].cancelled is True
     assert slot._record is None
 
 
@@ -469,3 +448,20 @@ def _fail_reply(
         },
         [],
     )
+
+
+def test_cell_image_needs_no_thread(monkeypatch: pytest.MonkeyPatch) -> None:
+    import threading
+
+    def refuse(self: threading.Thread) -> None:
+        raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(threading.Thread, "start", refuse)
+    _install_runtime(monkeypatch)
+    lens = BrowserLens()
+    data = png()
+
+    assert lens._cell_image("cell-view", expected_revision=0) is None
+    _reply(lens, _capture_commands(lens)[0], data=data)
+
+    assert lens._cell_image("cell-view", expected_revision=0) == data

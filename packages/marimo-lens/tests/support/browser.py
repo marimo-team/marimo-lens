@@ -6,7 +6,7 @@ import struct
 from collections.abc import Sequence
 from typing import Any, cast
 
-from marimo_lens import Lens
+from marimo_lens import Lens, Record, RecordOptions
 from marimo_lens._protocol.messages import PROTOCOL_VERSION
 
 from tests.support.factories import snapshot_metadata
@@ -20,11 +20,12 @@ class BrowserLens(Lens):
     def __init__(
         self,
         *,
+        record: Record | RecordOptions | bool | None = None,
         dom_selector: str | None = None,
         displayed: bool = True,
     ) -> None:
         self.sent = []
-        super().__init__(dom_selector=dom_selector)
+        super().__init__(record=record, dom_selector=dom_selector)
         if displayed:
             self.display()
 
@@ -56,8 +57,16 @@ class BrowserLens(Lens):
     def synced_state(self) -> dict[str, Any]:
         return cast(dict[str, Any], self._state)
 
+    def synced_history(self) -> dict[str, Any]:
+        history = self._history
+        assert history is not None, "This Lens shows no History."
+        return history
+
+    def synced_chats(self) -> list[dict[str, Any]]:
+        return cast(list[dict[str, Any]], self._chats)
+
     def history_entries(self) -> list[dict[str, Any]]:
-        return cast(list[dict[str, Any]], self.synced_state()["history"])
+        return cast(list[dict[str, Any]], self.synced_history()["entries"])
 
     def respond(
         self,
@@ -120,3 +129,14 @@ class BrowserLens(Lens):
             },
             buffers=() if image is None else [image],
         )
+
+
+class RecordBrowserLens(BrowserLens):
+    def __init__(
+        self,
+        *,
+        record: Record | RecordOptions | bool | None = True,
+        dom_selector: str | None = None,
+        displayed: bool = True,
+    ) -> None:
+        super().__init__(record=record, dom_selector=dom_selector, displayed=displayed)
