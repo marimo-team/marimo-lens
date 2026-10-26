@@ -813,3 +813,28 @@ test(
     ).toBeVisible();
   },
 );
+
+test(
+  "a mark on a fixed-size chart stays on its spot when the output resizes",
+  { tag: "@single-project" },
+  async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    const chart = page.getByRole("figure", { name: "Fixed-size chart" }).locator("svg");
+    await selectOutput(page, "point", "S1", "This bar", chart);
+    const marker = page.locator('[data-kind="point"][data-marimo-lens-selection-id]');
+    const offset = async () => {
+      const chartBounds = (await chart.boundingBox())!;
+      const markerBounds = (await marker.boundingBox())!;
+      return {
+        x: markerBounds.x + markerBounds.width / 2 - chartBounds.x,
+        y: markerBounds.y + markerBounds.height / 2 - chartBounds.y,
+      };
+    };
+    const placed = await offset();
+
+    await page.setViewportSize({ width: 900, height: 900 });
+
+    await expect.poll(async () => Math.abs((await offset()).x - placed.x)).toBeLessThan(1.5);
+    expect(Math.abs((await offset()).y - placed.y)).toBeLessThan(1.5);
+  },
+);

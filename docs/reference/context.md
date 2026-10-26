@@ -218,6 +218,26 @@ A region selection serializes with the protocol value `"rect"`:
 `width` and `height` are positive. The complete rectangle must remain inside
 the normalized target bounds.
 
+A mark placed on a canvas, image, video, iframe, or SVG chart that contains it
+also carries a `frame`:
+
+```json
+{
+  "kind": "point",
+  "x": 0.42,
+  "y": 0.31,
+  "frame": {
+    "path": "div > canvas",
+    "bounds": { "x": 0, "y": 0, "width": 0.5, "height": 1 }
+  }
+}
+```
+
+`path` leads from the target to that element, and `bounds` is its box in
+target fractions when the mark was placed. The coordinates keep describing the
+target at that moment. The browser draws the marker on the same spot of the
+element as the output's layout moves or resizes it.
+
 ## DOM hint shape
 
 `domHint` describes the element under the point or the center of the region. It

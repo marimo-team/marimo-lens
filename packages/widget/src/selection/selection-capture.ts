@@ -7,7 +7,7 @@ import { isAbortCause } from "@marimo-lens/protocol";
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
-import { sameAnchor } from "@/selection/anchor";
+import { currentAnchor, sameAnchor } from "@/selection/anchor";
 
 import type { Mutation, Revision } from "./revisioned-mutations";
 
@@ -124,7 +124,7 @@ export class SelectionCapture {
       const result = await this.#captureSnapshot({
         selectionId: selection.id,
         label: selection.label,
-        anchor: selection.anchor,
+        anchor: currentAnchor(output, selection.anchor),
         output,
         detailElement,
         context: selection.target.kind === "dom" ? this.#dom.captureContext(output) : undefined,

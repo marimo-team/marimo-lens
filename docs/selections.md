@@ -285,6 +285,7 @@ the same browser document:
 | Label and note   | The `S<n>` label stays stable, and the notebook runtime never issues it again.                                                                                                                  |
 | Target           | The same document ID and path plus the cell ID or exact DOM selector identify the target. DOM targets also require the same source identities, producing-cell ID set, and selector eligibility. |
 | Producing cells  | A DOM target includes producing cells from published source records or nested runtime metadata. Unkeyed roots remain tied to their original elements.                                           |
+| Marker position  | A mark on a chart, image, video, or iframe stays on the same spot of that element when the output resizes or rerenders around it.                                                               |
 | Selection image  | Moving or resizing starts a fresh PNG capture. The previous image remains available and is marked outdated until the new capture succeeds.                                                      |
 
 A full document replacement creates a new opaque document identity. The old

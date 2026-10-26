@@ -1,8 +1,10 @@
 import type { RectAnchor, SelectionAnchor } from "@marimo-lens/protocol";
 
-import { outputContentMetrics } from "@marimo-lens/image-capture";
+import { outputContentMetrics, relativeOutputBounds } from "@marimo-lens/image-capture";
 
 import { composedParent } from "@/notebook/open-tree";
+
+import { resolveFrame } from "./anchor-frame";
 
 export type ViewportAnchor =
   | { kind: "point"; x: number; y: number }
@@ -21,11 +23,18 @@ export type ScrollAttachment = {
   ancestorBaselines: ScrollFrame[];
 };
 
+/**
+ * Place an anchor in the viewport. An anchor on a frame, such as a chart's
+ * canvas, follows that element wherever the output's layout moves or resizes
+ * it. Other anchors keep their place in the output's content.
+ */
 export function anchorToViewport(
   output: HTMLElement,
   anchor: SelectionAnchor,
   attachment?: ScrollAttachment,
 ): ViewportAnchor {
+  const framed = framedRect(output, anchor);
+  if (framed) return onFrame(anchor, framed.rect);
   const metrics = outputContentMetrics(output);
   const nestedScroll = attachmentOffset(attachment);
   const x =
@@ -57,6 +66,24 @@ export function anchorCenter(
     : { x: viewport.x + viewport.width / 2, y: viewport.y + viewport.height / 2 };
 }
 
+/**
+ * Restate an anchor in the output's current layout, so moving or resizing it
+ * starts from where its marker shows now.
+ */
+export function currentAnchor(output: HTMLElement, anchor: SelectionAnchor): SelectionAnchor {
+  const framed = framedRect(output, anchor);
+  if (!anchor.frame || !framed) return anchor;
+  const viewport = onFrame(anchor, framed.rect);
+  const frame = { path: anchor.frame.path, bounds: relativeOutputBounds(framed.element, output) };
+  const start = viewportToContent(output, viewport.x, viewport.y);
+  if (viewport.kind === "point") return { kind: "point", ...start, frame };
+  const end = viewportToContent(output, viewport.x + viewport.width, viewport.y + viewport.height);
+  const width = end.x - start.x;
+  const height = end.y - start.y;
+  if (width <= 0 || height <= 0) return anchor;
+  return { kind: "rect", ...start, width, height, frame };
+}
+
 /** Convert a viewport point to fractions of the output's scrollable content. */
 export function viewportToContent(output: HTMLElement, x: number, y: number) {
   const metrics = outputContentMetrics(output);
@@ -71,6 +98,31 @@ export function viewportToContent(output: HTMLElement, x: number, y: number) {
       0,
       1,
     ),
+  };
+}
+
+function framedRect(
+  output: HTMLElement,
+  anchor: SelectionAnchor,
+): { element: Element; rect: DOMRect } | null {
+  const frame = anchor.frame;
+  if (!frame || frame.bounds.width <= 0 || frame.bounds.height <= 0) return null;
+  const element = resolveFrame(output, frame.path);
+  const rect = element?.getBoundingClientRect();
+  return element && rect && rect.width > 0 && rect.height > 0 ? { element, rect } : null;
+}
+
+function onFrame(anchor: SelectionAnchor, rect: DOMRect): ViewportAnchor {
+  const bounds = anchor.frame!.bounds;
+  const x = rect.left + ((anchor.x - bounds.x) / bounds.width) * rect.width;
+  const y = rect.top + ((anchor.y - bounds.y) / bounds.height) * rect.height;
+  if (anchor.kind === "point") return { kind: "point", x, y };
+  return {
+    kind: "rect",
+    x,
+    y,
+    width: (anchor.width / bounds.width) * rect.width,
+    height: (anchor.height / bounds.height) * rect.height,
   };
 }
 
