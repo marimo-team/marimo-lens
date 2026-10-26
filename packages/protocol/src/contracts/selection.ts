@@ -195,7 +195,7 @@ const SelectionInputObjectSchema = v.object({
 });
 
 const PreviousResolutionSchema = v.object({
-  addressedAt: TimestampSchema,
+  resolvedAt: TimestampSchema,
   summary: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(240))),
 });
 
@@ -245,28 +245,11 @@ export function parseTargetSelector(
   return parseContract(TargetSelectorSchema, input, "Lens target selector");
 }
 
-const AddressedSelectionSchema = v.object({
-  selectionId: BoundedIdentifierSchema,
-  label: SelectionLabelSchema,
-  note: v.pipe(UnicodeStringSchema, v.maxLength(4_000)),
-  target: SelectionTargetSchema,
-  createdAt: TimestampSchema,
-  addressedAt: TimestampSchema,
-  anchor: SelectionAnchorSchema,
-  domHint: v.optional(DomHintSchema),
-  description: TargetInfoSchema,
-  summary: v.optional(v.pipe(NonEmptyStringSchema, v.maxLength(240))),
-  resolutionRevision: RevisionSchema,
-});
-
-export type AddressedSelection = v.InferOutput<typeof AddressedSelectionSchema>;
-
 const LensStateObjectSchema = v.object({
   revision: RevisionSchema,
   nextLabel: SelectionLabelSchema,
   currentSelectionId: v.nullable(BoundedIdentifierSchema),
   selections: v.pipe(v.array(SelectionSchema), v.maxLength(64)),
-  history: v.pipe(v.array(AddressedSelectionSchema), v.maxLength(64)),
 });
 
 export const LensStateSchema = v.pipe(
@@ -276,19 +259,6 @@ export const LensStateSchema = v.pipe(
     const labels = state.selections.map((selection) => selection.label);
     return new Set(ids).size === ids.length && new Set(labels).size === labels.length;
   }, "Selection ids and labels must be unique"),
-  v.check((state) => {
-    const revisions = state.history.map((receipt) => receipt.resolutionRevision);
-    const identities = state.history.map(
-      (receipt) => `${receipt.selectionId}\u0000${receipt.resolutionRevision}`,
-    );
-    return (
-      new Set(identities).size === identities.length &&
-      revisions.every(
-        (revision, index) =>
-          revision <= state.revision && (index === 0 || revisions[index - 1]! <= revision),
-      )
-    );
-  }, "History selection revisions must be unique and ordered"),
   v.check(
     (state) =>
       state.currentSelectionId === null ||

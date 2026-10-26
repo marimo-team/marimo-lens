@@ -1,0 +1,96 @@
+{
+  "entries": [
+    {
+      "id": "selection-1",
+      "channel": "selection",
+      "label": "S1",
+      "note": "Central looks off",
+      "summary": "Dropped refunds.",
+      "openedAt": "2026-10-21T14:32:54.146893+00:00",
+      "resolvedAt": "2026-10-21T14:32:54.147607+00:00",
+      "revision": 2,
+      "cellIds": ["cell-chart", "cell-net"],
+      "changes": [
+        {
+          "cellId": "cell-net",
+          "name": "net",
+          "status": "undone",
+          "undoneBy": "chat-7bf2171d42c2",
+          "missing": ["net = sales[sales.kind != 'refund']"]
+        }
+      ],
+      "selection": {
+        "target": {
+          "kind": "dom",
+          "cellIds": ["cell-chart", "cell-net"],
+          "sources": [
+            {
+              "cellId": "cell-net",
+              "selector": "net"
+            }
+          ],
+          "documentId": "document-1",
+          "documentPath": "/",
+          "domSelector": "#report"
+        },
+        "anchor": {
+          "kind": "point",
+          "x": 0.25,
+          "y": 0.75
+        },
+        "description": {
+          "label": "Revenue by region"
+        }
+      },
+      "image": {
+        "sha256": "c306f8aabe90c270099dfaf94260878d8077c2d5c24c1b661ab00fedb242d716",
+        "width": 2,
+        "height": 2,
+        "capturedAt": "2026-07-14T11:58:00Z",
+        "outdated": true
+      },
+      "shaped": ["selection-2"]
+    },
+    {
+      "id": "chat-7bf2171d42c2",
+      "channel": "chat",
+      "note": "Show refunds again",
+      "summary": "Restored all sales.",
+      "openedAt": "2026-10-21T14:32:54.149840+00:00",
+      "resolvedAt": "2026-10-21T14:32:54.149911+00:00",
+      "revision": 2,
+      "cellIds": ["cell-net"],
+      "changes": [
+        {
+          "cellId": "cell-net",
+          "name": "net",
+          "status": "in_force"
+        },
+        {
+          "status": "undone",
+          "undoneBy": "unrecorded",
+          "missing": ["net = sales"]
+        },
+        {
+          "status": "unknown"
+        }
+      ]
+    }
+  ],
+  "total": 2,
+  "record": {
+    "status": "failed",
+    "reason": "Lens could not write the record: [Errno 28] No space left on device"
+  },
+  "cells": [
+    {
+      "id": "cell-chart",
+      "name": "revenue_chart",
+      "defines": ["revenue_chart"]
+    },
+    {
+      "id": "cell-net",
+      "defines": ["net", "net_by_store"]
+    }
+  ]
+}

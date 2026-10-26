@@ -11,7 +11,6 @@ from marimo_lens._protocol.codec import (
     parse_capture_response,
     parse_command,
     request_id_from,
-    success_response,
 )
 from marimo_lens._protocol.messages import PROTOCOL_VERSION
 from marimo_lens._schema.model import dump_model
@@ -124,13 +123,16 @@ def _without(content: dict[str, Any], field: str) -> dict[str, Any]:
             "selection.reopen",
             {
                 "selectionId": "selection-1",
-                "resolutionRevision": 5,
+                "resolvedAt": "2026-10-21T10:01:00+00:00",
+                "documentId": "document-2",
+                "documentPath": "/",
                 "expectedRevision": 5,
             },
             [],
             id="reopen",
         ),
-        pytest.param("history.clear", {"expectedRevision": 6}, [], id="history-clear"),
+        pytest.param("history.refresh", {}, [], id="history-refresh"),
+        pytest.param("history.image", {"sha256": "a" * 64}, [], id="history-image"),
         pytest.param(
             "snapshot.get", {"selectionId": "selection-1"}, [], id="snapshot-get"
         ),
@@ -351,6 +353,12 @@ def test_parse_command_accepts_each_supported_payload(
             "unsupported_command",
             id="unknown-command",
         ),
+        pytest.param(
+            _command("history.image", {"sha256": "../../secrets"}),
+            [],
+            "invalid_request",
+            id="image-digest-path",
+        ),
     ],
 )
 def test_parse_command_rejects_each_invalid_message(
@@ -492,25 +500,6 @@ def test_output_capture_response_accepts_additive_fields() -> None:
     assert response.error_code == "capture_failed"
 
 
-def test_responses_use_current_version_and_include_an_object_payload() -> None:
-    success = success_response(request_id="r1", revision=2)
-    error = error_response(
-        request_id="r2",
-        revision=3,
-        code="invalid_request",
-        message="Bad request.",
-    )
-
-    assert success["version"] == PROTOCOL_VERSION
-    assert success["payload"] == {}
-    assert error["version"] == PROTOCOL_VERSION
-    assert error["payload"] == {}
-    assert error["error"] == {
-        "code": "invalid_request",
-        "message": "Bad request.",
-    }
-
-
 def test_error_responses_bound_untrusted_text() -> None:
     error = error_response(
         request_id="r" * 1_000,
@@ -530,4 +519,4 @@ def test_error_responses_bound_untrusted_text() -> None:
     ids=["oversized", "unpaired-surrogate"],
 )
 def test_invalid_request_id_is_not_echoed(request_id: str) -> None:
-    assert request_id_from({"requestId": request_id}) == ""
+    assert request_id_from({"requestId": request_id}) is None

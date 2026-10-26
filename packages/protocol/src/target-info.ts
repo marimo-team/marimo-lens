@@ -1,4 +1,4 @@
-/** Declarative metadata that any client can publish on its rendered elements. */
+// Declarative metadata that any client can publish on its rendered elements.
 export const TARGET_LABEL_ATTRIBUTE = "data-marimo-lens-label";
 export const TARGET_DETAIL_ATTRIBUTE = "data-marimo-lens-detail";
 export const SOURCE_CELL_ATTRIBUTE = "data-marimo-lens-cell-id";

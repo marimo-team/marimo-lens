@@ -2,6 +2,7 @@ import * as v from "valibot";
 
 import type { TransportEnvelope, TransportValue } from "./transport";
 
+import { SelectionTargetSchema } from "./selection";
 import {
   AttentionDurationSchema,
   AttentionLabelSchema,
@@ -10,6 +11,7 @@ import {
   RevisionSchema,
   SelectionLabelSchema,
   SummarySchema,
+  TimestampSchema,
   WIDGET_TRANSPORT_VERSION,
   parseContract,
 } from "./transport";
@@ -24,7 +26,7 @@ const EventBaseSchema = {
 const ResolvedSelectionSchema = v.object({
   selectionId: BoundedIdentifierSchema,
   label: SelectionLabelSchema,
-  resolutionRevision: RevisionSchema,
+  target: SelectionTargetSchema,
 });
 
 export const SelectionResolvedEventSchema = v.object({
@@ -42,6 +44,7 @@ export const SelectionResolvedEventSchema = v.object({
         "Resolved selections must be unique",
       ),
     ),
+    resolvedAt: TimestampSchema,
     summary: v.optional(SummarySchema),
   }),
 });
