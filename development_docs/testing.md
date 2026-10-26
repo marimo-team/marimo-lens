@@ -7,19 +7,23 @@ verification.
 
 ## Evidence layers
 
-| Layer               | Proves                                                                                              | Primary command or suite                               |
-| ------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| Protocol            | Python and TypeScript accept the same bounded messages and reject malformed data.                   | Protocol package tests and `test_protocol.py`          |
-| Selection state     | Revisions, atomic transitions, images, History, limits, and failure behavior.                       | `test_selection_state.py`                              |
-| Context             | Runtime projection, provenance, controls, references, text, and context types.                      | Context, runtime, control, and provenance Python tests |
-| Image capture       | DOM raster geometry, composition, PNG bounds, owner realms, iframe behavior, and patch obligations. | Image-capture package tests                            |
-| Widget              | Gestures, reducers, commands, target resolution, attention, focus, and view ownership.              | Widget package tests                                   |
-| Public Python       | `Lens`, `MountedLens`, errors, argument validation, close, and agent connection.                    | Widget and agent Python tests                          |
-| Bundle integration  | Generated browser resources load through AnyWidget and agent-created output.                        | `test_bundle_integration.py`                           |
-| Documentation       | Interactive cells compile, routes and assets build, and base paths remain valid.                    | `make docs` and Pages workflow checks                  |
-| Distribution        | Wheel, source distribution, rebuilt wheel, metadata, resources, entry point, and installed API.     | `make package`                                         |
-| Preview publication | Preview versions, readiness, provenance, retries, newest links, and retention.                      | `uv run pytest -q scripts/tests`                       |
-| Real browser        | Notebook gestures, image capture, feedback, History, theme, and narrow layouts in Chromium.         | `pnpm test:e2e` and browser inspection                 |
+| Layer               | Proves                                                                                                | Primary command or suite                                                              |
+| ------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Protocol            | Python and TypeScript accept the same bounded messages and reject malformed data.                     | Protocol package tests and `test_protocol.py`                                         |
+| Selection state     | Revisions, atomic transitions, resolve and reopen, admission limits, and failure behavior.            | `test_selection_state.py`                                                             |
+| Selection images    | PNG validation, metadata agreement, decoded bounds, and the per-Lens image budget.                    | `test_images.py`                                                                      |
+| Request record      | Record lines, chat requests, journal writes and moves, recorded images, and in-memory records.        | `test_record.py`, `test_chat_requests.py`, `test_journal.py`, `test_record_images.py` |
+| History             | Change status, cross-kernel cell matching, History rows, refresh, reopen, and labels across restarts. | `test_record_status.py`, `test_history.py`                                            |
+| Record choice       | `Record` forms and validation, a Lens with no record, `images` and `history` off, storage, labels.    | `test_record_choice.py`                                                               |
+| Context             | Runtime projection, provenance, controls, references, text, and context types.                        | Context, runtime, control, and provenance Python tests                                |
+| Image capture       | DOM raster geometry, composition, PNG bounds, owner realms, iframe behavior, and patch obligations.   | Image-capture package tests                                                           |
+| Widget              | Gestures, reducers, commands, target resolution, attention, focus, and view ownership.                | Widget package tests                                                                  |
+| Public Python       | `Lens`, `MountedLens`, errors, argument validation, close, and agent connection.                      | Widget and agent Python tests                                                         |
+| Bundle integration  | Generated browser resources load through AnyWidget and agent-created output.                          | `test_bundle_integration.py`                                                          |
+| Documentation       | Interactive cells compile, routes and assets build, and base paths remain valid.                      | `make docs` and Pages workflow checks                                                 |
+| Distribution        | Wheel, source distribution, rebuilt wheel, metadata, resources, entry point, and installed API.       | `make package`                                                                        |
+| Preview publication | Preview versions, readiness, provenance, retries, newest links, and retention.                        | `uv run pytest -q scripts/tests`                                                      |
+| Real browser        | Notebook gestures, image capture, feedback, History, theme, and narrow layouts in Chromium.           | `pnpm test:e2e` and browser inspection                                                |
 
 One passing layer does not substitute for another. jsdom can prove a DOM
 algorithm while still missing a browser raster or layout failure.
@@ -156,8 +160,9 @@ pnpm test:e2e
 
 `apps/e2e/` owns the test runner and fixture notebook. The runner starts local
 marimo run and edit servers. Editor tests copy the fixture into their artifact
-directory so each test owns a separate kernel. Four Chromium projects test desktop and narrow
-layouts in light and dark themes. An editor project verifies selection, notes,
+directory so each test owns a separate kernel. A light desktop project runs every notebook
+spec, and a dark narrow project reruns `lens.spec.ts` except the tests tagged
+`@single-project`, which depend on neither layout nor theme. An editor project verifies selection, notes,
 producing cells, and PNG capture through `marimo edit`. The editor uses
 `apps/e2e/.marimo.toml` to disable code completion and language servers.
 The console guard records marimo's disabled-Copilot initialization timeout

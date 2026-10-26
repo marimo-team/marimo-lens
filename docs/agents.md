@@ -23,15 +23,15 @@ Then select a result, add a note, and say:
 
 The `marimo-lens` package ships its own Agent Skill inside an **Agent Plugin**,
 so the instructions always match the installed version. It also registers
-`marimo_lens.agent` as marimo's `lens` **capability**, which code-mode hosts
-advertise to agents.
+`marimo_lens._capability` as marimo's `lens` **capability**, which code-mode
+hosts advertise to agents.
 
 In the notebook kernel, read the core skill with either form:
 
 ```python
-import marimo_lens
+import marimo_lens._capability
 
-help(marimo_lens.agent)
+help(marimo_lens._capability)
 ```
 
 ```python
@@ -40,9 +40,10 @@ import agent_plugins as ap
 print(ap.read("marimo-lens"))
 ```
 
-`help()` prints the skill followed by the API reference for `connect()`,
-`discover()`, and `MountedLens`. `ap.read()` returns the skill alone as a
-string, so print it.
+Capability help prints the plugin inventory and complete core skill installed
+in the kernel. `ap.read()` returns the installation briefing as a string, so
+print it. Read `help(marimo_lens.agent)` for the Python API reference, or
+`help(marimo_lens.agent.MountedLens.cell_image)` for one method's contract.
 
 Read a reference only when its workflow applies:
 
@@ -61,8 +62,8 @@ your calls. marimo's `help(cm)` lists `lens`
 under installed capabilities and points to this module:
 
 ```bash
-marimo pair execute --url http://localhost:2718 --file notebook.py \
-  -c 'import marimo_lens; help(marimo_lens.agent)'
+marimo pair execute --url http://localhost:2718 --session <session_id> \
+  -c 'import marimo_lens._capability; help(marimo_lens._capability)'
 ```
 
 Before a notebook connection exists,
@@ -110,7 +111,7 @@ From a terminal, each kernel call is one `marimo pair execute`. Pass the Python
 on stdin and read printed results from the JSON result's `stdout`:
 
 ```bash
-marimo pair execute --url http://localhost:2718 --file notebook.py --code-file - <<'PY'
+marimo pair execute --url http://localhost:2718 --session <session_id> --code-file - <<'PY'
 import json
 
 import marimo._code_mode as cm
@@ -121,14 +122,15 @@ print(json.dumps({"identity": mounted.identity, "current": mounted.context().cur
 PY
 ```
 
-- Pass `--file` on every call. The session ID changes when the page reloads,
-  while the kernel, its Lens, and the saved identity remain.
+- Pass `--session` with the `session_id` that `marimo pair notebook list`
+  prints, on every call. It stays the same across page reloads and changes
+  when the kernel restarts, so list sessions again after a restart.
 - An uncaught `LensError` sets `success` to `false`. The last `stderr` line
   names its code, as in `LensError: lens_unavailable: No Lens is available in
   the active notebook.`
 - When `marimo pair` reports an unknown outcome, read fresh Lens context before
-  repeating a mutation. A committed `resolve()` has already moved its
-  selections to History.
+  repeating a mutation. A committed `resolve()` has already closed its
+  requests.
 - One session runs one execution at a time. Calls to different notebooks can
   run concurrently.
 
@@ -175,8 +177,19 @@ async with cm.get_context() as context:
 End that kernel call so the cell can run and the browser can render the dock,
 then connect in a fresh call. `add_lens_cell()` reuses one agent-managed Lens
 cell, reruns it when it holds no live Lens, and raises `lens_ambiguous` when it
-finds several. A host that mounts Lens with its own `dom_selector` policy owns
-mounting. Follow the host integration instead.
+finds several. The new cell mounts `Lens()`, which keeps no record. When the
+person asks for a record, pass it the way `Lens` takes it:
+
+```python
+async with cm.get_context() as context:
+    cell_id = marimo_lens.agent.add_lens_cell(context, record=True)
+```
+
+When an agent-managed cell already exists, a call without `record`, or with the
+cell's record, returns its ID. A different `record` raises
+`LensError(code="lens_cell_exists")`, whose message names the cell's record.
+Edit that cell to change its record. A host that mounts Lens with its own
+`dom_selector` policy owns mounting. Follow the host integration instead.
 
 A reopened notebook whose cells have not run in the new kernel has no Lens yet.
 Run the cell that mounts Lens with `ctx.run_cell(cell_id)`: a cell that imports
@@ -193,6 +206,49 @@ read `discover()` in each session concurrently.
 Address a selection through the session that holds it. When its note asks for
 work in another notebook, edit and verify through that notebook's session, then
 reveal and resolve the selection with the Lens that holds it.
+
+## Work through each request
+
+A selection is already a request. For a request made in chat, open one before
+the first edit, so the person sees it beside the open selections and the edits
+that follow belong to it. Resolve it as soon as the work is verified:
+
+```python
+import marimo._code_mode as cm
+import marimo_lens
+
+mounted = marimo_lens.agent.connect(cm.get_context())
+request_id = mounted.open_request(
+    "Drop refunds from the revenue chart",
+    cells=["Hbol"],
+)
+lens_context = mounted.context()
+print(lens_context.brief)
+if mounted.record is not None:
+    print(lens_context.history("Hbol"))
+```
+
+`lens_context.brief` is the first read: the current request, the cells behind
+it and their state, and, on a Lens that keeps a record, the earlier requests on
+those cells.
+
+`mounted.record` is the [`Record`](./api#record) the Lens keeps, or `None`.
+With a record, every request you resolve becomes one entry in its
+[request record](./data-and-trust#request-record). The entry lists each cell
+whose code differs from its code when the request opened, including cells the
+person edited. `history()` lists the earlier requests on a cell and the cells
+upstream of it, with whether each change is still in force. Without a record,
+`history()` raises `LensError(code="record_off")`, so check `mounted.record`
+first. Keep the changes still in force, unless the current
+request asks to reverse one, and then name the reversed request in the
+summary. When an earlier request looks wrong and the current one does not
+address it, tell the person and leave its change in place. Read cell code,
+the graph, and values through code mode, as the brief names them.
+
+Resolve every request you opened, alone or together with selections, as in
+[Return the result](#return-the-result). The
+[LensContext reference](./reference/context#history) defines each history
+field.
 
 ## Address a selection
 
@@ -281,12 +337,13 @@ revision = mounted.resolve(
 )
 ```
 
-Reveal replaces your activity. Resolution moves the selection to **History**
-immediately, and the browser shows the **Addressed** receipt after the reveal
-ends. Write the summary as a colleague would: what changed or what you found,
-and how you checked it. On `revision_conflict`, read fresh context and reassess
-before resolving. Keep ambiguous, blocked, or unverified selections Open and
-report what remains.
+Reveal replaces your activity. Resolution closes the selection immediately, and
+the browser shows the **Addressed** receipt with your summary after the reveal
+ends. A Lens with History also lists the request in **History**. Write the
+summary as a colleague would: what changed or what you found, and how you
+checked it. On `revision_conflict`, read fresh context and reassess before
+resolving. Keep ambiguous, blocked, or unverified selections Open and report
+what remains.
 
 ### Several selections
 
@@ -330,8 +387,8 @@ mounted.reveal(steps, duration_ms=None)
 
 Each target must be a current graph member. Verify that the cell is idle and
 free of relevant errors before presenting its result. Trails accept 1–16 steps
-and are transient: dismissal, another attention event, or a change to a
-referenced cell or its upstream inputs ends the route. Return control after
+and are transient. Dismissal or another attention event ends one, and so does
+a rerun of a referenced cell or its upstream inputs, or deleting the cell. Return control after
 showing it. A walkthrough request is not permission to edit or resolve
 existing selections.
 

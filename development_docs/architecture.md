@@ -6,13 +6,14 @@ an agent can connect to its producing notebook cells. The person supplies the
 visual referent and an optional note. Lens supplies the target identity,
 bounded notebook context, and an optional selection image. The agent edits through the
 active notebook integration, verifies the result, reveals it, and resolves the
-selection into History.
+selection. A Lens built with `Lens(record=True)` keeps the resolved request in
+its record and shows it in History.
 
 The public [Overview](../docs/overview.md) explains this workflow as a product.
 This page defines the implementation model and routes maintainers to each
 internal contract.
 
-## One selection from gesture to History
+## The lifecycle of one selection
 
 1. The browser locates a selectable target under the pointer or keyboard
    focus.
@@ -25,8 +26,12 @@ internal contract.
    selection-image bytes.
 6. A code-mode agent uses a `MountedLens` handle to show activity, inspect or
    edit the notebook, verify the result, and reveal the selected target.
-7. `resolve()` removes the open selection, releases its image bytes, and appends
-   a History entry in one revisioned commit.
+7. `resolve()` closes chat requests and removes the resolved selections in
+   one revisioned commit, then sends a `selection.resolved` event for the
+   receipt. A Lens that keeps a record hands the record one line per
+   resolved request, with the cells that changed since the request's
+   baseline, before that commit. A Lens that shows History projects it from
+   the record after the commit.
 
 Each step has one owner. Cross-boundary data is bounded and validated before it
 becomes authoritative.
@@ -44,11 +49,14 @@ becomes authoritative.
 | Selection image    | Annotated PNG evidence captured for an open selection. Its wire field is named `snapshot`.                                        |
 | Current selection  | The most recently activated open selection. It is the likely referent for requests such as “change this.”                         |
 | Revision           | The monotonic number that guards a selection-state mutation against stale context.                                                |
-| History entry      | Metadata recorded when an agent resolves an open selection. History entries contain no PNG bytes.                                 |
+| History entry      | One resolved request as the browser shows it from the record, with the record status of each change. It holds no PNG bytes.       |
+| Request            | One instruction from the analyst, open until the agent resolves it. A selection is a request in the `selection` channel.          |
+| Baseline           | The code of every notebook cell when a request opened or reopened. Lens compares it with the notebook at resolution.              |
+| Record             | Resolved requests and the cells each one changed, kept when a Lens opts in with `record=`. The editor writes `__marimo__/lens/`.  |
 | Runtime snapshot   | Private detached records read from the active marimo graph, cells, and relevant controls.                                         |
 | `LensContext`      | A detached, revisioned agent handoff derived from selection state and one runtime snapshot. It does not update after creation.    |
 | Attention address  | The tagged cell ID, or selection ID and revision, used by activity and reveal events.                                             |
-| Resolution receipt | Transient browser acknowledgement for one atomic `resolve()` call. It can represent several History entries.                      |
+| Resolution receipt | Transient browser acknowledgement for one atomic `resolve()` call. It can represent several resolved selections.                  |
 | Browser view       | One rendered [AnyWidget](https://anywidget.dev/) view of a Python `Lens` model. A document grants one view interaction ownership. |
 | `MountedLens`      | The agent-facing handle returned by `marimo_lens.agent.connect()`.                                                                |
 | Automatic Lens     | The default Lens that marimo shows in its editor when the notebook creates none. `automatic_lens()` owns that decision.           |
@@ -59,10 +67,18 @@ selection image status or image metadata.
 
 ## Five ownership rules
 
-1. Python owns Lens-instance state. This includes open selections, History,
-   selection-image bytes, revision checks, runtime context, and the public API.
-   The `Lens` widget in `packages/marimo-lens/src/marimo_lens/_widget/lens.py`
-   is the Python composition root.
+1. Python owns Lens-instance state. This includes open selections,
+   selection-image bytes, request baselines, the record and its History
+   projection, revision checks, runtime context, and the public API.
+   `LensSession` runs every use case against two seams it does not
+   implement: notebook reads (`NotebookReads`, implemented by
+   `MarimoRuntimeAdapter`) and, when the Lens keeps a record, a `KeptRecord`
+   whose `RecordStore` wraps a `Journal` (`FileJournal` or `MemoryJournal`).
+   The `Lens` widget is the composition root: it normalizes `record=` to a
+   `Record` or None, asks `MarimoRuntimeAdapter.storage()` where that record
+   lives, binds it through `LensRuntime.record()`, builds the session, and
+   translates browser messages into session calls. A host integration builds
+   the same session with its own adapters.
 2. The browser owns gestures, DOM access, selection-image composition, the
    dock, and transient activity, reveal, and resolution-receipt presentation.
 3. Dependencies point from composition toward primitives. The Python build
@@ -106,22 +122,28 @@ queries. The browser performs no marimo graph reads.
 ## Python package layers
 
 The `marimo_lens` package exports its public names from `__init__.py` and
-`agent.py`. Runtime modules live in layers. A layer imports only the layers
-listed above it in this table, and only `_marimo` and `_widget` import marimo,
-AnyWidget, or traitlets.
+`agent.py`. The private `_capability.py` module exposes the installed agent
+briefing through marimo capability discovery. Runtime modules live in layers. A layer
+imports only the layers listed above it in this table, and only `_marimo` and
+`_widget` import marimo, AnyWidget, or traitlets.
 `packages/marimo-lens/tests/test_package_layers.py` enforces both rules.
 
-| Layer        | Owns                                                                                                   |
-| ------------ | ------------------------------------------------------------------------------------------------------ |
-| `_core`      | Public types, `LensError`, `Rejection`, limits, and bounded scalars                                    |
-| `_schema`    | Pydantic shapes for selections and History, shared by state and transport                              |
-| `_notebook`  | Detached runtime snapshots, provenance, and control serialization                                      |
-| `_selection` | The revisioned `SelectionState` aggregate, selection images, and compact references                    |
-| `_context`   | `LensContext` and standalone text                                                                      |
-| `_session`   | `LensSession` use cases                                                                                |
-| `_protocol`  | Validation of browser commands, responses, and events                                                  |
-| `_marimo`    | Kernel reads, notebook snapshots, and marimo control adaptation                                        |
-| `_widget`    | The `Lens` widget, argument validation, command dispatch, output capture, the registry, and the mounts |
+| Layer        | Owns                                                                                     |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| `_core`      | Public types including `Record`, `LensError`, `Rejection`, limits, and bounded scalars   |
+| `_schema`    | Pydantic shapes for selections and History, shared by state and transport                |
+| `_notebook`  | Detached runtime snapshots, statement splitting, provenance, and control serialization   |
+| `_selection` | The revisioned `SelectionState` aggregate, selection images, and compact references      |
+| `_record`    | Open requests, record lines, journals, the record file, record status, and History       |
+| `_checks.py` | LV, LT, and LR diagnostics                                                               |
+| `_context`   | `LensContext`, the brief, and standalone text                                            |
+| `_session`   | `LensSession` use cases, the per-runtime `LensRuntime`, and its `RecordStore`s           |
+| `_protocol`  | Validation of browser commands, responses, and events                                    |
+| `_marimo`    | Kernel reads, creator-cell lifecycle, and the storage and journal for a `Record`         |
+| `_widget`    | The `Lens` widget, argument validation, command dispatch, output capture, and the mounts |
+
+`__main__.py` runs `python -m marimo_lens check` over `_marimo` and
+`_checks.py`.
 
 ## Widget folders
 
@@ -129,18 +151,18 @@ AnyWidget, or traitlets.
 A folder imports only the folders listed above it, and the
 `no-restricted-imports` rules in the root `vite.config.ts` enforce that order.
 
-| Folder      | Owns                                                                                                 |
-| ----------- | ---------------------------------------------------------------------------------------------------- |
-| `styles`    | StyleX tokens and shared style primitives                                                            |
-| `anywidget` | The AnyWidget model, command transport, and output-capture transport                                 |
-| `notebook`  | Notebook DOM access, target identity, output roots, and the viewport                                 |
-| `ui`        | Theme, focus, anchored surfaces, the portal, and the logo                                            |
-| `selection` | The interaction reducer, selection actions, capture, and overlays                                    |
-| `context`   | `LensContext`, its state, actions, and meta                                                          |
-| `history`   | The History list                                                                                     |
-| `transient` | Activity, reveal, and resolution-receipt presentation                                                |
-| `dock`      | The document-scoped dock, its position and motion, the selections sheet, and the open-selection list |
-| `app`       | View ownership, the Lens controller, and the composition into one view                               |
+| Folder      | Owns                                                                                               |
+| ----------- | -------------------------------------------------------------------------------------------------- |
+| `styles`    | StyleX tokens and shared style primitives                                                          |
+| `anywidget` | The AnyWidget model, command transport, and output-capture transport                               |
+| `notebook`  | Notebook DOM access, target identity, output roots, and the viewport                               |
+| `ui`        | Theme, focus, anchored surfaces, the portal, the logo, and image object URLs                       |
+| `selection` | The interaction reducer, selection actions, capture, and overlays                                  |
+| `context`   | `LensContext`, its state, actions, and meta, and the indexed record                                |
+| `history`   | History entries, the History list, earlier requests, and History images                            |
+| `transient` | Activity, reveal, and resolution-receipt presentation                                              |
+| `dock`      | The document-scoped dock, its position and motion, the Requests sheet, and the open-selection list |
+| `app`       | View ownership, the Lens controller, and the composition into one view                             |
 
 ## State and data flow
 
@@ -162,11 +184,20 @@ agent feedback
   -> browser attention event
   -> transient activity or reveal
   -> revisioned resolve
-  -> History entry
+  -> selection.resolved receipt
+  -> record line, when the Lens keeps a record
+  -> History entry, when the Lens shows History
 ```
 
-The synchronized trait is a projection of Python authority. A browser view can
-request a transition, but it cannot replace `_state` or `_selector` directly.
+The synchronized traits are projections of Python authority. A browser view
+requests a transition with a command. Python restores `_state`, `_history`,
+`_chats`, and `_selector` when a view writes them directly. `_history` is
+null on a Lens that shows no History.
+
+`useLensController` in `app` turns the traits and the interaction reducer into
+one `LensContext` value with `state`, `actions`, and `meta`. Dock, History, and
+receipt components read it with `useLens()`. Overlay and note components that
+must work outside the dock take props.
 PNG bytes travel through binary buffers and remain outside trait state,
 standalone text, compact references, and local storage.
 
@@ -187,8 +218,9 @@ History entry, or dock tab for Trails.
 ### Python owns selection state
 
 One Python aggregate gives browser views and agent calls the same revision,
-selection order, History, and image lifetime. A successful mutation advances
-the aggregate exactly once. Publication failure restores the prior aggregate.
+selection order, and image lifetime. A successful mutation advances
+the aggregate exactly once. Publication follows the commit, and a failed
+publication leaves the committed aggregate in place for the next one to repair.
 
 See [Selection state](selection-state.md).
 
@@ -201,8 +233,10 @@ published source records or nested `data-marimo-lens-cell-id` metadata. Value
 references distinguish selectors from the same cell. Both retain the owning document identity
 and pathname. The anchor narrows attention inside the target.
 
-Lens records bounded DOM evidence. Renderer-specific chart marks and
-application semantics remain with the agent or host integration.
+Lens records bounded DOM evidence and resolves a target to its producing cells
+and the sources its author declares. It does not resolve a chart mark to data
+rows, fields, or encodings. What a mark means is the agent's to interpret from
+the image, the DOM hint, and the notebook.
 
 See [Browser and host](browser-and-host.md).
 

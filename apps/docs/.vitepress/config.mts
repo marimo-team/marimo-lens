@@ -45,6 +45,7 @@ const reference = [
   { text: "Python API", link: "/api" },
   { text: "LensContext", link: "/reference/context" },
   { text: "HTML attributes", link: "/reference/attributes" },
+  { text: "Checks", link: "/reference/checks" },
   { text: "Errors and limits", link: "/reference/errors" },
   { text: "Compatibility", link: "/compatibility" },
 ];

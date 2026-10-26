@@ -22,8 +22,10 @@ lens = Lens()
 lens
 ```
 
-[Getting started](./getting-started) includes the installation command. The
-interactive chart on this page already mounts its own Lens.
+**History** and **Reopen** need a Lens that keeps a record. Construct it with
+`Lens(record=True)` to use them. [Getting started](./getting-started) includes
+the installation command. The interactive chart on this page already mounts
+its own Lens.
 
 <llm-exclude>
 
@@ -203,9 +205,14 @@ mo.Html(
 
 </llm-exclude>
 
-Each new selection appears in **Open** with a stable `S<n>` label. Labels are
-never reused during the Lens instance lifetime. Use the row actions to edit its
-note, preview its selection image, or remove it.
+Each new selection appears in **Open** with a stable `S<n>` label. Every Lens
+in the notebook draws from one sequence, so a label names one selection. When a
+Lens keeps a [request record](./data-and-trust#request-record), the sequence
+continues after the highest label in the record, also after a kernel restart.
+Two kernels that serve the same notebook file at once, or a Lens without a
+record that ran before a file record opened, can give out a label the record
+already holds. Use the row actions to edit its note, preview its selection
+image, or remove it.
 
 Drag a point or region marker to move it. The current region exposes four
 resize handles. Lens clamps the marker to its target. Press `Escape` during a
@@ -230,16 +237,17 @@ states and the separate cell-output image used after an agent change.
 
 ## Work with open selections
 
-Open **Selections** to review open selections and their notes. The dock shows
-the Open count. Drag the grip to move the dock out of the way. Lens remembers
-its position in this browser for the site, including after a reload. Collapse
-the dock to a compact Lens button, which you can also drag. The button keeps the
-Open count visible.
+Press the list button in the dock to open **Requests**, the sheet that lists
+open selections, their notes, and open chat requests. The button shows how
+many requests are open. Drag the grip to move the dock out of the way. Lens
+remembers its position in this browser for the site, including after a reload.
+Collapse the dock to a compact Lens button, which you can also drag. The button
+keeps the Open count visible.
 
 Focus the grip or collapsed button and use arrow keys to move it. Hold `Shift`
 for larger steps, press `Home` to reset to bottom center, or press `Escape`
-to cancel a drag. Selections open toward the available space and stay inside
-the viewport.
+to cancel a drag. **Requests** opens toward the available space and stays
+inside the viewport.
 
 Lens focuses the current selection in the **Open** tab. That selection is the
 likely referent when you ask an agent to change “this” or inspect “here.”
@@ -250,14 +258,23 @@ the most recently activated selection that remains.
 
 Open the note editor from a row, describe what the agent should inspect or
 change, then press **Done**, or `Command+Enter` on macOS and `Ctrl+Enter`
-elsewhere.
+elsewhere. The editor header shows the target's description, which names the
+producing cell when the output has no heading or label of its own. On a Lens
+with History, **Earlier requests that changed
+this result** lists resolved requests that changed the selection's cells or
+their upstream cells, undone ones first, each with its status, so the note can
+build on them.
+
+When an agent records a request from chat, it appears at the top of **Open**
+as **Asked in chat**, with the agent's copy of the message and the time it
+opened. It leaves **Open** when the agent resolves it.
 
 Press **Select** again when the request refers to another point or region. An
 agent can resolve those selections together after one verified change.
 
 Use **Remove selection** to delete one Open selection. Use **Clear selections**
 to delete every Open selection. These operations release their selection-image
-bytes. They do not clear History. Removing the current selection makes the most
+bytes and leave History as it is. Removing the current selection makes the most
 recently current remaining selection current.
 
 Lens can reattach an Open selection after its target element is replaced within
@@ -265,7 +282,7 @@ the same browser document:
 
 | Selection detail | What Lens keeps                                                                                                                                                                                 |
 | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Label and note   | The `S<n>` label stays stable and is never reused.                                                                                                                                              |
+| Label and note   | The `S<n>` label stays stable, and the notebook runtime never issues it again.                                                                                                                  |
 | Target           | The same document ID and path plus the cell ID or exact DOM selector identify the target. DOM targets also require the same source identities, producing-cell ID set, and selector eligibility. |
 | Producing cells  | A DOM target includes producing cells from published source records or nested runtime metadata. Unkeyed roots remain tied to their original elements.                                           |
 | Selection image  | Moving or resizing starts a fresh PNG capture. The previous image remains available and is marked outdated until the new capture succeeds.                                                      |
@@ -278,33 +295,65 @@ targets](./custom-targets#keep-targets-stable) explains DOM target identity.
 
 ## Resolve or reopen a selection
 
-After verifying the work, an agent calls `resolve()`. Lens moves each resolved
-selection from **Open** to **History** with its target, note, point or region,
-timestamps, and optional resolution summary. Each owning browser document shows
-a temporary resolution receipt for the selections it owns, with the visible
-status **Addressed**.
+After verifying the work, an agent calls `resolve()`. Lens closes each resolved
+selection. Each owning browser document shows a temporary resolution receipt
+for the selections it owns, with the visible status **Addressed**, the agent's
+summary, and the cells the change touched.
 
-Selections resolved by the same verified change can move together and share
-one resolution summary.
+Selections resolved by the same verified change can be resolved together and
+share one resolution summary.
 
-The receipt remains for six seconds and pauses while hovered or focused. Open
-it to inspect the matching History entries.
+The receipt remains for six seconds and pauses while hovered or focused. On a
+Lens with History, clicking it opens the matching History entries in
+**Requests**, and outside an open **Requests** sheet it also shows **View in
+History**. On a Lens without History, clicking it dismisses the receipt, and
+the sheet lists only open requests.
 
-To continue a request, open **History** and press **Reopen** while the target is
-available. Lens keeps the History entry, restores the selection as current in
-**Open**, and starts a fresh selection-image capture from the current target.
-When the target is unavailable, the History entry remains unchanged. Restore
-the target in the same browser document, then try again.
+**History** lists resolved requests from the record, newest first, including
+requests the agent recorded from chat. Each entry leads with whether its
+changes still hold, then shows when it resolved, the selection's target, the
+note, and the cells it changed with who undid them:
 
-Use **Clear history** to remove every History entry. Open selections and their
-images remain. Clearing History also removes prior-resolution metadata from
-currently reopened selections. History keeps the newest 64 entries within a
-64,000-byte metadata budget and evicts the oldest entries when either bound is
-reached.
+| Entry status    | Meaning                                                              |
+| --------------- | -------------------------------------------------------------------- |
+| Still applied   | Every change the request made still holds.                           |
+| Undone          | Every change was undone.                                             |
+| 1 of 2 undone   | Some changes were undone and the others still hold.                  |
+| Status unknown  | Lens cannot tell whether a change still holds.                       |
+| No cell changes | The request changed no cells, such as a question the agent answered. |
 
-Open selections, History, and stored selection images last for the lifetime of
-the live Lens instance. `lens.close()` or notebook-runtime teardown releases
-them.
+History names a cell by its marimo name or by the variables it defines. A cell
+with neither is an **Unnamed cell**, a cell the notebook no longer holds is a
+**Deleted cell**, and a cell Lens cannot find is **Cell not found**. Expand an
+entry to see the image the analyst marked, the agent's summary, and the status
+of each changed cell:
+
+| Change status                       | Meaning                                                                                                       |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Still applied                       | What the request added is still in the cell, even where a later request rewrote the line around it.           |
+| Undone by S4                        | A later request changed the cell back. A chat request is named by the start of its note.                      |
+| Undone by an edit made outside Lens | An edit outside every recorded request changed it back.                                                       |
+| Undone                              | The cell changed back, and the record cannot name the edit.                                                   |
+| Status unknown                      | The record or the notebook cannot tell. The [context reference](./reference/context#history) lists the cases. |
+
+An undone change also lists the statements it added that its cell no longer
+holds. **Show cells** reveals the cells an entry pointed at or changed. With a
+selection open, **Only requests that changed what S1 shows** narrows History to
+requests that changed that selection's cells or their upstream cells. History
+and the note editor's earlier requests refresh every 5 seconds while they are
+visible, so edits made outside Lens change the status there.
+
+To continue a selection, press **Reopen** while its target is available in this
+document. Lens restores the selection as current in **Open**, follows its cell
+to the notebook now, and starts a fresh selection-image capture. The resolved
+request stays in History. A reopened label that an open selection already uses
+fails, so resolve or delete that selection first.
+
+History shows the newest 100 resolved requests and says how many older ones the
+record holds. It lasts as long as the
+[request record](./data-and-trust#request-record). Open selections and stored
+selection images last for the lifetime of the live Lens instance.
+`lens.close()` or notebook-runtime teardown releases them.
 
 ## Keyboard
 
@@ -318,15 +367,15 @@ Use these keys while selection mode is active:
 | `Tab`                                    | Exit selection mode and continue to the next dock control.                       |
 | `Escape`                                 | Exit selection mode and return focus to **Select**.                              |
 
-Open **Selections** for row, tab, and note controls:
+Open **Requests** for row, tab, and note controls:
 
 | Keys                                               | Result                                                                    |
 | -------------------------------------------------- | ------------------------------------------------------------------------- |
 | `↑` / `↓` on an open selection                     | Move focus between selection rows.                                        |
 | `Enter` on an open selection                       | Make the focused selection current.                                       |
-| `←` / `→` on **Open** or **History**               | Switch tabs when the other tab contains items.                            |
+| `←` / `→` on **Open** or **History**               | Switch tabs when the Lens shows History and the other tab has items.      |
 | `Tab` / `Shift+Tab`                                | Move through row actions. In the note editor, cycle through its controls. |
-| `Escape` in **Selections**                         | Close the sheet and return focus to **Selections**.                       |
+| `Escape` in **Requests**                           | Close the sheet and return focus to **Requests**.                         |
 | `Command+Enter` or `Ctrl+Enter` in the note editor | Save the note and close the editor.                                       |
 | `Escape` in the note editor                        | Close the editor and return focus to the selection marker or Lens dock.   |
 | `Enter` or `Space` on an image action              | Pin the preview and move focus to its close control.                      |
@@ -346,10 +395,11 @@ screen-reader users.
 
 ## Multiple Lens instances
 
-The first displayed Lens view in a document owns interaction. Additional views
+The Lens displayed highest in a document owns interaction. Additional views
 render no Lens UI and log a warning to the browser console. Use
 `marimo_lens.agent.connect()` to access the Lens that owns the visible dock.
-Ownership passes to the next view when the current owner closes. A Lens in
+Ownership passes to the next Lens when the current owner closes, and a Lens
+whose cell reruns takes it back. A Lens in
 another same-origin document has its own owner.
 
 [How Lens works](./how-lens-works#activity-reveal-and-resolve) distinguishes

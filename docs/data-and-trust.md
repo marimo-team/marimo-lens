@@ -10,6 +10,11 @@ selection details and notebook context so a connected agent can act on the
 selected result. Review the notebook and agent environment with the same care
 you apply to source code, data, and rendered output.
 
+`Lens()` writes nothing to disk. It holds open selections, notes, and their
+images in kernel memory. `Lens(record=True)` also keeps a
+[request record](#request-record), which in the marimo editor writes files to
+the notebook's `__marimo__/lens/` folder.
+
 ## What Lens can expose
 
 | Data                                         | Where it comes from               | Agent-facing form                |
@@ -22,6 +27,7 @@ you apply to source code, data, and rendered output.
 | Annotated selection pixels                   | Browser capture at selection time | `LensContext.images` PNG bytes   |
 | Current cell-output pixels                   | Agent-requested browser capture   | One-use `cell_image()` PNG bytes |
 | Notebook path and cell IDs                   | Active marimo runtime             | Compact references and text      |
+| Resolved requests and the code they changed  | `resolve()` with a record         | `context.history()` and the file |
 
 A DOM hint can contain the element tag, role, accessible label, title, rendered
 text, a short structural path, and normalized bounds. A configured DOM target
@@ -47,20 +53,100 @@ environment can transmit them outside the notebook process.
 
 ## In-memory lifetime
 
-Open selections, History entries, and selection-image bytes live in the Python
-`Lens` instance. They are not written into the notebook file or browser local
-storage by Lens.
+Open selections and selection-image bytes live in the Python `Lens` instance.
+Lens keeps them out of the notebook file and browser local storage.
 
 - Delete or **Clear selections** releases the affected selection images.
-- `resolve()` releases images for the resolved selections and retains
-  metadata-only History entries.
-- **Clear history** removes History metadata.
+- `resolve()` on a `Lens()` closes the resolved requests and releases their
+  images.
+- `resolve()` on a Lens with a record moves the resolved requests, with each
+  selection's annotated image unless the record sets `images=False`, into the
+  [request record](#request-record).
 - `lens.close()` and notebook-runtime teardown release Lens-owned selection
   state and images.
 
 `LensContext` is a detached copy. Code that receives a context can retain its
 references, rendered text, or copied image bytes after the Lens instance
 changes or closes.
+
+## Request record
+
+A Lens keeps a record when you construct it with `record`, as in
+[Keep a record](./getting-started#keep-a-record). The automatic Lens that
+marimo shows keeps none. [`Record`](./api#record) lists every option.
+
+In the marimo editor, a record with the default `keep="notebook"` is a
+[JSON Lines](https://jsonlines.org/) file next to marimo's session files. Each
+`resolve()` appends one line per resolved request to it. Each resolved
+selection's annotated image goes beside it, named by its SHA-256
+digest:
+
+```text
+__marimo__/lens/analysis.py.jsonl
+__marimo__/lens/images/3f1c…e9.png
+```
+
+marimo places `__marimo__` beside the notebook, or under
+[`sys.pycache_prefix`](https://docs.python.org/3/library/sys.html#sys.pycache_prefix)
+when Python sets one. A line holds:
+
+- The request: its ID, channel, label, note, and the agent's summary.
+- When it opened and when it was resolved.
+- What it pointed at: the target, anchor, and captured description of a
+  selection, and the producing cells.
+- The selection's image, as `trace.image` with its digest, size, capture time,
+  and whether the selection moved after the image was taken. A record built
+  with `images=False` leaves it out.
+- Each cell that changed while it was open, with the code before and after.
+- The other requests that were open at the same time.
+
+The record keeps notes, code, and the images the analyst marked. It holds no
+control values or cell outputs. Lens writes an image whole under its digest
+before the line that names it, so a line never points at a half-written image.
+Lens appends under a file lock, so kernels that serve the same notebook write
+whole lines. A file system that offers no lock fails the write.
+
+A line that Lens cannot write, for example because the folder is read-only,
+stays in memory, and Lens writes it at the next resolution or `context()`
+call. An unsaved notebook keeps its lines in memory until it has a file name.
+Lens keeps up to 256 such lines. Past that, `resolve()` raises `record_full`
+and leaves the requests open, so save the notebook or make its folder
+writable. Lines still in memory end with the kernel, so save the notebook
+before you restart it.
+
+When marimo renames or moves the notebook, Lens moves the record to the new
+name at its next read or write and copies the images its lines name into the
+new folder. Rename the record file too when you rename the notebook outside
+marimo.
+
+A `keep="session"` record, a marimo app (`marimo run`), and marimo's browser
+runtime, which runs Python through [Pyodide](https://pyodide.org/), keep the
+record in memory until the runtime restarts and write no file. A memory record
+holds 1,024 lines within 64 MiB and drops the oldest resolutions first. An app
+visitor's History shows only the requests resolved in that visitor's session.
+
+The Lenses of one kernel share one record per storage. A chat request belongs
+to no Lens, so the record of the Lens that resolves it keeps it.
+
+Lens never edits `.gitignore`. Committing `__marimo__/lens/` publishes every
+recorded note, the code each request changed, and every image the analyst
+marked, so review the folder before you share it. Delete the folder to clear
+the record, its images, and History. Lens starts a new record with the next
+resolution. Remove `record` from the Lens to stop recording.
+
+Query the record from a notebook with [DuckDB](https://duckdb.org/), which
+marimo SQL cells use:
+
+```python
+_requests = mo.sql(
+    f"""
+    SELECT resolvedAt, channel, label, note, len(changes) AS changed_cells,
+        'images/' || trace.image.sha256 || '.png' AS image
+    FROM read_json_auto('__marimo__/lens/analysis.py.jsonl')
+    ORDER BY resolvedAt
+    """
+)
+```
 
 ## Agent transfer boundary
 

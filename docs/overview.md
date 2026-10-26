@@ -9,8 +9,8 @@ description: Lens lets a person point at a notebook result and gives a live note
 
 Lens is a widget for [marimo](https://marimo.io/), a reactive Python notebook.
 It lets you point at part of a rendered result, such as a bar in a chart or a
-row in a table, and hand that mark to a notebook agent together with the code
-and data behind it. The agent inspects, revises, and verifies the notebook.
+row in a table, and hand that mark to a notebook agent together with the cells
+that produced the result and their source. The agent inspects, revises, and verifies the notebook.
 Lens then brings the result back into view for your review.
 
 [marimo pair](https://marimo.io/pair) and marimo's code-mode sidebar let people
@@ -67,8 +67,9 @@ selection through a short loop:
    notebook, and changes what needs to change. Lens marks where the agent is
    working.
 3. **Review and continue.** The agent brings the result into view and resolves
-   the selection into **History** with a summary. You judge the evidence and
-   can reopen the selection for another pass.
+   the selection with a summary. You judge the evidence and can ask for another
+   pass. A Lens that keeps a record lists each resolved request in **History**,
+   where you can reopen it.
 
 Grounding gives the agent a starting point. The agent still interprets the
 selected region and verifies its work. You still decide whether the result
@@ -88,6 +89,9 @@ from marimo_lens import Lens
 lens = Lens()
 lens
 ```
+
+[Keep a record](./getting-started#keep-a-record) with `Lens(record=True)` to
+review resolved requests and the code each one changed.
 
 Lens owns selections, notebook context, and visible feedback. It does not edit
 or run cells. That work belongs to a **code-mode agent**, an agent that can

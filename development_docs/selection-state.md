@@ -1,7 +1,8 @@
 # Selection state
 
-Python owns every open selection, History entry, and stored selection image
-for one `Lens` instance. The browser requests transitions and renders the
+Python owns every open selection and stored selection image for one `Lens`
+instance, and projects History from the Lens's record when it keeps one and
+shows History. The browser requests transitions and renders the
 synchronized projection. It does not author authoritative state.
 
 Read [Architecture](architecture.md) for the shared vocabulary and
@@ -31,7 +32,7 @@ The target carries an opaque browser-document ID and the document pathname.
 Notebook targets carry exactly one cell ID. DOM targets carry an exact selector
 and a canonical sorted set of cell IDs inferred from nested
 `data-marimo-lens-cell-id` metadata or explicit notebook source records. DOM targets
-also preserve exact value selectors.
+also keep each declared value selector verbatim. Lens never evaluates it.
 
 The anchor and DOM hint can change. The label, target, description, and creation time are
 immutable after selection creation. A geometry or DOM-hint change makes the
@@ -46,31 +47,85 @@ stored image outdated until replacement capture succeeds.
 - The current selection ID.
 - An activation order covering every open selection.
 - Open `SelectionRecord` values.
-- Addressed `AddressedSelectionRecord` History entries.
 
 `LensSession` owns the current aggregate pointer. A transition first returns a
-complete next aggregate. The session advances the pointer, publishes one
-`_state` trait value, and restores the previous aggregate if trait publication
-fails.
+complete next aggregate. The session reads anything fallible first, such as the
+baseline for a new selection request, then advances the pointer, keeps the
+runtime's open requests in step, and publishes one `_state` trait value. A
+failed publication leaves the committed aggregate in place, and the next
+publication repairs browser views.
 
 Each successful mutation advances the revision exactly once. Failed validation
-and failed state publication leave the previous aggregate authoritative.
+leaves the previous aggregate authoritative.
+
+Python assigns a new selection's label from the notebook runtime's label
+sequence, which every Lens in the runtime shares. `nextLabel` in `_state` is
+the browser's hint for the label it shows while the selection commits.
 
 ## State ownership and lifetime
 
-| State                                   | Authority                         | Lifetime                                                      |
-| --------------------------------------- | --------------------------------- | ------------------------------------------------------------- |
-| Open selections, targets, and PNG bytes | Python `LensSession`              | Until delete, clear, resolve, `Lens.close()`, or teardown     |
-| Current selection and activation order  | Python `LensSession`              | Updated by activation and selection removal                   |
-| History entries                         | Python `LensSession`              | Until History clear, bounded eviction, close, or teardown     |
-| Next stable label                       | Python `LensSession`              | For the lifetime of the `Lens` instance                       |
-| Selection gesture and sheet workflow    | Browser reducer                   | Current interaction-owner browser view                        |
-| Selection capture job                   | Browser `SelectionCapture`        | Until commit, replacement, cancellation, removal, or teardown |
-| Selection image preview read            | Browser `SelectionSnapshotLoader` | While one or more preview consumers hold a lease              |
+| State                                   | Authority                  | Lifetime                                                                          |
+| --------------------------------------- | -------------------------- | --------------------------------------------------------------------------------- |
+| Open selections, targets, and PNG bytes | Python `LensSession`       | Across recognized creator reruns, subject to retention limits and native disposal |
+| Current selection and activation order  | Python `LensSession`       | Updated by activation and selection removal                                       |
+| History                                 | The Lens's `RecordStore`   | As long as its journal: the record file, or the kernel for a memory journal       |
+| Next stable label                       | Python `LensRuntime`       | Seeded from every opened record store, shared by the runtime                      |
+| Selection gesture and sheet workflow    | Browser reducer            | Current interaction-owner browser view                                            |
+| Selection capture job                   | Browser `SelectionCapture` | Until commit, replacement, cancellation, removal, or teardown                     |
+| Selection image preview read            | Browser `useObjectUrl`     | While its preview is open                                                         |
 
-Lens-instance state lives in memory. It does not persist across process or
-widget teardown. History entries are session history, not a durable audit
-log.
+Open selections and images live in memory. A recognized same-kernel rerun of
+a Lens's creator cell transfers the aggregate to the Lens constructed at the same
+marimo deterministic construction slot with the same `dom_selector`. Notes,
+PNG bytes, revision, current selection, activation order, labels, and the
+request owner's original baselines and concurrency remain intact. Each new
+widget has a fresh identity and comm and waits for its own browser readiness.
+Creator-code edits, upstream-code edits, and recovery after syntax or semantic
+errors use the same handoff while the creator cell keeps its construction slot
+and selector.
+
+The old widget and session close during the rerun. Pending cell-output
+captures and transient lifecycle watches close with them. Explicit
+`Lens.close()`, an unknown direct comm close, native creator-cell deletion
+disposal, and kernel teardown release the open state. Deleting, clearing, or
+resolving a selection releases its request and image before a later rerun can
+transfer the aggregate.
+
+`_marimo/lifecycle.py` replaces the exact native comm lifecycle item so cell
+membership reaches the widget before comm closure. The native kernel keeps
+cell metadata during graph deactivation for edits and syntax errors, and
+deletes that metadata before disposing a deleted, valid graph cell. The adapter
+checks the creator's metadata membership because marimo forwards graph deactivation's
+`deletion=True` to descendants too. Preservation requires marimo's native
+deterministic ID provider, kernel cell metadata, and a recognized comm item.
+The runtime retains detached aggregates and request owners. A generation
+check prevents a late cleanup callback from releasing an adopted slot. An
+unclaimed slot remains available through repeated graph invalidations
+and releases on native creator-cell deletion disposal or bounded eviction.
+Retention admits up to 64 detached aggregates and 64 MiB of combined baseline
+source strings and PNG bytes across the runtime. Source strings count by their
+in-memory size, once per object shared across retained baselines. Accounting
+reads their size directly. When either bound is exceeded, the earliest detached
+aggregates and their request owners leave together. A changed selector releases
+the prior slot's state.
+
+marimo 0.25.2 skips lifecycle disposal when deleting a creator that has left
+the graph after a syntax error, and drops the cell's metadata on this path. It
+also skips disposal when deleting a graph cell with a semantic error, such as
+duplicate definitions. The detached aggregate and its request owner remain until bounded
+eviction or kernel teardown. Recreating the same cell ID, construction slot,
+and selector can adopt that state. A fresh cell ID starts empty. Restart the
+kernel to release detached state after these deletions.
+
+Widget operations acquire the widget lock before the runtime lock. Retention,
+adoption, ledger changes, and eviction run under the runtime lock and never
+call an old widget's publisher.
+
+Open state ends when the kernel exits.
+A Lens with a file record keeps resolved requests in the notebook's record
+file, so History survives a kernel restart. A new Lens continues labels after
+the highest label in every record store its runtime opened. A Lens with no
+record keeps no resolved request past its receipt.
 
 ## Synchronized projection
 
@@ -80,11 +135,12 @@ The `_state` trait contains:
 - `nextLabel`
 - `currentSelectionId`
 - `selections`
-- `history`
 
 Activation order and PNG bytes remain private Python data. A trait observer
 restores the Python projection if another caller attempts to replace `_state`.
-The `_selector` trait has the same Python-authoritative behavior.
+The `_selector` and `_history` traits have the same Python-authoritative
+behavior. `_history` is null on a Lens that shows no History.
+[Protocol](protocol.md#history-trait) describes `_history`.
 
 ## Create a selection
 
@@ -126,44 +182,51 @@ document identity, pathname, exact selector, and inferred producing cell IDs.
 ## Delete and clear
 
 Deleting one selection removes its record and image bytes. Clearing selections
-removes every open selection and image while preserving History and the next
-label counter.
-
-Clearing History preserves open selections and their images. It also removes
-`previousResolution` metadata from reopened selections because the referenced
-History entry no longer exists.
+removes every open selection and image while preserving the next label counter.
+Deleted and cleared selections never reach the record.
 
 ## Resolve and History
 
 `Lens.resolve()` accepts one selection ID or a sequence of unique IDs and one
 expected revision. Python validates the full batch before changing state.
 
-One atomic resolve transition:
+On a Lens that keeps a record, Python builds one record line per resolved
+request before the transition and hands them to the journal. A journal that
+cannot take them raises `record_full`, and every request stays open. A failed
+write after the journal took them leaves the lines pending for the next write.
+A Lens with no record skips this step.
+
+One atomic resolve transition then:
 
 1. Removes every selected open record.
 2. Releases its selection image bytes.
-3. Appends one History entry per selection.
-4. Assigns every entry the resulting revision and shared optional summary.
-5. Promotes the most recently activated remaining selection.
-6. Publishes one synchronized state value.
+3. Promotes the most recently activated remaining selection.
+4. Publishes one synchronized state value.
 
-History is ordered by resolution revision and bounded by item count and encoded
-size. Older entries are evicted first when necessary. A batch that cannot fit
-its required entries fails before state changes.
+Python then projects History again when the Lens shows History, and sends
+the resolution event. The event carries each resolved selection's
+`selectionId`, `label`, and `target`, so the browser places the receipt from
+the event and `_state` alone.
 
 The browser resolution receipt is a best-effort presentation sent after the commit. Event
 delivery failure cannot restore the removed selections.
 
 ## Reopen
 
-Reopen identifies a History entry by selection ID and resolution revision. The
-transition restores the original target, anchor, note, DOM hint, creation time,
-and prior resolution metadata as the current selection. It starts a fresh
-selection image lifecycle with `pending` status. The History entry remains
-in History.
+Reopen needs History. On a Lens that shows no History, `selection.reopen`
+fails with `history_off`. Reopen identifies a recorded selection by selection
+ID and resolution time.
+Python reads it from the record and restores its ID, label, note, anchor,
+description, and creation time as the current selection. The target moves to
+the document that asked, and each cell ID follows its cell to the notebook now,
+because a page reload and a kernel restart both change those identities. Each
+History entry already carries that followed target, so the browser checks it
+against the page before it asks to reopen. The selection starts a fresh image
+lifecycle with `pending` status. The resolved
+request stays in the record and in History.
 
 A reopened selection can explain the prior attempt through
-`previousResolution.addressedAt` and its optional summary. Compact context
+`previousResolution.resolvedAt` and its optional summary. Compact context
 includes this field only for the current selection.
 
 ## Admission limits
@@ -171,7 +234,7 @@ includes this field only for the current selection.
 State admission protects:
 
 - Open selection count.
-- Selection and History encoded byte limits.
+- Selection encoded byte limits.
 - Required compact-reference capacity.
 - Per-field text and identifier bounds.
 - Stored PNG size and total image bytes.
@@ -193,20 +256,22 @@ protocol error before the authoritative state changes.
 - The next label follows every allocated open label and never moves backward.
 - Available or outdated image metadata has matching PNG bytes.
 - Pending and failed image states have no stored PNG bytes.
-- History keys pair selection ID with resolution revision and are unique.
-- History revisions are ordered and never exceed the state revision.
+- A reopened selection's label names no other open selection.
 - A committed transition advances exactly one revision.
 
 ## Source map
 
-| Concern                                        | Source                                                                          |
-| ---------------------------------------------- | ------------------------------------------------------------------------------- |
-| Aggregate, records, transitions, and admission | `packages/marimo-lens/src/marimo_lens/_selection/state.py`                      |
-| Use cases, state pointer, and publication      | `packages/marimo-lens/src/marimo_lens/_session/session.py`                      |
-| Python composition and command translation     | `packages/marimo-lens/src/marimo_lens/_widget/lens.py`, `commands.py`           |
-| Python validation models                       | `packages/marimo-lens/src/marimo_lens/_schema/selection.py`                     |
-| Browser state schemas                          | `packages/protocol/src/contracts/`                                              |
-| Browser mutation orchestration                 | `packages/widget/src/selection/selection-actions.ts`, `revisioned-mutations.ts` |
-| Selection image capture lifecycle              | `packages/widget/src/selection/selection-capture.ts`                            |
-| Browser interaction reducer                    | `packages/widget/src/selection/state.ts`                                        |
-| Open and History UI                            | `packages/widget/src/dock/`, `history/`, `selection/components/`                |
+| Concern                                                   | Source                                                                          |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Aggregate, records, transitions, and admission            | `packages/marimo-lens/src/marimo_lens/_selection/state.py`                      |
+| History projection and reopen                             | `packages/marimo-lens/src/marimo_lens/_record/history.py`                       |
+| Use cases, state pointer, and publication                 | `packages/marimo-lens/src/marimo_lens/_session/session.py`                      |
+| Detached aggregates, request owners, and retention limits | `packages/marimo-lens/src/marimo_lens/_session/runtime.py`                      |
+| Native creator-cell disposal and deterministic slots      | `packages/marimo-lens/src/marimo_lens/_marimo/lifecycle.py`                     |
+| Python composition and command translation                | `packages/marimo-lens/src/marimo_lens/_widget/lens.py`, `commands.py`           |
+| Python validation models                                  | `packages/marimo-lens/src/marimo_lens/_schema/selection.py`                     |
+| Browser state schemas                                     | `packages/protocol/src/contracts/`                                              |
+| Browser mutation orchestration                            | `packages/widget/src/selection/selection-actions.ts`, `revisioned-mutations.ts` |
+| Selection image capture lifecycle                         | `packages/widget/src/selection/selection-capture.ts`                            |
+| Browser interaction reducer                               | `packages/widget/src/selection/state.ts`                                        |
+| Open and History UI                                       | `packages/widget/src/dock/`, `history/`, `selection/components/`                |

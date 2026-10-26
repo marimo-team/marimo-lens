@@ -244,8 +244,9 @@ if _state == "empty":
 elif _state == "complete":
     _title = escape(agent_handoff["summary"])
     _body = (
-        "<p>The selection moved to <strong>History</strong> and the chart came back "
-        "into view. Reopen it from the dock to try another color.</p>"
+        "<p>The chart came back into view and the receipt confirmed the request. "
+        "A Lens built with <code>record=True</code> also keeps it in "
+        "<strong>History</strong>, where you can reopen it to try another color.</p>"
     )
 else:
     _items = "".join(

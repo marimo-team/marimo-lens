@@ -65,7 +65,8 @@ A configured root:
 - Must be visible and distinct from Lens UI or a Lens host.
 - Uses a unique authored ID or a generated element-lifetime locator.
 - Reads producing cells from declared `data-marimo-lens-cell-id` source elements.
-- Reads `data-marimo-lens-selector` for exact symbolic value selectors.
+- Reads `data-marimo-lens-selector` as a descriptive value selector, which Lens
+  keeps verbatim and never evaluates.
 - Resolves `data-marimo-lens-inputs` as a bounded list of unique source element IDs
   in the same document. An explicit region owns its complete input set;
   otherwise Lens collects contained source elements, treating each source as
@@ -88,7 +89,7 @@ unavailable. The target is revalidated before captured image bytes are committed
 Each `target.sources` entry has `cellId` and `selector`. `selector: null` identifies
 a cell output or generic cell-only metadata. Sources are evidence, not permission
 to read or mutate the kernel. The transport preserves them in selections,
-context, and History. Document ownership scopes the target, and Python inspects
+context, `selection.resolved` events, and History. Document ownership scopes the target, and Python inspects
 current notebook graph context separately from the captured image.
 
 Stable element IDs support remountable targets. Unkeyed elements receive an
@@ -101,7 +102,8 @@ silently redirect a selection.
 `renderSource`, and `media`) and its attribute names. The notebook adapter reads consumer text, source-host references,
 and native fallbacks. The selection overlay renders a compact, non-interactive
 label attached to the active target, clamped to the viewport. The live indicator exists in the armed workflow. Selection creation snapshots
-the same description into the protocol for Python state, History, and context.
+the same description into the protocol for Python state, `selection.resolved`
+events, History, and context.
 
 Consumers such as Studio publish the attributes. Lens's presentation has no
 framework or Studio-specific knowledge. The existing layout observer refreshes
@@ -116,9 +118,10 @@ The document locator stays in agent context. The source signature controls reatt
 
 ## Target resolution
 
-`selection-target.ts` combines notebook and configured target candidates. It
-uses the event composed path for pointer targeting and walks across open shadow
-hosts for element targeting.
+`selection-target.ts` combines notebook and configured target candidates and
+derives configured DOM targets and their stable selectors. It uses the event
+composed path for pointer targeting and walks across open shadow hosts for
+element targeting.
 
 `target-surface.ts` defines the located `TargetSurface`, which contains:
 
@@ -177,6 +180,14 @@ attachments during unrelated updates. Scrolling still reprojects each anchor,
 and target content or size changes refresh its attachment. Availability snapshots
 remain stable while the available selection IDs are unchanged.
 
+The target map and the scan for iframes and shadow roots rebuild only when a
+mutation can change them: an added or removed subtree that holds an output, a
+target, a scope, an outputless cell, a custom target, an iframe, or an open
+shadow root. Editor keystrokes and streamed output rows only schedule a layout
+pass, so their cost stays independent of page size. Whole-tree scans walk
+elements with a `TreeWalker` through `descendantElements()` in
+`notebook/open-tree.ts`.
+
 Keep target discovery in `notebook/selection-target.ts`, canonical output
 discovery in `notebook/output-root*.ts`, and document operations in
 `notebook-dom.ts`. A feature should not bypass these paths with an unrelated
@@ -188,17 +199,21 @@ The active UI lives in an open shadow root under Marimo's `#App` pane, or under
 the owning document body outside Marimo.
 Typed StyleX modules own component styles, variants, media queries, and theme
 tokens. The extracted stylesheet resets inherited typography and sets the color
-scheme. Lens consumes Marimo's Slate palette tokens, with local light and dark
-defaults. `LensViewOwner` observes theme changes on the body and document element
+scheme. Lens consumes Marimo's Slate palette, `--yellow-11` for undone changes,
+and `--link` for links, with local light and dark defaults. `LensViewOwner` observes theme changes on the body and document element
 and shares the theme with the portal and error boundary.
 Document-level keyboard handling reads composed event paths, and focus restoration
 uses the explicitly registered UI root and follows its active element.
 `createLensSurface()` owns the host, shared document styles,
 and disposal. The portal registers that root with `NotebookDomAdapter`, which
 mounts the host.
-`LensDock` owns one positioned panel for the selection sheet or a transient
-notice. `widget.css` contains the host reset and panel geometry driven by
-`useDockPosition`. The selection sheet owns scrolling for its notice and lists.
+`LensDock` owns one positioned panel for the Requests sheet or a transient
+notice. `RequestSheet` shows open selections and open chat requests under
+**Open**, and History under **History**. When `_history` is null, it renders
+the Open tab alone, and the dock's accessible names leave out the History
+count, as in `Requests, 1 open`. `widget.css` contains the host reset and
+panel geometry driven by `useDockPosition`. The Requests sheet owns scrolling
+for its notice and lists.
 
 In a Marimo editor, the adapter resolves the `#App` pane through the AnyWidget
 host's composed ancestor tree and mounts the portal host inside it, as Marimo
@@ -254,8 +269,11 @@ later view of another Lens logs one console warning that names
 `marimo_lens.agent.connect()`.
 
 The registry is stored on the owning `Document` through a global symbol. This
-lets separate AnyWidget module instances coordinate. When the owner view
-tears down, the next registered view becomes owner. Another document has an
+lets separate AnyWidget module instances coordinate. The Lens whose host comes
+first in document order owns the document, comparing hosts across open shadow
+roots, so a Lens whose cell reruns reclaims the dock. Among that Lens's views,
+the first registered owns. When the owner view tears down, ownership is
+published again. Another document has an
 independent registry and owner.
 
 Browser readiness follows the interaction owner. The owner mounts the output
@@ -302,8 +320,11 @@ reattach when the surface returns.
 Selection-addressed events wait until synchronized state reaches their address
 revision. The browser preserves event order across coalesced model updates and
 can use a later state revision while the same immutable selection target remains
-open. Resolution events follow the same document boundary. Each document
-presents a receipt containing the resolved targets it owns.
+open. Resolution events follow the same document boundary. Once `_state`
+reaches the event's revision, each document presents a receipt containing the
+resolved targets it owns, read from the event's own `target` fields. Clicking
+the receipt opens History when the Lens shows History. Otherwise the receipt
+reads `Dismiss receipt for S1` and the click dismisses it.
 
 ## Rasterization and the `html-to-image` patch
 

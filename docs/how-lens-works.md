@@ -1,6 +1,6 @@
 ---
 title: How Lens works
-description: Follow one selection from a rendered target through agent context, activity, verification, reveal, and History.
+description: Follow one selection from a rendered target through agent context, activity, verification, reveal, resolution, and the request record.
 ---
 
 # How Lens works
@@ -115,7 +115,7 @@ overview_resolve_button = mo.ui.run_button(
     label=_overview_api_label(
         _overview_api_icons["resolve"],
         "resolve()",
-        "Move the selection to History.",
+        "Close the request with a receipt.",
     ),
     tooltip="Call resolve()",
     full_width=True,
@@ -140,8 +140,8 @@ overview_resolve_button = mo.ui.run_button(
     <span>The agent changes notebook code and checks the affected result.</span>
   </li>
   <li>
-    <strong>Review or reopen</strong>
-    <span>Lens brings the result into view and preserves the selection for another pass.</span>
+    <strong>Review the result</strong>
+    <span>Lens brings the result into view and confirms the resolved request with a receipt.</span>
   </li>
 </ol>
 
@@ -150,7 +150,7 @@ overview_resolve_button = mo.ui.run_button(
 1. The person marks a rendered target and adds an optional note.
 2. Lens connects the selection to its producing cells and graph context.
 3. The agent changes notebook code and verifies the affected result.
-4. Lens reveals the result and moves Open selections into History.
+4. Lens reveals the result and closes the resolved selections with a receipt.
 
 </llm-only>
 
@@ -454,8 +454,10 @@ elif _overview_kind == "reveal":
         f"{_overview_details}"
     )
 elif _overview_kind == "resolve":
-    _overview_title = "The selection is in History"
-    _overview_body = "<code>resolve()</code> moved the selection to History."
+    _overview_title = "The request is resolved"
+    _overview_body = (
+        "<code>resolve()</code> closed the selection and showed its receipt."
+    )
 else:
     _overview_title = f"{_overview_label} is grounded"
     _overview_body = _overview_details
@@ -486,7 +488,7 @@ mo.Html(
 The interactive example follows one selection through the public agent loop:
 `context()` reads it, `start_activity()` marks the work location,
 `stop_activity()` clears that mark after verification, `reveal()` brings the
-result for review, and `resolve()` moves the selection to History.
+result for review, and `resolve()` closes the selection with a receipt.
 
 </llm-only>
 
@@ -506,9 +508,10 @@ A **point** or **region** narrows attention inside the target. Lens stores the
 geometry normalized to the target, so the selection survives resizing and
 reconnects when the same output renders again in the same browser document.
 
-Each selection has a stable `S<n>` label that is never reused during the Lens
-instance, an optional note, producing-cell references, and image status. Open
-selections live in **Open**. The **current selection** is the one most recently
+Each selection has a stable `S<n>` label, an optional note, producing-cell
+references, and image status. [Selections](./selections#create-a-selection)
+explains how labels are numbered. Open selections live
+in **Open**. The **current selection** is the one most recently
 created or activated. It is the likely referent when a person says "this" or
 "here." One request to an agent can refer to several selections.
 
@@ -521,12 +524,18 @@ state changes afterwards. Mutating calls take that revision as
 
 | Evidence            | Question it answers                                            | Where          |
 | ------------------- | -------------------------------------------------------------- | -------------- |
+| Brief               | What is the current request, and what should I read next?      | `brief`        |
 | Selection reference | What did the person select and ask for?                        | `references`   |
+| Chat request        | What did the person ask in chat that the agent recorded?       | `references`   |
+| Request history     | Which recorded requests changed these cells, and do they hold? | `history()`    |
 | Target description  | What name and rendering reference did the author supply?       | `references`   |
 | DOM hint            | Which rendered element sat under the point or region?          | `references`   |
 | Graph context       | Which cells and control values produced the target?            | `text`         |
 | Selection image     | What did the target look like when the selection was captured? | `images`       |
 | Cell-output image   | What does the producing cell's output look like now?           | `cell_image()` |
+
+Read [`brief`](./reference/context#brief) first. It names the current request
+and the Lens calls that fetch more.
 
 `references` is JSON-safe and builds immediately. `text` renders on first read
 and is cached. It lists producing cells and their nearest upstream dependencies
@@ -569,11 +578,11 @@ agent](./agents#verify-with-a-cell-output-image) shows the polling loop.
 Lens gives an agent three ways to show work in the notebook. Each serves a
 different stage and has a different lifetime.
 
-| Stage      | Operation          | Visible result                                                | State change                    |
-| ---------- | ------------------ | ------------------------------------------------------------- | ------------------------------- |
-| Work       | `start_activity()` | Marks the selected target or cell the agent is working on.    | None                            |
-| Review     | `reveal()`         | Brings the target or cell into view with a label and message. | None                            |
-| Resolution | `resolve()`        | Shows an **Addressed** receipt.                               | Open selections become History. |
+| Stage      | Operation          | Visible result                                                | State change    |
+| ---------- | ------------------ | ------------------------------------------------------------- | --------------- |
+| Work       | `start_activity()` | Marks the selected target or cell the agent is working on.    | None            |
+| Review     | `reveal()`         | Brings the target or cell into view with a label and message. | None            |
+| Resolution | `resolve()`        | Shows an **Addressed** receipt.                               | Requests close. |
 
 **Activity** is transient. `start_activity()` returns an `ActivityHandle`, and
 `stop_activity(handle)` clears it only while that handle still owns the
@@ -585,29 +594,32 @@ view tears down.
 holds for `duration_ms` or until dismissed. A sequence of 1–16 steps is a
 **Trail**: an ordered explanation attached to notebook cells that the person
 pages through at their own pace. Trails work without any selection, which makes
-them the tool for "walk me through this notebook." Reveals are transient and
-end when a referenced cell or its upstream inputs change.
+them the tool for "walk me through this notebook." Reveals are transient. A
+reveal ends when a referenced cell or its upstream inputs rerun, or the cell is
+deleted.
 
 **Resolve** is the revision-checked state change. It validates the whole batch
-of selection IDs, releases their images, appends one History entry per
-selection, and returns the new revision. A summary of what changed and how it
-was verified appears beside the original request. When a reveal precedes
-resolution, Lens shows the receipt after the reveal hold ends, so the person
-sees the result first and the acknowledgement second.
+of selection and chat request IDs, closes the requests, and returns the
+revision, which advances when the batch includes a selection. The receipt shows
+the agent's summary of what changed and how the agent verified it. A Lens that
+keeps a record first hands one line per request, with each selection image, to
+its record, which stores the summary beside the original request. When a reveal
+precedes resolution, Lens shows the receipt after the reveal hold ends, so the
+person sees the result first and the acknowledgement second.
 
 ## History and reopen
 
-A **History entry** keeps metadata for one resolved selection: label, target,
-geometry, note, timestamps, resolution revision, and summary. It carries no
-image bytes. History holds the newest 64 entries within 64,000 bytes and lives
-as long as the Lens instance.
+A Lens built with `Lens(record=True)` keeps a
+[request record](./data-and-trust#request-record) and shows it in **History**:
+each resolved request with its note, the agent's summary, and whether each
+change it made still holds. Press **Reopen** to restore a resolved selection as
+current in **Open** with a fresh image. The reopened selection carries
+`previousResolution` so the agent can see the earlier outcome.
+[Resolve or reopen a selection](./selections#resolve-or-reopen-a-selection)
+covers the History entries and reopen rules.
 
-**Addressed** records that the agent returned the request for review. It does
-not claim the answer is right. Press **Reopen** on a History entry to restore
-the selection as current in **Open**, with a fresh image captured from the
-current target. The reopened selection carries `previousResolution` so the
-agent can see the earlier outcome. Reopen requires the target to be available
-in the same browser document.
+The **Addressed** receipt tells the person that the agent returned the request
+for review. It does not claim the answer is right.
 
 ## Browser and Python
 
@@ -616,7 +628,7 @@ Python model in the kernel. Each side owns what it can see.
 
 | Browser                                                       | Python                                                |
 | ------------------------------------------------------------- | ----------------------------------------------------- |
-| Finds rendered outputs and handles pointer and keyboard input | Stores Open selections and History                    |
+| Finds rendered outputs and handles pointer and keyboard input | Stores Open selections and writes the record it keeps |
 | Positions markers, the dock, and agent feedback               | Reads the live marimo graph and builds `LensContext`  |
 | Captures selection and cell-output images                     | Validates revisions, activity, reveal, and resolution |
 

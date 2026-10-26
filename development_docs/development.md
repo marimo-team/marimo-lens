@@ -89,7 +89,8 @@ change cannot be picked up by the current kernel.
 
 ## Contributor loop
 
-1. Identify the owning package and contract in the change table.
+1. Identify the owning package and contract in the
+   [change routing table](../AGENTS.md#change-routing).
 2. Reproduce the current behavior through the nearest public or runtime
    boundary.
 3. Make the smallest source change that preserves the ownership rules.
@@ -98,17 +99,6 @@ change cannot be picked up by the current kernel.
 6. Verify browser-visible changes in a real browser.
 7. Run `make check` before handoff. Run `make package` when distribution
    contents or build behavior changed.
-
-| Change                          | Primary source                                                                                 | Required companion evidence                                                |
-| ------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| Public Python API               | `__init__.py`, `_widget/lens.py`, `_widget/arguments.py`, `_context/lens_context.py`, `_core/` | API docs and Python boundary tests                                         |
-| Selection lifecycle or History  | `_selection/`, `_protocol/`, `packages/protocol/`, widget selection modules                    | Python and browser contract tests, context projection, rebuilt assets      |
-| Runtime context                 | `_notebook/`, `_marimo/`, `_context/`                                                          | Context, control, and runtime tests                                        |
-| Agent capture or feedback       | `_widget/capture.py`, `_protocol/`, widget AnyWidget and transient modules                     | Transport, image, agent, and browser checks                                |
-| Browser interaction             | `packages/widget/src/` folders                                                                 | Widget tests, build, and real-browser evidence                             |
-| PNG composition                 | `packages/image-capture/`                                                                      | Image-capture tests and real-browser capture                               |
-| Documentation                   | `docs/` and `apps/docs/`                                                                       | Docs build, links, generated text views, desktop and narrow browser checks |
-| Bundling, packaging, or release | Build files, manifests, `Makefile`, and `scripts/`                                             | Rebuilt assets, `make package`, shell checks, and contributor docs         |
 
 ## Focused commands
 
