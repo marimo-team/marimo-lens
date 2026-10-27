@@ -26,12 +26,9 @@ describe("viewport revision", () => {
     );
     expect(container.textContent).toBe("0");
 
-    await act(async () => {
-      document.body.prepend(document.createElement("section"));
-      await new Promise((resolve) => window.setTimeout(resolve, 5));
-    });
+    act(() => document.body.prepend(document.createElement("section")));
 
-    expect(Number(container.textContent)).toBeGreaterThan(0);
+    await vi.waitFor(() => expect(Number(container.textContent)).toBeGreaterThan(0));
   });
 });
 
