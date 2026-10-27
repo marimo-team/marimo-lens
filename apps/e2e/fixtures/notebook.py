@@ -176,7 +176,7 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
             for _index in range(2, 64):
                 _command = {
                     "protocol": "marimo-lens.command",
-                    "version": 8,
+                    "version": 9,
                     "requestId": f"seed-{_index}",
                     "type": "selection.put",
                     "payload": {
@@ -267,6 +267,22 @@ def _(LensError, action, activity, execute, html, json, lens, mo, time):
         '<pre aria-label="Agent result" style="max-height:160px;overflow:auto">'
         + html.escape(json.dumps(_report))
         + "</pre>"
+    )
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    # A chart keeps its own size while the output around it widens.
+    mo.Html(
+        """
+        <figure aria-label="Fixed-size chart" style="margin:0">
+          <svg width="320" height="160" viewBox="0 0 320 160">
+            <rect x="20" y="40" width="60" height="120" fill="#0880ea"></rect>
+            <rect x="130" y="80" width="60" height="80" fill="#0880ea"></rect>
+            <rect x="240" y="20" width="60" height="140" fill="#0880ea"></rect>
+          </svg>
+        </figure>
+        """
     )
 
 

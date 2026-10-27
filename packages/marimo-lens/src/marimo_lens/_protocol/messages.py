@@ -44,7 +44,7 @@ RESPONSE_PROTOCOL = "marimo-lens.response"
 
 EVENT_PROTOCOL = "marimo-lens.event"
 
-PROTOCOL_VERSION = 8
+PROTOCOL_VERSION = 9
 
 ProtocolVersion: TypeAlias = Annotated[
     int,

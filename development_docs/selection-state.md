@@ -19,7 +19,7 @@ Selection
 ├── target
 │   ├── notebook: one producing cell
 │   └── dom: exact selector and zero or more producing cells
-├── anchor: normalized point or rectangle
+├── anchor: normalized point or rectangle, with the frame element it sits on
 ├── note
 ├── DOM hint
 ├── captured description with optional render-source reference and media part

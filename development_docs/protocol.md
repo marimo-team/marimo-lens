@@ -4,7 +4,7 @@ Python and browser views exchange private Lens messages through the
 [AnyWidget](https://anywidget.dev/) custom-message channel. The protocol validates every envelope, payload, revision,
 and binary buffer at the receiving boundary.
 
-Protocol version 8 is exact. Python and TypeScript schemas must change together.
+Protocol version 9 is exact. Python and TypeScript schemas must change together.
 Selections, and the selection in a History entry, require a captured
 `description`. Its optional rendering reference is client-supplied evidence,
 separate from notebook sources.

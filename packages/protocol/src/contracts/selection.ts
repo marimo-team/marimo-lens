@@ -20,28 +20,6 @@ import {
   parseContract,
 } from "./transport";
 
-const PointAnchorSchema = v.object({
-  kind: v.literal("point"),
-  x: NormalizedNumberSchema,
-  y: NormalizedNumberSchema,
-});
-
-const RectAnchorSchema = v.pipe(
-  v.object({
-    kind: v.literal("rect"),
-    x: NormalizedNumberSchema,
-    y: NormalizedNumberSchema,
-    width: PositiveNormalizedNumberSchema,
-    height: PositiveNormalizedNumberSchema,
-  }),
-  v.check(
-    (anchor) => anchor.x + anchor.width <= 1 && anchor.y + anchor.height <= 1,
-    "Selection rectangle extends beyond its target",
-  ),
-);
-
-export const SelectionAnchorSchema = v.variant("kind", [PointAnchorSchema, RectAnchorSchema]);
-
 const DomHintBoundsSchema = v.pipe(
   v.object({
     x: NormalizedNumberSchema,
@@ -54,6 +32,39 @@ const DomHintBoundsSchema = v.pipe(
     "DOM hint bounds extend beyond their target",
   ),
 );
+
+/**
+ * The element a selection's mark sits on, such as a chart's canvas: a path
+ * from the target and the element's box in target fractions at anchor time.
+ */
+const AnchorFrameSchema = v.object({
+  path: v.pipe(NonEmptyStringSchema, v.maxLength(240)),
+  bounds: DomHintBoundsSchema,
+});
+
+const PointAnchorSchema = v.object({
+  kind: v.literal("point"),
+  x: NormalizedNumberSchema,
+  y: NormalizedNumberSchema,
+  frame: v.optional(AnchorFrameSchema),
+});
+
+const RectAnchorSchema = v.pipe(
+  v.object({
+    kind: v.literal("rect"),
+    x: NormalizedNumberSchema,
+    y: NormalizedNumberSchema,
+    width: PositiveNormalizedNumberSchema,
+    height: PositiveNormalizedNumberSchema,
+    frame: v.optional(AnchorFrameSchema),
+  }),
+  v.check(
+    (anchor) => anchor.x + anchor.width <= 1 && anchor.y + anchor.height <= 1,
+    "Selection rectangle extends beyond its target",
+  ),
+);
+
+export const SelectionAnchorSchema = v.variant("kind", [PointAnchorSchema, RectAnchorSchema]);
 
 const DomHintSchema = v.object({
   tag: v.pipe(NonEmptyStringSchema, v.maxLength(240)),
@@ -218,6 +229,7 @@ export const SelectionSchema = v.intersect([
 
 export type PointAnchor = v.InferOutput<typeof PointAnchorSchema>;
 export type RectAnchor = v.InferOutput<typeof RectAnchorSchema>;
+export type AnchorFrame = v.InferOutput<typeof AnchorFrameSchema>;
 export type SelectionAnchor = v.InferOutput<typeof SelectionAnchorSchema>;
 export type DomHint = v.InferOutput<typeof DomHintSchema>;
 export type DomHintBounds = v.InferOutput<typeof DomHintBoundsSchema>;

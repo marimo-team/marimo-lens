@@ -18,6 +18,7 @@ import { errorMessage } from "@/anywidget/error";
 import { documentIdentity, targetBelongsToDocument } from "@/notebook/document-identity";
 import { targetInfo } from "@/notebook/target-info";
 import { anchorCenter, sameAnchor } from "@/selection/anchor";
+import { framedAnchor } from "@/selection/anchor-frame";
 import { collectDomHint } from "@/selection/dom-hint";
 import { revealSelection } from "@/selection/reveal";
 import { SelectionCapture, type SelectionCaptureJob } from "@/selection/selection-capture";
@@ -125,7 +126,7 @@ export function useSelectionActions(options: {
         note: "",
         target,
         createdAt: new dom.window.Date().toISOString(),
-        anchor,
+        anchor: framedAnchor(anchor, detailElement, output),
         domHint: collectDomHint(detailElement, output),
         description: targetInfo({ target, element: output }),
         snapshot: { status: "pending" },
@@ -324,14 +325,15 @@ export function useSelectionActions(options: {
   );
 
   const repositionSelection = useCallback(
-    (selection: Selection, anchor: SelectionAnchor) => {
+    (selection: Selection, adjusted: SelectionAnchor) => {
       currentSignal().throwIfAborted();
       const output = dom.getTarget(selection.target)?.element;
       if (!output) {
         dispatch({ type: "announce", message: "Target unavailable." });
         return;
       }
-      const detail = detailElement(dom, anchor, output);
+      const detail = detailElement(dom, adjusted, output);
+      const anchor = framedAnchor(adjusted, detail, output);
       const domHint = collectDomHint(detail, output);
       mutate({
         busyId: selection.id,
@@ -380,7 +382,7 @@ export function useSelectionActions(options: {
   };
 }
 
-/** The element under an anchor's center, which describes the selection. */
+/** The element under an anchor's center, which describes and frames the selection. */
 function detailElement(dom: NotebookDomAdapter, anchor: SelectionAnchor, output: HTMLElement) {
   const point = anchorCenter(output, anchor);
   return dom.deepestElementAtPoint(point.x, point.y) ?? output;

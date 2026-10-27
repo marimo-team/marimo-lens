@@ -107,6 +107,24 @@ def _without(content: dict[str, Any], field: str) -> dict[str, Any]:
             id="subnormal-rect",
         ),
         pytest.param(
+            "selection.put",
+            _put(
+                _with(
+                    anchor={
+                        "kind": "point",
+                        "x": 0.25,
+                        "y": 0.5,
+                        "frame": {
+                            "path": "div > canvas",
+                            "bounds": {"x": 0, "y": 0, "width": 0.5, "height": 1},
+                        },
+                    }
+                )
+            ),
+            [],
+            id="framed-anchor",
+        ),
+        pytest.param(
             "selection.activate",
             {"selectionId": "selection-1", "expectedRevision": 2},
             [],

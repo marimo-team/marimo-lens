@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Annotated, Literal, TypeAlias
+from typing import Annotated, Any, Literal, TypeAlias
 
 from pydantic import (
     AfterValidator,
     ConfigDict,
     Field,
+    SerializerFunctionWrapHandler,
     TypeAdapter,
     field_validator,
     model_serializer,
@@ -41,10 +42,45 @@ from .._core.bounds import (
 from .model import TransportModel
 
 
+class DomBounds(TransportModel):
+    x: NormalizedNumber
+    y: NormalizedNumber
+    width: NormalizedNumber
+    height: NormalizedNumber
+
+    @model_validator(mode="after")
+    def inside_target(self) -> Self:
+        if self.x + self.width > 1 or self.y + self.height > 1:
+            raise PydanticCustomError(
+                "invalid_selection",
+                "DOM hint bounds must stay inside their target",
+            )
+        return self
+
+
+class AnchorFrame(TransportModel):
+    """The element a selection's mark sits on, such as a chart's canvas.
+
+    ``path`` leads from the target to the element, and ``bounds`` is the
+    element's box in target fractions when the anchor was taken.
+    """
+
+    path: Annotated[DomFieldText, AfterValidator(nonblank)]
+    bounds: DomBounds
+
+
 class PointAnchor(TransportModel):
     kind: Literal["point"]
     x: NormalizedNumber
     y: NormalizedNumber
+    frame: AnchorFrame | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_absent_frame(self, handler: SerializerFunctionWrapHandler) -> Any:
+        data = handler(self)
+        if self.frame is None and isinstance(data, dict):
+            data.pop("frame", None)
+        return data
 
 
 class RectAnchor(TransportModel):
@@ -53,6 +89,14 @@ class RectAnchor(TransportModel):
     y: NormalizedNumber
     width: PositiveNormalizedNumber
     height: PositiveNormalizedNumber
+    frame: AnchorFrame | None = None
+
+    @model_serializer(mode="wrap")
+    def omit_absent_frame(self, handler: SerializerFunctionWrapHandler) -> Any:
+        data = handler(self)
+        if self.frame is None and isinstance(data, dict):
+            data.pop("frame", None)
+        return data
 
     @model_validator(mode="after")
     def inside_target(self) -> Self:
@@ -68,22 +112,6 @@ SelectionAnchor: TypeAlias = Annotated[
     PointAnchor | RectAnchor,
     Field(discriminator="kind"),
 ]
-
-
-class DomBounds(TransportModel):
-    x: NormalizedNumber
-    y: NormalizedNumber
-    width: NormalizedNumber
-    height: NormalizedNumber
-
-    @model_validator(mode="after")
-    def inside_target(self) -> Self:
-        if self.x + self.width > 1 or self.y + self.height > 1:
-            raise PydanticCustomError(
-                "invalid_selection",
-                "DOM hint bounds must stay inside their target",
-            )
-        return self
 
 
 class DomHint(TransportModel):

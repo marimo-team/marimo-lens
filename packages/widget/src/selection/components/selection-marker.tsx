@@ -7,6 +7,7 @@ import { useNotebookDom } from "@/notebook/notebook-dom-context";
 import {
   anchorToViewport,
   isViewportAnchorInsideOutput,
+  currentAnchor,
   translateAnchor,
 } from "@/selection/anchor";
 import { useScrollAttachment } from "@/selection/use-scroll-attachment";
@@ -49,7 +50,12 @@ export function SelectionMarker(props: MarkerProps) {
     );
   }
   return (
-    <RectMarkerFrame {...props} rect={anchor} style={anchorStyle(viewport)} onPreview={setPreview}>
+    <RectMarkerFrame
+      {...props}
+      rect={rectOf(currentAnchor(output, anchor), anchor)}
+      style={anchorStyle(viewport)}
+      onPreview={setPreview}
+    >
       <MarkerButton {...props} onPreview={setPreview} />
     </RectMarkerFrame>
   );
@@ -114,7 +120,7 @@ function MarkerButton({
   const { selection, output, current, busy, capturing, interactionEnabled } = props;
   const kind = selection.anchor.kind;
   const moved = (offset: { x: number; y: number }) =>
-    translateAnchor(output, selection.anchor, offset.x, offset.y);
+    translateAnchor(output, currentAnchor(output, selection.anchor), offset.x, offset.y);
   // A press without movement opens the note, a drag past 4 pixels activates
   // the selection and previews the new anchor, and release commits it.
   const { endsPress, handlers } = usePointerAdjustment({
@@ -184,4 +190,11 @@ function markerLabelProps({ selection, current }: MarkerProps) {
 export function anchorStyle(anchor: ReturnType<typeof anchorToViewport>): React.CSSProperties {
   if (anchor.kind === "point") return { left: anchor.x, top: anchor.y };
   return { left: anchor.x, top: anchor.y, width: anchor.width, height: anchor.height };
+}
+
+function rectOf(
+  anchor: SelectionAnchor,
+  fallback: Extract<SelectionAnchor, { kind: "rect" }>,
+): Extract<SelectionAnchor, { kind: "rect" }> {
+  return anchor.kind === "rect" ? anchor : fallback;
 }

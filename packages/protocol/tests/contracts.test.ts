@@ -551,6 +551,26 @@ test("target media names a page or a time span that ends after it starts", () =>
   expect(() => parseTargetMedia({ path: "report.pdf", sheet: 1 })).toThrow();
 });
 
+describe("selection anchor frames", () => {
+  test("reads the frame a mark sits on and rejects bounds outside the target", () => {
+    const frame = { path: "div > canvas", bounds: { x: 0, y: 0, width: 0.5, height: 1 } };
+    const anchor = { kind: "point" as const, x: 0.25, y: 0.5, frame };
+
+    expect(
+      parseContract(SelectionSchema, selectionFixture({ anchor }), "selection").anchor,
+    ).toEqual(anchor);
+    expect(() =>
+      parseContract(
+        SelectionSchema,
+        selectionFixture({
+          anchor: { ...anchor, frame: { ...frame, bounds: { ...frame.bounds, x: 0.75 } } },
+        }),
+        "selection",
+      ),
+    ).toThrow();
+  });
+});
+
 test("an output capture response tolerates fields this version does not know", () => {
   const image = {
     status: "available",
