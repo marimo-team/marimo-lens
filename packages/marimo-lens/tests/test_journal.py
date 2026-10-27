@@ -36,7 +36,12 @@ def _line(notebook: RuntimeSnapshot, request_id: str) -> RecordLine:
 
 
 def _ids(path: pathlib.Path) -> list[str]:
-    return [json.loads(text)["id"] for text in path.read_text().splitlines()]
+    # Windows cannot delete an open file, so a moved record leaves an empty one.
+    if not path.exists():
+        return []
+    return [
+        json.loads(text)["id"] for text in path.read_text(encoding="utf-8").splitlines()
+    ]
 
 
 def test_an_interrupted_write_is_dropped_before_the_next_line(
@@ -286,7 +291,7 @@ def test_a_renamed_notebook_keeps_its_record_and_images(
     notebook.context.globals["__file__"] = str(tmp_path / "reports" / "revenue.py")
     [chat, row] = lens.context().history()
 
-    assert not (tmp_path / "__marimo__" / "lens" / "sales.py.jsonl").exists()
+    assert _ids(tmp_path / "__marimo__" / "lens" / "sales.py.jsonl") == []
     moved = tmp_path / "reports" / "__marimo__" / "lens" / "revenue.py.jsonl"
     assert len(_read(moved).lines) == 2
     assert chat["image"] is None
@@ -345,7 +350,7 @@ def test_a_record_that_cannot_move_keeps_taking_lines_under_its_old_name(
     assert health.status == "failed"
     assert [line.id for line in waiting.lines] == ["before", "during"]
     assert [line.id for line in moved.lines] == ["before", "during"]
-    assert (_ids(new), old.exists()) == (["before", "during"], False)
+    assert (_ids(new), _ids(old)) == (["before", "during"], [])
 
 
 def test_a_retried_move_writes_each_line_once(
@@ -373,8 +378,7 @@ def test_a_retried_move_writes_each_line_once(
     second = journal.read()
 
     assert (first.health.status, second.health.status) == ("failed", "saved")
-    assert _ids(new) == ["before"]
-    assert not old.exists()
+    assert (_ids(new), _ids(old)) == (["before"], [])
 
 
 def test_a_move_into_a_record_another_move_retired_keeps_every_line(

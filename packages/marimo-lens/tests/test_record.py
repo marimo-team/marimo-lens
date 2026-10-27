@@ -145,7 +145,7 @@ def test_record_follows_the_python_cache_prefix(
 
     relative = notebook.parent.relative_to(notebook.anchor)
     path = prefix / relative / "__marimo__" / "lens" / "sales.py.jsonl"
-    assert len(path.read_text().splitlines()) == 1
+    assert len(path.read_text(encoding="utf-8").splitlines()) == 1
     assert not (notebook.parent / "__marimo__").exists()
 
 

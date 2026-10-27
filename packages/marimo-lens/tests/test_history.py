@@ -374,7 +374,8 @@ def test_a_write_failure_naming_undecodable_path_bytes_reaches_history(
     from marimo_lens._record import files
 
     def fail(*args: object, **kwargs: object) -> None:
-        raise OSError(os.fsdecode(b"/data/caf\xe9/sales.py.jsonl is read-only"))
+        # os.fsdecode of the byte 0xe9 on POSIX: a lone surrogate.
+        raise OSError("/data/caf\udce9/sales.py.jsonl is read-only")
 
     monkeypatch.setattr(files, "append", fail)
     lens = RecordBrowserLens()
@@ -518,5 +519,7 @@ def test_history_and_chats_traits_match_the_browser_fixtures(
     ]:
         path = fixtures / name
         if os.environ.get("LENS_UPDATE_FIXTURES") == "1":
-            path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
-        assert value == json.loads(path.read_text()), name
+            path.write_text(
+                json.dumps(value, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        assert value == json.loads(path.read_text(encoding="utf-8")), name

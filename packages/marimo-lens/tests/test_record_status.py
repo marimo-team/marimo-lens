@@ -129,8 +129,8 @@ def test_requests_count_in_the_order_they_resolved(
     revert = session.change("Show all sales again", "cell-net", SALES["cell-net"])
     # Another Lens can append its line after a request that resolved later.
     [record] = tmp_path.rglob("*.jsonl")
-    lines = record.read_text().splitlines(keepends=True)
-    record.write_text("".join(reversed(lines)))
+    lines = record.read_text(encoding="utf-8").splitlines(keepends=True)
+    record.write_text("".join(reversed(lines)), encoding="utf-8")
 
     [change] = session.changes(fix)
 

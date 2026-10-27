@@ -37,7 +37,11 @@ def test_resolve_stores_the_image_beside_the_record_and_links_it(
     sha256 = hashlib.sha256(data).hexdigest()
     stored = _lens_folder(tmp_path) / "images" / f"{sha256}.png"
     assert stored.read_bytes() == data
-    [line] = (_lens_folder(tmp_path) / "sales.py.jsonl").read_text().splitlines()
+    [line] = (
+        (_lens_folder(tmp_path) / "sales.py.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
     assert json.loads(line)["trace"]["image"] == {
         "sha256": sha256,
         "width": 2,
