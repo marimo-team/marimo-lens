@@ -39,12 +39,13 @@ describe("selection targets", () => {
       return matches.call(this, selector);
     });
     const query = Document.prototype.querySelectorAll;
-    vi.spyOn(Document.prototype, "querySelectorAll").mockImplementation(
-      function (this: Document, selector) {
-        if (selector.includes(":has(")) throw new DOMException("Unsupported :has", "SyntaxError");
-        return query.call(this, selector);
-      },
-    );
+    vi.spyOn(Document.prototype, "querySelectorAll").mockImplementation(function (
+      this: Document,
+      selector,
+    ) {
+      if (selector.includes(":has(")) throw new DOMException("Unsupported :has", "SyntaxError");
+      return query.call(this, selector);
+    });
     document.body.innerHTML =
       '<div id="output-native">Native</div><section id="custom">Custom</section><main id="scope" data-marimo-lens-scope="article"><article id="card"><span>Text</span></article></main>';
     const native = visible(document.getElementById("output-native")!);

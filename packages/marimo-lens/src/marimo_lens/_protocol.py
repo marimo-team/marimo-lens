@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -140,7 +140,7 @@ def parse_command(
 
     return Command(
         request_id=command.request_id,
-        type=cast(CommandType, command.type),
+        type=command.type,
         payload=dump_model(command.payload),
     )
 

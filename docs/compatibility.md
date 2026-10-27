@@ -13,7 +13,7 @@ agent API from the hosted documentation.
 | Component     | Supported contract                                        |
 | ------------- | --------------------------------------------------------- |
 | Python        | 3.10 through 3.14                                         |
-| marimo        | 0.25.0 or newer                                           |
+| marimo        | 0.25.2 or newer                                           |
 | `marimo-lens` | Install a tagged release from PyPI for released behavior. |
 
 The package declares no upper marimo version bound. Lens uses public notebook

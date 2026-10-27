@@ -8,15 +8,7 @@ import type {
 } from "@marimo-lens/protocol";
 
 import { isAbortCause, parseErrorCause } from "@marimo-lens/protocol";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Dispatch,
-  type RefObject,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, type Dispatch, type RefObject } from "react";
 
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
@@ -46,19 +38,16 @@ export function useSelectionActions(options: {
 }) {
   const { stateRef, dispatch, dom, selector, protocol, captureSnapshot } = options;
   const currentSignal = useLifecycleSignal(dom.window);
-  const [mutationQueue] = useState(() => ({ tail: Promise.resolve() }));
+  const mutationTail = useRef<Promise<void>>(Promise.resolve());
 
-  const enqueueMutation = useCallback(
-    <T>(mutation: () => Promise<T>): Promise<T> => {
-      const result = mutationQueue.tail.then(mutation, mutation);
-      mutationQueue.tail = result.then(
-        () => undefined,
-        () => undefined,
-      );
-      return result;
-    },
-    [mutationQueue],
-  );
+  const enqueueMutation = useCallback(<T>(mutation: () => Promise<T>): Promise<T> => {
+    const result = mutationTail.current.then(mutation, mutation);
+    mutationTail.current = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }, []);
 
   const runRevisioned = useCallback(
     async (

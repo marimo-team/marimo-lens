@@ -76,8 +76,7 @@ export function useDocumentInteractions(options: {
   useEffect(() => () => clearClickGuard(), [clearClickGuard]);
 
   useEffect(() => {
-    if (interactionActive) dom.document.documentElement.dataset.marimoLensArmed = "true";
-    else delete dom.document.documentElement.dataset.marimoLensArmed;
+    markArmed(dom.document, interactionActive);
 
     const surfaceOptions = {
       includeTargetFrames: interactionActive,
@@ -254,7 +253,7 @@ export function useDocumentInteractions(options: {
 
     return () => {
       detachSurfaces();
-      if (interactionActive) delete dom.document.documentElement.dataset.marimoLensArmed;
+      if (interactionActive) markArmed(dom.document, false);
     };
   }, [
     beginSelection,
@@ -346,4 +345,11 @@ function eventTargetElement(event: Event, ownerDocument: Document): Element | nu
     ? (event.composedPath().find((item): item is Element => item instanceof ownerWindow.Element) ??
         null)
     : null;
+}
+
+// The armed attribute lets the surface styles turn off pointer events on
+// notebook iframes while a selection gesture is in progress.
+function markArmed(document: Document, armed: boolean): void {
+  if (armed) document.documentElement.dataset.marimoLensArmed = "true";
+  else delete document.documentElement.dataset.marimoLensArmed;
 }

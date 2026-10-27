@@ -160,7 +160,7 @@ directory so each test owns a separate kernel. Four Chromium projects test deskt
 layouts in light and dark themes. An editor project verifies selection, notes,
 producing cells, and PNG capture through `marimo edit`. The editor uses
 `apps/e2e/.marimo.toml` to disable code completion and language servers.
-The console guard records marimo 0.24's disabled-Copilot initialization timeout
+The console guard records marimo's disabled-Copilot initialization timeout
 in a diagnostic attachment. All other console errors and all uncaught page errors
 fail the test.
 It retains traces and screenshots for failures in

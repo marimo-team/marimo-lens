@@ -19,9 +19,7 @@ declare global {
 }
 
 export function LensViewOwner({ children, lensId }: { children: ReactNode; lensId?: string }) {
-  const viewIdRef = useRef<symbol | null>(null);
-  if (viewIdRef.current === null) viewIdRef.current = Symbol("marimo-lens-view");
-  const viewId = viewIdRef.current;
+  const [viewId] = useState(() => Symbol("marimo-lens-view"));
   const hostRef = useRef<HTMLSpanElement>(null);
   const conflictWarnedRef = useRef(false);
   const [ownedAdapter, setOwnedAdapter] = useState<NotebookDomAdapter | null>(null);

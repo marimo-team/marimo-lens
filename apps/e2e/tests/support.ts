@@ -72,7 +72,7 @@ export const test = base.extend<{ browserErrors: string[]; notebook: void }>({
           backgroundImageFailures.push(`${url}: ${text}`);
           return;
         }
-        // marimo 0.24 eagerly initializes its disabled Copilot client in each editor.
+        // Editor startup can report a timeout from its disabled Copilot client.
         if (
           testInfo.project.name === "editor" &&
           text.split(/\r?\n/, 1)[0] ===

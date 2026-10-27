@@ -1,4 +1,4 @@
-import { defineRule } from "@oxlint/plugins";
+import { defineRule } from "vite-plus/lint/plugins";
 
 import { createLexicalTypeEnvironment, qualifiedNameParts } from "../shared/type-environment.ts";
 import { ruleTester } from "./rule-tester.ts";

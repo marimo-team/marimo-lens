@@ -603,7 +603,7 @@ test("dock movement survives reload and keeps click, cancel, and keyboard contro
   await page.mouse.up();
   await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(beforeCancel.y, 0);
   await pill.click();
-  await expect(grip).toBeVisible();
+  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeFocused();
   await grip.focus();
   await page.keyboard.press("Home");
   await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(initial.y, 0);

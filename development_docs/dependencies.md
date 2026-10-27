@@ -34,8 +34,8 @@ The published package currently requires:
 
 - `agent-plugins>=0.2.4` for packaged resources and Python briefings.
 - `anywidget>=0.9` and `traitlets>=5` for the widget model and transport.
-- `marimo>=0.24` for notebook runtime and agent capability integration.
-- `pydantic>=2` for transport validation.
+- `marimo>=0.25.2` for notebook runtime and agent capability integration.
+- `pydantic>=2.4` for transport validation.
 - `typing-extensions>=4.4` for public types on Python 3.10.
 
 The build backend requires `agent-plugins>=0.2.4` and `hatchling>=1.26.3`, which

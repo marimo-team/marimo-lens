@@ -102,6 +102,7 @@ export function useResolutionReceipt(options: ResolutionReceiptOptions): Resolut
     ) {
       return;
     }
+    // oxlint-disable-next-line react/set-state-in-effect -- The receipt moves focus, so it appears after the committed state reaches the resolved revision.
     setQueued((current) => (current === queued ? null : current));
     const ownedSelections = queued.payload.selections.filter((_, index) => {
       const receipt = receipts[index];

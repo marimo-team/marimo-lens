@@ -12,7 +12,7 @@ the same target for review. This page is for agents and integration authors.
 Run its Python examples through the notebook's code-mode execution channel.
 
 Notebook users need none of this. Use marimo's AI sidebar in **Code Mode
-(beta)**, or connect your own agent through **Settings → Pair with an agent**.
+(beta)**, or connect your own agent through **Settings → Connect your agent**.
 Then select a result, add a note, and say:
 
 > Use Lens to address my current selection.

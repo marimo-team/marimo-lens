@@ -15,7 +15,6 @@ export default defineConfig(({ mode }) => ({
     css: {
       fileName: "widget.css",
     },
-    dts: true,
     entry: ["src/widget.tsx"],
     loader: {
       ".svg": "dataurl",
