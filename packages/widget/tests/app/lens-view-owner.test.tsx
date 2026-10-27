@@ -38,6 +38,19 @@ describe("Lens view ownership", () => {
     expect(activeViews()).toEqual(["next"]);
   });
 
+  test("gives the dock back to a Lens whose cell reruns above another Lens", async () => {
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const recorded = renderView("recorded", document, [], "lens-recorded");
+    renderView("plain", document, [], "lens-plain");
+    const plainContainer = document.body.lastElementChild!;
+
+    await unmountAsync(recorded);
+    expect(activeViews()).toEqual(["plain"]);
+    renderView("rerun", document, [], "lens-rerun", plainContainer);
+
+    expect(activeViews()).toEqual(["rerun"]);
+  });
+
   test("keeps another view of the owning Lens quiet", () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     renderView("notebook", document, [], "lens-1");
@@ -145,9 +158,10 @@ function renderView(
   ownerDocument = document,
   mounted: string[] = [],
   lensId?: string,
+  before?: Element,
 ): Root {
   const container = ownerDocument.createElement("div");
-  ownerDocument.body.appendChild(container);
+  ownerDocument.body.insertBefore(container, before ?? null);
   const root = createRoot(container);
   roots.add(root);
   act(() =>

@@ -19,6 +19,7 @@ from .._core.bounds import (
     AttentionLabel,
     AttentionText,
     CellId,
+    DomSelectorText,
     ErrorCode,
     Identifier,
     NonEmptyErrorText,
@@ -26,12 +27,15 @@ from .._core.bounds import (
     RevealText,
     Revision,
     SelectionLabel,
+    Sha256,
+    TimestampText,
 )
 from .._schema.model import TransportModel
 from .._schema.selection import (
     ImageAction,
     OutputCaptureImage,
     SelectionInput,
+    SelectionTarget,
 )
 
 COMMAND_PROTOCOL = "marimo-lens.command"
@@ -40,7 +44,7 @@ RESPONSE_PROTOCOL = "marimo-lens.response"
 
 EVENT_PROTOCOL = "marimo-lens.event"
 
-PROTOCOL_VERSION = 7
+PROTOCOL_VERSION = 8
 
 ProtocolVersion: TypeAlias = Annotated[
     int,
@@ -83,15 +87,21 @@ class ClearSelectionsPayload(TransportModel):
 
 
 class ReopenSelectionPayload(SelectionMutationPayload):
-    resolution_revision: Revision
+    resolved_at: TimestampText
+    document_id: Identifier
+    document_path: DomSelectorText
 
 
-class ClearHistoryPayload(TransportModel):
-    expected_revision: Revision
+class RefreshHistoryPayload(TransportModel):
+    pass
 
 
 class SnapshotRequestPayload(TransportModel):
     selection_id: Identifier
+
+
+class HistoryImageRequestPayload(TransportModel):
+    sha256: Sha256
 
 
 class CommandBase(TransportModel):
@@ -125,14 +135,19 @@ class ReopenSelectionCommand(CommandBase):
     payload: ReopenSelectionPayload
 
 
-class ClearHistoryCommand(CommandBase):
-    type: Literal["history.clear"]
-    payload: ClearHistoryPayload
+class RefreshHistoryCommand(CommandBase):
+    type: Literal["history.refresh"]
+    payload: RefreshHistoryPayload
 
 
 class GetSnapshotCommand(CommandBase):
     type: Literal["snapshot.get"]
     payload: SnapshotRequestPayload
+
+
+class GetHistoryImageCommand(CommandBase):
+    type: Literal["history.image"]
+    payload: HistoryImageRequestPayload
 
 
 ClientCommand: TypeAlias = Annotated[
@@ -141,8 +156,9 @@ ClientCommand: TypeAlias = Annotated[
     | DeleteSelectionCommand
     | ClearSelectionsCommand
     | ReopenSelectionCommand
-    | ClearHistoryCommand
-    | GetSnapshotCommand,
+    | RefreshHistoryCommand
+    | GetSnapshotCommand
+    | GetHistoryImageCommand,
     Field(discriminator="type"),
 ]
 
@@ -299,7 +315,7 @@ class AttentionActivityStopEvent(TransportModel):
 class ResolvedSelection(TransportModel):
     selection_id: Identifier
     label: SelectionLabel
-    resolution_revision: Revision
+    target: SelectionTarget
 
 
 class SelectionResolvedPayload(TransportModel):
@@ -307,6 +323,7 @@ class SelectionResolvedPayload(TransportModel):
         tuple[ResolvedSelection, ...],
         Field(min_length=1, max_length=MAX_SELECTIONS),
     ]
+    resolved_at: TimestampText
     summary: AttentionText | None = None
 
 
@@ -330,7 +347,7 @@ class SuccessResponse(TransportModel):
 class FailureResponse(TransportModel):
     protocol: Literal["marimo-lens.response"] = RESPONSE_PROTOCOL
     version: ProtocolVersion = PROTOCOL_VERSION
-    request_id: str
+    request_id: RequestId
     ok: Literal[False] = False
     revision: Revision
     payload: dict[str, Any]

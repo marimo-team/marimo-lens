@@ -271,6 +271,34 @@ describe("selection overlay", () => {
     expect(releaseAdjustment).toHaveBeenCalledWith(registerAdjustment.mock.calls[0]?.[0]);
   });
 
+  test("keeps a resize handle focusable while its keyboard step saves", () => {
+    setupOutput();
+    const selection = selectionFixture({
+      anchor: { kind: "rect", x: 0.2, y: 0.2, width: 0.3, height: 0.3 },
+    });
+    const onReposition = vi.fn();
+    const render = renderOverlay([selection], selection.id, { onReposition });
+    const handle = () => document.querySelector<HTMLButtonElement>('[data-handle="se"]')!;
+    act(() => {
+      handle().focus();
+      handle().dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
+      handle().dispatchEvent(new KeyboardEvent("keyup", { key: "ArrowRight", bubbles: true }));
+    });
+    expect(onReposition).toHaveBeenCalledOnce();
+
+    render({ busySelectionIds: new Set([selection.id]) });
+    const step = new KeyboardEvent("keydown", {
+      key: "ArrowRight",
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => void handle().dispatchEvent(step));
+
+    expect(handle().disabled).toBe(false);
+    expect(handle().getAttribute("aria-disabled")).toBe("true");
+    expect(step.defaultPrevented).toBe(true);
+  });
+
   test("opens no note when a marker move canceled with Escape is released", () => {
     stubPointerCapture();
     setupOutput();

@@ -25,7 +25,9 @@ def test_quickstart_trail_checks_every_target_before_revealing(
             if name not in missing
         ],
     )
-    monkeypatch.setattr(runtime, "collect_runtime_snapshot", lambda: snapshot)
+    monkeypatch.setattr(
+        runtime, "collect_runtime_snapshot", lambda output_cell_ids: snapshot
+    )
     calls: list[tuple[list[dict[str, str]], dict[str, object]]] = []
 
     def reveal(steps: list[dict[str, str]], **kwargs: object) -> None:

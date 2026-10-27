@@ -46,6 +46,7 @@ attributes, since invalid input references make a configured target unavailable.
 
 Check the target indicator and a new selection's `description` after rendering.
 Lens captures the label, detail, and rendering reference at selection time and
-retains them through History and reopen. Updating metadata affects future
+retains them for the selection's life, including its record line, History, and
+reopen on a Lens that keeps a record. Updating metadata affects future
 selections. See the [custom targets guide](https://marimo-team.github.io/marimo-lens/custom-targets)
 for interactive examples and the complete host contract.

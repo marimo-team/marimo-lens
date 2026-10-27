@@ -1,5 +1,5 @@
 import type { AnyModel, Experimental, Host, RenderProps } from "@anywidget/types";
-import type { LensState } from "@marimo-lens/protocol";
+import type { ChatRequest, HistoryState, LensState } from "@marimo-lens/protocol";
 
 import { act } from "react";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
@@ -84,7 +84,7 @@ async function release(cleanup: RenderCleanup): Promise<void> {
 }
 
 function fakeModel(): AnyModel {
-  const values = new Map<string, LensState | string>([
+  const values = new Map<string, LensState | HistoryState | ChatRequest[] | string>([
     [
       "_state",
       {
@@ -92,9 +92,10 @@ function fakeModel(): AnyModel {
         nextLabel: "S1",
         currentSelectionId: null,
         selections: [],
-        history: [],
       },
     ],
+    ["_history", { entries: [], total: 0, record: { status: "saved" }, cells: [] }],
+    ["_chats", []],
     ["_css", ""],
   ]);
   const model: AnyModel = {

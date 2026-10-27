@@ -9,18 +9,15 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from .._core.bounds import (
-    MAX_HISTORY,
+    MAX_SELECTION_LABEL,
     MAX_SELECTIONS,
 )
 from .._core.errors import Rejection
 from .._schema.model import dump_model
 from .._schema.selection import (
-    AddressedSelection,
     AvailableSnapshot,
     ImageAction,
     OutdatedSnapshot,
-    PendingSnapshot,
-    PreviousResolution,
     Selection,
     SelectionInput,
     SelectionSnapshot,
@@ -35,7 +32,6 @@ _IMMUTABLE_SELECTION_FIELDS = (
     ("description", "description"),
 )
 MAX_SELECTION_STATE_BYTES = 48_000
-MAX_HISTORY_STATE_BYTES = 64_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,7 +64,6 @@ class SelectionState:
     current_selection_id: str | None = None
     activation_order: tuple[str, ...] = ()
     records: tuple[SelectionRecord, ...] = ()
-    history: tuple[AddressedSelection, ...] = ()
 
     def record(self, selection_id: str) -> SelectionRecord | None:
         return next(
@@ -98,7 +93,6 @@ class SelectionState:
             "nextLabel": f"S{self.next_label}",
             "currentSelectionId": self.current_selection_id,
             "selections": copy.deepcopy(self.selections()),
-            "history": [dump_model(receipt) for receipt in self.history],
         }
 
 
@@ -110,7 +104,10 @@ def put_selection(
     expected_revision: int,
     image: bytes | bytearray | memoryview | None,
 ) -> tuple[SelectionState, Selection]:
-    """Return the state after one put and the selection it committed."""
+    """Return the state after one put and the selection it committed.
+
+    A new selection takes the next label, whatever label it arrived with.
+    """
 
     _require_revision(state, expected_revision)
     existing_index = next(
@@ -128,11 +125,6 @@ def put_selection(
             raise Rejection(
                 "selection_limit_reached",
                 f"Lens supports up to {MAX_SELECTIONS} selections.",
-            )
-        if selection.label != f"S{state.next_label}":
-            raise Rejection(
-                "selection_label_conflict",
-                f"The next Lens selection label is S{state.next_label}.",
             )
         if image_action == "preserve":
             raise Rejection(
@@ -212,7 +204,6 @@ def put_selection(
             current_selection_id=current_selection_id,
             activation_order=activation_order,
             records=tuple(records),
-            history=state.history,
         )
     )
     return next_state, committed
@@ -241,7 +232,6 @@ def activate_selection(
             current_selection_id=current_selection_id,
             activation_order=activation_order,
             records=state.records,
-            history=state.history,
         )
     )
 
@@ -274,7 +264,6 @@ def remove_selection(
                 current_selection_id=current_selection_id,
                 activation_order=activation_order,
                 records=records,
-                history=state.history,
             )
         ),
         removed,
@@ -291,7 +280,6 @@ def clear_selections(
         SelectionState(
             revision=state.revision + 1,
             next_label=state.next_label,
-            history=state.history,
         )
     )
 
@@ -299,74 +287,30 @@ def clear_selections(
 def resolve_selections(
     state: SelectionState,
     selection_ids: Sequence[str],
-    *,
-    expected_revision: int,
-    resolved_at: str,
-    summary: str | None,
 ) -> tuple[SelectionState, tuple[SelectionRecord, ...]]:
-    """Move open selections into History atomically and return them."""
+    """Close open selections atomically and return them.
 
-    _require_revision(state, expected_revision)
-    ids = tuple(selection_ids)
-    if not ids:
-        raise Rejection(
-            "invalid_selection",
-            "Resolving selections requires at least one selection ID.",
-        )
-    if len(ids) > MAX_SELECTIONS:
-        raise Rejection(
-            "invalid_selection",
-            f"Lens resolves up to {MAX_SELECTIONS} selections at once.",
-        )
-    if len(ids) != len(set(ids)):
-        raise Rejection(
-            "invalid_selection",
-            "Selection IDs in one resolution must be unique.",
-        )
+    Callers pass unique IDs of open selections, already checked against the
+    revision.
+    """
+
     records_by_id = {record.id: record for record in state.records}
-    if any(selection_id not in records_by_id for selection_id in ids):
-        raise Rejection(
-            "selection_not_found",
-            "Cannot resolve an unknown Lens selection.",
-        )
-    removed = tuple(records_by_id[selection_id] for selection_id in ids)
-    removed_ids = set(ids)
+    removed = tuple(records_by_id[selection_id] for selection_id in selection_ids)
+    removed_ids = set(selection_ids)
     activation_order = tuple(
         selection_id
         for selection_id in state.activation_order
         if selection_id not in removed_ids
     )
-    resolution_revision = state.revision + 1
-    receipts = tuple(
-        AddressedSelection(
-            selection_id=record.selection.id,
-            label=record.selection.label,
-            note=record.selection.note,
-            target=record.selection.target,
-            created_at=record.selection.created_at,
-            addressed_at=resolved_at,
-            anchor=record.selection.anchor,
-            dom_hint=record.selection.dom_hint,
-            description=record.selection.description,
-            summary=summary,
-            resolution_revision=resolution_revision,
-        )
-        for record in removed
-    )
     return (
-        _admit_state(
-            SelectionState(
-                revision=resolution_revision,
-                next_label=state.next_label,
-                current_selection_id=activation_order[-1] if activation_order else None,
-                activation_order=activation_order,
-                records=tuple(
-                    record for record in state.records if record.id not in removed_ids
-                ),
-                history=_trim_history(
-                    (*state.history, *receipts), required_tail=len(receipts)
-                ),
-            )
+        SelectionState(
+            revision=state.revision + 1,
+            next_label=state.next_label,
+            current_selection_id=activation_order[-1] if activation_order else None,
+            activation_order=activation_order,
+            records=tuple(
+                record for record in state.records if record.id not in removed_ids
+            ),
         ),
         removed,
     )
@@ -374,15 +318,18 @@ def resolve_selections(
 
 def reopen_selection(
     state: SelectionState,
-    selection_id: str,
-    resolution_revision: int,
+    selection: Selection,
     *,
     expected_revision: int,
 ) -> SelectionState:
-    """Open a resolved selection again, with a fresh snapshot lifecycle."""
+    """Open a resolved selection again, with a fresh snapshot lifecycle.
+
+    ``selection`` comes from the notebook's record. It keeps its ID and label,
+    so a label that an open selection already uses cannot reopen.
+    """
 
     _require_revision(state, expected_revision)
-    if state.record(selection_id) is not None:
+    if state.record(selection.id) is not None:
         raise Rejection(
             "selection_already_open",
             "This Lens selection is already open.",
@@ -392,34 +339,17 @@ def reopen_selection(
             "selection_limit_reached",
             f"Lens supports up to {MAX_SELECTIONS} selections.",
         )
-    receipt = next(
-        (
-            receipt
-            for receipt in state.history
-            if receipt.selection_id == selection_id
-            and receipt.resolution_revision == resolution_revision
-        ),
-        None,
-    )
-    if receipt is None:
+    if any(record.selection.label == selection.label for record in state.records):
+        raise Rejection(
+            "selection_label_conflict",
+            f"An open selection already uses the label {selection.label}.",
+        )
+    label_number = _selection_label_number(selection.label)
+    if label_number > MAX_SELECTION_LABEL:
         raise Rejection(
             "history_not_found",
-            "This addressed Lens selection is no longer in history.",
+            "This recorded selection can no longer be reopened.",
         )
-    selection = Selection(
-        id=receipt.selection_id,
-        label=receipt.label,
-        note=receipt.note,
-        target=receipt.target,
-        created_at=receipt.created_at,
-        anchor=receipt.anchor,
-        dom_hint=receipt.dom_hint,
-        description=receipt.description,
-        snapshot=PendingSnapshot(status="pending"),
-        previous_resolution=PreviousResolution(
-            addressed_at=receipt.addressed_at, summary=receipt.summary
-        ),
-    )
     current_selection_id, activation_order = _activated_state(
         selection.id,
         state.activation_order,
@@ -427,38 +357,10 @@ def reopen_selection(
     return _admit_state(
         SelectionState(
             revision=state.revision + 1,
-            next_label=state.next_label,
+            next_label=max(state.next_label, label_number + 1),
             current_selection_id=current_selection_id,
             activation_order=activation_order,
             records=(*state.records, SelectionRecord(selection=selection, image=None)),
-            history=state.history,
-        )
-    )
-
-
-def clear_history(
-    state: SelectionState,
-    *,
-    expected_revision: int,
-) -> SelectionState:
-    """Clear History receipts while keeping open selections."""
-
-    _require_revision(state, expected_revision)
-    return _admit_state(
-        SelectionState(
-            revision=state.revision + 1,
-            next_label=state.next_label,
-            current_selection_id=state.current_selection_id,
-            activation_order=state.activation_order,
-            records=tuple(
-                SelectionRecord(
-                    selection=record.selection.model_copy(
-                        update={"previous_resolution": None}
-                    ),
-                    image=record.image,
-                )
-                for record in state.records
-            ),
         )
     )
 
@@ -467,7 +369,6 @@ def validate_state_admission(state: SelectionState) -> None:
     """Validate the complete synchronized state and compact-reference capacity."""
 
     active_payload = state.payload()
-    active_payload["history"] = []
     size = len(
         json.dumps(
             active_payload,
@@ -482,11 +383,6 @@ def validate_state_admission(state: SelectionState) -> None:
             f"{MAX_SELECTION_STATE_BYTES:,}-byte limit."
         )
     validate_reference_capacity(state.selections())
-    if _history_size(state.history) > MAX_HISTORY_STATE_BYTES:
-        raise ValueError(
-            "Lens addressed history exceeds the shared "
-            f"{MAX_HISTORY_STATE_BYTES:,}-byte limit."
-        )
 
 
 def _admit_state(state: SelectionState) -> SelectionState:
@@ -503,6 +399,10 @@ def _require_revision(state: SelectionState, expected_revision: object) -> None:
             "revision_conflict",
             "Lens selections changed before this command was applied.",
         )
+
+
+def _selection_label_number(label: str) -> int:
+    return int(label[1:])
 
 
 def _validate_preserved_snapshot(
@@ -538,41 +438,6 @@ def _selection_edit_activates(existing: Selection, selection: Selection) -> bool
         existing.note != selection.note
         or existing.anchor != selection.anchor
         or existing.dom_hint != selection.dom_hint
-    )
-
-
-def _trim_history(
-    receipts: Sequence[AddressedSelection],
-    *,
-    required_tail: int,
-) -> tuple[AddressedSelection, ...]:
-    if required_tail > MAX_HISTORY:
-        raise Rejection(
-            "selection_context_limit",
-            "This Lens completion exceeds the addressed history limit.",
-        )
-    history = tuple(receipts[-MAX_HISTORY:])
-    while (
-        len(history) > required_tail
-        and _history_size(history) > MAX_HISTORY_STATE_BYTES
-    ):
-        history = history[1:]
-    if _history_size(history) > MAX_HISTORY_STATE_BYTES:
-        raise Rejection(
-            "selection_context_limit",
-            "This Lens completion receipt exceeds the addressed history limit.",
-        )
-    return history
-
-
-def _history_size(receipts: Sequence[AddressedSelection]) -> int:
-    return len(
-        json.dumps(
-            [dump_model(receipt) for receipt in receipts],
-            ensure_ascii=False,
-            allow_nan=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
     )
 
 

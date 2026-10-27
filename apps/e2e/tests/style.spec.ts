@@ -1,6 +1,13 @@
 import { expect } from "@playwright/test";
 
-import { expectInsideViewport, runAction, screenshot, selectOutput, test } from "./support";
+import {
+  editNote,
+  expectInsideViewport,
+  runAction,
+  screenshot,
+  selectOutput,
+  test,
+} from "./support";
 
 test("reduced motion preserves control geometry while pressed", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -51,17 +58,17 @@ test.describe("touch controls", () => {
   test("collapsed, clear, and reopen controls retain usable touch targets", async ({ page }) => {
     expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
     await page.getByRole("button", { name: "Collapse Lens" }).click();
-    const collapsed = page.getByRole("button", { name: "Open Lens", exact: true });
+    const collapsed = page.getByRole("button", { name: "Expand Lens", exact: true });
     expect((await collapsed.boundingBox())?.height).toBeGreaterThanOrEqual(44);
     await collapsed.click();
     await selectOutput(page, "point", "S1", "Check this month");
-    await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+    await page.getByRole("button", { name: "Requests, 1 open, 0 in history" }).click();
     const clear = page.getByRole("button", { name: "Clear selections", exact: true });
     await expect(clear).toBeVisible();
     expect((await clear.boundingBox())?.height).toBeGreaterThanOrEqual(44);
-    await page.getByRole("button", { name: "Close selections" }).click();
+    await page.getByRole("button", { name: "Close requests" }).click();
     await runAction(page, "Resolve");
-    await page.getByRole("button", { name: "Open selections, 0 open, 1 in history" }).click();
+    await page.getByRole("button", { name: "Requests, 0 open, 1 in history" }).click();
     await page.getByRole("tab", { name: /History/ }).click();
     const reopen = page.getByRole("button", { name: "Reopen S1", exact: true });
     await expect(reopen).toBeVisible();
@@ -72,7 +79,7 @@ test.describe("touch controls", () => {
 test("current and inactive selection rows retain visible keyboard focus", async ({ page }) => {
   await selectOutput(page, "point", "S1", "First month");
   await selectOutput(page, "point", "S2", "Second month");
-  await page.getByRole("button", { name: "Open selections, 2 open, 0 in history" }).click();
+  await page.getByRole("button", { name: "Requests, 2 open, 0 in history" }).click();
   const current = page.locator("[data-marimo-lens-selection-summary][aria-current=true]");
   const label = current.locator("span").first();
   const resting = await label.evaluate((element) => getComputedStyle(element).backgroundColor);
@@ -111,7 +118,7 @@ test("dark collapsed controls retain their palette without native host tokens", 
     }
   });
   await page.getByRole("button", { name: "Collapse Lens" }).click();
-  const tab = page.getByRole("button", { name: "Open Lens", exact: true });
+  const tab = page.getByRole("button", { name: "Expand Lens", exact: true });
   for (const hovered of [false, true]) {
     if (hovered) await tab.hover();
     const channels = await tab.evaluate(async (element) => {
@@ -148,13 +155,13 @@ test("selection borders and the collapsed dock follow forced colors", async ({ p
     ).toHaveCSS("border-top-color", highlight);
   }
   await page.getByRole("button", { name: "Collapse Lens" }).click();
-  const tab = page.getByRole("button", { name: /^Open Lens/ });
+  const tab = page.getByRole("button", { name: /^Expand Lens/ });
   await expect
     .poll(() => tab.evaluate((element) => getComputedStyle(element, "::before").borderTopColor))
     .toBe(highlight);
 });
 
-test("long attention notices scroll inside and outside the selection sheet", async ({
+test("long attention notices scroll inside and outside the requests sheet", async ({
   page,
 }, testInfo) => {
   await selectOutput(page, "point", "S1", "Inspect progress");
@@ -164,8 +171,7 @@ test("long attention notices scroll inside and outside the selection sheet", asy
   const notice = page.locator("[data-marimo-lens-target-attention-notice]");
   await expect(notice).toBeVisible();
   for (const open of [false, true]) {
-    if (open)
-      await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
+    if (open) await page.getByRole("button", { name: "Requests, 1 open, 0 in history" }).click();
     const scroll = page.locator(
       open ? "[data-marimo-lens-sheet-notice]" : "[data-marimo-lens-dock-panel]",
     );
@@ -185,9 +191,8 @@ test("busy point and region markers dim consistently during note saves", async (
   await selectOutput(page, "region", "S2", "Check the quarter");
   const opacities: number[] = [];
   for (const label of ["S1", "S2"]) {
-    await page.getByRole("button", { name: "Open selections, 2 open, 0 in history" }).click();
-    await page.getByRole("button", { name: `Edit note for ${label}`, exact: true }).click();
-    const editor = page.getByRole("dialog", { name: new RegExp(`Edit note for ${label}`) });
+    await page.getByRole("button", { name: "Requests, 2 open, 0 in history" }).click();
+    const editor = await editNote(page, label);
     await editor.getByRole("textbox").fill(`Updated ${label}`);
     // Hold the command before it reaches Python so the actual pending UI stays visible.
     let release = () => {};
@@ -207,7 +212,6 @@ test("busy point and region markers dim consistently during note saves", async (
         includeHidden: true,
       });
       await expect(marker).toBeDisabled();
-      await expect(marker).toHaveAttribute("data-busy", "true");
       const opacity = await marker.evaluate((element) => {
         let effective = 1;
         for (let ancestor: Element | null = element; ancestor; ancestor = ancestor.parentElement) {

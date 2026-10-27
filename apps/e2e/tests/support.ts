@@ -1,5 +1,5 @@
 import { expect, test as base, type Locator, type Page, type TestInfo } from "@playwright/test";
-import { copyFile, mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,24 +19,30 @@ type Report = {
   mounted_identity: string | null;
   error: { code: string; revision: number | null } | null;
   context_ms: number;
-  references: { revision: number; selections: Selection[] };
+  references: { revision: number; selections: Selection[]; notebook: { record: unknown } };
   images: Record<string, { bytes: number; signature: string }>;
   text: string;
 };
 
-export const test = base.extend<{ browserErrors: string[]; notebook: void }>({
+export const test = base.extend<{ record: boolean; browserErrors: string[]; notebook: string }>({
+  // The fixture's Lenses keep a record. Editor tests can turn it off to cover `Lens()`.
+  record: [true, { option: true }],
   notebook: [
-    async ({ page, colorScheme, browserErrors }, use, testInfo) => {
+    async ({ page, colorScheme, browserErrors, record }, use, testInfo) => {
       let url = "/?theme=system";
+      let notebook = fileURLToPath(new URL("../fixtures/notebook.py", import.meta.url));
       if (testInfo.project.name === "editor") {
         // Edit mode shares a kernel per file. Each test gets its own notebook.
-        const notebook = testInfo.outputPath("notebook.py");
+        const source = await readFile(notebook, "utf8");
+        notebook = testInfo.outputPath("notebook.py");
         await mkdir(dirname(notebook), { recursive: true });
-        await copyFile(
-          fileURLToPath(new URL("../fixtures/notebook.py", import.meta.url)),
+        await writeFile(
           notebook,
+          record ? source : source.replaceAll("Lens(record=True, ", "Lens("),
         );
         url += `&file=${encodeURIComponent(notebook)}`;
+      } else if (!record) {
+        throw new Error("A Lens without a record runs in the editor project");
       }
       await page.goto(url);
       await expect(page.locator("body")).toHaveAttribute("data-theme", colorScheme ?? "light");
@@ -48,7 +54,7 @@ export const test = base.extend<{ browserErrors: string[]; notebook: void }>({
         page.getByRole("button", { name: "Select a target", exact: true }),
       ).toBeVisible();
       expect(browserErrors).toEqual([]);
-      await use();
+      await use(notebook);
     },
     { auto: true },
   ],
@@ -165,6 +171,22 @@ export async function selectOutput(
   await editor.getByRole("button", { name: "Done", exact: true }).click({ noWaitAfter: true });
   await expect(editor).toBeHidden();
   await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeEnabled();
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+
+/** Press the middle of `from`, move to `to` in `steps` mouse events, and release. */
+export async function drag(page: Page, from: Box, to: { x: number; y: number }, steps?: number) {
+  await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps });
+  await page.mouse.up();
+}
+
+/** Open the note editor of an open selection from its row in the requests sheet. */
+export async function editNote(page: Page, label: string): Promise<Locator> {
+  await page.getByRole("button", { name: `Edit note for ${label}`, exact: true }).click();
+  return page.getByRole("dialog", { name: new RegExp(`Edit note for ${label}`) });
 }
 
 export async function expectInsideViewport(page: Page, surface: Locator) {

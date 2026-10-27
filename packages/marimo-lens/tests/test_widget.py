@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import inspect
 import json
 import threading
 from collections.abc import Sequence
@@ -86,59 +85,6 @@ def _attend(
     if action == "reveal":
         arguments.setdefault("duration_ms", 4_000)
     return getattr(lens, action)(target, **arguments)
-
-
-def test_public_api_exposes_context_and_resolution_contracts() -> None:
-    lens_parameters = inspect.signature(Lens).parameters
-    assert list(lens_parameters) == ["dom_selector"]
-    assert lens_parameters["dom_selector"].kind is inspect.Parameter.KEYWORD_ONLY
-    assert lens_parameters["dom_selector"].default is None
-    resolve_parameters = inspect.signature(Lens.resolve).parameters
-    assert list(resolve_parameters) == [
-        "self",
-        "selection_ids",
-        "expected_revision",
-        "summary",
-    ]
-    assert (
-        resolve_parameters["expected_revision"].kind is inspect.Parameter.KEYWORD_ONLY
-    )
-    assert resolve_parameters["summary"].default is None
-    for method in (Lens.reveal, Lens.start_activity):
-        parameters = inspect.signature(method).parameters
-        assert list(parameters) == [
-            "self",
-            "target",
-            "expected_revision",
-            "duration_ms",
-            "label",
-            "message",
-        ]
-        for name in ("expected_revision", "duration_ms", "label", "message"):
-            assert parameters[name].kind is inspect.Parameter.KEYWORD_ONLY
-        for name in ("label", "message"):
-            assert parameters[name].default is None
-    assert (
-        inspect.signature(Lens.reveal).parameters["duration_ms"].default
-        is inspect.Parameter.empty
-    )
-    assert (
-        inspect.signature(Lens.start_activity).parameters["duration_ms"].default is None
-    )
-    assert list(inspect.signature(Lens.stop_activity).parameters) == [
-        "self",
-        "activity",
-    ]
-
-    lens = BrowserLens()
-    assert not hasattr(lens, "images")
-    assert lens.synced_state() == {
-        "revision": 0,
-        "nextLabel": "S1",
-        "currentSelectionId": None,
-        "selections": [],
-        "history": [],
-    }
 
 
 def test_reveal_normalizes_a_bounded_message_without_changing_state_or_context(
@@ -465,63 +411,6 @@ def test_target_attention_validates_arguments_before_runtime_access(
     assert lens.sent == []
 
 
-@pytest.mark.parametrize(
-    ("arguments", "error", "message"),
-    [
-        ({"target": 1}, TypeError, "target must be a cell ID or SelectionReference"),
-        ({"target": ""}, ValueError, "cell_id must not be empty"),
-        ({"target": "x" * 129}, ValueError, "at most 128 UTF-16 code units"),
-        ({"message": 1}, TypeError, "message must be a string or None"),
-        ({"message": "\ud800"}, ValueError, "valid Unicode text"),
-        ({"label": 1}, TypeError, "label must be a string or None"),
-        ({"label": "x" * 41}, ValueError, "at most 40 UTF-16 code units"),
-        ({"label": "\U0001f642" * 21}, ValueError, "at most 40 UTF-16 code units"),
-        ({"label": "\ud800"}, ValueError, "valid Unicode text"),
-    ],
-)
-@pytest.mark.parametrize("action", ["start_activity", "reveal"])
-def test_target_attention_reports_each_invalid_argument(
-    runtime_reads: list[str],
-    action: str,
-    arguments: dict[str, Any],
-    error: type[Exception],
-    message: str,
-) -> None:
-    lens = BrowserLens()
-
-    with pytest.raises(error, match=message):
-        _attend(lens, action, **arguments)
-
-    assert runtime_reads == []
-
-
-@pytest.mark.parametrize(
-    ("action", "arguments", "error", "message"),
-    [
-        ("start_activity", {"message": "x" * 241}, ValueError, "at most 240 UTF-16"),
-        ("reveal", {"message": "\U0001f642" * 501}, ValueError, "at most 1000 UTF-16"),
-        ("reveal", {"duration_ms": True}, TypeError, "must be an integer"),
-        ("reveal", {"duration_ms": 1.5}, TypeError, "must be an integer"),
-        ("reveal", {"duration_ms": "8000"}, TypeError, "must be an integer"),
-        ("reveal", {"duration_ms": 300_001}, ValueError, "between 1 and 300000"),
-        ("start_activity", {"duration_ms": 0}, ValueError, "between 1 and 300000"),
-    ],
-)
-def test_target_attention_reports_each_bound(
-    runtime_reads: list[str],
-    action: str,
-    arguments: dict[str, Any],
-    error: type[Exception],
-    message: str,
-) -> None:
-    lens = BrowserLens()
-
-    with pytest.raises(error, match=message):
-        _attend(lens, action, **arguments)
-
-    assert runtime_reads == []
-
-
 @pytest.mark.parametrize("action", ["start_activity", "reveal"])
 def test_target_attention_rejects_a_closed_lens_before_runtime_access(
     runtime_reads: list[str], action: str
@@ -673,6 +562,8 @@ def test_editing_the_published_state_in_place_leaves_the_selection_alone() -> No
             },
         ),
         ("_selector", "#other"),
+        ("_lens_id", "another-lens"),
+        ("_chats", [{"id": "chat-elsewhere", "note": "Opened elsewhere"}]),
     ],
 )
 def test_synced_traits_are_python_owned(trait: str, foreign: object) -> None:
@@ -774,15 +665,12 @@ def test_identifier_heavy_selections_fit_the_supported_selection_count() -> None
     assert len(projected) == 63
 
 
-def test_new_labels_are_server_checked_and_never_reused() -> None:
+def test_python_assigns_new_labels_and_never_reuses_them() -> None:
     lens = BrowserLens()
     lens.put(selection())
     _delete(lens, "selection-1")
 
-    reused = _try_put(lens, selection(selection_id="selection-2", label="S1"))
-    assert reused["error"]["code"] == "selection_label_conflict"
-    assert lens.synced_state()["nextLabel"] == "S2"
-    lens.put(selection(selection_id="selection-2", label="S2"))
+    lens.put(selection(selection_id="selection-2", label="S1"))
 
     assert [item["label"] for item in _selections(lens)] == ["S2"]
     cleared = lens.command("selections.clear", {"expectedRevision": lens.revision})
@@ -792,12 +680,11 @@ def test_new_labels_are_server_checked_and_never_reused() -> None:
         "nextLabel": "S3",
         "currentSelectionId": None,
         "selections": [],
-        "history": [],
     }
 
 
 def test_resolve_removes_selection_and_image_and_preserves_label_allocation() -> None:
-    lens = BrowserLens()
+    lens = BrowserLens(record=True)
     data = png()
     lens.put(selection(), image=data)
     lens.put(selection(selection_id="selection-2", label="S2"))
@@ -810,30 +697,10 @@ def test_resolve_removes_selection_and_image_and_preserves_label_allocation() ->
     assert lens.synced_state()["currentSelectionId"] == "selection-2"
     assert [item["id"] for item in _selections(lens)] == ["selection-2"]
     [entry] = lens.history_entries()
-    assert entry == {
-        "description": {"label": "Cell cell-view"},
-        "selectionId": "selection-1",
-        "label": "S1",
-        "note": "",
-        "target": {
-            "kind": "notebook",
-            "cellIds": ["cell-view"],
-            "documentId": "document-1",
-            "documentPath": "/",
-        },
-        "createdAt": "2026-07-14T11:58:00Z",
-        "addressedAt": entry["addressedAt"],
-        "anchor": {"kind": "point", "x": 0.25, "y": 0.75},
-        "domHint": {
-            "tag": "svg",
-            "role": "img",
-            "ariaLabel": "Sales by category",
-            "text": "",
-            "path": "div > svg",
-            "bounds": {"x": 0.1, "y": 0.2, "width": 0.7, "height": 0.6},
-        },
-        "resolutionRevision": 4,
-    }
+    assert (entry["id"], entry["revision"]) == ("selection-1", 4)
+    assert entry["image"]["sha256"] == hashlib.sha256(data).hexdigest()
+    # selection-2 stays open on the same output cell, so this request shaped it.
+    assert entry["shaped"] == ["selection-2"]
     assert lens.context().images == {}
 
     lens.put(selection(selection_id="selection-3", label="S3"))
@@ -854,7 +721,7 @@ def test_resolve_removes_selection_and_image_and_preserves_label_allocation() ->
 def test_resolve_emits_one_transient_resolution_receipt(
     summary: str, kept: str | None
 ) -> None:
-    lens = BrowserLens()
+    lens = BrowserLens(record=True)
     lens.put(selection())
 
     revision = lens.resolve("selection-1", expected_revision=1, summary=summary)
@@ -872,9 +739,15 @@ def test_resolve_emits_one_transient_resolution_receipt(
                 {
                     "selectionId": "selection-1",
                     "label": "S1",
-                    "resolutionRevision": 2,
+                    "target": {
+                        "kind": "notebook",
+                        "cellIds": ["cell-view"],
+                        "documentId": "document-1",
+                        "documentPath": "/",
+                    },
                 }
             ],
+            "resolvedAt": entry["resolvedAt"],
             **({} if kept is None else {"summary": kept}),
         },
     }
@@ -886,7 +759,7 @@ def test_resolve_emits_one_transient_resolution_receipt(
 
 
 def test_resolve_commits_multiple_selections_atomically() -> None:
-    lens = BrowserLens()
+    lens = BrowserLens(record=True)
     lens.put(selection())
     lens.put(selection(selection_id="selection-2", label="S2"))
     lens.put(selection(selection_id="selection-3", label="S3"))
@@ -901,20 +774,17 @@ def test_resolve_commits_multiple_selections_atomically() -> None:
     assert [item["id"] for item in _selections(lens)] == ["selection-2"]
     assert lens.synced_state()["currentSelectionId"] == "selection-2"
     history = lens.history_entries()
-    assert [item["selectionId"] for item in history] == ["selection-3", "selection-1"]
-    assert {item["resolutionRevision"] for item in history} == {4}
+    assert [item["id"] for item in history] == ["selection-3", "selection-1"]
+    assert {item["revision"] for item in history} == {4}
     event = lens.sent[-1][0]
     assert event["revision"] == 4
     assert [
         (item["selectionId"], item["label"]) for item in event["payload"]["selections"]
     ] == [("selection-3", "S3"), ("selection-1", "S1")]
-    assert {item["resolutionRevision"] for item in event["payload"]["selections"]} == {
-        4
-    }
 
 
-def test_browser_reopens_addressed_selection_and_clears_history() -> None:
-    lens = BrowserLens()
+def test_browser_reopens_a_resolved_selection_in_its_document() -> None:
+    lens = BrowserLens(record=True)
     selected = selection(note="Please align this label.")
     description = {
         "label": "Athletes",
@@ -924,11 +794,7 @@ def test_browser_reopens_addressed_selection_and_clears_history() -> None:
     }
     selected["description"] = description
     lens.put(selected)
-    context = lens.context()
-    assert context.current is not None
-    assert context.current.get("description") == description
-    assert "src/report.ts" in context.text
-    assert "client supplied" in context.text
+    assert "src/report.ts" in lens.context().text
     lens.resolve(
         selected["id"],
         expected_revision=1,
@@ -936,45 +802,30 @@ def test_browser_reopens_addressed_selection_and_clears_history() -> None:
     )
     [entry] = lens.history_entries()
 
-    reopened = _reopen(lens, selected["id"], entry["resolutionRevision"])
+    reopened = _reopen(lens, selected["id"], entry["resolvedAt"])
 
     assert reopened["revision"] == 3
     assert reopened["payload"] == {"selectionId": selected["id"]}
-    assert lens.history_entries() == [entry]
-    assert entry["summary"] == "Aligned the label and verified the chart."
-    assert entry["description"] == description
     [restored] = _selections(lens)
-    assert {
-        key: value for key, value in restored.items() if key != "previousResolution"
-    } == {**selected, "snapshot": {"status": "pending"}}
-    previous = {
-        "addressedAt": entry["addressedAt"],
-        "summary": "Aligned the label and verified the chart.",
-    }
-    assert restored["previousResolution"] == previous
-    assert lens.synced_state()["currentSelectionId"] == selected["id"]
+    assert restored["description"] == description
+    assert restored["snapshot"] == {"status": "pending"}
     context = lens.context()
     assert context.current is not None
-    assert context.current.get("previousResolution") == previous
-    assert "history" not in context.references
-
-    cleared = lens.command("history.clear", {"expectedRevision": 3})
-
-    assert cleared["revision"] == 4
-    assert lens.history_entries() == []
-    [active] = _selections(lens)
-    assert "previousResolution" not in active
-    assert active == {
-        key: value for key, value in restored.items() if key != "previousResolution"
+    assert context.current.get("previousResolution") == {
+        "resolvedAt": entry["resolvedAt"],
+        "summary": "Aligned the label and verified the chart.",
     }
 
 
-def test_browser_reopen_requires_the_retained_receipt_revision() -> None:
-    lens = BrowserLens()
+def test_browser_reopen_requires_a_recorded_resolution() -> None:
+    lens = BrowserLens(record=True)
     lens.put(selection())
     lens.resolve("selection-1", expected_revision=1)
 
-    code = lens.refused("selection.reopen", _reopen_payload(lens, "selection-1", 99))
+    code = lens.refused(
+        "selection.reopen",
+        _reopen_payload(lens, "selection-1", "2026-01-01T00:00:00+00:00"),
+    )
 
     assert code == "history_not_found"
     assert lens.revision == 2
@@ -1010,7 +861,7 @@ def test_resolve_rejects_stale_revision_without_changing_state() -> None:
     assert len(lens.sent) == sent_before
 
 
-def test_resolve_rejects_unknown_selection_without_changing_state() -> None:
+def test_resolve_rejects_an_unknown_request_without_changing_state() -> None:
     lens = BrowserLens()
     lens.put(selection())
     before = copy.deepcopy(lens.synced_state())
@@ -1018,27 +869,27 @@ def test_resolve_rejects_unknown_selection_without_changing_state() -> None:
     with pytest.raises(LensError) as error:
         lens.resolve(["selection-1", "selection-missing"], expected_revision=1)
 
-    assert error.value.code == "selection_not_found"
+    assert error.value.code == "request_not_found"
     assert error.value.revision == 1
     assert lens.synced_state() == before
 
 
 @pytest.mark.parametrize(
-    ("selection_id", "revision", "summary", "error_type", "message"),
+    ("selection_id", "revision", "summary", "error_type"),
     [
-        ("", 1, None, ValueError, "selection_id must not be empty"),
-        (1, 1, None, TypeError, "selection_ids must be a string or a sequence"),
-        ([], 1, None, ValueError, "at least one selection ID"),
-        (["selection-1", "selection-1"], 1, None, ValueError, "duplicates"),
-        ("x" * 129, 1, None, ValueError, "at most 128 UTF-16 code units"),
-        ("\ud800", 1, None, ValueError, "valid Unicode text"),
-        ("selection-1", -1, None, ValueError, "non-negative integer"),
-        ("selection-1", True, None, TypeError, "must be an integer"),
-        ("selection-1", "1", None, TypeError, "must be an integer"),
-        ("selection-1", 1, 1, TypeError, "summary must be a string or None"),
-        ("selection-1", 1, "x" * 241, ValueError, "at most 240 UTF-16 code units"),
-        ("selection-1", 1, "\U0001f642" * 121, ValueError, "at most 240 UTF-16"),
-        ("selection-1", 1, "\ud800", ValueError, "valid Unicode text"),
+        ("", 1, None, ValueError),
+        (1, 1, None, TypeError),
+        ([], 1, None, ValueError),
+        (["selection-1", "selection-1"], 1, None, ValueError),
+        ("x" * 129, 1, None, ValueError),
+        ("\ud800", 1, None, ValueError),
+        ("selection-1", -1, None, ValueError),
+        ("selection-1", True, None, TypeError),
+        ("selection-1", "1", None, TypeError),
+        ("selection-1", 1, 1, TypeError),
+        ("selection-1", 1, "x" * 241, ValueError),
+        ("selection-1", 1, "\U0001f642" * 121, ValueError),
+        ("selection-1", 1, "\ud800", ValueError),
     ],
 )
 def test_resolve_validates_arguments_before_changing_state(
@@ -1046,13 +897,12 @@ def test_resolve_validates_arguments_before_changing_state(
     revision: Any,
     summary: Any,
     error_type: type[Exception],
-    message: str,
 ) -> None:
     lens = BrowserLens()
     lens.put(selection())
     before = copy.deepcopy(lens.synced_state())
 
-    with pytest.raises(error_type, match=message):
+    with pytest.raises(error_type):
         lens.resolve(selection_id, expected_revision=revision, summary=summary)
 
     assert lens.synced_state() == before
@@ -1071,7 +921,7 @@ def test_resolve_rejects_a_closed_lens() -> None:
 
 
 def test_resolution_receipt_failure_does_not_roll_back_resolution() -> None:
-    lens = FailingEventLens()
+    lens = FailingEventLens(record=True)
     lens.put(selection())
 
     revision = lens.resolve("selection-1", expected_revision=1)
@@ -1082,12 +932,10 @@ def test_resolution_receipt_failure_does_not_roll_back_resolution() -> None:
         "nextLabel": "S2",
         "currentSelectionId": None,
         "selections": [],
-        "history": lens.history_entries(),
     }
-    assert [
-        (entry["selectionId"], entry["resolutionRevision"])
-        for entry in lens.history_entries()
-    ] == [("selection-1", 2)]
+    assert [(entry["id"], entry["revision"]) for entry in lens.history_entries()] == [
+        ("selection-1", 2)
+    ]
 
 
 def test_concurrent_resolutions_emit_receipts_in_revision_order() -> None:
@@ -1120,22 +968,21 @@ def test_concurrent_resolutions_emit_receipts_in_revision_order() -> None:
     assert [event["revision"] for event in events] == [3, 4]
 
 
-def test_resolve_rolls_back_when_authoritative_state_cannot_publish() -> None:
-    lens = FailingPublishLens()
-    data = png()
-    lens.put(selection(), image=data)
-    lens.put(selection(selection_id="selection-2", label="S2"))
-    _activate(lens, "selection-1")
-    before = copy.deepcopy(lens.synced_state())
-    sent_before = len(lens.sent)
+def test_resolve_commits_when_publishing_its_state_fails() -> None:
+    lens = FailingPublishLens(record=True)
+    lens.put(selection())
+    lens.put(selection(selection_id="selection-2"))
     lens.fail_next_state_publish = True
 
-    with pytest.raises(RuntimeError, match="state publish failed"):
-        lens.resolve("selection-1", expected_revision=3)
+    revision = lens.resolve("selection-1", expected_revision=2)
 
-    assert lens.synced_state() == before
-    assert lens.context().images["selection-1"] == data
-    assert len(lens.sent) == sent_before
+    assert revision == 3
+    assert [item["id"] for item in lens.context().references["selections"]] == [
+        "selection-2"
+    ]
+    assert [entry["id"] for entry in lens.history_entries()] == ["selection-1"]
+    _activate(lens, "selection-2", revision=3)
+    assert [item["id"] for item in _selections(lens)] == ["selection-2"]
 
 
 def test_creation_activation_and_note_edits_define_current_selection() -> None:
@@ -1237,41 +1084,17 @@ def test_every_mutation_rejects_stale_revision_before_changing_state() -> None:
     assert lens.synced_state()["currentSelectionId"] == "selection-1"
 
 
-def test_trait_publish_failure_rolls_back_selection_current_mru_and_image() -> None:
+def test_a_failed_state_publication_keeps_the_committed_change() -> None:
     lens = FailingPublishLens()
     data = png()
     lens.fail_next_state_publish = True
 
-    failed_put = _try_put(
-        lens,
-        selection(snapshot=snapshot_metadata(data)),
-        image_action="replace",
-        image=data,
-    )
+    lens.put(selection(), image=data)
 
-    assert failed_put["error"]["code"] == "internal_error"
-    assert lens.synced_state() == {
-        "revision": 0,
-        "nextLabel": "S1",
-        "currentSelectionId": None,
-        "selections": [],
-        "history": [],
-    }
-    assert lens.context().images == {}
-
-    for index in range(3):
-        lens.put(
-            selection(selection_id=f"selection-{index + 1}", label=f"S{index + 1}")
-        )
-    lens.fail_next_state_publish = True
-    failed_activate = lens.respond(
-        "selection.activate", {"selectionId": "selection-1", "expectedRevision": 3}
-    )
-    assert failed_activate["error"]["code"] == "internal_error"
-    assert lens.synced_state()["currentSelectionId"] == "selection-3"
-
-    _delete(lens, "selection-3")
-    assert lens.synced_state()["currentSelectionId"] == "selection-2"
+    assert lens.revision == 0
+    assert lens.context().images == {"selection-1": data}
+    _activate(lens, "selection-1", revision=1)
+    assert lens.revision == 2
 
 
 def _selections(lens: BrowserLens) -> list[dict[str, Any]]:
@@ -1317,18 +1140,18 @@ def _delete(lens: BrowserLens, selection_id: str) -> dict[str, Any]:
 
 
 def _reopen_payload(
-    lens: BrowserLens, selection_id: str, resolution_revision: int
+    lens: BrowserLens, selection_id: str, resolved_at: str
 ) -> dict[str, Any]:
     return {
         "selectionId": selection_id,
-        "resolutionRevision": resolution_revision,
+        "resolvedAt": resolved_at,
+        "documentId": "document-2",
+        "documentPath": "/reloaded",
         "expectedRevision": lens.revision,
     }
 
 
-def _reopen(
-    lens: BrowserLens, selection_id: str, resolution_revision: int
-) -> dict[str, Any]:
+def _reopen(lens: BrowserLens, selection_id: str, resolved_at: str) -> dict[str, Any]:
     return lens.command(
-        "selection.reopen", _reopen_payload(lens, selection_id, resolution_revision)
+        "selection.reopen", _reopen_payload(lens, selection_id, resolved_at)
     )

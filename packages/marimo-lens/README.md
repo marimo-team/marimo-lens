@@ -18,7 +18,8 @@ marimo-lens connects a point or region on a rendered
 [marimo](https://marimo.io/) notebook output to its producing cells, relevant
 notebook context, and an annotated image when capture succeeds. A live notebook
 agent can inspect the request, show its activity, and return results for review.
-Reopen an addressed selection from History to continue the analysis.
+A Lens that keeps a record lists resolved requests in History with whether their
+changes still hold. Reopen a selection from History to continue the analysis.
 
 ## Install and mount
 
@@ -30,9 +31,28 @@ uv run marimo edit notebook.py
 ```
 
 Requires Python 3.10–3.14 and marimo 0.25.2 or newer. marimo mounts Lens
-automatically once a cell that imports marimo runs.
+automatically once a cell that imports marimo runs. Mount it yourself to choose
+its options:
+
+```python
+from marimo_lens import Lens
+
+lens = Lens()
+lens
+```
 
 Press **Select**, click a point or drag a region, then add a note.
+
+`Lens()` keeps open selections, notes, and images in kernel memory. Keep a
+record of resolved requests, with History and the code each request changed:
+
+```python
+lens = Lens(record=True)
+```
+
+In the marimo editor the record is a file in the notebook's `__marimo__/lens/`
+folder. [`Record`](https://marimo-team.github.io/marimo-lens/api#record) lists
+the options.
 
 Custom pages can publish [Lens target metadata](https://marimo-team.github.io/marimo-lens/custom-targets)
 for notebook inputs, labels, rendering references, and image context. Lens
@@ -51,46 +71,11 @@ sidebar, select a result in Lens, and tell the agent:
 The [quickstart](https://marimo-team.github.io/marimo-lens/getting-started)
 covers the complete path from connection to a reviewed chart change.
 
-Read the packaged briefing from a terminal:
-
-```console
-uvx --with marimo-lens agent-plugins read marimo-lens
-```
-
-In an existing notebook kernel, run `import marimo_lens` followed by
-`help(marimo_lens.agent)`. The help includes the same core skill and references
-from that installation. marimo pair runs it in the notebook's kernel from a
-terminal:
-
-```console
-marimo pair execute --url <URL> --file <notebook.py> -c 'import marimo_lens; help(marimo_lens.agent)'
-```
-
-The `uvx` command uses an isolated tool environment and does not connect to the
-notebook.
-
-Use `marimo_lens.agent.skill()` to read individual skill resources and
-`marimo_lens.agent.plugin()` to inspect the installed plugin bundle.
-
-Agents call `marimo_lens.agent.connect()` to reuse an existing Lens, including
-automatically mounted instances. When one browser-ready Lens owns the dock,
-`connect()` selects it even if the code-mode context contains other Lens
-objects. `discover()` lists available handles when an agent needs to inspect
-availability or choose between instances.
-
-After verification, call `resolve(..., summary="...")` with what changed or
-what you found and checked. The summary appears beside the original request in
-History. A batch shares one summary; resolve separately when outcomes differ.
-
-Use `reveal(steps, duration_ms=None)` for a transient notebook walkthrough. A small stepper
-in the popover header lets users move at their own pace. Nothing is saved;
-referenced cell or upstream changes end the walkthrough.
-
-Lens works with agents that can execute Python in the live notebook kernel,
-including [marimo pair](https://marimo.io/pair). The package includes the matching
-agent instructions and registers its Lens capability with marimo. Follow
-[Connect an agent](https://marimo-team.github.io/marimo-lens/agents) for setup
-and the inspection, verification, and review workflow.
+In the notebook kernel, `import marimo_lens._capability` followed by
+`help(marimo_lens._capability)` prints the agent briefing installed with this
+package. [Connect an agent](https://marimo-team.github.io/marimo-lens/agents)
+covers the briefing, `marimo_lens.agent.connect()`, and the inspection,
+verification, and review workflow.
 
 ## Documentation
 

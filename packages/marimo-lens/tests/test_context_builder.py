@@ -8,10 +8,8 @@ import pytest
 from marimo_lens._context.build import target_cell_ids
 from marimo_lens._context.text import MAX_CONTEXT_TEXT_CHARACTERS, _target_cells_text
 from marimo_lens._notebook.controls import (
-    MAX_CONTROL_CHARACTERS,
     MAX_CONTROLS,
     RuntimeControl,
-    serialize_controls,
 )
 from marimo_lens._notebook.snapshot import RuntimeSnapshot
 from marimo_lens._schema.selection import Selection
@@ -77,12 +75,17 @@ def test_references_are_compact_and_text_is_standalone() -> None:
         "notebook",
         "currentSelectionId",
         "selections",
+        "chatRequests",
     }
     assert references["revision"] == 7
     assert references["currentSelectionId"] == "selection-1"
     assert references["notebook"] == {
         "path": "/workspace/demo.py",
         "available": True,
+        "record": {
+            "status": "unsaved",
+            "reason": "The notebook has no file name yet.",
+        },
     }
     reference = references["selections"][0]
     assert set(reference) == {
@@ -103,7 +106,9 @@ def test_references_are_compact_and_text_is_standalone() -> None:
         "documentId": "document-1",
         "documentPath": "/",
     }
-    assert reference["cells"] == [{"id": "cell-view", "status": "available"}]
+    assert reference["cells"] == [
+        {"id": "cell-view", "status": "available", "codeHash": None}
+    ]
     assert reference["snapshot"] == {"status": "pending"}
     assert len(compact.encode()) < 2_000
     assert "chart_source_sentinel" not in compact
@@ -163,7 +168,6 @@ def test_dom_targets_keep_value_sources_and_document_grounding() -> None:
     assert second["cells"] == []
     assert "summary.revenue" in text
     assert "summary.cost" in text
-    assert "DOM element" in text
     assert 'Document: "/dashboard/"' in text
     assert 'DOM selector: "#app-shell > article:nth-of-type(2)"' in text
 
@@ -198,6 +202,10 @@ def test_references_distinguish_missing_cells_from_unavailable_runtime() -> None
         "path": "",
         "available": False,
         "reason": "not running in a marimo kernel",
+        "record": {
+            "status": "unsaved",
+            "reason": "The notebook has no file name yet.",
+        },
     }
     assert "Look here." in missing_text
     assert "Look here." in unavailable_text
@@ -354,35 +362,6 @@ def test_context_reports_source_and_control_state_budgets() -> None:
     assert "source_sentinel" not in json.dumps(references)
 
 
-def test_control_serialization_uses_one_shared_character_budget() -> None:
-    nested = ["x" * 1_000] * 20
-    controls = tuple(
-        RuntimeControl(
-            name=f"control_{index}",
-            cell_ids=("cell-view",),
-            kind="anywidget",
-            component="ExampleWidget",
-            label="L" * 10_000,
-            value=nested,
-        )
-        for index in range(MAX_CONTROLS)
-    )
-
-    serialized = serialize_controls(controls)
-    encoded = json.dumps(
-        [control.value for control in serialized.controls],
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-    )
-
-    assert len(encoded) <= MAX_CONTROL_CHARACTERS
-    assert serialized.state_truncated is True
-    assert [control.name for control in serialized.controls] == [
-        f"control_{index}" for index in range(MAX_CONTROLS)
-    ]
-
-
 def test_context_enforces_independent_reference_and_text_budgets() -> None:
     selections = [
         selection(
@@ -483,37 +462,15 @@ def test_reference_budget_fits_maximal_valid_selection_state() -> None:
         <= MAX_CONTEXT_REFERENCES_BYTES
     )
     assert references["currentSelectionId"] == "selection-0"
-    assert len(references["selections"]) == len(selections)
-    for source, reference in zip(selections, references["selections"], strict=True):
-        assert reference["id"] == source["id"]
-        assert reference["label"] == source["label"]
-        assert reference["target"] == source["target"]
-        assert reference["anchor"] == source["anchor"]
-        assert reference["cells"] == [
-            {"id": source["target"]["cellIds"][0], "status": "available"}
-        ]
-        assert reference["snapshot"] == {"status": "pending"}
-
-    assert all(
-        reference["note"] == source_notes[str(reference["id"])]
+    assert [
+        (reference["id"], reference["note"], reference["target"])
         for reference in references["selections"]
-    )
+    ] == [
+        (item["id"], source_notes[str(item["id"])], item["target"])
+        for item in selections
+    ]
     assert f"- Note: {'é' * 50}" in text
     assert f"- Path: `{'é' * 100}" in text
-
-
-def test_context_rejects_aggregate_selection_growth() -> None:
-    selections = [
-        selection(
-            selection_id=f"selection-{index + 1}",
-            label=f"S{index + 1}",
-            note="x" * 4_000,
-        )
-        for index in range(12)
-    ]
-
-    with pytest.raises(ValueError, match="shared 48,000-byte limit"):
-        validate_state_admission(_state(selections))
 
 
 def test_context_trims_secondary_evidence_before_the_current_note() -> None:

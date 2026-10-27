@@ -5,7 +5,7 @@ build-backend = "agent_plugins.build.hatchling"
 [project]
 name = "marimo-lens"
 version = "0.2.4"
-description = "Ground your agent's work in the code and context behind the result you select in a marimo notebook"
+description = "Point at results in a marimo notebook, hand them to your agent with a note, and optionally keep a record of what each request changed"
 requires-python = ">=3.10,<3.15"
 readme = "README.md"
 license = "Apache-2.0"
@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.entry-points."marimo.agent.capability"]
-lens = "marimo_lens.agent"
+lens = "marimo_lens._capability"
 
 [project.urls]
 Documentation = "https://marimo-team.github.io/marimo-lens/"

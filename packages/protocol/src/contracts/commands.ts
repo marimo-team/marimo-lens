@@ -2,19 +2,17 @@ import * as v from "valibot";
 
 import type { TransportEnvelope, TransportValue } from "./transport";
 
-import {
-  AvailableSnapshotSchema,
-  OutdatedSnapshotSchema,
-  SelectionInputSchema,
-  SelectionSchema,
-} from "./selection";
+import { AvailableSnapshotSchema, OutdatedSnapshotSchema, SelectionInputSchema } from "./selection";
 import {
   BoundedIdentifierSchema,
+  DomSelectorSchema,
   NonEmptyStringSchema,
   OutputCaptureImageIdSchema,
   RequestIdSchema,
   RevisionSchema,
+  Sha256Schema,
   StoredImageEntries,
+  TimestampSchema,
   UnicodeStringSchema,
   WIDGET_TRANSPORT_VERSION,
   parseContract,
@@ -34,16 +32,6 @@ export const SnapshotResponsePayloadSchema = v.object({
   selectionId: BoundedIdentifierSchema,
   snapshot: StoredSnapshotSchema,
 });
-
-export const SelectionPutResponsePayloadSchema = v.object({
-  selection: SelectionSchema,
-});
-
-export const SelectionMutationResponsePayloadSchema = v.object({
-  selectionId: BoundedIdentifierSchema,
-});
-
-export const ClearSelectionsResponsePayloadSchema = v.object({});
 
 const CommandBaseSchema = {
   protocol: v.literal("marimo-lens.command"),
@@ -100,17 +88,17 @@ const ReopenSelectionCommandSchema = v.object({
   type: v.literal("selection.reopen"),
   payload: v.object({
     selectionId: BoundedIdentifierSchema,
-    resolutionRevision: RevisionSchema,
+    resolvedAt: TimestampSchema,
+    documentId: BoundedIdentifierSchema,
+    documentPath: DomSelectorSchema,
     expectedRevision: RevisionSchema,
   }),
 });
 
-const ClearHistoryCommandSchema = v.object({
+const RefreshHistoryCommandSchema = v.object({
   ...CommandBaseSchema,
-  type: v.literal("history.clear"),
-  payload: v.object({
-    expectedRevision: RevisionSchema,
-  }),
+  type: v.literal("history.refresh"),
+  payload: v.object({}),
 });
 
 export const GetSnapshotCommandSchema = v.object({
@@ -118,6 +106,14 @@ export const GetSnapshotCommandSchema = v.object({
   type: v.literal("snapshot.get"),
   payload: v.object({
     selectionId: BoundedIdentifierSchema,
+  }),
+});
+
+const GetHistoryImageCommandSchema = v.object({
+  ...CommandBaseSchema,
+  type: v.literal("history.image"),
+  payload: v.object({
+    sha256: Sha256Schema,
   }),
 });
 
@@ -135,8 +131,9 @@ export const ClientCommandSchema = v.variant("type", [
   DeleteSelectionCommandSchema,
   ClearSelectionsCommandSchema,
   ReopenSelectionCommandSchema,
-  ClearHistoryCommandSchema,
+  RefreshHistoryCommandSchema,
   GetSnapshotCommandSchema,
+  GetHistoryImageCommandSchema,
 ]);
 
 export const OutputCaptureResponsePayloadSchema = v.object({
@@ -172,13 +169,6 @@ export type OutputCaptureImage = v.InferOutput<typeof OutputCaptureImageSchema>;
 export type ImageAction = v.InferOutput<typeof ImageActionSchema>;
 export type StoredSnapshot = v.InferOutput<typeof StoredSnapshotSchema>;
 export type SnapshotResponsePayload = v.InferOutput<typeof SnapshotResponsePayloadSchema>;
-export type SelectionPutResponsePayload = v.InferOutput<typeof SelectionPutResponsePayloadSchema>;
-export type SelectionMutationResponsePayload = v.InferOutput<
-  typeof SelectionMutationResponsePayloadSchema
->;
-export type ClearSelectionsResponsePayload = v.InferOutput<
-  typeof ClearSelectionsResponsePayloadSchema
->;
 export type ClientCommand = v.InferOutput<typeof ClientCommandSchema>;
 export type OutputCaptureCommand = v.InferOutput<typeof OutputCaptureCommandSchema>;
 export type OutputCaptureResponsePayload = v.InferOutput<typeof OutputCaptureResponsePayloadSchema>;

@@ -11,13 +11,13 @@ inspection, edits, execution, and general verification.
 
 ## Integration layers
 
-| Layer               | Responsibility                                                                                          |
-| ------------------- | ------------------------------------------------------------------------------------------------------- |
-| marimo code mode    | Supplies a live kernel context, graph, cells, globals, and cell mutation APIs.                          |
-| `marimo_lens.agent` | Discovers or creates Lens, selects one instance, returns `MountedLens`, and locates packaged resources. |
-| `MountedLens`       | Exposes detached context, cell-output PNG capture, activity, reveal, and resolve.                       |
-| Lens Agent Skill    | Defines request routing, evidence requirements, verification, presentation, and resolution policy.      |
-| marimo pair         | Lists live notebooks and runs code-mode calls from a terminal through `marimo pair execute`.            |
+| Layer               | Responsibility                                                                                           |
+| ------------------- | -------------------------------------------------------------------------------------------------------- |
+| marimo code mode    | Supplies a live kernel context, graph, cells, globals, and cell mutation APIs.                           |
+| `marimo_lens.agent` | Discovers or creates Lens, selects one instance, returns `MountedLens`, and locates packaged resources.  |
+| `MountedLens`       | Exposes detached context, cell-output PNG capture, activity, reveal, chat requests, checks, and resolve. |
+| Lens Agent Skill    | Defines request routing, evidence requirements, verification, presentation, and resolution policy.       |
+| marimo pair         | Lists live notebooks and runs code-mode calls from a terminal through `marimo pair execute`.             |
 
 Lens augments a code-mode integration. It does not own the notebook execution
 environment.
@@ -30,22 +30,29 @@ The Python distribution registers a standard Python
 ```text
 group: marimo.agent.capability
 name:  lens
-value: marimo_lens.agent
+value: marimo_lens._capability
 ```
 
 The entry point lives in `packages/marimo-lens/pyproject.toml`. marimo code mode
 can discover the installed module through its capability registry.
 
-`import marimo_lens` also loads the submodule, so agents and docs reach the
-handoff surface as `marimo_lens.agent.*`. The entry point keeps naming the
-submodule because marimo prints it in `help(cm)`, and its module help carries
-the skill.
+marimo prints the private instruction module in `help(cm)`. Importing
+`marimo_lens._capability` and calling `help(marimo_lens._capability)` reads the
+installed plugin inventory and complete core skill. Its empty `__all__` keeps
+capability help focused on instructions. The entry point owns this module.
+
+`import marimo_lens` loads the public API as `marimo_lens.agent.*`.
+`help(marimo_lens.agent)` documents its six exports, including `MountedLens`
+and its method signatures. Individual method help supplies exact contracts.
 
 `marimo_lens.agent.plugin()` locates the Agent Plugin installed with the active
 `marimo-lens` distribution. `marimo_lens.agent.skill()` selects its `marimo-lens` skill.
-Module help lazily calls `agent_plugins.read("marimo-lens")`, delivering the
-same core skill as the CLI briefing with installation identity and resource
-guidance. Ordinary imports do not read plugin resources. The core skill owns
+Capability help calls `agent_plugins.read("marimo-lens")` once per retrieval
+and presents its plugin inventory and complete core skill sections. This keeps
+native help below 10,000 characters while preserving the instruction source.
+The adapter keeps
+its resource-backed `__doc__` property out of member enumeration so pydoc's
+scans reuse the displayed briefing. Imports defer plugin resource reads. The core skill owns
 connection and walkthroughs, and routes selection work, setup, and target
 authoring to focused references. API docstrings describe individual operations.
 
@@ -60,8 +67,10 @@ mounted instances are already discoverable after browser readiness, including
 objects retained as cell outputs rather than notebook globals. Let pending
 mounts finish rendering before deciding to create another widget.
 
-`add_lens_cell(ctx)` accepts a live marimo code-mode context with cell lookup,
-creation, and execution APIs.
+`add_lens_cell(ctx, *, record=None)` accepts a live marimo code-mode context
+with cell lookup, creation, and execution APIs. `record` takes the forms
+`Lens(record=...)` takes, and `add_lens_cell()` validates it before it touches
+the context.
 
 It searches for the private marker used by an agent-created Lens cell:
 
@@ -77,12 +86,20 @@ The behavior is:
   whose notebook has not run, after a failed first run, or after `close()`. A
   cell's status reports its last run, not whether its Lens is still open.
 - Several marked cells raise `lens_ambiguous`.
+- One existing marked cell whose record differs from a passed `record` raises
+  `lens_cell_exists`, and the message names the cell's record. A call without
+  `record`, or with the cell's record, returns the existing cell's ID and
+  queues its run under the same conditions.
 - No marked cell queues one hidden-code cell, runs it when the code-mode
   context applies the mutation, and returns its ID.
 
 The generated cell imports `Lens`, creates one private `_lens` binding, and
 appends it to marimo output. Private bindings avoid adding public names to the
-dataflow graph.
+dataflow graph. `_lens_arguments()` spells the record the shortest way:
+`_Lens()` for no record, `_Lens(record=True)` for `Record()`, and otherwise a
+dict of the fields that differ from their defaults, such as
+`_Lens(record={"keep": "session"})`. `add_lens_cell()` never rewrites an
+existing marked cell.
 
 Cell creation and browser rendering occur across kernel calls. Connect in a
 fresh call after the new cell renders and the browser announces capture
@@ -171,15 +188,18 @@ only available handle.
 A `MountedLens` fixes one opaque identity and one Python `Lens` for the handle
 lifetime.
 
-| Member                                      | Contract                                                                 |
-| ------------------------------------------- | ------------------------------------------------------------------------ |
-| `identity`                                  | Reconnects to the same live Lens in a later kernel call.                 |
-| `context()`                                 | Returns a fresh detached `LensContext`.                                  |
-| `cell_image(cell_id, *, expected_revision)` | Starts, polls, and consumes one unannotated cell-output PNG transfer.    |
-| `start_activity(target, ...)`               | Starts transient work presentation and returns its opaque owner handle.  |
-| `stop_activity(activity)`                   | Stops presentation when the handle still owns it.                        |
-| `reveal(target, ...)`                       | Reveals a cell, selection, or ordered steps for a supplied hold.         |
-| `resolve(selection_ids, ...)`               | Moves verified selections to History in one revisioned state transition. |
+| Member                                      | Contract                                                                |
+| ------------------------------------------- | ----------------------------------------------------------------------- |
+| `identity`                                  | Reconnects to the same live Lens in a later kernel call.                |
+| `context()`                                 | Returns a fresh detached `LensContext`.                                 |
+| `cell_image(cell_id, *, expected_revision)` | Starts, polls, and consumes one unannotated cell-output PNG transfer.   |
+| `start_activity(target, ...)`               | Starts transient work presentation and returns its opaque owner handle. |
+| `stop_activity(activity)`                   | Stops presentation when the handle still owns it.                       |
+| `reveal(target, ...)`                       | Reveals a cell, selection, or ordered steps for a supplied hold.        |
+| `open_request(note, cells)`                 | Opens a chat request with a baseline, outside the revisioned state.     |
+| `record`                                    | Returns the Lens's normalized `Record`, or None when it keeps none.     |
+| `check()`                                   | Checks open selections, and the record when the Lens keeps one.         |
+| `resolve(request_ids, ...)`                 | Resolves selection and chat requests and writes any record lines.       |
 
 The handle delegates to the public `Lens` methods. Argument and lifecycle
 contracts therefore stay aligned between notebook users and agent integrations.
@@ -244,9 +264,10 @@ Python validates the complete route and sends an `attention.reveal` event.
 The browser owns its index and the compact stepper in the popover header.
 There is no saved catalog or model trait, and navigation needs no kernel calls.
 
-The runtime adapter watches the referenced cells. A changed cell or upstream
-rerun sends `attention.trail.stop` with the matching ID, so an old callback
-cannot cancel newer attention. At most one watch remains; replacement attention
+The runtime adapter watches the referenced cells through marimo's cell
+lifecycle. A rerun of a referenced cell or its upstream inputs, or deleting the
+cell, sends `attention.trail.stop` with the matching ID, so an old callback
+cannot cancel newer attention. At most one watch remains. Replacement attention
 and Lens close release it. Dismissal and browser refresh discard the UI route.
 
 ## Reveal and resolve
@@ -264,16 +285,25 @@ The normal completion sequence is:
 6. Let each owning document's resolution receipt become its final browser
    acknowledgement.
 
-The browser can locate a queued reveal through a History entry whose resolution
-revision follows the reveal's captured revision. Activity still requires an Open
+When a queued reveal names a selection that already left `_state`, the
+browser locates it through the `selection.resolved` event, which carries the
+selection's label and target. `use-target-attention.ts` keeps those targets in
+a map by selection ID, bounded to 256 entries. It answers a reveal only from a
+resolution newer than the reveal's address revision, because a reopened
+selection keeps its ID. A reveal that arrives after the selection left
+`_state` and before its event waits for the event, a later state revision, or
+1 second, because deleting or clearing a selection also advances the revision
+and sends no event.
+Activity still requires an Open
 selection. Both paths enforce the owning document. Keep revisioned mutations
 ordered. A later attention event replaces the current reveal, so start the next
 activity after its hold.
 
 The browser queues a resolution receipt behind an active reveal. Python commits
-resolve before sending the event. Each document filters the event to History
-entries whose targets it owns. Receipt delivery failure cannot roll back the
-committed state.
+resolve before sending the event. Once `_state` reaches the event's revision,
+each document filters the event's selections to the targets it owns. Clicking
+the receipt opens History when the Lens shows History and dismisses the receipt
+otherwise. Receipt delivery failure cannot roll back the committed state.
 
 ## Image handoff
 
@@ -288,21 +318,14 @@ and image reader must share a filesystem.
 
 ## Failure and recovery
 
-| Error code                            | Owner and recovery                                                                                                    |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `lens_unavailable`                    | Retry once without a saved identity. Add a default Lens cell when no host-authored Lens is required.                  |
-| `lens_ambiguous`                      | Reconnect with a saved identity or leave one intended Lens instance.                                                  |
-| `revision_conflict`                   | Stop saved activity, reconnect, read fresh context, and reassess the request.                                         |
-| `selection_not_found`                 | Read current Open selections before another selection-scoped operation.                                               |
-| `cell_not_found`                      | Use an exact cell from the active graph.                                                                              |
-| `runtime_unavailable`                 | Keep the selection Open and report that notebook verification is unavailable.                                         |
-| `browser_unavailable`                 | Wait for a displayed Lens view or restore the owning browser document.                                                |
-| `capture_busy`                        | Finish the pending cell-output capture before requesting another cell.                                                |
-| `capture_timeout` or `capture_failed` | Continue from text and graph evidence when sufficient, or keep the selection open if visual verification is required. |
-| `lens_closed`                         | Discard the handle and reconnect to another live Lens if one exists.                                                  |
+[Errors and limits](../docs/reference/errors.md#lenserror-codes) owns every
+`LensError` code and its recovery action, and the skill's
+[Workflow](../skills/marimo-lens/references/workflow.md#operation-recovery)
+reference covers the codes agents recover from. Change both with the code.
 
-Keep ambiguous, blocked, and unverified selections open. Resolution records a
-History entry and releases the selection image.
+Keep ambiguous, blocked, and unverified selections open. On a Lens that keeps
+a record, resolution moves the request into that record, with its selection
+image unless the record sets `images=False`.
 
 `LensError` text begins with its code. Code-mode transports such as
 `marimo pair execute` return an uncaught error as traceback text, so the code

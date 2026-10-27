@@ -1,5 +1,5 @@
 import type {
-  AddressedSelection,
+  HistoryEntry,
   LensState,
   Selection,
   SelectionAnchor,
@@ -15,7 +15,7 @@ import type { SelectionSnapshotCapture } from "@/selection/selection-capture";
 import type { SelectionMotion, UiAction } from "@/selection/state";
 
 import { errorMessage } from "@/anywidget/error";
-import { targetBelongsToDocument } from "@/notebook/document-identity";
+import { documentIdentity, targetBelongsToDocument } from "@/notebook/document-identity";
 import { targetInfo } from "@/notebook/target-info";
 import { anchorCenter, sameAnchor } from "@/selection/anchor";
 import { collectDomHint } from "@/selection/dom-hint";
@@ -224,6 +224,11 @@ export function useSelectionActions(options: {
 
   const deleteSelection = useCallback(
     (selection: Selection) => {
+      // Focus moves to the selection beside the removed one, so removing
+      // several in a row keeps the person in the list.
+      const open = stateRef.current.selections;
+      const index = open.findIndex(({ id }) => id === selection.id);
+      const neighbor = open[index + 1] ?? open[index - 1];
       mutate({
         busyId: selection.id,
         run: (state) =>
@@ -233,14 +238,17 @@ export function useSelectionActions(options: {
         until: (latest) => !latest.selections.some(({ id }) => id === selection.id),
         done: () => {
           invalidateSnapshotCapture(selection.id);
-          dispatch({ type: "setSheetOpen", open: false });
           dispatch({ type: "announce", message: `${selection.label} removed.` });
-          focusDock(dom);
+          if (neighbor && stateRef.current.selections.some(({ id }) => id === neighbor.id)) {
+            focusSelectionOrDock(dom, neighbor.id);
+          } else {
+            focusDock(dom);
+          }
         },
         failed: "Selection could not be removed",
       });
     },
-    [dispatch, dom, invalidateSnapshotCapture, mutate, protocol],
+    [dispatch, dom, invalidateSnapshotCapture, mutate, protocol, stateRef],
   );
 
   const clearSelections = useCallback(() => {
@@ -271,30 +279,32 @@ export function useSelectionActions(options: {
   }, [dispatch, dom, invalidateSnapshotCapture, mutate, protocol]);
 
   const reopenSelection = useCallback(
-    (receipt: AddressedSelection) => {
+    (entry: HistoryEntry) => {
       mutate({
-        busyId: receipt.selectionId,
+        busyId: entry.id,
         run: (state) => {
-          const existing = state.selections.find(({ id }) => id === receipt.selectionId);
-          return existing && selectionMatchesReceipt(existing, receipt)
+          const existing = state.selections.find(({ id }) => id === entry.id);
+          return existing && selectionMatchesEntry(existing, entry)
             ? Promise.resolve({ revision: state.revision })
             : protocol.reopenSelection({
-                selectionId: receipt.selectionId,
-                resolutionRevision: receipt.resolutionRevision,
+                selectionId: entry.id,
+                resolvedAt: entry.resolvedAt,
+                documentId: documentIdentity(dom.document),
+                documentPath: dom.document.location?.pathname || "/",
                 expectedRevision: state.revision,
               });
         },
         until: (latest) => {
-          const reopened = latest.selections.find(({ id }) => id === receipt.selectionId);
+          const reopened = latest.selections.find(({ id }) => id === entry.id);
           return (
-            latest.currentSelectionId === receipt.selectionId &&
+            latest.currentSelectionId === entry.id &&
             reopened !== undefined &&
-            selectionMatchesReceipt(reopened, receipt)
+            selectionMatchesEntry(reopened, entry)
           );
         },
         done: () => {
-          const reopened = requireSelection(stateRef.current, receipt.selectionId);
-          dispatch({ type: "historyReopened", selectionId: reopened.id, label: reopened.label });
+          const reopened = requireSelection(stateRef.current, entry.id);
+          dispatch({ type: "historyReopened", label: reopened.label });
           const output = dom.getTarget(reopened.target)?.element;
           if (output) {
             revealSelection(dom, reopened, "smooth");
@@ -312,28 +322,6 @@ export function useSelectionActions(options: {
     },
     [dispatch, dom, mutate, protocol, recapture, stateRef],
   );
-
-  const clearHistory = useCallback(() => {
-    mutate({
-      run: (state) =>
-        state.history.length === 0
-          ? Promise.resolve({ revision: state.revision })
-          : protocol.clearHistory(state.revision),
-      until: (latest) => latest.history.length === 0,
-      done: () => {
-        if (stateRef.current.selections.length > 0) {
-          dispatch({ type: "setSheetTab", tab: "open" });
-        } else {
-          dispatch({ type: "setSheetOpen", open: false });
-          focusDock(dom);
-        }
-        dispatch({ type: "announce", message: "History cleared." });
-      },
-      failed: "History could not be cleared",
-      settled: () => dispatch({ type: "setHistoryClearPending", pending: false }),
-    });
-    dispatch({ type: "setHistoryClearPending", pending: true });
-  }, [dispatch, dom, mutate, protocol, stateRef]);
 
   const repositionSelection = useCallback(
     (selection: Selection, anchor: SelectionAnchor) => {
@@ -387,7 +375,6 @@ export function useSelectionActions(options: {
     deleteSelection,
     clearSelections,
     reopenSelection,
-    clearHistory,
     repositionSelection,
     invalidateSnapshotCapture,
   };
@@ -399,11 +386,11 @@ function detailElement(dom: NotebookDomAdapter, anchor: SelectionAnchor, output:
   return dom.deepestElementAtPoint(point.x, point.y) ?? output;
 }
 
-function selectionMatchesReceipt(selection: Selection, receipt: AddressedSelection): boolean {
+function selectionMatchesEntry(selection: Selection, entry: HistoryEntry): boolean {
   const previous = selection.previousResolution;
   return (
-    previous?.addressedAt === receipt.addressedAt &&
-    (previous.summary ?? undefined) === (receipt.summary ?? undefined)
+    previous?.resolvedAt === entry.resolvedAt &&
+    (previous.summary ?? undefined) === (entry.summary ?? undefined)
   );
 }
 

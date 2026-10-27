@@ -30,7 +30,6 @@ from .._core.bounds import (
     OutputImageId,
     PositiveNormalizedNumber,
     PositiveSafeInteger,
-    Revision,
     SelectionImageId,
     SelectionLabel,
     Sha256,
@@ -286,26 +285,12 @@ class SelectionInput(TransportModel):
 
 
 class PreviousResolution(TransportModel):
-    addressed_at: TimestampText
+    resolved_at: TimestampText
     summary: AttentionText | None = None
 
 
 class Selection(SelectionInput):
     previous_resolution: PreviousResolution | None = None
-
-
-class AddressedSelection(TransportModel):
-    selection_id: Identifier
-    label: SelectionLabel
-    note: NoteText
-    target: SelectionTarget
-    created_at: TimestampText
-    addressed_at: TimestampText
-    anchor: SelectionAnchor
-    dom_hint: DomHint | None = None
-    description: TargetInfo
-    summary: AttentionText | None = None
-    resolution_revision: Revision
 
 
 class OutputCaptureImage(PngMetadata):

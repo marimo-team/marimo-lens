@@ -11,37 +11,40 @@ page.
 
 ## Choose a route
 
-| Task                                                           | Read first                                          | Continue with                                       |
-| -------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------- |
-| Set up the repository and run Lens                             | [Development](development.md)                       | [Testing](testing.md)                               |
-| Change targets, selections, revisions, or History              | [Selection state](selection-state.md)               | [Protocol](protocol.md)                             |
-| Change graph context, controls, text, or images                | [Context and evidence](context-and-evidence.md)     | [Testing](testing.md)                               |
-| Change output discovery, DOM targets, iframes, or shadow roots | [Browser and host](browser-and-host.md)             | [Context and evidence](context-and-evidence.md)     |
-| Change agent connection or feedback                            | [Agent integration](agent-integration.md)           | [Protocol](protocol.md)                             |
-| Change browser messages or synchronized state                  | [Protocol](protocol.md)                             | [Selection state](selection-state.md)               |
-| Change bundling, Hatch, or packaged resources                  | [Build and distribution](build-and-distribution.md) | [Testing](testing.md)                               |
-| Change public or internal documentation                        | [Documentation](documentation.md)                   | [Development](development.md)                       |
-| Add or update a dependency                                     | [Dependencies](dependencies.md)                     | [Testing](testing.md)                               |
-| Prepare and publish a version                                  | [Release](release.md)                               | [Build and distribution](build-and-distribution.md) |
+| Task                                                           | Read first                                                     | Continue with                                       |
+| -------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------- |
+| Set up the repository and run Lens                             | [Development](development.md)                                  | [Testing](testing.md)                               |
+| Change targets, selections, revisions, or History              | [Selection state](selection-state.md)                          | [Protocol](protocol.md)                             |
+| Change graph context, controls, text, or images                | [Context and evidence](context-and-evidence.md)                | [Testing](testing.md)                               |
+| Change the request record, its status, the brief, or checks    | [Context and evidence](context-and-evidence.md#request-record) | [Selection state](selection-state.md)               |
+| Change output discovery, DOM targets, iframes, or shadow roots | [Browser and host](browser-and-host.md)                        | [Context and evidence](context-and-evidence.md)     |
+| Change agent connection or feedback                            | [Agent integration](agent-integration.md)                      | [Protocol](protocol.md)                             |
+| Change browser messages or synchronized state                  | [Protocol](protocol.md)                                        | [Selection state](selection-state.md)               |
+| Change bundling, Hatch, or packaged resources                  | [Build and distribution](build-and-distribution.md)            | [Testing](testing.md)                               |
+| Change public or internal documentation                        | [Documentation](documentation.md)                              | [Development](development.md)                       |
+| Add or update a dependency                                     | [Dependencies](dependencies.md)                                | [Testing](testing.md)                               |
+| Prepare and publish a version                                  | [Release](release.md)                                          | [Build and distribution](build-and-distribution.md) |
 
 ## Contract owners
 
-| Contract                                | Canonical owner                                                   |
-| --------------------------------------- | ----------------------------------------------------------------- |
-| Public Python methods and agent adapter | [`docs/api.md`](../docs/api.md)                                   |
-| Public context shapes                   | [`docs/reference/context.md`](../docs/reference/context.md)       |
-| Public errors and limits                | [`docs/reference/errors.md`](../docs/reference/errors.md)         |
-| Public target attributes                | [`docs/reference/attributes.md`](../docs/reference/attributes.md) |
-| Public product model                    | [`docs/overview.md`](../docs/overview.md)                         |
-| Public selection behavior               | [`docs/selections.md`](../docs/selections.md)                     |
-| Public agent workflow                   | [`docs/agents.md`](../docs/agents.md)                             |
-| Internal ownership and vocabulary       | [Architecture](architecture.md)                                   |
-| Selection aggregate and transitions     | [Selection state](selection-state.md)                             |
-| Browser transport and schema evolution  | [Protocol](protocol.md)                                           |
-| Contributor commands and local loop     | [Development](development.md)                                     |
-| Distribution artifacts                  | [Build and distribution](build-and-distribution.md)               |
-| Release procedure                       | [Release](release.md)                                             |
-| Executable agent workflow policy        | [`skills/marimo-lens/SKILL.md`](../skills/marimo-lens/SKILL.md)   |
+| Contract                                | Canonical owner                                                      |
+| --------------------------------------- | -------------------------------------------------------------------- |
+| Public Python methods and agent adapter | [`docs/api.md`](../docs/api.md)                                      |
+| Public context shapes                   | [`docs/reference/context.md`](../docs/reference/context.md)          |
+| Public errors and limits                | [`docs/reference/errors.md`](../docs/reference/errors.md)            |
+| Public checks                           | [`docs/reference/checks.md`](../docs/reference/checks.md)            |
+| Public request record and its storage   | [`docs/data-and-trust.md`](../docs/data-and-trust.md#request-record) |
+| Public target attributes                | [`docs/reference/attributes.md`](../docs/reference/attributes.md)    |
+| Public product model                    | [`docs/overview.md`](../docs/overview.md)                            |
+| Public selection behavior               | [`docs/selections.md`](../docs/selections.md)                        |
+| Public agent workflow                   | [`docs/agents.md`](../docs/agents.md)                                |
+| Internal ownership and vocabulary       | [Architecture](architecture.md)                                      |
+| Selection aggregate and transitions     | [Selection state](selection-state.md)                                |
+| Browser transport and schema evolution  | [Protocol](protocol.md)                                              |
+| Contributor commands and local loop     | [Development](development.md)                                        |
+| Distribution artifacts                  | [Build and distribution](build-and-distribution.md)                  |
+| Release procedure                       | [Release](release.md)                                                |
+| Executable agent workflow policy        | [`skills/marimo-lens/SKILL.md`](../skills/marimo-lens/SKILL.md)      |
 
 Source schemas and constants remain the exact authority for wire fields and
 numeric limits. Maintainer pages explain why those contracts exist, how the
@@ -53,7 +56,8 @@ parts interact, and which evidence a change requires.
 - [Selection state](selection-state.md) defines targets, selections, revisions,
   image state, resolve, reopen, and History.
 - [Context and evidence](context-and-evidence.md) explains runtime reads,
-  provenance, controls, references, text, and image bytes.
+  provenance, controls, references, text, image bytes, the brief, the request
+  record, record status, and checks.
 - [Browser and host](browser-and-host.md) explains notebook output discovery,
   configured DOM roots, document ownership, capture, and presentation.
 - [Agent integration](agent-integration.md) explains code mode, discovery,

@@ -98,9 +98,7 @@ export function SelectionList() {
                 <SnapshotPreviewButton
                   key={snapshotKey(selection)}
                   selection={selection}
-                  capturing={selection.snapshot.status === "pending"}
-                  variant="icon"
-                  snapshotLoader={meta.snapshotLoader}
+                  loadSnapshot={meta.loadSnapshot}
                 />
                 <button
                   {...stylex.props(...iconButtonStyles)}
@@ -137,8 +135,10 @@ export function SelectionList() {
         <button
           {...stylex.props(...buttonStyles, ui.danger, selectionListStyles.clear)}
           type="button"
-          disabled={clearing || busySelectionIds.size > 0}
-          onClick={actions.clearSelections}
+          aria-disabled={clearing || busySelectionIds.size > 0 || undefined}
+          onClick={() => {
+            if (!clearing && busySelectionIds.size === 0) actions.clearSelections();
+          }}
         >
           {clearing ? (
             <LoaderCircle {...stylex.props(ui.spin)} size={14} aria-hidden="true" />

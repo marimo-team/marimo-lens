@@ -179,9 +179,9 @@ checks the selected output and its producing code, makes the change, and
 verifies it.
 
 Review the result when the agent brings it into view. In the sample, February
-should be orange while January and March remain green. The verified request
-moves to **History** with a summary. Reopen it to refine the result. Requests
-the agent cannot verify stay open with an explanation.
+should be orange while January and March remain green. The agent resolves the
+verified request, and a resolution receipt shows its summary. Requests the
+agent cannot verify stay open with an explanation.
 
 <llm-exclude>
 
@@ -195,7 +195,7 @@ the agent cannot verify stay open with an explanation.
 
 Confirm that it is connected to this notebook and that the dock is mounted.
 Ask the agent to check that Lens is installed in that kernel, read
-`help(marimo_lens.agent)`, and add the dock if it is missing.
+`help(marimo_lens._capability)`, and add the dock if it is missing.
 
 A terminal can read the packaged briefing with
 `uvx --with marimo-lens agent-plugins read marimo-lens`. That command reads an
@@ -203,6 +203,35 @@ isolated installation. Working with your notebook requires the live connection.
 [Agent integration](./agents) covers discovery and resource access.
 
 :::
+
+## Keep a record
+
+The dock marimo mounts keeps no record of resolved requests. To keep one, add
+a cell that constructs a Lens with `record`:
+
+```python
+from marimo_lens import Lens
+
+lens = Lens(record=True)
+lens
+```
+
+This Lens replaces the automatic one. Each resolved request now appends a line
+to `__marimo__/lens/notebook.py.jsonl` with the code of every cell it changed,
+and Lens stores the selection's image beside it. The dock gains a **History**
+tab where you review resolved requests and reopen one to refine the result, and
+your agent can ask which earlier changes still hold.
+
+Pass a dict to change what the record keeps:
+
+```python
+Lens(record={"keep": "session"})  # kernel memory only, no files
+Lens(record={"images": False})  # record lines without images
+Lens(record={"history": False})  # no History tab, agents still read the record
+```
+
+Read [Data and trust](./data-and-trust#request-record) before committing the
+`__marimo__/lens/` folder, and [`Record`](./api#record) for every option.
 
 ## Try it here
 
@@ -227,8 +256,8 @@ request, code, and live results.
 The demo shows three monthly revenue values: January 42, February 58, and
 March 39, in USD thousands. Its Trail visits the data table, compares the bars,
 then explains that February has the highest revenue and that revenue is not
-profit. The reader controls the steps. Selections and History remain unchanged
-by a walkthrough.
+profit. The reader controls the steps. A walkthrough leaves selections
+unchanged.
 
 </llm-only>
 
@@ -336,7 +365,7 @@ if starter_walkthrough.value:
     )
 
     # The docs demo runs in notebook cells rather than an agent scratchpad.
-    _runtime = _collect_runtime_snapshot()
+    _runtime = _collect_runtime_snapshot(output_cell_ids=())
     if not _runtime.available:
         raise RuntimeError(_runtime.reason)
     _route = [
@@ -440,6 +469,6 @@ mo.Html(
 
 ## Next steps
 
-- [Selections](./selections) covers gestures, notes, images, History, and reopening.
+- [Selections](./selections) covers gestures, notes, images, receipts, History, and reopening.
 - [How Lens works](./how-lens-works) explains what your agent receives and how it returns results.
 - [Custom targets](./custom-targets) makes cards, dashboards, and custom views selectable.

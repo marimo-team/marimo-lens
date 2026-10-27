@@ -6,58 +6,98 @@ import threading
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from types import MappingProxyType
-from typing import cast
+from typing import TypeGuard, cast
 
 from pydantic import ValidationError
 from typing_extensions import Self
 
-from .._core.bounds import REVISION_ADAPTER
-from .._core.types import LensReferences, SelectionReference
+from .._core.bounds import CELL_ID_ADAPTER, REVISION_ADAPTER
+from .._core.errors import LensError
+from .._core.types import (
+    CellReference,
+    ChatRequestReference,
+    LensReferences,
+    RecordedRequest,
+    RequestReference,
+    SelectionReference,
+    cell_address,
+)
 
 
 class LensContext:
-    """Detached live references, standalone text, and optional images.
+    """Detached brief, references, history, standalone text, and images.
 
+    ``Lens.context()`` and ``MountedLens.context()`` create it from one
+    selection-state revision, one runtime snapshot, and one read of the
+    record when the Lens keeps one. ``brief`` describes the open request
+    identified by ``request``.
     ``references`` contains compact notebook or DOM targets and their
-    producing cells. ``text`` contains bounded source and runtime context for a
-    text-only handoff. ``images`` maps selection IDs to captured PNG bytes.
+    producing cells. ``history()`` joins recorded requests with the notebook.
+    ``text`` contains bounded source and runtime context for a text-only
+    handoff. ``images`` maps selection IDs to captured PNG bytes.
     """
 
-    __slots__ = ("_images", "_lock", "_references", "_text", "_text_factory")
+    __slots__ = (
+        "_brief",
+        "_brief_factory",
+        "_history",
+        "_images",
+        "_lock",
+        "_references",
+        "_request",
+        "_text",
+        "_text_factory",
+    )
 
+    _request: RequestReference | None
     _references: LensReferences
     _text: str | None
     _text_factory: Callable[[], str] | None
+    _brief: str | None
+    _brief_factory: Callable[[], str] | None
+    _history: Callable[[Sequence[str] | None], list[RecordedRequest]] | None
     _images: Mapping[str, bytes]
     _lock: threading.RLock
 
-    def __init__(
-        self,
-        references: Mapping[str, object],
-        text: str,
-        images: Mapping[str, bytes],
-    ) -> None:
-        self._references = cast(LensReferences, deepcopy(references))
-        self._text = text
-        self._text_factory = None
-        self._images = MappingProxyType(dict(images))
-        self._lock = threading.RLock()
+    def __init__(self) -> None:
+        raise TypeError(
+            "Read a LensContext with Lens.context() or MountedLens.context()."
+        )
 
     @classmethod
     def _create(
         cls,
         *,
         references: Mapping[str, object],
+        request: RequestReference | None,
         text: Callable[[], str],
+        brief: Callable[[], str],
+        history: Callable[[Sequence[str] | None], list[RecordedRequest]] | None,
         images: Mapping[str, bytes],
     ) -> Self:
         self = object.__new__(cls)
+        self._request = deepcopy(request)
         self._references = cast(LensReferences, deepcopy(references))
         self._text = None
         self._text_factory = text
+        self._brief = None
+        self._brief_factory = brief
+        self._history = history
         self._images = MappingProxyType(dict(images))
         self._lock = threading.RLock()
         return self
+
+    @property
+    def request(self) -> RequestReference | None:
+        """Return the open request described by the brief, or None.
+
+        The newest chat request takes precedence when it opened after the
+        current selection. Otherwise the current selection is the request.
+        The returned dictionary is a copy captured by this context. Keep its
+        ID across calls so a later request cannot replace the work in progress.
+        """
+
+        return deepcopy(self._request)
 
     @property
     def references(self) -> LensReferences:
@@ -76,6 +116,67 @@ class LensContext:
                 self._text = factory()
                 self._text_factory = None
             return self._text
+
+    def history(
+        self,
+        target: str
+        | CellReference
+        | Sequence[str | CellReference]
+        | SelectionReference
+        | RequestReference
+        | ChatRequestReference
+        | None = None,
+    ) -> list[RecordedRequest]:
+        """Return recorded requests in time order, each change with its status.
+
+        With no target, return every recorded request, at most the newest 256.
+        With cells, return the requests whose changed or traced cells are now
+        those cells or their upstream closure, or whose lost code now lives
+        there. Name cells by ID or cell reference, alone or in a sequence, or
+        pass a reference that lists cells, such as ``context.request`` or a
+        SelectionReference. The rows are JSON-safe, so
+        ``pl.DataFrame(context.history())`` works.
+
+        Check ``mounted.record`` or ``references["notebook"]["record"]`` before
+        calling it. A Lens built without a record has no history to return.
+
+        Raises:
+            LensError: ``record_off``: the Lens keeps no record. Construct it
+                as ``Lens(record=True)`` to keep resolved requests.
+            TypeError: The target names no cells in one of those forms.
+            ValueError: A cell ID is empty or too long, or the sequence is
+                empty.
+        """
+
+        if self._history is None:
+            raise LensError(
+                "record_off",
+                "This Lens keeps no record. Construct it as Lens(record=True) "
+                "to keep resolved requests.",
+                revision=self.revision,
+            )
+        return deepcopy(self._history(_target_cells(target)))
+
+    @property
+    def brief(self) -> str:
+        """Return the first read for the current request, at most 4,000 characters.
+
+        The current request is the newest open chat request when it opened
+        after the current selection, or else the current selection. The brief
+        gives its note, the part the analyst pointed
+        at, the producing cells and their state, earlier requests on those
+        cells and upstream with whether their changes still hold when the
+        Lens keeps a record, the other open requests, and the Lens calls that
+        fetch more. It holds no cell code, values, or images.
+        """
+
+        with self._lock:
+            if self._brief is None:
+                factory = self._brief_factory
+                assert factory is not None
+                self._brief = factory()
+                self._brief_factory = None
+            return self._brief
 
     @property
     def images(self) -> Mapping[str, bytes]:
@@ -125,3 +226,41 @@ class LensContext:
             f"image_bytes={image_bytes}"
             ")"
         )
+
+
+_TARGET = (
+    "target must be a cell ID, a cell reference, a sequence of either, or a "
+    "reference that lists cells, such as context.request."
+)
+
+
+def _target_cells(target: object) -> tuple[str, ...] | None:
+    if target is None:
+        return None
+    if isinstance(target, Mapping) and _listed(target.get("cells")):
+        # A selection, request, or chat request reference lists its cells.
+        items: Sequence[object] = target["cells"]
+    elif isinstance(target, str | Mapping):
+        items = (target,)
+    elif _listed(target):
+        items = target
+        if not items:
+            raise ValueError("target must name at least one cell.")
+    else:
+        raise TypeError(_TARGET)
+    return tuple(dict.fromkeys(_cell_id(cell_address(item)) for item in items))
+
+
+def _listed(value: object) -> TypeGuard[Sequence[object]]:
+    return isinstance(value, Sequence) and not isinstance(value, str)
+
+
+def _cell_id(value: object) -> str:
+    if not isinstance(value, str):
+        raise TypeError(_TARGET)
+    try:
+        return CELL_ID_ADAPTER.validate_python(value)
+    except ValidationError:
+        raise ValueError(
+            "target must be a nonblank cell ID of at most 128 UTF-16 code units."
+        ) from None

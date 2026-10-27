@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Mapping, Sequence
+from typing import cast
 
 from pydantic import TypeAdapter, ValidationError
 
@@ -11,19 +13,47 @@ from .._core.bounds import (
     CELL_ID_ADAPTER,
     DOM_SELECTOR_ADAPTER,
     MAX_ATTENTION_DURATION_MS,
-    MAX_SELECTIONS,
+    MAX_NOTE,
     MAX_TRAIL_STEPS,
+    NOTE_ADAPTER,
     OPTIONAL_ATTENTION_LABEL_ADAPTER,
     OPTIONAL_ATTENTION_TEXT_ADAPTER,
     OPTIONAL_REVEAL_TEXT_ADAPTER,
     REVISION_ADAPTER,
     SELECTION_ID_ADAPTER,
 )
+from .._core.record import Record, RecordOptions
+from .._core.types import cell_address
 from .._protocol.messages import (
     AttentionAddress,
     CellAttentionAddress,
     SelectionAttentionAddress,
 )
+from .._session.session import MAX_REQUEST_CELLS, MAX_RESOLVED_REQUESTS
+
+_RECORD_KEYS = tuple(field.name for field in dataclasses.fields(Record))
+
+
+def validated_record(value: Record | RecordOptions | bool | None) -> Record | None:
+    """Return the ``Record`` that ``Lens(record=value)`` keeps, or None."""
+
+    if value is None or value is False:
+        return None
+    if value is True:
+        return Record()
+    if isinstance(value, Record):
+        return value
+    if isinstance(value, Mapping):
+        options = cast(Mapping[object, object], value)
+        unknown = next((key for key in options if key not in _RECORD_KEYS), None)
+        if unknown is not None:
+            raise TypeError(
+                f"record has no option {unknown!r}. Use {', '.join(_RECORD_KEYS[:-1])}, or {_RECORD_KEYS[-1]}."
+            )
+        return Record(**cast(RecordOptions, options))
+    raise TypeError(
+        "record must be True, False, None, a dict of record options, or a Record."
+    )
 
 
 def validated_dom_selector(dom_selector: str | None) -> str | None:
@@ -43,7 +73,7 @@ def validated_dom_selector(dom_selector: str | None) -> str | None:
         ) from error
 
 
-def selection_ids(value: object) -> tuple[str, ...]:
+def request_ids(value: object) -> tuple[str, ...]:
     if isinstance(value, str):
         values: Sequence[object] = (value,)
     elif isinstance(value, Sequence) and not isinstance(
@@ -52,20 +82,49 @@ def selection_ids(value: object) -> tuple[str, ...]:
     ):
         values = value
     else:
-        raise TypeError("selection_ids must be a string or a sequence of strings.")
+        raise TypeError("request_ids must be a string or a sequence of strings.")
     if not values:
-        raise ValueError("selection_ids must contain at least one selection ID.")
-    if len(values) > MAX_SELECTIONS:
+        raise ValueError("request_ids must contain at least one request ID.")
+    if len(values) > MAX_RESOLVED_REQUESTS:
         raise ValueError(
-            f"selection_ids must contain at most {MAX_SELECTIONS} selection IDs."
+            f"request_ids must contain at most {MAX_RESOLVED_REQUESTS} request IDs."
         )
-    selection_ids = tuple(
-        _validated_identifier(SELECTION_ID_ADAPTER, item, name="selection_id")
+    request_ids = tuple(
+        _validated_identifier(SELECTION_ID_ADAPTER, item, name="request_id")
         for item in values
     )
-    if len(selection_ids) != len(set(selection_ids)):
-        raise ValueError("selection_ids must not contain duplicates.")
-    return selection_ids
+    if len(request_ids) != len(set(request_ids)):
+        raise ValueError("request_ids must not contain duplicates.")
+    return request_ids
+
+
+def request_note(value: object) -> str:
+    if not isinstance(value, str):
+        raise TypeError("note must be a string.")
+    note = value.strip()
+    if not note:
+        raise ValueError("note must quote the analyst's request.")
+    try:
+        return NOTE_ADAPTER.validate_python(note)
+    except ValidationError:
+        raise ValueError(
+            f"note must contain at most {MAX_NOTE:,} UTF-16 code units."
+        ) from None
+
+
+def request_cells(value: object) -> tuple[str, ...]:
+    """Cell IDs from cell IDs or the cell references Lens returns."""
+
+    if value is None:
+        return ()
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        raise TypeError("cells must be a sequence of cell IDs or cell references.")
+    if len(value) > MAX_REQUEST_CELLS:
+        raise ValueError(f"cells must contain at most {MAX_REQUEST_CELLS} cells.")
+    cell_ids = tuple(cell_id(cell_address(item)) for item in value)
+    if len(cell_ids) != len(set(cell_ids)):
+        raise ValueError("cells must not contain duplicates.")
+    return cell_ids
 
 
 def cell_id(value: object) -> str:
@@ -168,7 +227,12 @@ def optional_text(
         error_type, message = _validation_detail(error)
         if error_type in {"string_type", "none_required"}:
             raise TypeError(f"{name} must be a string or None.") from None
-        raise ValueError(f"{name} {message}.") from None
+        length = (
+            f" It has {len(value.encode('utf-16-le')) // 2:,}."
+            if isinstance(value, str) and "at most" in message
+            else ""
+        )
+        raise ValueError(f"{name} {message}.{length}") from None
 
 
 def _validation_detail(error: ValidationError) -> tuple[str, str]:
@@ -191,7 +255,10 @@ def reveal_steps(
 
     if isinstance(target, Sequence) and not isinstance(target, (str, bytes)):
         if label is not None or message is not None:
-            raise TypeError("Put label and message on each reveal step.")
+            raise TypeError(
+                "A list of reveal steps carries label and message in each step. "
+                "Drop the label and message arguments."
+            )
         steps = target
     else:
         steps = [{"target": target, "label": label, "message": message}]

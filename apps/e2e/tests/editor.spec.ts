@@ -1,27 +1,43 @@
 import { expect } from "@playwright/test";
+import { createHash } from "node:crypto";
+import { access } from "node:fs/promises";
+import { dirname, join } from "node:path";
 
-import { runAction, screenshot, selectOutput, test } from "./support";
+import { drag, runAction, screenshot, selectOutput, test } from "./support";
 
-test("editor output selections expose notes, producing cells, and PNGs to the kernel", async ({
-  page,
-}, testInfo) => {
-  await selectOutput(page, "point", "S1", "Explain February in the editor");
-  const report = await runAction(page);
-  const selection = report.references.selections[0];
-  expect(selection).toMatchObject({
-    label: "S1",
-    note: "Explain February in the editor",
-    target: { kind: "notebook" },
-    anchor: { kind: "point" },
-    snapshot: { status: "available" },
+test.describe("a Lens without a record", () => {
+  test.use({ record: false });
+
+  test("closes a resolved selection with a dismissible receipt and writes no record", async ({
+    page,
+    notebook,
+  }, testInfo) => {
+    await selectOutput(page, "point", "S1", "Explain February without a record");
+    const report = await runAction(page);
+    expect(report.references.notebook.record).toBeNull();
+    await page.getByRole("button", { name: "Requests, 1 open", exact: true }).click();
+    const sheet = page.getByRole("region", { name: "Requests", exact: true });
+    await expect(sheet.getByRole("tab", { name: /^Open/ })).toBeVisible();
+    await expect(sheet.getByRole("tab", { name: /History/ })).toHaveCount(0);
+    await page.getByRole("button", { name: "Close requests" }).click();
+    await expect(sheet).toBeHidden();
+
+    const resolved = await runAction(page, "Resolve");
+    expect(resolved.error).toBeNull();
+    expect(resolved.references.selections).toEqual([]);
+    const receipt = page
+      .locator("[data-marimo-lens-dock]")
+      .getByRole("button", { name: "Dismiss receipt for S1", exact: true });
+    await expect(receipt).toBeVisible();
+    await expect(receipt).toHaveAttribute("data-selection-id", report.references.selections[0].id);
+    await expect(receipt).toContainText("Checked the revenue totals");
+    await screenshot(page, testInfo, "receipt-without-record");
+    // Pointer interaction pauses the receipt's timeout, so only the click dismisses it.
+    await receipt.click();
+    await expect(receipt).toBeHidden();
+    await expect(sheet).toBeHidden();
+    await expect(access(join(dirname(notebook), "__marimo__", "lens"))).rejects.toThrow();
   });
-  expect(selection.target.cellIds).toHaveLength(1);
-  expect(selection.cells).toEqual([{ id: selection.target.cellIds[0], status: "available" }]);
-  expect(report.images[selection.id].signature).toBe("89504e470d0a1a0a");
-  expect(report.images[selection.id].bytes).toBeGreaterThan(100);
-  expect(report.text).toContain("Revenue by month");
-  await page.getByRole("button", { name: "Open selections, 1 open, 0 in history" }).click();
-  await screenshot(page, testInfo, "editor-selection");
 });
 
 test("editor selections reference a cell without output through its code", async ({ page }) => {
@@ -35,57 +51,62 @@ test("editor selections reference a cell without output through its code", async
     anchor: { kind: "point" },
     snapshot: { status: "available" },
   });
-  expect(selection.cells).toEqual([{ id: selection.target.cellIds[0], status: "available" }]);
+  // marimo's host protocol names the cell's code by this `code_hash`.
+  const code = 'reporting_months = ["January", "February", "March"]';
+  const codeHash = createHash("sha256").update(code).digest("hex").slice(0, 16);
+  expect(selection.cells).toEqual([
+    { id: selection.target.cellIds[0], status: "available", codeHash },
+  ]);
   expect(report.text).toContain("In this cell, add April");
   expect(report.text).toContain('reporting_months = ["January", "February", "March"]');
 });
 
-for (const kind of ["point", "region"] as const) {
-  test(`fullscreen ${kind} selections keep the inline cell, note, and image`, async ({
-    page,
-  }, testInfo) => {
-    const chart = page.getByRole("region", { name: "Revenue by month" });
-    const output = page.locator('[id^="output-"]', { has: chart });
-    const cellId = (await output.getAttribute("id"))!.slice("output-".length);
-    const cell = page.locator("[data-cell-id]", { has: chart });
-    await selectOutput(page, "point", "S1", "Inline attention");
-    await chart.hover();
-    await cell.getByTestId("fullscreen-output-button").click();
-    await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeVisible();
+test("fullscreen region selections keep the inline cell, note, and image", async ({
+  page,
+}, testInfo) => {
+  const chart = page.getByRole("region", { name: "Revenue by month" });
+  const output = page.locator('[id^="output-"]', { has: chart });
+  const cellId = (await output.getAttribute("id"))!.slice("output-".length);
+  const cell = page.locator("[data-cell-id]", { has: chart });
+  await selectOutput(page, "point", "S1", "Inline attention");
+  await chart.hover();
+  await cell.getByTestId("fullscreen-output-button").click();
+  await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeVisible();
 
-    await selectOutput(page, kind, "S2", `Review this fullscreen ${kind}`);
-    await page.getByRole("button", { name: "Open selections, 2 open, 0 in history" }).click();
-    await expect(page.getByText(`Review this fullscreen ${kind}`, { exact: true })).toBeVisible();
-    await screenshot(page, testInfo, `fullscreen-${kind}-selection`);
-    await page.getByRole("button", { name: "Exit fullscreen", exact: true }).click();
+  await selectOutput(page, "region", "S2", "Review this fullscreen region");
+  await page.getByRole("button", { name: "Requests, 2 open, 0 in history" }).click();
+  await expect(page.getByText("Review this fullscreen region", { exact: true })).toBeVisible();
+  await screenshot(page, testInfo, "fullscreen-region-selection");
+  await page.getByRole("button", { name: "Exit fullscreen", exact: true }).click();
 
-    await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeHidden();
-    await expect(page.locator("[data-marimo-lens-selection-id]")).toHaveCount(2);
-    const report = await runAction(page);
-    expect(report.references.selections).toHaveLength(2);
-    const [inline, fullscreen] = report.references.selections;
-    expect(fullscreen).toMatchObject({
-      label: "S2",
-      note: `Review this fullscreen ${kind}`,
-      target: { kind: "notebook", cellIds: [cellId] },
-      anchor: { kind: kind === "point" ? "point" : "rect" },
-      snapshot: { status: "available" },
-    });
-    expect(fullscreen.target).toEqual(inline.target);
-    expect(fullscreen.cells).toEqual([{ id: cellId, status: "available" }]);
-    expect(report.images[fullscreen.id].signature).toBe("89504e470d0a1a0a");
-    expect(report.images[fullscreen.id].bytes).toBeGreaterThan(100);
-
-    await chart.evaluate((target) => target.scrollIntoView({ block: "center" }));
-    await chart.hover();
-    await cell.getByTestId("fullscreen-output-button").click();
-    await page.getByRole("button", { name: "Select a target", exact: true }).click();
-    await page.getByRole("button", { name: "Cancel selection mode", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeEnabled();
-    await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Exit fullscreen", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeHidden();
+  await expect(page.locator("[data-marimo-lens-selection-id]")).toHaveCount(2);
+  const report = await runAction(page);
+  expect(report.references.selections).toHaveLength(2);
+  const [inline, fullscreen] = report.references.selections;
+  expect(fullscreen).toMatchObject({
+    label: "S2",
+    note: "Review this fullscreen region",
+    target: { kind: "notebook", cellIds: [cellId] },
+    anchor: { kind: "rect" },
+    snapshot: { status: "available" },
   });
-}
+  expect(fullscreen.target).toEqual(inline.target);
+  expect(fullscreen.cells).toEqual([
+    { id: cellId, status: "available", codeHash: expect.stringMatching(/^[0-9a-f]{16}$/) },
+  ]);
+  expect(report.images[fullscreen.id].signature).toBe("89504e470d0a1a0a");
+  expect(report.images[fullscreen.id].bytes).toBeGreaterThan(100);
+
+  await chart.evaluate((target) => target.scrollIntoView({ block: "center" }));
+  await chart.hover();
+  await cell.getByTestId("fullscreen-output-button").click();
+  await page.getByRole("button", { name: "Select a target", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel selection mode", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Select a target", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Exit fullscreen", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Exit fullscreen", exact: true }).click();
+});
 
 test("fullscreen hides other cells' markers and keeps keyboard selection on its output", async ({
   page,
@@ -168,33 +189,6 @@ test("Marimo dialogs cover Lens selection markers", async ({ page }, testInfo) =
   await screenshot(page, testInfo, "dialog-over-selection");
 });
 
-test("in-pane Marimo chrome covers Lens markers", async ({ page }, testInfo) => {
-  await selectOutput(page, "point", "S1", "Check in-pane stacking");
-  const marker = page.locator("[data-marimo-lens-selection-id]");
-  const bounds = await marker.boundingBox();
-  if (!bounds) throw new Error("Selection marker is unavailable");
-  await page.evaluate(({ x, y, width, height }) => {
-    const app = document.getElementById("App");
-    if (!app) throw new Error("Marimo app pane is unavailable");
-    const chrome = document.createElement("div");
-    chrome.dataset.testid = "in-pane-chrome";
-    chrome.textContent = "Marimo chrome";
-    chrome.style.cssText = `position:fixed;z-index:1000;left:${x}px;top:${y}px;width:${width}px;height:${height}px;background:white`;
-    app.append(chrome);
-  }, bounds);
-
-  expect(
-    await page.evaluate(
-      ({ x, y, width, height }) =>
-        document
-          .elementFromPoint(x + width / 2, y + height / 2)
-          ?.closest('[data-testid="in-pane-chrome"]') !== null,
-      bounds,
-    ),
-  ).toBe(true);
-  await screenshot(page, testInfo, "in-pane-chrome-over-selection");
-});
-
 test("Marimo sidebar clips a straddling region and its handles", async ({ page }, testInfo) => {
   await selectOutput(page, "region", "S1", "Check application chrome");
   await openSidebarAndStraddleSelection(page, "rect");
@@ -213,7 +207,7 @@ test("collapsed Lens matches Marimo controls while remaining draggable", async (
   page,
 }, testInfo) => {
   await page.getByRole("button", { name: "Collapse Lens" }).click();
-  const lens = page.getByRole("button", { name: "Open Lens", exact: true });
+  const lens = page.getByRole("button", { name: "Expand Lens", exact: true });
   const grip = lens.locator("[data-marimo-lens-collapsed-grip]");
   await expect(grip).toBeVisible();
   const save = page.locator('[data-testid="save-button"]');
@@ -260,10 +254,7 @@ test("collapsed Lens matches Marimo controls while remaining draggable", async (
   const handle = (await grip.boundingBox())!;
   const button = (await lens.boundingBox())!;
   expect(handle.x + handle.width).toBeLessThanOrEqual(button.x);
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(handle.x + 90, handle.y - 100, { steps: 10 });
-  await page.mouse.up();
+  await drag(page, handle, { x: handle.x + 90, y: handle.y - 100 }, 10);
   await expect.poll(async () => (await dock.boundingBox())!.x).toBeGreaterThan(before.x + 70);
   await expect.poll(async () => (await dock.boundingBox())!.y).toBeLessThan(before.y - 70);
   await expect(lens).toBeVisible();
@@ -342,4 +333,30 @@ async function expectLensClippedByApp(
       hiddenHandlesClipped: true,
       hiddenHandles: kind === "rect" ? 2 : 0,
     });
+
+  // Lens UI outside the pane misses hit testing even where it paints, so
+  // compare pixels: the sidebar strip at the pane edge renders the same with
+  // the Lens root transparent.
+  const strip = await page.evaluate(() => {
+    const pane = document.getElementById("App")!.getBoundingClientRect();
+    const marker = document
+      .querySelector("[data-marimo-lens-portal]")!
+      .shadowRoot!.querySelector("[data-marimo-lens-selection-id]")!
+      .getBoundingClientRect();
+    const y = Math.floor(marker.top) - 24;
+    return {
+      x: Math.floor(pane.left) - 21,
+      y,
+      width: 20,
+      height: Math.ceil(marker.bottom) + 8 - y,
+    };
+  });
+  const root = page.locator("[data-marimo-lens-root]");
+  const withLens = await page.screenshot({ clip: strip });
+  await root.evaluate((element: HTMLElement) =>
+    element.style.setProperty("opacity", "0", "important"),
+  );
+  const withoutLens = await page.screenshot({ clip: strip });
+  await root.evaluate((element: HTMLElement) => element.style.removeProperty("opacity"));
+  expect(withLens.equals(withoutLens)).toBe(true);
 }

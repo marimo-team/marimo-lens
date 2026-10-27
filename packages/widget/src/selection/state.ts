@@ -31,10 +31,11 @@ export type UiState = {
   optimisticCurrentSelectionId: string | null;
   busySelectionIds: ReadonlySet<string>;
   clearPending: boolean;
-  historyClearPending: boolean;
   sheetOpen: boolean;
   sheetTab: RequestSheetTab;
-  focusedHistoryRevision: number | null;
+  focusedHistoryKey: string | null;
+  /** History lists only the requests that shaped the current selection. */
+  historyShapedOnly: boolean;
   announcement: string;
 };
 
@@ -62,12 +63,12 @@ export type UiAction =
   | { type: "mutationStarted"; selectionId: string }
   | { type: "mutationFinished"; selectionId: string }
   | { type: "setClearPending"; pending: boolean }
-  | { type: "setHistoryClearPending"; pending: boolean }
-  | { type: "historyReopened"; selectionId: string; label: string }
+  | { type: "historyReopened"; label: string }
   | { type: "setSheetTab"; tab: RequestSheetTab }
   /** Keep the tab a sheet fell through to when its own tab emptied. */
   | { type: "sheetFellThrough"; tab: RequestSheetTab }
-  | { type: "openHistory"; resolutionRevision: number }
+  | { type: "openHistory"; key: string }
+  | { type: "setShapedOnly"; enabled: boolean }
   | { type: "setSheetOpen"; open: boolean }
   | { type: "toggleSheet" }
   | { type: "announce"; message: string };
@@ -78,10 +79,10 @@ export const INITIAL_UI_STATE: UiState = {
   optimisticCurrentSelectionId: null,
   busySelectionIds: new Set(),
   clearPending: false,
-  historyClearPending: false,
   sheetOpen: false,
   sheetTab: "open",
-  focusedHistoryRevision: null,
+  focusedHistoryKey: null,
+  historyShapedOnly: false,
   announcement: "",
 };
 
@@ -218,21 +219,18 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
       };
     case "setClearPending":
       return { ...state, clearPending: action.pending };
-    case "setHistoryClearPending":
-      return { ...state, historyClearPending: action.pending };
     case "historyReopened":
       return {
         ...state,
         sheetTab: "open",
-        focusedHistoryRevision: null,
-        optimisticCurrentSelectionId: state.optimisticCurrentSelectionId ?? action.selectionId,
+        focusedHistoryKey: null,
         announcement: `${action.label} reopened.`,
       };
     case "setSheetTab":
       return {
         ...state,
         sheetTab: action.tab,
-        focusedHistoryRevision: null,
+        focusedHistoryKey: null,
       };
     case "sheetFellThrough":
       return { ...state, sheetTab: action.tab };
@@ -241,12 +239,19 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
         ...state,
         sheetOpen: true,
         sheetTab: "history",
-        focusedHistoryRevision: action.resolutionRevision,
+        focusedHistoryKey: action.key,
+        historyShapedOnly: false,
       };
+    case "setShapedOnly":
+      return { ...state, historyShapedOnly: action.enabled };
     case "setSheetOpen":
       return { ...state, sheetOpen: action.open };
+    // The sheet opens on Open, where the current selection is. With nothing
+    // open it shows History instead.
     case "toggleSheet":
-      return { ...state, sheetOpen: !state.sheetOpen };
+      return state.sheetOpen
+        ? { ...state, sheetOpen: false }
+        : { ...state, sheetOpen: true, sheetTab: "open", focusedHistoryKey: null };
     case "announce":
       return { ...state, announcement: action.message };
   }

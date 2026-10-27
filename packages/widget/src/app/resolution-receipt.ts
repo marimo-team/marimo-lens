@@ -1,10 +1,9 @@
 import type { LensState, SelectionResolvedEvent } from "@marimo-lens/protocol";
 
-import { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
-import type { UiAction } from "@/selection/state";
 import type { TargetAttentionKind } from "@/transient/target-attention";
 
 import { targetBelongsToDocument } from "@/notebook/document-identity";
@@ -14,23 +13,28 @@ type ResolutionReceiptOptions = {
   state: LensState;
   protocol: LensProtocolClient;
   dom: NotebookDomAdapter;
-  dispatch: Dispatch<UiAction>;
   invalidateSnapshotCapture: (selectionId: string) => void;
   attentionKind: TargetAttentionKind | null;
 };
 
 type ResolutionReceiptState = {
   receipt: SelectionResolvedEvent | null;
+  /**
+   * The receipt a screen reader hears. It stays while attention covers the
+   * receipt it already presented, so the announcement is made once.
+   */
+  announced: SelectionResolvedEvent | null;
   setInteraction: (event: SelectionResolvedEvent, active: boolean) => void;
+  dismiss: (event: SelectionResolvedEvent) => void;
 };
 
 export function useResolutionReceipt(options: ResolutionReceiptOptions): ResolutionReceiptState {
-  const { state, protocol, dom, dispatch, invalidateSnapshotCapture, attentionKind } = options;
+  const { state, protocol, dom, invalidateSnapshotCapture, attentionKind } = options;
   const suspended = attentionKind !== null;
   const [queued, setQueued] = useState<SelectionResolvedEvent | null>(null);
   const [receipt, setReceipt] = useState<SelectionResolvedEvent | null>(null);
   const [pausedRevision, setPausedRevision] = useState<number | null>(null);
-  const presentedRevision = useRef<number | null>(null);
+  const [presentedRevision, setPresentedRevision] = useState<number | null>(null);
   const focus = useRef<{
     revision: number;
     selectionId: string;
@@ -68,16 +72,13 @@ export function useResolutionReceipt(options: ResolutionReceiptOptions): Resolut
   }, [dom, pausedRevision, receipt, suspended]);
 
   useEffect(() => {
-    if (
-      !receipt ||
-      attentionKind !== "activity" ||
-      presentedRevision.current !== receipt.revision
-    ) {
+    if (!receipt || attentionKind !== "activity" || presentedRevision !== receipt.revision) {
       return;
     }
+    // oxlint-disable-next-line react/set-state-in-effect -- Agent activity arrives from the kernel and ends a receipt the person already saw.
     setReceipt((current) => (current === receipt ? null : current));
     setPausedRevision((current) => (current === receipt.revision ? null : current));
-  }, [attentionKind, receipt]);
+  }, [attentionKind, presentedRevision, receipt]);
 
   const setInteraction = useCallback((event: SelectionResolvedEvent, active: boolean) => {
     setPausedRevision((current) =>
@@ -85,29 +86,17 @@ export function useResolutionReceipt(options: ResolutionReceiptOptions): Resolut
     );
   }, []);
 
+  const dismiss = useCallback((event: SelectionResolvedEvent) => {
+    setReceipt((current) => (current === event ? null : current));
+  }, []);
+
   useEffect(() => {
     if (!queued || state.revision < queued.revision) return;
-    const receipts = queued.payload.selections.map((resolved) =>
-      state.history.find(
-        (candidate) =>
-          candidate.selectionId === resolved.selectionId &&
-          candidate.resolutionRevision === resolved.resolutionRevision,
-      ),
-    );
-    if (
-      receipts.some((candidate) => candidate === undefined) ||
-      queued.payload.selections.some((resolved) =>
-        state.selections.some(({ id }) => id === resolved.selectionId),
-      )
-    ) {
-      return;
-    }
     // oxlint-disable-next-line react/set-state-in-effect -- The receipt moves focus, so it appears after the committed state reaches the resolved revision.
     setQueued((current) => (current === queued ? null : current));
-    const ownedSelections = queued.payload.selections.filter((_, index) => {
-      const receipt = receipts[index];
-      return receipt !== undefined && targetBelongsToDocument(receipt.target, dom.document);
-    });
+    const ownedSelections = queued.payload.selections.filter(({ target }) =>
+      targetBelongsToDocument(target, dom.document),
+    );
     const documentReceipt =
       ownedSelections.length === 0
         ? null
@@ -131,21 +120,19 @@ export function useResolutionReceipt(options: ResolutionReceiptOptions): Resolut
     if (pendingFocus?.revision === queued.revision) focus.current = null;
   }, [dom, queued, state]);
 
+  // A receipt counts as presented once it shows without attention covering it.
   useEffect(() => {
-    if (!receipt || suspended || presentedRevision.current === receipt.revision) return;
-    presentedRevision.current = receipt.revision;
-    const resolved = receipt.payload.selections;
-    const resolutionLabel =
-      resolved.length === 1
-        ? `${resolved[0]!.label} addressed.`
-        : `${resolved.length} selections addressed.`;
-    dispatch({
-      type: "announce",
-      message: `${resolutionLabel}${receipt.payload.summary ? ` ${receipt.payload.summary}` : ""}`,
-    });
-  }, [dispatch, receipt, suspended]);
+    if (!receipt || suspended) return;
+    // oxlint-disable-next-line react/set-state-in-effect -- Presentation follows the commit that shows the receipt uncovered.
+    setPresentedRevision((current) => (current === receipt.revision ? current : receipt.revision));
+  }, [receipt, suspended]);
 
-  return { receipt: suspended ? null : receipt, setInteraction };
+  return {
+    receipt: suspended ? null : receipt,
+    announced: receipt && (!suspended || presentedRevision === receipt.revision) ? receipt : null,
+    setInteraction,
+    dismiss,
+  };
 }
 
 function focusedSelectionId(element: HTMLElement | null): string | null {

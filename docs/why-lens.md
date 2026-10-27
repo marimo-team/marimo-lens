@@ -9,4 +9,4 @@ description: How visual selections connect notebook output to the computation an
 and the point, revise, review workflow.
 
 [How Lens works](./how-lens-works) follows a selection from the browser through
-notebook context, agent feedback, and History.
+notebook context, agent feedback, resolution, and the request record.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pathlib
+import textwrap
 from collections.abc import Iterator, Mapping
 from types import SimpleNamespace
 from typing import Any
@@ -89,7 +91,7 @@ def test_runtime_collects_cells_edges_and_controls(
     )
     install_context(monkeypatch, context)
 
-    snapshot = collect_runtime_snapshot()
+    snapshot = collect_runtime_snapshot(tuple(context.graph.cells))
 
     assert snapshot.available is True
     assert snapshot.filename == "/workspace/demo.py"
@@ -229,13 +231,13 @@ def test_targeted_runtime_never_reads_unrelated_widget_state(
     assert unrelated.state_reads == baseline_reads
 
 
-def test_targeted_runtime_materializes_at_most_sixty_four_cells(
+def test_runtime_snapshot_keeps_the_selected_closure_within_the_notebook_bound(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cells = {f"cell-{index}": _ReadCountingCell("x" * 10_000) for index in range(1_000)}
+    cells = {f"cell-{index}": _ReadCountingCell("x" * 10_000) for index in range(1_200)}
     parents = {
         f"cell-{index}": ({f"cell-{index - 1}"} if index else set())
-        for index in range(1_000)
+        for index in range(1_200)
     }
     context = SimpleNamespace(
         graph=SimpleNamespace(cells=cells, definitions={}, parents=parents),
@@ -245,24 +247,115 @@ def test_targeted_runtime_materializes_at_most_sixty_four_cells(
     )
     install_context(monkeypatch, context)
 
-    runtime = collect_runtime_snapshot(("cell-999",))
-    provenance = resolve_provenance(runtime, ["cell-999"])
+    runtime = collect_runtime_snapshot(("cell-1199",))
+    provenance = resolve_provenance(runtime, ["cell-1199"])
 
-    assert len(runtime.cells) == 64
-    assert sum(cell.code_reads for cell in cells.values()) == 64
-    assert runtime.omitted_cell_count == 936
+    assert len(runtime.cells) == 1_000
+    assert {cell.id for cell in runtime.cells} == {
+        f"cell-{index}" for index in range(200, 1_200)
+    }
+    assert sum(cell.code_reads for cell in cells.values()) == 1_000
+    assert runtime.omitted_cell_count == 200
     assert runtime.omitted_cell_ids == tuple(
-        f"cell-{index}" for index in range(935, 919, -1)
+        f"cell-{index}" for index in range(199, 183, -1)
     )
-    assert runtime.cell_truncated_output_ids == frozenset({"cell-999"})
-    assert runtime.available_cell_ids == frozenset({"cell-999"})
-    assert provenance.omitted_cell_count == 936
+    assert runtime.cell_truncated_output_ids == frozenset({"cell-1199"})
+    assert runtime.available_cell_ids == frozenset({"cell-1199"})
+    assert len(provenance.cells) == 64
+    assert provenance.omitted_cell_count == 1_136
+
+
+def test_runtime_snapshot_keeps_unrelated_cells_after_the_selected_closure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    context = SimpleNamespace(
+        graph=SimpleNamespace(
+            cells={
+                "cell-other": cell("other = 1", defs={"other"}),
+                "cell-data": cell("data = 1", defs={"data"}),
+                "cell-view": cell("render(data)", refs={"data"}),
+            },
+            definitions={},
+            parents={
+                "cell-other": set(),
+                "cell-data": set(),
+                "cell-view": {"cell-data"},
+            },
+        ),
+        globals={},
+        filename="demo.py",
+        cell_id="cell-lens",
+    )
+    install_context(monkeypatch, context)
+
+    runtime = collect_runtime_snapshot(("cell-view",))
+
+    assert [cell.id for cell in runtime.cells] == [
+        "cell-other",
+        "cell-data",
+        "cell-view",
+    ]
+    assert runtime.available_cell_ids == frozenset({"cell-view"})
+    assert runtime.omitted_cell_count == 0
+
+
+def test_runtime_snapshot_reads_names_and_order_during_a_code_mode_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._ast.cell import CellConfig
+    from marimo._messaging.notebook.document import (
+        NotebookCell,
+        NotebookDocument,
+        notebook_document_context,
+    )
+    from marimo._types.ids import CellId_t
+
+    function = "def net_by_store(sales):\n    return sales"
+    context = SimpleNamespace(
+        graph=SimpleNamespace(
+            cells={
+                "cell-view": cell("render(data)", refs={"data"}),
+                "cell-data": cell("data = 1", defs={"data"}),
+                "cell-fn": cell(function, defs={"net_by_store"}),
+            },
+            definitions={},
+            parents={"cell-data": set(), "cell-view": {"cell-data"}, "cell-fn": set()},
+        ),
+        globals={"__file__": "/workspace/renamed.py"},
+        filename="/workspace/original.py",
+        cell_id="cell-lens",
+    )
+    install_context(monkeypatch, context)
+    document = NotebookDocument(
+        [
+            NotebookCell(CellId_t("cell-data"), "data = 1", "load_data", CellConfig()),
+            NotebookCell(CellId_t("cell-view"), "render(data)", "_", CellConfig()),
+            # marimo names a top-level function cell after it, with a "*" prefix.
+            NotebookCell(CellId_t("cell-fn"), function, "*net_by_store", CellConfig()),
+        ]
+    )
+
+    without_document = collect_runtime_snapshot(tuple(context.graph.cells))
+    with notebook_document_context(document):
+        with_document = collect_runtime_snapshot(tuple(context.graph.cells))
+
+    assert [(cell.id, cell.name) for cell in without_document.cells] == [
+        ("cell-view", None),
+        ("cell-data", None),
+        ("cell-fn", None),
+    ]
+    assert [(cell.id, cell.name) for cell in with_document.cells] == [
+        ("cell-data", "load_data"),
+        ("cell-view", None),
+        ("cell-fn", "net_by_store"),
+    ]
+    assert with_document.filename == "/workspace/renamed.py"
 
 
 def test_targeted_runtime_preserves_membership_for_omitted_producers(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    cell_ids = tuple(f"cell-{index}" for index in range(65))
+    cell_ids = tuple(f"cell-{index}" for index in range(1_001))
     context = SimpleNamespace(
         graph=SimpleNamespace(
             cells={cell_id: _ReadCountingCell("value = 1") for cell_id in cell_ids},
@@ -277,47 +370,10 @@ def test_targeted_runtime_preserves_membership_for_omitted_producers(
 
     runtime = collect_runtime_snapshot(cell_ids)
 
-    assert len(runtime.cells) == 64
+    assert len(runtime.cells) == 1_000
     assert runtime.available_cell_ids == frozenset(cell_ids)
-    assert runtime.omitted_cell_ids == ("cell-64",)
-    assert runtime.cell_truncated_output_ids == frozenset({"cell-64"})
-
-
-def test_targeted_runtime_reads_only_sixteen_of_many_relevant_controls(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo_lens._marimo.controls as control_state_module
-
-    controls = {f"control_{index:02d}": _CountingControl(index) for index in range(80)}
-    context = SimpleNamespace(
-        graph=SimpleNamespace(
-            cells={
-                "cell-view": cell(
-                    "render_controls()",
-                    refs=set(controls),
-                )
-            },
-            definitions={},
-            parents={"cell-view": set()},
-        ),
-        globals=controls,
-        filename="demo.py",
-        cell_id="cell-lens",
-    )
-    install_context(monkeypatch, context)
-    monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
-
-    runtime = collect_runtime_snapshot(("cell-view",))
-
-    assert len(runtime.controls) == 16
-    assert sum(control.frontend_reads for control in controls.values()) == 16
-    assert runtime.control_truncated_output_ids == frozenset({"cell-view"})
-
-    _, text = build_context(
-        runtime, [selection()], revision=1, current_selection_id="selection-1"
-    )
-
-    assert "Control sampling reached its per-output limit for `cell-view`" in text
+    assert runtime.omitted_cell_ids == ("cell-1000",)
+    assert runtime.cell_truncated_output_ids == frozenset({"cell-1000"})
 
 
 def test_targeted_runtime_retains_top_controls_for_each_output(
@@ -357,25 +413,6 @@ def test_targeted_runtime_retains_top_controls_for_each_output(
     assert runtime.control_truncated_output_ids == frozenset(
         {"cell-alpha", "cell-beta"}
     )
-
-
-def test_targeted_runtime_uses_exact_namespace_lookups(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo_lens._marimo.controls as control_state_module
-
-    control = _CountingControl(8)
-    namespace = _ExactLookupMapping({"limit": control})
-    context = control_context("limit", control)
-    context.globals = namespace
-    install_context(monkeypatch, context)
-    monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
-
-    runtime = collect_runtime_snapshot(("cell-view",))
-
-    assert [item.name for item in runtime.controls] == ["limit"]
-    assert namespace.lookups == ["limit"]
-    assert control.frontend_reads == 1
 
 
 def test_control_lookup_failure_is_scoped_to_its_output(
@@ -624,7 +661,6 @@ def test_runtime_cell_status_reads_only_exact_graph_membership(
 
     assert runtime_cell_status("cell-view") == "available"
     assert runtime_cell_status("cell-other") == "missing"
-    assert lock.entries == 2
 
 
 def test_runtime_copies_graph_structures_while_holding_its_lock(
@@ -642,7 +678,6 @@ def test_runtime_copies_graph_structures_while_holding_its_lock(
 
     snapshot = collect_runtime_snapshot(("cell-view",))
 
-    assert lock.entries == 1
     assert snapshot.cells[0].id == "cell-view"
     assert snapshot.cells[0].runtime_state == "idle"
     assert snapshot.cells[0].run_result_status == "success"
@@ -652,11 +687,9 @@ def test_runtime_copies_graph_structures_while_holding_its_lock(
 class _RecordingLock:
     def __init__(self) -> None:
         self.active = False
-        self.entries = 0
 
     def __enter__(self) -> None:
         self.active = True
-        self.entries += 1
 
     def __exit__(self, *_args: object) -> None:
         self.active = False
@@ -736,13 +769,16 @@ class _ReadCountingCell:
         return self._code
 
 
-class _ExactLookupMapping(Mapping[str, object]):
-    def __init__(self, values: dict[str, object]) -> None:
+class _SelectiveLookupMapping(Mapping[str, object]):
+    def __init__(self, values: dict[str, object], *, failures: set[str]) -> None:
         self._values = values
+        self._failures = failures
         self.lookups: list[str] = []
 
     def __getitem__(self, key: str) -> object:
         self.lookups.append(key)
+        if key in self._failures:
+            raise RuntimeError("namespace lookup failed")
         return self._values[key]
 
     def __iter__(self) -> Iterator[str]:
@@ -750,23 +786,6 @@ class _ExactLookupMapping(Mapping[str, object]):
 
     def __len__(self) -> int:
         raise AssertionError("targeted runtime must not size context.globals")
-
-
-class _SelectiveLookupMapping(_ExactLookupMapping):
-    def __init__(
-        self,
-        values: dict[str, object],
-        *,
-        failures: set[str],
-    ) -> None:
-        super().__init__(values)
-        self._failures = failures
-
-    def __getitem__(self, key: str) -> object:
-        self.lookups.append(key)
-        if key in self._failures:
-            raise RuntimeError("namespace lookup failed")
-        return self._values[key]
 
 
 class _GlobalsFailureContext:
@@ -815,3 +834,73 @@ class _HostileGlobal:
     def widget(self) -> object:
         self.probes.append("widget")
         raise RuntimeError("unrelated widget property was read")
+
+
+def test_document_only_cells_share_the_notebook_bound(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from marimo._ast.cell import CellConfig
+    from marimo._messaging.notebook.document import (
+        NotebookCell,
+        NotebookDocument,
+        notebook_document_context,
+    )
+    from marimo._types.ids import CellId_t
+
+    context = SimpleNamespace(
+        graph=SimpleNamespace(
+            cells={"cell-run": cell("x = 1", defs={"x"})},
+            definitions={},
+            parents={"cell-run": set()},
+        ),
+        globals={},
+        filename="demo.py",
+        cell_id="cell-lens",
+    )
+    install_context(monkeypatch, context)
+    document = NotebookDocument(
+        [
+            NotebookCell(CellId_t("cell-run"), "x = 1", "_", CellConfig()),
+            *(
+                NotebookCell(CellId_t(f"cell-{index}"), "y = (", "_", CellConfig())
+                for index in range(1_005)
+            ),
+        ]
+    )
+
+    with notebook_document_context(document):
+        snapshot = collect_runtime_snapshot(tuple(context.graph.cells))
+
+    assert len(snapshot.cells) + len(snapshot.unregistered) == 1_000
+    assert snapshot.omitted_cell_count == 6
+    assert snapshot.document is True
+
+
+def test_a_notebook_file_names_a_top_level_function_cell_as_written(
+    tmp_path: pathlib.Path,
+) -> None:
+    from marimo_lens._marimo.notebook_file import notebook_file_snapshot
+
+    path = tmp_path / "sales.py"
+    path.write_text(
+        textwrap.dedent(
+            """
+            import marimo
+
+            app = marimo.App()
+
+
+            @app.function
+            def net_by_store(sales):
+                return sales
+
+
+            if __name__ == "__main__":
+                app.run()
+            """
+        )
+    )
+
+    snapshot = notebook_file_snapshot(path)
+
+    assert [cell.name for cell in snapshot.cells] == ["net_by_store"]

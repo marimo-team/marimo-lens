@@ -22,6 +22,40 @@ afterEach(() => {
 });
 
 describe("document selection interactions", () => {
+  test("a canceled drag's lost release lets a later notebook release through", () => {
+    const output = visibleOutput();
+    const button = document.createElement("button");
+    output.appendChild(button);
+    const notebookPointerUp = vi.fn();
+    button.addEventListener("pointerup", notebookPointerUp);
+    mount(vi.fn<BeginSelection>());
+    arm();
+    void act(() => button.dispatchEvent(pointer("pointerdown", 40, 50, 1)));
+    pressSelectKey("Escape");
+    expect(workflowMode()).toBe("idle");
+    // Released outside the window, so this document sees no pointerup.
+    void act(() => button.dispatchEvent(pointer("pointerdown", 40, 50, 1)));
+    void act(() => button.dispatchEvent(pointer("pointerup", 40, 50, 1)));
+    expect(notebookPointerUp).toHaveBeenCalledOnce();
+  });
+
+  test("a drag canceled with Escape does not click the pressed notebook control", () => {
+    const output = visibleOutput();
+    const button = document.createElement("button");
+    output.appendChild(button);
+    const notebookClick = vi.fn();
+    button.addEventListener("click", notebookClick);
+    mount(vi.fn<BeginSelection>());
+    arm();
+    void act(() => button.dispatchEvent(pointer("pointerdown", 40, 50, 7)));
+    pressSelectKey("Escape");
+    void act(() => button.dispatchEvent(pointer("pointerup", 40, 50, 7)));
+    void act(() =>
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true })),
+    );
+    expect(notebookClick).not.toHaveBeenCalled();
+  });
+
   test("creates a centered point from the armed Select button", () => {
     visibleOutput();
     const beginSelection = vi.fn<BeginSelection>();
@@ -147,20 +181,6 @@ describe("document selection interactions", () => {
       String(sheetOpen),
     );
     expect(document.activeElement).toBe(focus ? document.querySelector(focus) : document.body);
-  });
-
-  test("Escape cancels a drag before disarming", () => {
-    const output = visibleOutput();
-    output.hasPointerCapture = vi.fn((pointerId: number) => pointerId === 7);
-    mount(vi.fn<BeginSelection>());
-    arm();
-    void act(() => output.dispatchEvent(pointer("pointerdown", 40, 50, 7)));
-    expect(workflowMode()).toBe("dragging");
-
-    pressSelectKey("Escape");
-
-    expect(output.releasePointerCapture).toHaveBeenCalledWith(7);
-    expect(workflowMode()).toBe("idle");
   });
 
   test("cycles outputs with vertical keys while keeping Select focused", () => {

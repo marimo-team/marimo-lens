@@ -13,10 +13,8 @@ import type {
 } from "@marimo-lens/protocol";
 
 import {
-  ClearSelectionsResponsePayloadSchema,
   ClientCommandSchema,
-  SelectionMutationResponsePayloadSchema,
-  SelectionPutResponsePayloadSchema,
+  HistoryImageResponsePayloadSchema,
   SnapshotResponsePayloadSchema,
   WIDGET_TRANSPORT_VERSION,
   parseAttentionEvent,
@@ -129,8 +127,23 @@ export class LensProtocolClient {
     return this.#mutate("selections.clear", { expectedRevision });
   }
 
-  clearHistory(expectedRevision: number): Promise<LensResponse> {
-    return this.#mutate("history.clear", { expectedRevision });
+  refreshHistory(): Promise<LensResponse> {
+    return this.#mutate("history.refresh", {});
+  }
+
+  /** Read the annotated PNG that the notebook's record keeps for a resolved selection. */
+  async getHistoryImage(sha256: string): Promise<Uint8Array<ArrayBuffer>> {
+    const { response, buffers } = await this.#send("history.image", { sha256 });
+    const payload = parseReply(() =>
+      parseContract(HistoryImageResponsePayloadSchema, response.payload, "History image response"),
+    );
+    if (payload.sha256 !== sha256) {
+      throw new LensProtocolError(
+        "invalid_response",
+        "History image response must identify the requested image",
+      );
+    }
+    return exactBytes(buffers[0]);
   }
 
   async getSnapshot(selectionId: string): Promise<SnapshotAsset> {
@@ -281,7 +294,9 @@ function validateReply(
   response: LensResponse,
   buffers: readonly DataView[],
 ): void {
-  const expected = response.ok && command.type === "snapshot.get" ? 1 : 0;
+  const imageReply =
+    response.ok && (command.type === "snapshot.get" || command.type === "history.image");
+  const expected = imageReply ? 1 : 0;
   if (buffers.length !== expected) {
     throw new LensProtocolError(
       "invalid_response",
@@ -298,49 +313,6 @@ function validateReply(
       "Selection mutation response must advance the requested revision once",
       response.revision,
     );
-  }
-  if (!response.ok) {
-    parseContract(ClearSelectionsResponsePayloadSchema, response.payload, "Failed Lens response");
-    return;
-  }
-  switch (command.type) {
-    case "selection.put": {
-      const payload = parseContract(
-        SelectionPutResponsePayloadSchema,
-        response.payload,
-        "Selection put response",
-      );
-      if (payload.selection.id !== command.payload.selection.id) {
-        throw new LensProtocolError(
-          "invalid_response",
-          "Selection put response must identify the submitted selection",
-        );
-      }
-      return;
-    }
-    case "selection.activate":
-    case "selection.delete":
-    case "selection.reopen": {
-      const payload = parseContract(
-        SelectionMutationResponsePayloadSchema,
-        response.payload,
-        "Selection mutation response",
-      );
-      if (payload.selectionId !== command.payload.selectionId) {
-        throw new LensProtocolError(
-          "invalid_response",
-          "Selection mutation response must identify the requested selection",
-        );
-      }
-      return;
-    }
-    case "selections.clear":
-    case "history.clear":
-      parseContract(
-        ClearSelectionsResponsePayloadSchema,
-        response.payload,
-        "Clear selections response",
-      );
   }
 }
 

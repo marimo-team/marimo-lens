@@ -14,6 +14,8 @@ LAYERS = (
     "_schema",
     "_notebook",
     "_selection",
+    "_record",
+    "_checks",
     "_context",
     "_session",
     "_protocol",

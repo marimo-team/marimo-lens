@@ -68,7 +68,7 @@ heading says something else.
 
 A root's explicit label wins over labels on nested elements. Without a custom
 label, Lens falls back to available value selectors, headings, accessible
-names, producing cell IDs, or the element name. Labels describe a target and
+names, producing cell names or IDs, or the element name. Labels describe a target and
 do not affect its identity. Changing a label updates the indicator and future
 selections, while existing selections keep the description they captured.
 
@@ -297,7 +297,7 @@ Try these variations:
 | Enter invalid JSON as the rendering reference.                                                | Lens omits the rendering reference and keeps the valid label and detail.                         |
 | Uncheck the image-context option.                                                             | Lens uses its bounded surrounding-context heuristics for the next capture.                       |
 
-Exit Select mode before editing fields. Open **Selections** to compare captured
+Exit Select mode before editing fields. Open **Requests** to compare captured
 names across selections. Live changes affect future selections. Note edits,
 History, and reopen preserve a selection's original description.
 

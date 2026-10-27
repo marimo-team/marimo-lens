@@ -33,7 +33,9 @@ def revision_conflict(expected: int, current: int) -> LensError:
 
     return LensError(
         "revision_conflict",
-        f"Expected Lens revision {expected}, but the current revision is {current}.",
+        f"Expected Lens revision {expected}, but the current revision is {current}. "
+        "Each resolve and each selection change advances it, so pass the "
+        "revision the last call returned, or read fresh context.",
         revision=current,
     )
 

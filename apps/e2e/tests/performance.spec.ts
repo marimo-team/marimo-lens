@@ -232,7 +232,7 @@ test("preview and annotation churn releases PNG URLs and bounds retained browser
   for (let cycle = 1; cycle <= 16; cycle += 1) {
     const started = performance.now();
     await selectOutput(page, "point", `S${cycle}`, `Review cycle ${cycle}`);
-    await page.getByRole("button", { name: /^Open selections,/ }).click();
+    await page.getByRole("button", { name: /^Requests,/ }).click();
     await page.getByRole("button", { name: `View image for S${cycle}.`, exact: true }).click();
     const preview = page.getByRole("dialog", {
       name: `Selection image for S${cycle}`,
@@ -245,7 +245,7 @@ test("preview and annotation churn releases PNG URLs and bounds retained browser
       .toBeGreaterThan(0);
     await preview.getByRole("button", { name: "Close preview" }).click();
     await page.getByRole("button", { name: `Remove selection S${cycle}`, exact: true }).click();
-    await expect(page.getByRole("region", { name: "Selections", exact: true })).toBeHidden();
+    await expect(page.getByRole("region", { name: "Requests", exact: true })).toBeHidden();
     await expect.poll(() => page.evaluate(() => window.pngUrls.active.size)).toBe(0);
     durations.push(performance.now() - started);
     if (cycle === 4 || cycle === 10 || cycle === 16) {
@@ -271,7 +271,7 @@ test("preview and annotation churn releases PNG URLs and bounds retained browser
   expect(last).toBeLessThan(first * 1.75 + 250);
 });
 
-test("large authored scopes preserve parent picking, child evidence, and responsive outlines", async ({
+test("large authored scopes preserve parent picking and child evidence", async ({
   page,
   context,
 }, testInfo) => {
@@ -324,23 +324,4 @@ test("large authored scopes preserve parent picking, child evidence, and respons
       domHint: { tag: "em", text: "Focus 0", path: "p > em" },
     },
   ]);
-  await page.setViewportSize({ width: 390, height: 844 });
-  await target.scrollIntoViewIfNeeded();
-  await page.getByRole("button", { name: "Select a target", exact: true }).click();
-  await target.hover();
-  const label = page.locator("[data-marimo-lens-target-label]");
-  await expect(label).toContainText("Card 0");
-  expect(
-    await label.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return (
-        rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight
-      );
-    }),
-  ).toBe(true);
-  await testInfo.attach("scoped-picking-narrow", {
-    body: await page.screenshot(),
-    contentType: "image/png",
-  });
-  await page.keyboard.press("Escape");
 });

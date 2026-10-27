@@ -1,0 +1,78 @@
+{
+  "entries": [
+    {
+      "id": "s1",
+      "channel": "selection",
+      "label": "S1",
+      "note": "Central looks off",
+      "summary": "Dropped refunds.",
+      "openedAt": "2026-07-14T12:00:01+00:00",
+      "resolvedAt": "2026-07-14T12:00:02+00:00",
+      "revision": 2,
+      "cellIds": ["cell-chart"],
+      "changes": [
+        {
+          "cellId": "cell-net",
+          "status": "undone",
+          "undoneBy": "chat-000000000004",
+          "missing": ["net = sales[sales.kind != 'refund']"]
+        }
+      ],
+      "selection": {
+        "target": {
+          "cellIds": ["cell-chart"],
+          "documentId": "document-1",
+          "kind": "notebook",
+          "documentPath": "/"
+        },
+        "anchor": {
+          "kind": "point",
+          "x": 0.25,
+          "y": 0.75
+        },
+        "description": {
+          "label": "Cell cell-chart"
+        }
+      },
+      "image": {
+        "sha256": "c306f8aabe90c270099dfaf94260878d8077c2d5c24c1b661ab00fedb242d716",
+        "width": 2,
+        "height": 2,
+        "capturedAt": "2026-07-14T11:58:00Z",
+        "outdated": false
+      },
+      "shaped": ["s2"]
+    },
+    {
+      "id": "chat-000000000004",
+      "channel": "chat",
+      "note": "Show refunds again 📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉📉...",
+      "summary": "Restored all sales.",
+      "openedAt": "2026-07-14T12:00:05+00:00",
+      "resolvedAt": "2026-07-14T12:00:06+00:00",
+      "revision": 2,
+      "cellIds": ["cell-net"],
+      "changes": [
+        {
+          "cellId": "cell-net",
+          "status": "in_force"
+        }
+      ],
+      "shaped": ["s2"]
+    }
+  ],
+  "total": 2,
+  "record": {
+    "status": "saved"
+  },
+  "cells": [
+    {
+      "id": "cell-net",
+      "defines": ["net"]
+    },
+    {
+      "id": "cell-chart",
+      "defines": []
+    }
+  ]
+}

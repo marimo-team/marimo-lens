@@ -224,13 +224,15 @@ def error_response(
     return dump_model(response)
 
 
-def request_id_from(content: object) -> str:
+def request_id_from(content: object) -> str | None:
+    """Return the request ID of a command, or None when it names none to answer."""
+
     if not isinstance(content, Mapping):
-        return ""
+        return None
     try:
         return REQUEST_ID_ADAPTER.validate_python(content.get("requestId"))
     except ValidationError:
-        return ""
+        return None
 
 
 def _validate_model(

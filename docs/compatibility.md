@@ -64,7 +64,7 @@ The agent workflow requires an integration that can execute Python in the live
 marimo kernel. Lens calls this environment **code mode**. The same kernel must
 contain the installed `marimo-lens` package and the mounted `Lens` instance.
 
-The package registers `marimo_lens.agent` in marimo's
+The package registers `marimo_lens._capability` in marimo's
 `marimo.agent.capability` entry-point group. An agent host can discover that
 capability, read the packaged Agent Skill, and call `connect()` inside the live
 kernel.
@@ -74,11 +74,9 @@ Code and Codex through its `marimo pair notebook list` and
 `marimo pair execute` commands. marimo's code-mode sidebar is the in-editor
 integration.
 
-Read Lens instructions through `help(marimo_lens.agent)` or
-`agent_plugins.read("marimo-lens")` in the notebook's Python environment. A
-terminal bootstrap with `uvx --with marimo-lens agent-plugins read marimo-lens`
-reads an isolated installation and requires network access when packages are
-uncached.
+[Read the packaged briefing](./agents#read-the-packaged-briefing) from the
+notebook's Python environment. A terminal bootstrap with `uvx` reads an
+isolated installation and requires network access when packages are uncached.
 
 ## Hosted docs and released packages
 

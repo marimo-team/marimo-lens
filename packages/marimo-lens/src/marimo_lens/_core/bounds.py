@@ -20,7 +20,17 @@ from pydantic_core import PydanticCustomError
 
 MAX_SELECTIONS = 64
 
-MAX_HISTORY = 64
+MAX_HISTORY_ENTRIES = 100
+
+MAX_HISTORY_NOTE = 500
+
+MAX_HISTORY_STATEMENT = 240
+
+MAX_HISTORY_DEFINES = 8
+
+MAX_HISTORY_CELL_NAMES = 256
+
+MAX_CHAT_REQUESTS = 16
 
 MAX_SELECTION_ID = 128
 
@@ -35,6 +45,8 @@ MAX_DOM_FIELD = 240
 MAX_DOM_SELECTOR = 1_024
 
 MAX_ERROR = 500
+
+MAX_CELL_NAME = 256
 
 MAX_ATTENTION_MESSAGE = 240
 
@@ -85,6 +97,22 @@ def bounded_utf16(value: str, *, maximum: int) -> str:
     return value
 
 
+def utf16_prefix(text: str, maximum: int) -> str:
+    """Return ``text``, or its prefix ending in "..." within ``maximum`` UTF-16 units."""
+
+    if len(text.encode("utf-16-le")) // 2 <= maximum:
+        return text
+    prefix: list[str] = []
+    units = 0
+    for character in text:
+        width = 2 if ord(character) > 0xFFFF else 1
+        if units + width > maximum - 3:
+            break
+        prefix.append(character)
+        units += width
+    return "".join(prefix) + "..."
+
+
 def utf16_text(value: str, maximum: int) -> str:
     """Return ``value`` with lone surrogates replaced, cut to ``maximum`` UTF-16 units.
 
@@ -132,6 +160,12 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def parse_timestamp(value: str) -> datetime:
+    """Return the instant that a validated ``TimestampText`` names."""
+
+    return _AWARE_DATETIME_ADAPTER.validate_python(value)
+
+
 def _valid_timestamp(value: str) -> str:
     try:
         _AWARE_DATETIME_ADAPTER.validate_python(value)
@@ -173,6 +207,9 @@ RequestId: TypeAlias = Annotated[
     AfterValidator(nonblank),
     AfterValidator(partial(bounded_utf16, maximum=256)),
 ]
+
+# The largest label number whose successor still fits in a label.
+MAX_SELECTION_LABEL = 10**15 - 2
 
 SelectionLabel: TypeAlias = Annotated[
     UnicodeText,
@@ -303,6 +340,8 @@ ErrorCode: TypeAlias = Annotated[
 
 SELECTION_ID_ADAPTER = TypeAdapter(Identifier)
 
+NOTE_ADAPTER = TypeAdapter(NoteText)
+
 REQUEST_ID_ADAPTER = TypeAdapter(RequestId)
 
 CELL_ID_ADAPTER = TypeAdapter(CellId)
@@ -310,12 +349,6 @@ CELL_ID_ADAPTER = TypeAdapter(CellId)
 DOM_SELECTOR_ADAPTER = TypeAdapter(DomSelectorText)
 
 REVISION_ADAPTER = TypeAdapter(Revision)
-
-POSITIVE_SAFE_INTEGER_ADAPTER = TypeAdapter(PositiveSafeInteger)
-
-NONNEGATIVE_SAFE_INTEGER_ADAPTER = TypeAdapter(NonNegativeSafeInteger)
-
-SELECTION_LABEL_ADAPTER = TypeAdapter(SelectionLabel)
 
 OPTIONAL_ATTENTION_TEXT_ADAPTER = TypeAdapter(OptionalAttentionText)
 

@@ -1,4 +1,4 @@
-import type { AddressedSelection, Selection } from "@marimo-lens/protocol";
+import type { HistoryEntry, Selection } from "@marimo-lens/protocol";
 
 import { captureOutputSnapshot } from "@marimo-lens/image-capture";
 import { useEffect, useLayoutEffect, useMemo, useReducer, type Dispatch } from "react";
@@ -13,15 +13,18 @@ import { useLatestCommitted } from "@/app/committed-ref";
 import { useResolutionReceipt } from "@/app/resolution-receipt";
 import { sheetView } from "@/app/sheet-view";
 import { useAdjustmentSlot } from "@/app/use-adjustment-slot";
+import { useHistoryRefresh } from "@/app/use-history-refresh";
 import { useOutputCapture } from "@/app/use-output-capture";
+import { historyKey, indexRecord } from "@/context/record-index";
+import { reopenTarget } from "@/history/entries";
 import { useNotebookDom } from "@/notebook/notebook-dom-context";
 import { useDocumentInteractions } from "@/selection/document-interactions";
 import { revealSelection } from "@/selection/reveal";
 import { useSelectionActions } from "@/selection/selection-actions";
-import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
 import { INITIAL_UI_STATE, uiReducer } from "@/selection/state";
 import { useAvailableSelectionIds } from "@/selection/target-availability";
 import { useTargetAttention } from "@/transient/use-target-attention";
+import { focusListTrigger } from "@/ui/focus";
 
 export type LensDependencies = {
   captureOutputSnapshot: typeof captureOutputSnapshot;
@@ -39,8 +42,8 @@ type SelectionActions = ReturnType<typeof useSelectionActions>;
 
 /**
  * Run one Lens view: its interaction state, selection actions, attention,
- * and receipt, published as the Lens context plus what the overlay layers
- * draw.
+ * receipt, and record, published as the Lens context plus what the overlay
+ * layers draw.
  */
 export function useLensController(dependencies: LensDependencies) {
   const dom = useNotebookDom();
@@ -63,15 +66,14 @@ export function useLensController(dependencies: LensDependencies) {
     availableSelectionIds: open.availableSelectionIds,
   });
   useOutputCapture(model.protocol, dom, dependencies.captureOutputSnapshot);
-  const presentation = useTargetAttention(model.protocol, dom, model.state);
-  useCloseSheetForTrail(presentation?.trail?.id, dispatch);
+  const attention = useTargetAttention(model.protocol, dom, model.state);
+  useCloseSheetForTrail(attention.presentation?.trail?.id, dispatch);
   const receipt = useResolutionReceipt({
     state: model.state,
     protocol: model.protocol,
     dom,
-    dispatch,
     invalidateSnapshotCapture: selectionActions.invalidateSnapshotCapture,
-    attentionKind: presentation?.kind ?? null,
+    attentionKind: attention.agentAttentionKind,
   });
   useDocumentInteractions({
     workflow: ui.workflow,
@@ -82,24 +84,30 @@ export function useLensController(dependencies: LensDependencies) {
     cancelAdjustment: adjustment.cancelAdjustment,
   });
 
-  const history = model.state.history;
-  const sheet = sheetView(ui, open.selections.length, history.length);
+  const record = useMemo(() => indexRecord(model.history), [model.history]);
+  const sheet = sheetView(ui, open.selections.length + model.chats.length, model.history);
   const note = noteInProgress(ui, open.selections);
   useSettleUi(ui, sheet, note !== null, dispatch);
+  // The note editor lists the requests that shaped its selection, so History
+  // stays current while either shows it.
+  useHistoryRefresh(
+    model.protocol,
+    dom,
+    (sheet.open && sheet.tab === "history") || (note !== null && model.history !== null),
+  );
   const meta = useLensMeta(model);
   const actions = useLensActions({
     dispatch,
     dom,
     selectionActions,
+    revealCells: attention.revealCells,
     receipt,
-    // Opening the sheet with no open selection shows History.
-    opensOnHistory: !ui.sheetOpen && open.selections.length === 0 && history.length > 0,
   });
 
   const armed = ui.workflow.mode === "armed" || ui.workflow.mode === "dragging";
   const noteOpen = note !== null;
   const { selections, currentSelectionId, availableSelectionIds, busySelectionIds } = open;
-  const { open: sheetOpen, tab, focusedHistoryRevision } = sheet;
+  const { open: sheetOpen, tab, focusedHistoryKey, shapedOnly } = sheet;
   // Keep the value stable across drags and other interaction-only renders, so
   // context consumers render when what they read changes.
   const state = useMemo<LensState>(
@@ -108,12 +116,13 @@ export function useLensController(dependencies: LensDependencies) {
       currentSelectionId,
       availableSelectionIds,
       busySelectionIds,
-      history,
+      chats: model.chats,
+      history: model.history,
+      record,
       armed,
-      interactionLocked: ui.clearPending || ui.historyClearPending || noteOpen,
+      interactionLocked: ui.clearPending || noteOpen,
       clearPending: ui.clearPending,
-      historyClearPending: ui.historyClearPending,
-      sheet: { open: sheetOpen, tab, focusedHistoryRevision },
+      sheet: { open: sheetOpen, tab, focusedHistoryKey, shapedOnly },
       receipt: receipt.receipt,
     }),
     [
@@ -121,14 +130,16 @@ export function useLensController(dependencies: LensDependencies) {
       currentSelectionId,
       availableSelectionIds,
       busySelectionIds,
-      history,
+      model.chats,
+      model.history,
+      record,
       armed,
       ui.clearPending,
-      ui.historyClearPending,
       noteOpen,
       sheetOpen,
       tab,
-      focusedHistoryRevision,
+      focusedHistoryKey,
+      shapedOnly,
       receipt.receipt,
     ],
   );
@@ -144,9 +155,10 @@ export function useLensController(dependencies: LensDependencies) {
     dispatch,
     dom,
     note,
-    presentation,
+    attention,
     adjustment,
     selectionActions,
+    announcedReceipt: receipt.announced,
   };
 }
 
@@ -158,9 +170,9 @@ function useCloseSheetForTrail(trailId: string | undefined, dispatch: Dispatch<U
 }
 
 /**
- * Settle the interaction state after selections or History change underneath
- * it. A note whose selection closed ends, a sheet with nothing left closes, and
- * a sheet that fell through to the other tab stays there.
+ * Settle the interaction state after requests or History change underneath it.
+ * A note whose selection closed ends, a sheet with nothing left closes, and a
+ * sheet that fell through to the other tab stays there when requests arrive.
  */
 function useSettleUi(
   ui: UiState,
@@ -206,46 +218,42 @@ function noteInProgress(ui: UiState, selections: readonly Selection[]) {
 }
 
 function useLensMeta(model: LensModel): LensContextValue["meta"] {
-  const snapshotLoader = useMemo(
-    () => new SelectionSnapshotLoader((selectionId) => model.protocol.getSnapshot(selectionId)),
+  return useMemo(
+    () => ({
+      loadSnapshot: (selectionId: string) => model.protocol.getSnapshot(selectionId),
+      loadHistoryImage: (sha256: string) => model.protocol.getHistoryImage(sha256),
+    }),
     [model.protocol],
   );
-  useEffect(() => () => snapshotLoader.clear(), [snapshotLoader]);
-  return useMemo(() => ({ snapshotLoader }), [snapshotLoader]);
 }
 
 function useLensActions({
   dispatch,
   dom,
   selectionActions,
+  revealCells,
   receipt,
-  opensOnHistory,
 }: {
   dispatch: Dispatch<UiAction>;
   dom: NotebookDomAdapter;
   selectionActions: SelectionActions;
+  revealCells: (entry: HistoryEntry) => void;
   receipt: ReturnType<typeof useResolutionReceipt>;
-  opensOnHistory: boolean;
 }): LensActions {
-  const { setInteraction } = receipt;
-  const {
-    activateSelection,
-    openNote,
-    deleteSelection,
-    clearSelections,
-    clearHistory,
-    reopenSelection,
-  } = selectionActions;
+  const { setInteraction, dismiss } = receipt;
+  const { activateSelection, openNote, deleteSelection, clearSelections, reopenSelection } =
+    selectionActions;
   return useMemo<LensActions>(
     () => ({
       toggleArmed: () => dispatch({ type: "toggleArm" }),
-      toggleSheet: () => {
-        if (opensOnHistory) dispatch({ type: "setSheetTab", tab: "history" });
-        dispatch({ type: "toggleSheet" });
-      },
+      toggleSheet: () => dispatch({ type: "toggleSheet" }),
       setSheetTab: (tab) => dispatch({ type: "setSheetTab", tab }),
+      setShapedOnly: (enabled) => dispatch({ type: "setShapedOnly", enabled }),
       openResolution: (event) =>
-        dispatch({ type: "openHistory", resolutionRevision: event.revision }),
+        dispatch({
+          type: "openHistory",
+          key: historyKey(event.payload.selections[0]!.selectionId, event.payload.resolvedAt),
+        }),
       activateSelection: (selection: Selection, motion: RevealMotion) => {
         if (dom.getTarget(selection.target)) {
           revealSelection(dom, selection, motion);
@@ -257,26 +265,32 @@ function useLensActions({
       editNote: (selection: Selection, motion: SelectionMotion) => openNote(selection.id, motion),
       deleteSelection,
       clearSelections,
-      clearHistory,
-      reopen: (receipt: AddressedSelection) => {
-        if (dom.getTarget(receipt.target)) {
-          reopenSelection(receipt);
+      reopen: (entry) => {
+        const target = reopenTarget(entry, dom.document);
+        if (target && dom.getTarget(target)) {
+          reopenSelection(entry);
         } else {
           dispatch({ type: "announce", message: "Target unavailable in this document." });
         }
       },
+      revealCells: (entry) => {
+        dispatch({ type: "setSheetOpen", open: false });
+        revealCells(entry);
+        focusListTrigger(dom);
+      },
+      dismissReceipt: dismiss,
       setReceiptInteraction: setInteraction,
     }),
     [
       activateSelection,
-      clearHistory,
       clearSelections,
       deleteSelection,
+      dismiss,
       dispatch,
       dom,
       openNote,
-      opensOnHistory,
       reopenSelection,
+      revealCells,
       setInteraction,
     ],
   );

@@ -308,7 +308,7 @@ function domSelector(
 ): string {
   const ownerDocument = element.ownerDocument;
   if (element.id) {
-    const selector = `#${escapeIdentifier(element.id, ownerDocument)}`;
+    const selector = `#${CSS.escape(element.id)}`;
     if (
       selector.length <= 1_024 &&
       (documentIds?.get(element.id) === element ||
@@ -332,13 +332,4 @@ function domSelector(
   const attribute = "data-marimo-lens-target-id";
   if (element.getAttribute(attribute) !== id) element.setAttribute(attribute, id);
   return `[${attribute}="${id}"]`;
-}
-
-function escapeIdentifier(value: string, ownerDocument: Document): string {
-  const escape = ownerDocument.defaultView?.CSS?.escape;
-  if (escape) return escape(value);
-  return value.replace(
-    /[^a-zA-Z0-9_-]/g,
-    (character) => `\\${character.codePointAt(0)!.toString(16)} `,
-  );
 }

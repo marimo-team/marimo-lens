@@ -26,8 +26,11 @@ https://github.com/user-attachments/assets/7845c3b6-3ead-469f-8910-b688feb6a284
   Lens keeps the mark, note, image, and relevant notebook context together.
 - **Follow the work.** See where the agent is working, or ask for a guided trail
   through the notebook's inputs and results.
-- **Review and continue.** Reopen an addressed selection from History to refine
-  the request against the current output.
+- **Review and continue.** The agent resolves your request with a summary of
+  what it changed and how it checked. A Lens that keeps a record lists recent
+  resolved requests in History, with the cells each one changed and whether
+  those changes still hold. Reopen a selection to refine it against the
+  current output.
 
 ## Get started
 
@@ -41,6 +44,10 @@ sample notebook in molab:
 
 [![Open in molab](https://molab.marimo.io/molab-shield.svg)](https://molab.marimo.io/notebooks/nb_MimGXwYTcvjfb1sdUdaTyn)
 
+marimo shows the Lens dock once a cell that imports marimo runs.
+[Keep a record](https://marimo-team.github.io/marimo-lens/getting-started#keep-a-record)
+with `Lens(record=True)` to get History and the code each request changed.
+
 ## For agents
 
 Read the packaged Lens briefing:
@@ -49,12 +56,12 @@ Read the packaged Lens briefing:
 uvx --with marimo-lens agent-plugins read marimo-lens
 ```
 
-In a connected notebook kernel, `import marimo_lens` followed by
-`help(marimo_lens.agent)` prints the guidance installed there. marimo pair
+In a connected notebook kernel, `import marimo_lens._capability` followed by
+`help(marimo_lens._capability)` prints the guidance installed there. marimo pair
 runs it from a terminal:
 
 ```console
-marimo pair execute --url <URL> --file <notebook.py> -c 'import marimo_lens; help(marimo_lens.agent)'
+marimo pair execute --url <URL> --session <session_id> -c 'import marimo_lens._capability; help(marimo_lens._capability)'
 ```
 
 [Connect an agent](https://marimo-team.github.io/marimo-lens/agents) covers

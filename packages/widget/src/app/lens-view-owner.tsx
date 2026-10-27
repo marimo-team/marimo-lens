@@ -11,7 +11,10 @@ const VIEW_REGISTRY: unique symbol = Symbol.for("marimo-lens.view-registry.v2");
 // A duplicate view renders the owning Lens again, as a host preview can.
 type ViewOwnership = "owner" | "duplicate" | "conflict";
 type ViewListener = (ownership: ViewOwnership) => void;
-type ViewRegistry = Map<symbol, { lensId: string | undefined; listener: ViewListener }>;
+type ViewRegistry = Map<
+  symbol,
+  { lensId: string | undefined; host: Element; listener: ViewListener }
+>;
 
 declare global {
   interface Document {
@@ -32,7 +35,7 @@ export function LensViewOwner({ children, lensId }: { children: ReactNode; lensI
     const releaseTheme = observeLensTheme(host.ownerDocument, setTheme);
     const adapter = new NotebookDomAdapter(host.ownerDocument);
     const releaseHostOutput = adapter.registerHost(host);
-    const releaseView = acquireView(host.ownerDocument, viewId, lensId, (ownership) => {
+    const releaseView = acquireView(host, viewId, lensId, (ownership) => {
       if (ownership === "conflict" && !conflictWarnedRef.current) {
         conflictWarnedRef.current = true;
         console.warn(
@@ -61,13 +64,14 @@ export function LensViewOwner({ children, lensId }: { children: ReactNode; lensI
 }
 
 function acquireView(
-  ownerDocument: Document,
+  host: Element,
   viewId: symbol,
   lensId: string | undefined,
   listener: ViewListener,
 ): () => void {
+  const ownerDocument = host.ownerDocument;
   const views = viewRegistry(ownerDocument);
-  views.set(viewId, { lensId, listener });
+  views.set(viewId, { lensId, host, listener });
   publishOwnership(views);
 
   let released = false;
@@ -102,16 +106,44 @@ function viewRegistry(ownerDocument: Document): ViewRegistry {
   return views;
 }
 
+/**
+ * The Lens shown first in the document owns it, so a Lens whose cell reruns
+ * keeps the dock from a Lens below it. Among views of that Lens, the first
+ * registered owns and later ones, such as a host preview, are duplicates.
+ */
 function publishOwnership(views: ViewRegistry): void {
+  let first: { lensId: string | undefined; host: Element } | undefined;
+  for (const view of views.values()) {
+    if (first === undefined || precedes(view.host, first.host)) first = view;
+  }
   let owner: { lensId: string | undefined } | undefined;
   for (const view of views.values()) {
-    if (owner === undefined) {
+    if (owner === undefined && (view === first || sameLens(view, first))) {
       owner = view;
       view.listener("owner");
     } else {
-      view.listener(
-        view.lensId !== undefined && view.lensId === owner.lensId ? "duplicate" : "conflict",
-      );
+      view.listener(owner !== undefined && sameLens(view, owner) ? "duplicate" : "conflict");
     }
   }
+}
+
+function sameLens(view: { lensId: string | undefined }, other?: { lensId: string | undefined }) {
+  return view.lensId !== undefined && view.lensId === other?.lensId;
+}
+
+/** Say whether `host` comes before `other` in the document, across open shadow roots. */
+function precedes(host: Element, other: Element): boolean {
+  const position = documentAnchor(host).compareDocumentPosition(documentAnchor(other));
+  return (
+    (position & Node.DOCUMENT_POSITION_FOLLOWING) !== 0 &&
+    (position & Node.DOCUMENT_POSITION_DISCONNECTED) === 0
+  );
+}
+
+function documentAnchor(element: Element): Element {
+  let anchor = element;
+  for (let root = anchor.getRootNode(); root instanceof ShadowRoot; root = anchor.getRootNode()) {
+    anchor = root.host;
+  }
+  return anchor;
 }

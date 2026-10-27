@@ -62,6 +62,9 @@ export const noteEditorStyles = stylex.create({
     overflow: "hidden",
     textOverflow: "ellipsis",
   },
+  detail: {
+    color: colors.mutedForeground,
+  },
   input: {
     display: "block",
     width: "100%",

@@ -10,7 +10,6 @@ function state(revision = 0): LensState {
     nextLabel: "S1",
     currentSelectionId: null,
     selections: [],
-    history: [],
   };
 }
 

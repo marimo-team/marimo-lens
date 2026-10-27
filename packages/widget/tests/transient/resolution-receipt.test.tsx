@@ -1,10 +1,17 @@
-import type { SelectionResolvedEvent } from "@marimo-lens/protocol";
+import { afterEach, describe, expect, test } from "vite-plus/test";
 
-import { afterEach, describe, expect, test, vi } from "vite-plus/test";
+import type { LensState } from "@/context/lens-context";
 
 import { ResolutionReceipt } from "@/transient/resolution-receipt";
 
-import { resolvedEventFixture, selectionFixture } from "../support/fixtures";
+import {
+  historyEntryFixture,
+  historyFixture,
+  resolvedEventFixture,
+  selectionFixture,
+} from "../support/fixtures";
+import { LensTestProvider, lensActions, lensState } from "../support/lens";
+import { NotebookDomTestProvider } from "../support/notebook-dom";
 import { render } from "../support/render";
 
 afterEach(() => {
@@ -12,37 +19,51 @@ afterEach(() => {
 });
 
 describe("resolution receipt", () => {
-  test("renders a quiet visual receipt outside the live region", () => {
-    const event = resolvedEventFixture({ revision: 4, summary: "Updated the chart cell." });
-    const onOpenHistory = vi.fn();
-    renderReceipt(event, onOpenHistory);
-
-    const receipt = document.querySelector<HTMLElement>("[data-marimo-lens-resolution-receipt]");
-    expect(receipt?.textContent).toBe("S1AddressedUpdated the chart cell.");
-    expect(receipt?.dataset.selectionId).toBe("selection-1");
-    expect(receipt?.dataset.revision).toBe("4");
-    expect(receipt?.getAttribute("aria-label")).toBe("Open history for S1");
-    expect(receipt?.hasAttribute("aria-live")).toBe(false);
-    receipt?.click();
-    expect(onOpenHistory).toHaveBeenCalledWith(event);
-  });
-
-  test("summarizes one atomic batch", () => {
+  test("names each cell a batch changed once, with whether the change holds", () => {
     const second = selectionFixture({ id: "selection-2", label: "S2" });
-    const event = resolvedEventFixture({ revision: 6, selections: [selectionFixture(), second] });
-    renderReceipt(event);
+    const resolvedAt = "2026-07-23T08:00:00Z";
+    const event = resolvedEventFixture({
+      revision: 6,
+      selections: [selectionFixture(), second],
+      resolvedAt,
+    });
+    const history = historyFixture(
+      [
+        historyEntryFixture({
+          resolvedAt,
+          changes: [{ cellId: "cell-net", status: "in_force" }],
+        }),
+        historyEntryFixture({
+          id: second.id,
+          label: "S2",
+          resolvedAt,
+          changes: [
+            { cellId: "cell-net", status: "in_force" },
+            { cellId: "cell-chart", status: "in_force" },
+          ],
+        }),
+      ],
+      {
+        cells: [
+          { id: "cell-net", name: "net_revenue", defines: ["net_revenue"] },
+          { id: "cell-chart", defines: ["revenue_chart"] },
+        ],
+      },
+    );
+    renderReceipt(lensState({ history, receipt: event }));
 
-    const receipt = document.querySelector<HTMLElement>("[data-marimo-lens-resolution-receipt]");
-    expect(receipt?.textContent).toBe("2 selectionsAddressed");
-    expect(receipt?.dataset.selectionId).toBeUndefined();
-    expect(receipt?.dataset.selectionCount).toBe("2");
-    expect(receipt?.getAttribute("aria-label")).toBe("Open history for 2 selections");
+    expect(document.querySelector("[data-marimo-lens-receipt-changes]")?.textContent).toBe(
+      "Changednet_revenue, still appliedrevenue_chart, still appliedView in History",
+    );
   });
 });
 
-function renderReceipt(
-  event: SelectionResolvedEvent,
-  onOpenHistory: (event: SelectionResolvedEvent) => void = () => {},
-) {
-  render(<ResolutionReceipt event={event} onOpenHistory={onOpenHistory} />);
+function renderReceipt(state: LensState) {
+  render(
+    <NotebookDomTestProvider>
+      <LensTestProvider state={state} actions={lensActions()}>
+        <ResolutionReceipt onReveal={() => {}} onRefocus={() => {}} />
+      </LensTestProvider>
+    </NotebookDomTestProvider>,
+  );
 }

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pydoc
 import subprocess
 import sys
+from importlib import import_module
 from importlib.metadata import distribution
 from pathlib import Path
 from types import SimpleNamespace
@@ -47,12 +48,15 @@ def verify_release(expected_version: str) -> None:
         if entry_point.group == "marimo.agent.capability"
     ]
     if [(entry.name, entry.value) for entry in capabilities] != [
-        ("lens", "marimo_lens.agent")
+        ("lens", "marimo_lens._capability")
     ]:
         raise SystemExit("marimo-lens has an invalid agent capability entry point")
-    if capabilities[0].load() is not marimo_lens.agent:
-        raise SystemExit("The Lens capability does not load marimo_lens.agent")
-    if code_mode.capabilities().get("lens") != "marimo_lens.agent":
+    capability = capabilities[0].load()
+    if capability is not import_module("marimo_lens._capability"):
+        raise SystemExit("The Lens capability does not load marimo_lens._capability")
+    if capability.__all__ != []:
+        raise SystemExit("The Lens capability must expose its instruction briefing")
+    if code_mode.capabilities().get("lens") != "marimo_lens._capability":
         raise SystemExit("Marimo code mode cannot discover the Lens capability")
 
     plugin = marimo_lens.agent.plugin()
@@ -79,12 +83,24 @@ def verify_release(expected_version: str) -> None:
         )
     if skill.frontmatter.splitlines()[0] != "name: marimo-lens":
         raise SystemExit("The installed Lens skill has invalid frontmatter")
-    help_text = pydoc.render_doc(marimo_lens.agent)
+    help_text = pydoc.plain(pydoc.render_doc(capability))
     if str(plugin.path) not in help_text or str(skill / "SKILL.md") not in help_text:
-        raise SystemExit("marimo_lens.agent help cannot locate its packaged resources")
+        raise SystemExit("Lens capability help cannot locate its packaged resources")
+    if len(help_text) >= 10_000:
+        raise SystemExit("Lens capability help exceeds its 10,000-character budget")
     briefing = ap.read("marimo-lens")
-    if marimo_lens.agent.__doc__ != briefing or skill.source not in briefing:
-        raise SystemExit("Lens module help does not expose the installed core briefing")
+    instructions = capability.__doc__
+    inventory = briefing.split("```text\n", 1)[1].split("\n```", 1)[0]
+    if (
+        instructions is None
+        or inventory not in instructions
+        or skill.source not in instructions
+        or skill.source not in briefing
+        or any(line.strip() not in help_text for line in skill.body.splitlines())
+    ):
+        raise SystemExit(
+            "Lens capability help must expose the complete installed skill"
+        )
     cli = subprocess.run(
         [sys.executable, "-m", "agent_plugins", "read", "marimo-lens"],
         capture_output=True,

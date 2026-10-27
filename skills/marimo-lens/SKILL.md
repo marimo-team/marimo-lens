@@ -1,125 +1,28 @@
 ---
 name: marimo-lens
 description: >-
-  Add Lens to a live notebook, explain a notebook with a guided Trail, or
-  address a user's selection on a rendered output or configured DOM target.
-  Use when asked to enable Lens, give a walkthrough, explain results in place,
-  or act on selected points, regions, and notes. The address mode handles every
-  open selection. Requires the live marimo notebook kernel, reached through
-  marimo pair or the editor's code-mode sidebar.
+  Use with marimo pair whenever an analyst asks about or wants changes to a
+  live marimo notebook that has Lens, a `lens` capability in `help(cm)` or a
+  `Lens(` cell, in chat or by pointing at an output. Lens
+  records the request, reports what earlier requests decided about its cells,
+  and closes it with a summary. Also adds Lens to a notebook.
 ---
 
 # Work with marimo Lens
 
-Lens adds visual collaboration to a live notebook. It can show a Trail through
-the notebook's results or connect a selected surface to its source, context,
-and captured image. The active code-mode integration owns notebook inspection,
-editing, and execution.
+Lens holds open requests and, when it keeps a record, the code each resolved
+request changed. Code mode owns cells and edits. Run `help(cm)` once per
+kernel.
 
-## Choose the workflow
+Each block is one kernel call. Scratchpad names disappear between calls. Save
+the printed identity, request ID, and revision.
 
-| User intent                                                | Action                                                                                |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| "Add Lens" or "I can't see Lens"                           | Reuse an existing instance or [add Lens](#add-lens-when-missing).                     |
-| "Walk me through this notebook" or "Explain these results" | Inspect the relevant cells and [show a Trail](#explain-the-notebook-with-a-trail).    |
-| "Change this" or "Address my selections"                   | [Read the selected request](#address-a-selection), verify the result, and resolve it. |
+## Start: request, brief, and code together
 
-Route from the user's request. A general explanation can use a Trail even when
-there are no selections. Existing selections do not turn an explicit
-walkthrough request into permission to edit or resolve them.
-
-This core skill contains the complete ordinary mounting and Trail workflows.
-Read a reference only when its task or exception applies.
-
-Run each Python block in this skill as one call in the live notebook kernel.
-From a terminal, that call is one `marimo pair execute` with the block on
-stdin, and printed results arrive in its JSON `stdout`.
-[Run Lens through marimo pair](references/setup.md#run-lens-through-marimo-pair)
-covers targeting, errors, and concurrency. In the editor's code-mode sidebar,
-each block is one `execute_code` call. Reuse instructions already loaded for
-the same environment and Lens installation.
-
-Speak as a colleague in chat, activity, popovers, and summaries. Describe what
-you changed or found and the evidence behind it. Use concrete labels and a
-short supporting message. On a read-only tour, describe existing findings.
-Use a teaching tone when requested.
-
-## Begin with the requested work
-
-After the integration's required first call, such as `help(cm)` for marimo
-pair, combine connection with the first useful operation: check availability
-for an add request, inspect relevant cells and values for a Trail, or read the
-current selection snapshot. A separate call that prints only an identity is
-unnecessary.
-
-`connect(ctx)` reuses authored and automatically mounted instances. When one
-browser-ready Lens owns the visible dock, it selects that Lens even if the
-context contains other Lens objects. Keep its opaque identity when work spans
-calls. Each call has a fresh scratchpad, so reimport `cm` and `marimo_lens`,
-reacquire the context, and select that same Lens using `identity=` in later
-calls.
-
-For `lens_ambiguous`, inspect `marimo_lens.agent.discover(ctx)` and choose the identity
-matching the request and visible surface. Ask the user if those clues cannot
-distinguish the instances.
-
-## Add Lens when missing
-
-Check availability during the mounting call. Retry an unavailable connection
-only when a Lens cell or host mount is still being created or rendered. Once
-you establish that no Lens exists and no mount is pending, add it immediately.
-
-For an ordinary notebook with no pending mount, reuse an available Lens or
-queue one cell:
-
-```python
-import marimo._code_mode as cm
-import marimo_lens
-
-async with cm.get_context() as ctx:
-    available = marimo_lens.agent.discover(ctx)
-    if available:
-        print({"identities": [mounted.identity for mounted in available]})
-    else:
-        print({"cell_id": marimo_lens.agent.add_lens_cell(ctx)})
-```
-
-End the call so the queued cell can run and the browser can render the dock.
-Reconnect in a fresh call and confirm the dock is available. The helper reuses
-its previously added Lens cell and reruns it when it holds no live Lens. A host
-with a custom mounting policy mounts Lens through its own integration, as
-described in [setup](references/setup.md).
-
-A notebook reopened in a new kernel, for example after a server restart, can
-show every cell as stale. None of its cells have run, so no Lens exists and
-selections from the previous kernel are gone. A code-mode call runs notebook
-cells only through `ctx.run_cell()`. Run the cell that mounts Lens: a cell that
-imports marimo, or an authored Lens cell. Otherwise use the helper.
-
-If the user only asked to add Lens, report that it is ready and finish. Continue
-to a Trail or selection workflow when that is part of the request.
-
-## Explain the notebook with a Trail
-
-A Trail is an ordered explanation attached to notebook cells. Each step brings
-its result into view with a label and message. Use it for introductions,
-walkthroughs, and explanations so the user can follow the evidence in place.
-
-Reuse verified context from the conversation. If the route is unknown, connect
-and inspect a compact outline of `ctx.cells` in one call: IDs, names, statuses,
-and first code lines. Batch-read the relevant landmark cells, their errors, and
-the needed live values in `ctx.globals`. Explain the question, evidence, main
-result, and next step in notebook order. Once those findings are verified,
-send one Trail and return control.
-
-Use `ctx.graph.cells` to check executable graph membership. A narrative cell
-outside that graph can inform the explanation but cannot be a reveal target.
-Before presenting a result, verify its source and values and confirm the cell
-is idle and free of relevant errors.
-
-After inspecting the results, choose a short route. For a notebook with cells
-named `inputs`, `analysis`, and `summary`, this complete call shows a Trail.
-Substitute the actual cell names and explanations supported by their values:
+Quote a chat instruction in `open_request()` before investigating or
+editing, and read the brief: it lists what earlier requests decided. Name its
+cells when known. For "address my selection", omit `open_request()`: the selection
+is already a request.
 
 ```python
 import marimo._code_mode as cm
@@ -127,113 +30,182 @@ import marimo_lens
 
 ctx = cm.get_context()
 mounted = marimo_lens.agent.connect(ctx)
-route = [
-    ("inputs", "Inputs", "Start with the values used by this notebook."),
-    ("analysis", "Calculation", "Follow how the inputs become a result."),
-    ("summary", "Conclusion", "Review the result and what it supports."),
-]
-steps = []
-for name, label, message in route:
-    cell = ctx.cells[name]
-    if cell.id not in ctx.graph.cells or cell.status != "idle" or cell.errors:
-        raise RuntimeError(f"Verify {name} before revealing it")
-    steps.append({"target": cell.id, "label": label, "message": message})
-mounted.reveal(steps, duration_ms=None)
+mounted.open_request("<the analyst's message, quoted>")
+context = mounted.context()
+request = context.request
+print({"identity": mounted.identity, "revision": context.revision, "request": request})
+print(context.brief)
+if request and request["cells"]:
+    for reference in request["cells"]:
+        cell = ctx.cells[reference["id"]]
+        print(cell.id, cell.status, cell.errors, cell.code, sep="\n")
+elif request is None or request["channel"] == "chat":
+    for cell in ctx.cells:
+        print(cell.id, cell.name, cell.status, cell.code.splitlines()[:1])
 ```
 
-Put the explanation in each step's message, using concrete findings from the
-notebook. `reveal()` accepts 1–16 ordered steps and returns `None`. Each step has a target, an
-optional label of up to 40 UTF-16 units, and an optional message of up to 1,000.
-The user navigates the popover at their own pace. Return control after showing
-the route. A text/data walkthrough requires no selection snapshot, PNG capture,
-resolution, or timing loop. Edit or rerun cells only when requested.
+`context.request` is the brief's request. `context.current` is the selection.
+Complete the saved request ID even if another request opens.
 
-A Trail is transient. Dismissal, refresh, another attention event, or changes
-to referenced cells or their upstream inputs end it. A finite `duration_ms`
-limits the entire route, and navigation does not restart that timer. Verify
-changed results before showing another Trail.
-
-## Address a selection
-
-Read the open selections and their notes in one call. The selections live in
-`snapshot.references["selections"]`, and `snapshot.current` is the likely
-referent for "this" or "here":
+For a selection, append this image export to the same call. Open the printed
+path if you can read images. Otherwise say you could not see the marked part.
 
 ```python
-import json
+from tempfile import NamedTemporaryFile
 
+selection = context.current
+if selection is not None:
+    print(selection)
+    image_bytes = context.images.get(selection["id"])
+    if image_bytes:
+        with NamedTemporaryFile(suffix=".png", delete=False) as image_file:
+            image_file.write(image_bytes)
+            print(image_file.name)
+    activity = mounted.start_activity(
+        selection, expected_revision=context.revision, label="Checking selection"
+    )
+    print({"activity": activity})
+```
+
+Delete the file after reading. Kernel and image reader must share a filesystem.
+Report missing image evidence. Reveal replaces activity. If blocked, call
+`mounted.stop_activity(activity)` with the saved handle.
+
+## Inspect and edit
+
+Read bodies, errors, `ctx.graph.ancestors(cell_id)`, and needed
+`ctx.globals[name]` values together. When `mounted.record` is not `None`
+(otherwise `context.history()` raises `record_off`), also read `context.history(context.request)` and `context.history(cell_id)` for each
+cell you edit. Preserve `in_force` changes unless asked to reverse them, then
+name them in the summary. For `undone`, `missing` names lost statements and
+`movedTo` the cells that hold them now. The brief names other cells the
+undoing request changed. Restore where needed, except what your own edits for
+the open request undid. Investigate `unknown`.
+
+Edit the inspected full cell body and queue its run:
+
+```python
+import marimo._code_mode as cm
+
+async with cm.get_context() as ctx:
+    ctx.edit_cell("Hbol", "revenue = sales[sales.kind != 'refund'].sum()")
+    ctx.run_cell("Hbol")
+```
+
+marimo raises `StaleCellError` when the cell changed after you read it: read
+it again and reassess. Verify in a fresh call after queued runs finish.
+
+## Verify visual edits
+
+For visual edits, capture the result in the verification call:
+
+```python
+import marimo._code_mode as cm
+
+ctx = cm.get_context()
+cell = ctx.cells["Hbol"]
+assert cell.status == "idle" and not cell.errors
+await ctx.screenshot(cell.id, save_to="/tmp/lens-output.png")
+print("/tmp/lens-output.png")
+```
+
+Open the PNG, then delete it. Without Playwright and Chromium in the kernel
+environment, use the
+[Workflow](references/workflow.md#capture-a-current-cell-image) browser capture
+recipe.
+
+## Finish: verify, reveal, resolve
+
+After verification, reveal and resolve together using the saved request ID:
+
+```python
 import marimo._code_mode as cm
 import marimo_lens
 
-mounted = marimo_lens.agent.connect(cm.get_context())
-snapshot = mounted.context()
+ctx = cm.get_context()
+mounted = marimo_lens.agent.connect(ctx, identity="F3n...")
+context = mounted.context()
+cell = ctx.cells["Hbol"]
+assert cell.status == "idle" and not cell.errors
+diagnostics = mounted.check()
+print(diagnostics)
+if any(
+    item["severity"] == "warning"
+    and (
+        item["cellId"] == cell.id
+        or item["requestId"] == "chat-..."
+        or (item["cellId"] is None and item["requestId"] is None)
+    )
+    for item in diagnostics
+):
+    raise RuntimeError("Review affected Lens warnings before resolving")
+mounted.reveal(
+    cell.id,
+    duration_ms=4_000,
+    label="Revenue",
+    message="Refunds are filtered before the total.",
+)
 print(
-    json.dumps(
-        {
-            "identity": mounted.identity,
-            "revision": snapshot.revision,
-            "currentId": (snapshot.current or {}).get("id"),
-            "selections": [
-                {"id": s["id"], "label": s["label"], "note": s["note"]}
-                for s in snapshot.references["selections"]
-            ],
-        },
-        ensure_ascii=False,
+    mounted.resolve(
+        "chat-...",
+        expected_revision=context.revision,
+        summary="Filtered refunds before summing revenue and checked the total.",
     )
 )
 ```
 
-An empty list means this notebook holds no open selections. The editor's
-code-mode sidebar reaches only its own notebook, so tell the user and add that
-notes in another notebook are addressed from that notebook's sidebar or
-through marimo pair.
+Reveal a selection with `mounted.reveal(context.current,
+expected_revision=context.revision, duration_ms=4_000)`. If that revision
+changed, stop activity and reassess. Chat instructions override older notes.
 
-Follow [selection work](references/selections.md) for the complete lifecycle:
-read context, inspect evidence, start activity, apply the requested change,
-verify, reveal, and resolve. Preserve these boundaries:
+Resolve answered requests too, even with no edit: the summary is the answer
+the analyst sees. When only the analyst can decide, ask and keep the request
+open, as with blocked or unverified requests.
 
-- Use the stored `SelectionReference` and its captured revision as the
-  presentation target. Its producing cells are provenance and edit locations.
-  DOM targets can have zero or several producing cells.
-- Inspect captured images before making visual claims about a selected mark.
-  Verify changes against fresh runtime and browser evidence. Report the
-  coverage limit when image inspection is unavailable.
-- Keep activity visible through verification. Reveal replaces it. Call
-  `reveal()` before `resolve()` with the same captured revision in one kernel
-  call, then return control to the browser.
-- Resolve with a concrete summary of the outcome and verification. Keep
-  ambiguous, blocked, or unverified selections open. On revision conflict,
-  stop owned activity, reconnect, and reassess fresh context.
-- A Lens belongs to one notebook session. When the connected Lens holds none
-  of the selections the user refers to, check the other notebooks as
-  described in
-  [selections in other notebooks](references/selections.md#selections-in-other-notebooks).
+Batch shared outcomes. Resolve others separately, passing the returned revision
+onward. Selection resolution advances it. Chat leaves it unchanged. Use the
+returned revision as the completion receipt and finish the task in that call.
 
-`$marimo-lens address` handles every open selection, including each note and
-its evidence. For other requests, the user's instruction takes priority over
-an older selection note. An empty selection list still permits a requested
-overview or walkthrough.
+Mention History only when `mounted.record.history` is true.
 
-## Read further
+## Notebook tours
 
-Use [setup](references/setup.md) for a missing package or notebook connection, or a custom mount,
-[target authoring](references/targets.md) when creating selectable HTML or
-widgets, and [code-mode recipes](references/workflow.md) for image transfer,
-feedback across calls, and recovery.
-
-For selection work, read its reference inside the notebook:
+Inspect landmark cells, then reveal a Trail and resolve its chat request.
+Use 1 to 16 idle graph cells with no errors:
 
 ```python
+import marimo._code_mode as cm
 import marimo_lens
 
-print(
-    marimo_lens.agent.skill()
-    .file("references/selections.md")
-    .read_text(encoding="utf-8")
+ctx = cm.get_context()
+mounted = marimo_lens.agent.connect(ctx, identity="F3n...")
+mounted.reveal(
+    [
+        {"target": "Hbol", "label": "Inputs", "message": "Monthly revenue by region."},
+        {"target": "lEQa", "label": "Revenue", "message": "Compare regions."},
+    ],
+    duration_ms=None,
 )
 ```
 
-Use `help(mounted)` or `help(mounted.reveal)` for precise operation contracts.
-The [documentation index](https://marimo-team.github.io/marimo-lens/llms.txt)
-routes broader examples and API guidance. Check published APIs against the
-installed version.
+Each step carries its label and message. Dismissal, replacement, and a rerun
+or deletion of a referenced cell end the Trail.
+
+## Mounting and deeper reference
+
+For missing Lens, queue `marimo_lens.agent.add_lens_cell(ctx)` inside
+`async with cm.get_context() as ctx`, then reconnect in a fresh call. It mounts
+`Lens()` with no record. Pass `record=True` (files beside the notebook) or
+`record={"keep": "session"}` only when the analyst asks. An existing agent cell
+with another record raises `lens_cell_exists`: edit that cell to change it.
+For `lens_ambiguous`, inspect `marimo_lens.agent.discover(ctx)` and choose by
+the request and dock. Ask if unclear. For `lens_unavailable`, reconnect once
+with identity omitted and inspect fresh context.
+
+Read a packaged reference with
+`marimo_lens.agent.skill().file("references/workflow.md").read_text(encoding="utf-8")`.
+
+- [Workflow](references/workflow.md): browser capture and recovery.
+- [Selections](references/selections.md): multiple selections or notebooks.
+- [Setup](references/setup.md): installation and mounting.
+- [Targets](references/targets.md): HTML and widgets.

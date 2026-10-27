@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import * as v from "valibot";
 import { describe, expect, test } from "vite-plus/test";
 
 import {
@@ -5,6 +7,7 @@ import {
   AttentionActivityStartEventSchema,
   AttentionActivityStopEventSchema,
   AttentionRevealEventSchema,
+  ChatsSchema,
   ClientCommandSchema,
   DeleteSelectionCommandSchema,
   GetSnapshotCommandSchema,
@@ -14,7 +17,9 @@ import {
   SelectionSchema,
   OutputCaptureResponsePayloadSchema,
   WIDGET_TRANSPORT_VERSION,
+  parseChatsTrait,
   parseContract,
+  parseHistoryTrait,
   parseLensResponse,
   parseTargetMedia,
   parseTransportEnvelope,
@@ -70,7 +75,7 @@ describe("selection contracts", () => {
   test("projects supported fields from additive selection state", () => {
     const canonical = selectionFixture({
       previousResolution: {
-        addressedAt: "2026-07-14T10:05:00Z",
+        resolvedAt: "2026-07-14T10:05:00Z",
         summary: "Updated the label and verified the chart.",
       },
     });
@@ -88,7 +93,6 @@ describe("selection contracts", () => {
             snapshot: { ...canonical.snapshot, colorSpace: "srgb" },
           },
         ],
-        history: [],
         runtimeRevision: 11,
       },
       "state",
@@ -99,7 +103,6 @@ describe("selection contracts", () => {
       nextLabel: "S2",
       currentSelectionId: "selection-1",
       selections: [canonical],
-      history: [],
     });
   });
 
@@ -112,7 +115,6 @@ describe("selection contracts", () => {
           nextLabel: "S2",
           currentSelectionId: "selection-1",
           selections: [selectionFixture(), selectionFixture()],
-          history: [],
         },
         "state",
       ),
@@ -128,117 +130,39 @@ describe("selection contracts", () => {
           nextLabel: "S2",
           currentSelectionId: "missing",
           selections: [selectionFixture()],
-          history: [],
         },
         "state",
       ),
     ).toThrow();
   });
-  test("rejects a selection label outside the S1, S2, … sequence", () => {
-    expect(() =>
-      parseContract(
-        SelectionSchema,
-        { ...selectionFixture(), label: "selection-one" },
-        "selection",
-      ),
-    ).toThrow();
+  // history-shapes.json holds the shapes the Python scenario does not produce:
+  // a failed record, unknown changes, DOM sources, and outdated images.
+  test.each([
+    { file: "history-state.json", parse: parseHistoryTrait },
+    { file: "history-shapes.json", parse: parseHistoryTrait },
+    { file: "chats.json", parse: parseChatsTrait },
+  ])("reads the trait value in $file", ({ file, parse }) => {
+    const value = JSON.parse(readFileSync(new URL(`./${file}`, import.meta.url), "utf8"));
+
+    expect(parse(value)).toEqual(value);
   });
 
-  test("accepts addressed history and one previous resolution on an open selection", () => {
-    const addressed = {
-      selectionId: "selection-1",
-      label: "S1",
-      note: "Align this label",
-      description: { label: "Cell cell-1" },
-      target: {
-        kind: "notebook" as const,
-        cellIds: ["cell-1"],
-        documentId: "document-1",
-        documentPath: "/",
-      },
-      createdAt: "2026-07-14T10:00:00Z",
-      addressedAt: "2026-07-14T10:05:00Z",
-      anchor: { kind: "point" as const, x: 0.25, y: 0.5 },
-      summary: "Updated the label and verified the chart.",
-      resolutionRevision: 4,
-    };
-    const state = parseContract(
-      LensStateSchema,
-      {
-        revision: 5,
-        nextLabel: "S2",
-        currentSelectionId: "selection-1",
-        selections: [
-          selectionFixture({
-            snapshot: { status: "pending" },
-            previousResolution: {
-              addressedAt: addressed.addressedAt,
-              summary: addressed.summary,
-            },
-          }),
-        ],
-        history: [addressed],
-      },
-      "state",
-    );
-
-    expect(state.history).toEqual([addressed]);
-    expect(state.selections[0]?.previousResolution).toEqual({
-      addressedAt: addressed.addressedAt,
-      summary: addressed.summary,
-    });
-
-    const sharedRevision = [
-      { ...addressed, resolutionRevision: 5 },
-      { ...addressed, selectionId: "selection-2", label: "S2", resolutionRevision: 5 },
-    ];
-    expect(
-      parseContract(LensStateSchema, { ...state, history: sharedRevision }, "state").history,
-    ).toEqual(sharedRevision);
-    expect(() =>
-      parseContract(
-        LensStateSchema,
-        {
-          ...state,
-          history: [addressed, addressed],
-        },
-        "state",
-      ),
-    ).toThrow("History selection revisions must be unique and ordered");
-  });
-
-  test("requires an exact addressed receipt for reopen commands", () => {
-    const reopen = {
+  test("addresses a History image by its SHA-256 digest", () => {
+    const image = {
       protocol: "marimo-lens.command",
       version: WIDGET_TRANSPORT_VERSION,
-      requestId: "request-1",
-      type: "selection.reopen",
-      payload: {
-        selectionId: "selection-1",
-        resolutionRevision: 4,
-        expectedRevision: 4,
-      },
+      requestId: "request-3",
+      type: "history.image",
+      payload: { sha256: "a".repeat(64) },
     };
-    expect(parseContract(ClientCommandSchema, reopen, "command")).toEqual(reopen);
+    expect(parseContract(ClientCommandSchema, image, "command")).toEqual(image);
     expect(() =>
       parseContract(
         ClientCommandSchema,
-        {
-          ...reopen,
-          payload: { ...reopen.payload, resolutionRevision: -1 },
-        },
+        { ...image, payload: { sha256: "../../secrets" } },
         "command",
       ),
     ).toThrow();
-
-    const clearHistory = {
-      protocol: "marimo-lens.command",
-      version: WIDGET_TRANSPORT_VERSION,
-      requestId: "request-2",
-      type: "history.clear",
-      payload: { expectedRevision: 4 },
-    };
-    expect(parseContract(ClientCommandSchema, clearHistory, "command")).toEqual(clearHistory);
   });
 
   test("requires positive rectangles contained by the target", () => {
@@ -439,15 +363,21 @@ describe("selection contracts", () => {
           {
             selectionId: "selection-1",
             label: "S1",
-            resolutionRevision: 4,
+            target: {
+              kind: "notebook",
+              cellIds: ["cell-1"],
+              documentId: "document-1",
+              documentPath: "/",
+            },
           },
         ],
+        resolvedAt: "2026-07-14T10:05:00Z",
         summary: "Updated the chart cell.",
       },
     };
 
     const [resolved] = event.payload.selections;
-    const { resolutionRevision: _, ...withoutRevision } = resolved!;
+    const { target: _, ...withoutTarget } = resolved!;
 
     test("reads a resolution event", () => {
       expect(parseContract(SelectionResolvedEventSchema, event, "event")).toEqual(event);
@@ -481,8 +411,8 @@ describe("selection contracts", () => {
         },
       },
       {
-        name: "a selection without its resolution revision",
-        value: { ...event, payload: { ...event.payload, selections: [withoutRevision] } },
+        name: "a selection without its target",
+        value: { ...event, payload: { ...event.payload, selections: [withoutTarget] } },
       },
     ])("rejects $name", ({ value }) => {
       expect(() => parseContract(SelectionResolvedEventSchema, value, "event")).toThrow();
@@ -639,4 +569,23 @@ test("an output capture response tolerates fields this version does not know", (
       "payload",
     ),
   ).toEqual({ outputCellId: "cell-view", image });
+});
+
+describe("open chat requests", () => {
+  test("reads the chat requests every Lens of a runtime shows", () => {
+    const chats = [
+      { id: "chat-1", note: "Why is Central low?", openedAt: "2026-07-14T10:06:00Z" },
+      { id: "chat-2", note: "Add a 2026 column", openedAt: "2026-07-14T10:08:00Z" },
+    ];
+
+    expect(v.parse(ChatsSchema, chats)).toEqual(chats);
+    expect(parseChatsTrait([])).toEqual([]);
+  });
+
+  test("rejects more chat requests than a runtime keeps open", () => {
+    const chat = { id: "chat-1", note: "Why?", openedAt: "2026-07-14T10:06:00Z" };
+
+    expect(() => parseChatsTrait(Array(17).fill(chat))).toThrow();
+    expect(() => parseChatsTrait(null)).toThrow();
+  });
 });

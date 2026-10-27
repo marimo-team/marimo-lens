@@ -4,18 +4,59 @@ import { historyDisclosureMarker } from "../selection/components/selection-marke
 import { colors, media } from "../styles/tokens.stylex";
 
 export const historyStyles = stylex.create({
+  panel: {
+    display: "grid",
+    gap: 4,
+  },
+  filter: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "4px 12px",
+    color: colors.mutedForeground,
+    fontSize: 11,
+    cursor: "pointer",
+  },
+  figure: {
+    display: "grid",
+    gap: 4,
+    margin: 0,
+  },
+  image: {
+    display: "block",
+    width: "100%",
+    height: "auto",
+    maxHeight: 240,
+    objectFit: "contain",
+    border: `1px solid ${colors.border}`,
+    borderRadius: 4,
+  },
+  imagePlaceholder: (aspectRatio: string) => ({
+    width: "100%",
+    maxHeight: 240,
+    aspectRatio,
+    border: `1px solid ${colors.border}`,
+    borderRadius: 4,
+  }),
+  footer: {
+    margin: 0,
+    padding: "4px 12px 2px",
+    color: colors.mutedForeground,
+    fontSize: 10,
+  },
   list: {
     display: "flex",
     margin: 0,
     padding: 0,
     flexDirection: "column",
-    gap: 2,
     listStyle: "none",
   },
   item: {
     position: "relative",
     display: { [media.compact]: "grid" },
-    minHeight: 42,
+    borderTopWidth: 1,
+    borderTopStyle: "solid",
+    borderTopColor: colors.border,
     backgroundColor: { ":focus-within": colors.hover },
   },
   disclosure: {
@@ -24,14 +65,12 @@ export const historyStyles = stylex.create({
   },
   row: {
     display: "grid",
-    minHeight: { default: 42, [media.coarsePointer]: 58 },
-    padding: { default: "5px 88px 5px 8px", [media.compact]: "5px 8px" },
-    alignItems: "center",
-    gridTemplateColumns: {
-      default: "auto minmax(0, 1fr) auto 14px",
-      [media.compact]: "auto minmax(0, 1fr) 14px",
-    },
-    gap: 7,
+    minHeight: { default: 44, [media.coarsePointer]: 58 },
+    paddingBlock: 8,
+    paddingInlineStart: 10,
+    alignItems: "start",
+    gridTemplateColumns: "auto minmax(0, 1fr) 14px",
+    gap: 10,
     cursor: "pointer",
     listStyle: "none",
     backgroundColor: {
@@ -45,24 +84,15 @@ export const historyStyles = stylex.create({
     outlineOffset: { ":focus-visible": -2 },
     "::-webkit-details-marker": { display: "none" },
   },
-  target: {
-    display: "flex",
-    minWidth: 0,
-    alignItems: "center",
-    gap: 3,
-    color: colors.mutedForeground,
-    fontSize: 11,
-    overflowWrap: "anywhere",
-    whiteSpace: "normal",
+  // Room for the Reopen button that sits over a selection's row.
+  rowWithReopen: {
+    paddingInlineEnd: { default: 88, [media.compact]: 10 },
   },
-  date: {
-    gridRow: { [media.compact]: 2 },
-    gridColumn: { [media.compact]: 2 },
-    color: colors.mutedForeground,
-    fontSize: 10,
-    whiteSpace: "nowrap",
+  rowPlain: {
+    paddingInlineEnd: 12,
   },
   chevron: {
+    marginTop: 2,
     color: colors.mutedForeground,
     transform: {
       default: "none",
@@ -71,8 +101,8 @@ export const historyStyles = stylex.create({
   },
   details: {
     display: "grid",
-    gap: 6,
-    padding: "2px 12px 10px 45px",
+    gap: 8,
+    padding: "2px 12px 10px 50px",
     backgroundColor: {
       [stylex.when.ancestor("[open]", historyDisclosureMarker)]: colors.hover,
     },
@@ -100,9 +130,49 @@ export const historyStyles = stylex.create({
     overflowWrap: "anywhere",
     whiteSpace: "pre-wrap",
   },
-  addressedAt: {
+  changes: {
+    display: "grid",
+    margin: 0,
+    padding: 0,
+    gap: 6,
+    listStyle: "none",
+  },
+  change: {
+    display: "grid",
+    minWidth: 0,
+    gap: 4,
+    fontSize: 11,
+  },
+  changeHead: {
+    display: "flex",
+    minWidth: 0,
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  cell: {
+    minWidth: 0,
+    overflow: "hidden",
+    color: colors.foreground,
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+  },
+  meta: {
+    margin: 0,
     color: colors.mutedForeground,
     fontSize: 10,
+  },
+  detailActions: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  action: {
+    minHeight: { default: 26, [media.coarsePointer]: 44 },
+    padding: "0 6px",
+    color: colors.mutedForeground,
+    fontSize: 11,
   },
   reopen: {
     position: { default: "absolute", [media.compact]: "static" },

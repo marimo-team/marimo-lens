@@ -1,7 +1,8 @@
-"""Read marimo's kernel context: runtime scope, running cell, and notebook graph."""
+"""Read marimo's kernel context: runtime scope, running cell, and notebook file."""
 
 from __future__ import annotations
 
+import pathlib
 from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any, cast
@@ -67,6 +68,36 @@ class RuntimeReadError(RuntimeError):
         super().__init__(f"{name}: {detail}" if isinstance(detail, str) else name)
 
 
+def record_path() -> pathlib.Path | None:
+    """Return the notebook's Lens record file, or None for an unsaved notebook.
+
+    The record lives in the notebook's ``__marimo__`` folder, which marimo
+    resolves through ``notebook_output_dir()`` and ``sys.pycache_prefix``.
+    """
+
+    try:
+        context = runtime_context()
+    except RuntimeReadError:
+        return None
+    namespace, _complete = runtime_globals(context)
+    filename = notebook_filename(context, namespace)
+    if not filename:
+        return None
+    return record_path_for(pathlib.Path(filename))
+
+
+def notebook_filename(context: Any, namespace: Mapping[str, Any]) -> str:
+    # marimo updates the notebook's __file__ when it renames the file, but
+    # keeps the runtime context's filename from kernel start.
+    try:
+        current = read_namespace_value(namespace, "__file__")
+    except (KeyError, RuntimeReadError):
+        current = None
+    if isinstance(current, str) and current:
+        return current
+    return str(getattr(context, "filename", "") or "")
+
+
 def runtime_globals(context: Any) -> tuple[Mapping[str, Any], bool]:
     # The private runtime context may expose globals through a failing descriptor.
     try:
@@ -115,3 +146,17 @@ def graph_lock(value: Any) -> AbstractContextManager[Any]:
     if hasattr(value, "__enter__") and hasattr(value, "__exit__"):
         return cast(AbstractContextManager[Any], value)
     return nullcontext()
+
+
+def record_path_for(notebook: pathlib.Path) -> pathlib.Path:
+    """Return the Lens record file of the notebook at ``notebook``.
+
+    marimo mirrors only absolute paths under ``sys.pycache_prefix``, and the
+    kernel names its notebook by absolute path, so a relative one resolves
+    from the working directory first.
+    """
+
+    from marimo._utils.paths import notebook_output_dir
+
+    notebook = notebook.absolute()
+    return notebook_output_dir(notebook) / "lens" / f"{notebook.name}.jsonl"

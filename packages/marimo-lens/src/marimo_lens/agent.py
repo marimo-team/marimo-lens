@@ -2,22 +2,32 @@
 
 from __future__ import annotations
 
+import ast
+import dataclasses
 import secrets
-import sys
 import threading
 import weakref
-from collections.abc import Mapping, Sequence
-from types import ModuleType
-from typing import Protocol, cast
+from collections.abc import Callable, Mapping, Sequence
+from typing import Protocol, TypeVar, cast
 
 import agent_plugins
 
 from ._context.lens_context import LensContext
 from ._core.errors import LensError
-from ._core.types import ActivityHandle, RevealStep, SelectionReference
+from ._core.record import Record, RecordOptions
+from ._core.types import (
+    ActivityHandle,
+    CellReference,
+    Diagnostic,
+    RevealStep,
+    SelectionReference,
+)
 from ._marimo.kernel import current_runtime_scope
+from ._widget.arguments import validated_record
 from ._widget.lens import Lens
 from ._widget.registry import mounted_lenses, open_lenses_from_cell
+
+_F = TypeVar("_F", bound=Callable[..., object])
 
 _DISTRIBUTION_NAME = "marimo-lens"
 _SKILL_NAME = "marimo-lens"
@@ -36,6 +46,7 @@ def skill() -> agent_plugins.Skill:
 class _CodeModeCell(Protocol):
     id: object
     status: object
+    code: str
 
 
 _IDENTITIES: weakref.WeakKeyDictionary[Lens, str] = weakref.WeakKeyDictionary()
@@ -47,16 +58,81 @@ _LENS_CELL_CODE = f"""\
 import marimo as _mo
 from marimo_lens import Lens as _Lens
 
-_lens = _Lens()
+_lens = _Lens({{arguments}})
 _mo.output.append(_lens)
 """
+
+
+def _lens_arguments(record: Record | None) -> str:
+    """Return the shortest ``Lens`` arguments that keep ``record``."""
+
+    if record is None:
+        return ""
+    changed = {
+        field.name: getattr(record, field.name)
+        for field in dataclasses.fields(record)
+        if getattr(record, field.name) != field.default
+    }
+    if not changed:
+        return "record=True"
+    options = ", ".join(
+        f'"{name}": ' + (f'"{value}"' if isinstance(value, str) else repr(value))
+        for name, value in changed.items()
+    )
+    return f"record={{{options}}}"
+
+
+class _Unreadable:
+    pass
+
+
+_UNREADABLE = _Unreadable()
+
+
+def _cell_record(code: str) -> Record | _Unreadable | None:
+    """Return the record the ``_Lens(...)`` call in ``code`` keeps.
+
+    Returns ``_UNREADABLE`` when the call or its ``record`` is not a literal
+    this module wrote, such as a cell the analyst rewrote.
+    """
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        return _UNREADABLE
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_Lens"
+        ):
+            value = next(
+                (keyword.value for keyword in node.keywords if keyword.arg == "record"),
+                None,
+            )
+            if value is None:
+                return None
+            try:
+                return validated_record(ast.literal_eval(value))
+            except (TypeError, ValueError):
+                return _UNREADABLE
+    return _UNREADABLE
+
+
+def _documented_by(method: Callable[..., object]) -> Callable[[_F], _F]:
+    def document(forward: _F) -> _F:
+        forward.__doc__ = method.__doc__
+        return forward
+
+    return document
 
 
 class MountedLens:
     """A live Lens handle returned by connect().
 
     Its identity and Lens remain fixed for the handle's lifetime. Keep identity
-    to reconnect to the same Lens in a later kernel call.
+    to reconnect to the same Lens in a later kernel call. Each method delegates
+    to the ``Lens`` method of the same name.
     """
 
     __slots__ = ("__identity", "__lens")
@@ -77,23 +153,24 @@ class MountedLens:
     def _lens(self) -> Lens:
         return self.__lens
 
+    @property
+    def record(self) -> Record | None:
+        """Return the ``Record`` the Lens keeps, or None when it keeps none.
+
+        None means ``context().history()`` raises ``record_off``, ``check()``
+        returns no ``LR`` diagnostics, and a resolved request ends with its
+        browser receipt. ``record.history`` False means the analyst has no
+        History tab. ``record.images`` False means recorded requests carry no
+        image. ``context().references["notebook"]["record"]["status"]`` says
+        where the record lives now.
+        """
+
+        return self._lens.record
+
     def __repr__(self) -> str:
         """Return a diagnostic representation containing the opaque identity."""
 
         return f"MountedLens(identity={self.identity!r})"
-
-    def context(self) -> LensContext:
-        """Return a detached snapshot of the current Lens context.
-
-        The snapshot carries its revision, bounded notebook text, selection
-        references, and annotated selection PNG bytes. Read another snapshot
-        after the notebook or Lens state changes.
-
-        Raises:
-            LensError: The Lens is closed.
-        """
-
-        return self._lens.context()
 
     def cell_image(self, cell_id: str, *, expected_revision: int) -> bytes | None:
         """Return a fresh unannotated cell PNG across kernel calls.
@@ -115,6 +192,11 @@ class MountedLens:
             expected_revision=expected_revision,
         )
 
+    @_documented_by(Lens.context)
+    def context(self) -> LensContext:
+        return self._lens.context()
+
+    @_documented_by(Lens.start_activity)
     def start_activity(
         self,
         target: str | SelectionReference,
@@ -124,20 +206,6 @@ class MountedLens:
         label: str | None = None,
         message: str | None = None,
     ) -> ActivityHandle:
-        """Show one cell or selection as the current work target.
-
-        Pass a LensContext revision with a SelectionReference. Leave duration_ms
-        unset to keep activity visible until stop_activity() or another
-        attention event replaces it. A supplied duration clears the activity
-        after that hold.
-
-        Raises:
-            LensError: The Lens is closed, a selection revision changed, a
-                selection is missing, or the runtime cannot resolve a cell.
-            TypeError: An argument has the wrong type.
-            ValueError: An argument is outside its accepted range.
-        """
-
         return self._lens.start_activity(
             target,
             expected_revision=expected_revision,
@@ -146,48 +214,33 @@ class MountedLens:
             message=message,
         )
 
+    @_documented_by(Lens.stop_activity)
     def stop_activity(self, activity: ActivityHandle) -> None:
-        """Stop activity when ``activity`` still owns the presentation.
-
-        Raises:
-            LensError: The Lens is closed.
-            TypeError: The argument is not a string activity handle.
-            ValueError: The handle is empty or exceeds its size limit.
-        """
-
         self._lens.stop_activity(activity)
 
+    @_documented_by(Lens.open_request)
+    def open_request(
+        self, note: str, cells: Sequence[str | CellReference] | None = None
+    ) -> str:
+        return self._lens.open_request(note, cells)
+
+    @_documented_by(Lens.check)
+    def check(self) -> list[Diagnostic]:
+        return self._lens.check()
+
+    @_documented_by(Lens.resolve)
     def resolve(
         self,
-        selection_ids: str | Sequence[str],
+        request_ids: str | Sequence[str],
         *,
         expected_revision: int,
         summary: str | None = None,
     ) -> int:
-        """Move verified selections to History and return the new revision.
-
-        Include a user-facing summary of what changed and what you verified,
-        up to 240 UTF-16 code units. Lens stores it beside the original request
-        in each History entry. Batch selections that share an outcome; resolve
-        separately with distinct summaries when outcomes differ. If verification
-        required no change, summarize the finding and why it answers the request.
-
-        Pass the returned revision to the next guarded Lens mutation. The state
-        transition commits before Lens sends its browser receipt.
-
-        Raises:
-            LensError: The Lens is closed, the revision changed, or a selection
-                cannot be resolved.
-            TypeError: An argument has the wrong type.
-            ValueError: An argument is outside its accepted range.
-        """
-
         return self._lens.resolve(
-            selection_ids,
-            expected_revision=expected_revision,
-            summary=summary,
+            request_ids, expected_revision=expected_revision, summary=summary
         )
 
+    @_documented_by(Lens.reveal)
     def reveal(
         self,
         target: str | SelectionReference | Sequence[RevealStep],
@@ -197,20 +250,6 @@ class MountedLens:
         label: str | None = None,
         message: str | None = None,
     ) -> None:
-        """Reveal one target or ordered steps for the supplied hold.
-
-        Pass a LensContext revision with a SelectionReference. Reveal replaces
-        current activity. Call reveal() before resolve() with the same captured
-        revision in one kernel call. History retains the target, and the
-        browser presents the resolution receipt after the reveal ends.
-
-        Raises:
-            LensError: The Lens is closed, a selection revision changed, a
-                selection is missing, or the runtime cannot resolve a cell.
-            TypeError: An argument has the wrong type.
-            ValueError: An argument is outside its accepted range.
-        """
-
         self._lens.reveal(
             target,
             expected_revision=expected_revision,
@@ -220,15 +259,25 @@ class MountedLens:
         )
 
 
-def add_lens_cell(ctx: object) -> str:
-    """Queue a collapsed notebook cell that mounts a Lens.
+def add_lens_cell(
+    ctx: object, *, record: Record | RecordOptions | bool | None = None
+) -> str:
+    """Queue a collapsed notebook cell that mounts a Lens keeping ``record``.
+
+    ``record`` takes the forms ``Lens(record=...)`` takes. The cell spells it
+    the shortest way: ``_Lens()``, ``_Lens(record=True)``, or a dict of the
+    options that differ from their defaults. Pass a record only when the
+    analyst asks for one, since ``keep="notebook"`` writes files beside the
+    notebook.
 
     Return the existing agent-created Lens cell ID when the notebook already
-    contains one. That cell is queued to run again unless it still holds an
-    open Lens or is queued, running, or disabled. A notebook reopened in a new
-    kernel, a failed first run, or a closed Lens then mounts a new Lens. The
-    code-mode context creates and runs cells when its async context manager
-    exits.
+    contains one, and leave that cell's code unchanged. That cell is queued
+    to run again unless it still holds an open Lens or is queued, running, or
+    disabled. A notebook reopened in a new kernel, a failed first run, or a
+    closed Lens then mounts a new Lens. A ``record`` that differs from the
+    one the cell keeps raises ``lens_cell_exists``. Edit that cell to change
+    its record. The code-mode context creates and runs cells when its async
+    context manager exits.
 
     Call connect() in a later kernel call after the browser has rendered the
     cell.
@@ -237,10 +286,14 @@ def add_lens_cell(ctx: object) -> str:
         The existing or queued cell ID.
 
     Raises:
-        TypeError: The context lacks the required code-mode cell APIs.
-        LensError: The notebook contains several agent-created Lens cells.
+        TypeError: The context lacks the required code-mode cell APIs, or
+            ``record`` is not a form ``Lens(record=...)`` accepts.
+        ValueError: ``record`` names an unknown ``keep``.
+        LensError: The notebook contains several agent-created Lens cells, or
+            its Lens cell keeps a record other than ``record``.
     """
 
+    kept = validated_record(record)
     create_cell = getattr(ctx, "create_cell", None)
     run_cell = getattr(ctx, "run_cell", None)
     cells = getattr(ctx, "cells", None)
@@ -256,9 +309,21 @@ def add_lens_cell(ctx: object) -> str:
         )
     if existing:
         cell_id = str(existing[0].id)
+        open_lenses = open_lenses_from_cell(current_runtime_scope(), cell_id)
+        if record is not None:
+            kept_now = (
+                open_lenses[0].record if open_lenses else _cell_record(existing[0].code)
+            )
+            if not isinstance(kept_now, _Unreadable) and kept_now != kept:
+                raise LensError(
+                    "lens_cell_exists",
+                    f"The agent-managed Lens cell {cell_id} mounts "
+                    f"Lens({_lens_arguments(kept_now)}). Edit that cell to change "
+                    "its record.",
+                )
         # Rerunning a cell replaces its open Lens and drops that Lens's Open
         # selections. A queued or running cell is already mounting one.
-        holds_open_lens = bool(open_lenses_from_cell(current_runtime_scope(), cell_id))
+        holds_open_lens = bool(open_lenses)
         if not holds_open_lens and existing[0].status not in {
             "queued",
             "running",
@@ -267,7 +332,9 @@ def add_lens_cell(ctx: object) -> str:
             run_cell(cell_id)
         return cell_id
 
-    cell_id = create_cell(_LENS_CELL_CODE, hide_code=True)
+    cell_id = create_cell(
+        _LENS_CELL_CODE.format(arguments=_lens_arguments(kept)), hide_code=True
+    )
     run_cell(cell_id)
     return str(cell_id)
 
@@ -402,20 +469,3 @@ __all__ = [
     "plugin",
     "skill",
 ]
-
-
-class _AgentModule(ModuleType):
-    # Module help resolves packaged resource paths lazily through a writable descriptor.
-    @property
-    def __doc__(self) -> str | None:  # pyrefly: ignore [bad-override]
-        summary = self.__dict__.get("__doc__")
-        return (
-            agent_plugins.read(_DISTRIBUTION_NAME) if isinstance(summary, str) else None
-        )
-
-    @__doc__.setter
-    def __doc__(self, value: str | None) -> None:  # pyright: ignore[reportIncompatibleVariableOverride]
-        self.__dict__["__doc__"] = value
-
-
-sys.modules[__name__].__class__ = _AgentModule

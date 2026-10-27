@@ -171,8 +171,24 @@ Connect in a fresh kernel call.
 **Result:** The dock appears after the cell runs, and `discover()` returns its
 handle.
 
-Open selections and History belong to the Lens in the previous kernel and end
-with it. The new Lens starts empty.
+Open selections and open chat requests belong to the previous kernel and end
+with it. In the marimo editor a Lens built with `Lens(record=True)` reads the
+notebook's record file, so History returns. A memory record, described in
+[Request record](./data-and-trust#request-record), starts empty.
+
+## History is missing
+
+**Symptom:** The dock shows no **History** tab, or `context.history()` raises
+`LensError(code="record_off")`.
+
+**Action:** The Lens keeps no record, which is the default for `Lens()` and the
+automatic Lens. Mount `Lens(record=True)` in a notebook cell, as in
+[Keep a record](./getting-started#keep-a-record). A Lens built with
+`record={"history": False}` shows no History tab, so drop that option to show
+it.
+
+**Result:** The dock shows **History**, and requests resolved from then on
+appear there.
 
 ## Code mode cannot find Lens
 
@@ -180,17 +196,18 @@ with it. The new Lens starts empty.
 active agent has no advertised `lens` capability.
 
 **Action:** Confirm that `marimo-lens` is installed in the active notebook
-environment and import its agent adapter there.
+environment and read its capability help there.
 
 ```python
-import marimo_lens
+import marimo_lens._capability
 
-help(marimo_lens.agent)
+help(marimo_lens._capability)
 ```
 
-Lens registers `marimo_lens.agent` in marimo's `marimo.agent.capability`
+Lens registers `marimo_lens._capability` in marimo's `marimo.agent.capability`
 entry-point group. After installing it in the running kernel's environment,
-ask the agent to check `cm.capabilities()` again and import the Lens adapter.
+ask the agent to check `cm.capabilities()` again and read
+`help(marimo_lens._capability)`.
 If the import fails, inspect the kernel's `sys.executable` and install through
 that notebook's package manager.
 

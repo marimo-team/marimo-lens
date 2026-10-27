@@ -1,9 +1,16 @@
 import * as stylex from "@stylexjs/stylex";
 import { ChevronDown, GripVertical, List, MousePointer2 } from "lucide-react";
-import { useRef, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from "react";
 
 import { useLens, type LensState } from "@/context/lens-context";
-import { useNotebookDom } from "@/notebook/notebook-dom-context";
+import { historyShows } from "@/context/record-index";
 import { ui } from "@/styles/primitives";
 import { ResolutionReceipt } from "@/transient/resolution-receipt";
 import { LensLogo } from "@/ui/components/lens-logo";
@@ -45,23 +52,15 @@ export function LensDock({ notice }: { notice?: ReactNode }) {
     focus(SELECT);
   };
   const sheetOpen = expanded && sheet.open;
-  useSheetFocus(dockRef, sheetOpen, sheet.tab, sheet.focusedHistoryRevision);
+  useSheetFocus(dockRef, sheetOpen, sheet.tab, sheet.focusedHistoryKey);
   useSelectionShortcut(interactionLocked, enterSelectionMode);
-  const { receipt } = state;
-  const panelNotice =
-    notice ??
-    (receipt ? (
-      <ResolutionReceipt
-        key={receipt.revision}
-        event={receipt}
-        onOpenHistory={(event) => {
-          setExpanded(true);
-          actions.openResolution(event);
-        }}
-        onInteractionChange={actions.setReceiptInteraction}
-      />
-    ) : null);
-  const hasNotice = panelNotice !== null;
+  const hasNotice = notice != null || state.receipt !== null;
+  const panelNotice = notice ?? (
+    <ResolutionReceipt
+      onReveal={() => setExpanded(true)}
+      onRefocus={() => focus(expanded ? SELECT : TAB)}
+    />
+  );
 
   return (
     <aside
@@ -80,7 +79,7 @@ export function LensDock({ notice }: { notice?: ReactNode }) {
         <div
           {...stylex.props(dockStyles.panel)}
           data-marimo-lens-dock-panel
-          data-content={sheetOpen ? "selections" : "notice"}
+          data-content={sheetOpen ? "requests" : "notice"}
         >
           {sheetOpen ? (
             <RequestSheet
@@ -116,26 +115,41 @@ export function LensDock({ notice }: { notice?: ReactNode }) {
   );
 }
 
-/** Focus a dock control by selector once the next frame has rendered it. */
+/**
+ * Focus a dock control by selector. A control that the same state change
+ * mounts, such as the collapsed tab, takes focus once that change commits.
+ */
 function useDockFocus(dockRef: RefObject<HTMLElement | null>) {
-  const dom = useNotebookDom();
+  const pending = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const selector = pending.current;
+    if (selector === null) return;
+    pending.current = null;
+    dockRef.current?.querySelector<HTMLElement>(selector)?.focus();
+  });
   return (selector: string) => {
-    dom.window.requestAnimationFrame(() =>
-      dockRef.current?.querySelector<HTMLElement>(selector)?.focus(),
-    );
+    const control = dockRef.current?.querySelector<HTMLElement>(selector);
+    if (control) control.focus();
+    else pending.current = selector;
   };
 }
 
-/** Say whether the Lens has open selections or History to show. */
-function hasSelectionSurface(state: LensState): boolean {
-  return openRequestCount(state) > 0 || state.history.length > 0;
+/**
+ * Describe the requests for an accessible name, such as "2 open, 3 in history",
+ * or return null when the Lens has no requests to show.
+ */
+function requestsLabel(state: LensState): string | null {
+  const open = openRequestCount(state);
+  if (open === 0 && !historyShows(state.history)) return null;
+  const history = state.history ? `, ${state.history.entries.length} in history` : "";
+  return `${open} open${history}`;
 }
 
 /** The expanded dock: move, select, open the requests sheet, and collapse. */
 function DockBar({ onCollapse }: { onCollapse: () => void }) {
   const { state, actions } = useLens();
   const { armed } = state;
-  const open = openRequestCount(state);
+  const label = requestsLabel(state);
   return (
     <div
       {...stylex.props(dockStyles.surface, dockStyles.bar)}
@@ -185,7 +199,7 @@ function DockBar({ onCollapse }: { onCollapse: () => void }) {
         <span>{armed ? "Click or drag" : "Select"}</span>
         {armed ? <kbd {...stylex.props(dockStyles.shortcut)}>ESC</kbd> : null}
       </button>
-      {hasSelectionSurface(state) ? (
+      {label === null ? null : (
         <>
           <span {...stylex.props(dockStyles.separator)} aria-hidden="true" />
           <button
@@ -195,15 +209,15 @@ function DockBar({ onCollapse }: { onCollapse: () => void }) {
             disabled={state.interactionLocked || armed}
             onClick={actions.toggleSheet}
             aria-expanded={state.sheet.open}
-            aria-controls="marimo-lens-selection-list"
-            aria-label={`Open selections, ${open} open, ${state.history.length} in history`}
-            title="Selections"
+            aria-controls="marimo-lens-requests"
+            aria-label={`Requests, ${label}`}
+            title="Requests"
           >
             <List size={15} aria-hidden="true" />
-            <span {...stylex.props(dockStyles.count)}>{open}</span>
+            <span {...stylex.props(dockStyles.count)}>{openRequestCount(state)}</span>
           </button>
         </>
-      ) : null}
+      )}
       <span {...stylex.props(dockStyles.separator)} aria-hidden="true" />
       <button
         {...stylex.props(ui.interactive, dockStyles.action, dockStyles.icon)}
@@ -222,6 +236,7 @@ function DockBar({ onCollapse }: { onCollapse: () => void }) {
 /** The collapsed dock: a draggable tab that opens Lens again. */
 function DockTab({ onExpand }: { onExpand: () => void }) {
   const { state } = useLens();
+  const label = requestsLabel(state);
   const open = openRequestCount(state);
   return (
     <button
@@ -239,12 +254,8 @@ function DockTab({ onExpand }: { onExpand: () => void }) {
       data-ml-dock-drag
       aria-describedby="ml-dock-move-help"
       onClick={onExpand}
-      aria-label={
-        hasSelectionSurface(state)
-          ? `Open Lens, ${open} open ${open === 1 ? "selection" : "selections"}, ${state.history.length} in history`
-          : "Open Lens"
-      }
-      title="Open Lens · Drag to move"
+      aria-label={label === null ? "Expand Lens" : `Expand Lens, ${label}`}
+      title="Expand Lens · Drag to move"
     >
       <span
         {...stylex.props(dockStyles.collapsedGrip)}

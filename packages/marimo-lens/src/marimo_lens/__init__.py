@@ -7,11 +7,18 @@ from importlib import metadata
 from . import agent as agent
 from ._context.lens_context import LensContext
 from ._core.errors import LensError
+from ._core.record import Record, RecordOptions
 from ._core.types import (
     ActivityHandle,
     CellReference,
+    ChatRequestReference,
+    Diagnostic,
     LensReferences,
     NotebookReference,
+    RecordedChange,
+    RecordedImage,
+    RecordedRequest,
+    RequestReference,
     RevealStep,
     SelectionReference,
     SelectionTargetReference,
@@ -28,11 +35,19 @@ LensError.__module__ = __name__
 __all__ = [
     "ActivityHandle",
     "CellReference",
+    "ChatRequestReference",
+    "Diagnostic",
     "Lens",
     "LensContext",
     "LensError",
     "LensReferences",
     "NotebookReference",
+    "Record",
+    "RecordOptions",
+    "RecordedChange",
+    "RecordedImage",
+    "RecordedRequest",
+    "RequestReference",
     "RevealStep",
     "SelectionReference",
     "SelectionTargetReference",

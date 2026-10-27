@@ -24,9 +24,7 @@ const widgetLayers = [
   "app",
 ];
 
-type LayerRule = { files: string[]; rules: Record<string, ["error", unknown]> };
-
-const widgetLayerRules = widgetLayers.slice(0, -1).map((layer, index): LayerRule => ({
+const widgetLayerRules = widgetLayers.slice(0, -1).map((layer, index) => ({
   files: [`packages/widget/src/${layer}/**`],
   rules: {
     "no-restricted-imports": [

@@ -105,6 +105,12 @@ in distribution metadata.
 resources. Their returned paths must identify the same distribution version as
 the imported Python API.
 
+The `marimo.agent.capability` entry point registers
+`lens = "marimo_lens._capability"`. That private module exposes the installed
+inventory and complete core skill through native module help. Its empty
+`__all__` keeps the briefing compact. `marimo_lens.agent` owns the public Python
+API and its method documentation.
+
 ## `make package`
 
 Run:
@@ -150,7 +156,7 @@ inputs required to reconstruct an installable wheel.
 - marimo code-mode capability discovery.
 - Installed Agent Plugin name, versioned path, skill membership, and required
   skill files.
-- Module help paths for installed resources.
+- Capability help paths, complete core skill, and a 10,000-character budget.
 - Installed license bytes.
 - Public Python types and callables.
 - JSON-safe `ActivityHandle` values.

@@ -1,20 +1,30 @@
 import type { AnyModel } from "@anywidget/types";
-import type { LensState, TargetSelector } from "@marimo-lens/protocol";
+import type { ChatRequest, HistoryState, LensState, TargetSelector } from "@marimo-lens/protocol";
 
 import { useModel } from "@anywidget/react";
-import { parseLensState, parseTargetSelector } from "@marimo-lens/protocol";
+import {
+  parseChatsTrait,
+  parseHistoryTrait,
+  parseLensState,
+  parseTargetSelector,
+} from "@marimo-lens/protocol";
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 
 import { LensProtocolClient } from "@/anywidget/client";
 
 type LensModelFields = {
   _state: LensState;
+  _history: HistoryState | null;
+  _chats: ChatRequest[];
   _selector: TargetSelector;
   _css: string | undefined;
 };
 
 export type LensModel = {
   state: LensState;
+  history: HistoryState | null;
+  /** The runtime's open chat requests, oldest first. */
+  chats: ChatRequest[];
   css: string;
   protocol: LensProtocolClient;
   selector: TargetSelector;
@@ -23,6 +33,8 @@ export type LensModel = {
 export function useLensModel(ownerWindow: Window): LensModel {
   const model = useModel<LensModelFields>();
   const state = useModelValue(model, "_state", parseLensState);
+  const history = useModelValue(model, "_history", parseHistoryTrait);
+  const chats = useModelValue(model, "_chats", parseChatsTrait);
   const selector = useModelValue(model, "_selector", parseTargetSelector);
   const css = useModelValue(model, "_css", parseCss);
   const protocol = useMemo(() => new LensProtocolClient(model, ownerWindow), [model, ownerWindow]);
@@ -32,7 +44,7 @@ export function useLensModel(ownerWindow: Window): LensModel {
     return () => protocol.dispose();
   }, [protocol]);
 
-  return { state, css, protocol, selector };
+  return { state, history, chats, css, protocol, selector };
 }
 
 function parseCss(value: string | undefined): string {
@@ -56,8 +68,9 @@ function useModelValue<Key extends keyof LensModelFields, Value>(
   return useSyncExternalStore(subscribe, getSnapshot);
 }
 
-// Parse each new trait value once, so the store hands React a stable snapshot.
-// A value that fails its contract throws to the view's error boundary.
+// A trait value that fails its contract keeps the last accepted value on
+// screen, so a later valid value renders without remounting the view. With
+// no accepted value yet the error reaches the view's error boundary.
 function acceptedValue<Key extends keyof LensModelFields, Value>(
   model: AnyModel<LensModelFields>,
   key: Key,
@@ -68,8 +81,13 @@ function acceptedValue<Key extends keyof LensModelFields, Value>(
   return () => {
     const next = model.get(key);
     if (accepted && next === raw) return accepted.value;
-    accepted = { value: parse(next) };
     raw = next;
+    try {
+      accepted = { value: parse(next) };
+    } catch (error) {
+      if (!accepted) throw error;
+      console.warn(`marimo-lens: ignored an invalid ${key} value`, error);
+    }
     return accepted.value;
   };
 }

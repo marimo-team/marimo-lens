@@ -13,9 +13,14 @@ provided one.
 | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | Discover existing instances                | [`discover()`](#discover)                                                                                        |
 | Add the notebook interface                 | [`Lens`](#lens)                                                                                                  |
+| Keep a record of resolved requests         | [`Lens(record=...)`](#lens), [`Record`](#record), [`RecordOptions`](#recordoptions)                              |
+| Read the current request first             | [`LensContext.brief`](./reference/context#brief), [`LensContext.request`](./reference/context#request)           |
 | Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                          |
+| Check what recorded requests changed       | [`LensContext.history()`](./reference/context#history)                                                           |
+| Check selections and the record            | [`check()`](#lens-check), [Checks](./reference/checks)                                                           |
 | Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal) |
-| Move addressed requests to History         | [`resolve()`](#lens-resolve)                                                                                     |
+| Record a request the analyst made in chat  | [`open_request()`](#lens-open-request)                                                                           |
+| Resolve requests                           | [`resolve()`](#lens-resolve)                                                                                     |
 | Show a user-paced notebook walkthrough     | [`reveal()`](#lens-reveal)                                                                                       |
 | Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                |
 | Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
@@ -35,9 +40,17 @@ capture.
 
 ::: info Source version
 
-This reference follows the repository's `main` branch. PyPI follows tagged
-releases. Read [Compatibility](./compatibility) when the installed signatures
-differ.
+This reference follows `main`. Read
+[Compatibility](./compatibility#hosted-docs-and-released-packages) when the
+installed signatures differ.
+
+:::
+
+::: warning Upgrading: the record is opt-in
+
+`Lens()` and the automatic Lens keep no record of resolved requests. A notebook
+that relied on the record, its History tab, or `context.history()` writes
+`Lens(record=True)` in a cell. That cell replaces the automatic Lens.
 
 :::
 
@@ -53,14 +66,26 @@ The top-level package exports:
 from marimo_lens import (
     ActivityHandle,
     CellReference,
+    ChatRequestReference,
+    Diagnostic,
     Lens,
     LensContext,
     LensError,
     LensReferences,
     NotebookReference,
+    Record,
+    RecordOptions,
+    RecordedChange,
+    RecordedImage,
+    RecordedRequest,
+    RequestReference,
+    RevealStep,
     SelectionReference,
     SelectionTargetReference,
     __version__,
+    agent,
+    automatic_lens,
+    notebook_lens,
 )
 ```
 
@@ -69,19 +94,14 @@ from marimo_lens import (
 ### `Lens`
 
 ```python
-Lens(*, dom_selector: str | None = None) -> Lens
+Lens(
+    *,
+    record: Record | RecordOptions | bool | None = None,
+    dom_selector: str | None = None,
+) -> Lens
 ```
 
 Creates the Python widget and browser UI that own one Lens instance.
-
-- `dom_selector: str | None` adds configured DOM targets to the default
-  notebook targets and regions declared with Lens target or source attributes.
-  See [Custom targets](./custom-targets). The string is stripped and accepts at
-  most 1,024 UTF-16 code units.
-- Returns a renderable `Lens` instance.
-- Raises `TypeError` for a non-string selector.
-- Raises `ValueError` for an empty or oversized selector.
-- The browser reports invalid CSS syntax when the view mounts.
 
 ```python
 from marimo_lens import Lens
@@ -90,21 +110,154 @@ lens = Lens()
 lens
 ```
 
+Every Lens holds the analyst's open selections with their notes and annotated
+PNGs, opens selection and chat requests, and resolves them with a receipt in
+the browser. Pass `record` to also keep a record of resolved requests:
+
+```python
+lens = Lens(record=True)
+```
+
+The [request record](./data-and-trust#request-record) keeps each resolved
+request with the code of every cell it changed. It adds the History tab,
+`context.history()`, and the `LR` checks.
+
+Rerunning its creator cell in the same kernel preserves open selections, notes,
+and captured images when the replacement Lens occupies the same construction
+position and uses the same `dom_selector`. Changing `record` keeps them, so
+adding `record=True` to the creator cell records the selections already open.
+Keep construction order stable when
+a cell creates several instances. The replacement has a fresh connection identity.
+Reconnect before using it through an agent handle. Explicitly closing Lens,
+normal creator-cell deletion, or stopping the kernel releases open selections.
+
+marimo skips widget disposal when it deletes a creator cell that failed to
+compile, so the next Lens the kernel constructs releases that cell's detached
+selections. The kernel retains a bounded number of detached Lens states,
+listed in [Errors and limits](./reference/errors#resource-limits), and evicting
+one releases its open selections.
+
+- `record: Record | RecordOptions | bool | None` chooses the record. `None`,
+  the default, and `False` keep none. `True` keeps a full `Record()`. A
+  [`RecordOptions`](#recordoptions) dict such as `{"keep": "session"}` sets the
+  fields it names and leaves the rest at their defaults. A
+  [`Record`](#record) applies as given.
+- `dom_selector: str | None` adds configured DOM targets to the default
+  notebook targets and regions declared with Lens target or source attributes.
+  See [Custom targets](./custom-targets). The string is stripped and accepts at
+  most 1,024 UTF-16 code units.
+- Returns a renderable `Lens` instance.
+- Raises `TypeError` for a `record` of another type, an unknown record option,
+  an option value of the wrong type, or a non-string selector.
+- Raises `ValueError` for an unknown `keep`, or an empty or oversized selector.
+- The browser reports invalid CSS syntax when the view mounts.
+
 Keep the value mounted while people create selections and agents call its
 methods. Read [Custom targets](./custom-targets) before configuring host DOM
 targets.
+
+### `Record`
+
+```python
+Record(
+    *,
+    keep: Literal["notebook", "session"] = "notebook",
+    images: bool = True,
+    history: bool = True,
+)
+```
+
+`Record` describes the record a Lens keeps of resolved requests. It is a
+frozen, keyword-only dataclass. `Lens(record=True)` keeps `Record()`.
+
+| Field     | Default      | Behavior                                                                                                                                                                                                                                                     |
+| --------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `keep`    | `"notebook"` | `"notebook"` writes the record to the notebook's `__marimo__/lens/` folder in the marimo editor. In apps, in Pyodide, and outside marimo it keeps the record in memory until the kernel stops. `"session"` keeps it in memory everywhere and writes no file. |
+| `images`  | `True`       | Stores each resolved selection's annotated PNG beside its record line. `False` writes lines without `trace.image`.                                                                                                                                           |
+| `history` | `True`       | Shows the History tab, where the analyst reviews resolved requests and reopens selections. `False` hides it. Agents read the record through `context.history()` either way.                                                                                  |
+
+```python
+from marimo_lens import Lens, Record
+
+lens = Lens(record=Record(keep="session", images=False))
+```
+
+`repr()` reads like the constructor:
+
+```python
+>>> Record(keep="session", images=False)
+Record(keep='session', images=False, history=True)
+```
+
+Raises `ValueError` when `keep` is not `"notebook"` or `"session"`, and
+`TypeError` when `images` or `history` is not a bool.
+
+The Lenses of one kernel share one record per storage. Each Lens applies its
+own `images` to the lines it writes and its own `history` to its dock.
+
+### `RecordOptions`
+
+```python
+class RecordOptions(TypedDict, total=False):
+    keep: Literal["notebook", "session"]
+    images: bool
+    history: bool
+```
+
+`RecordOptions` is the dict form of `Record`. Pass it as `Lens(record={...})`
+without importing `Record`. Each key sets the field of the same name, and
+missing keys keep their `Record` defaults:
+
+```python
+Lens(record={"keep": "session"})  # memory everywhere, no files
+Lens(record={"images": False})  # record lines without PNGs
+Lens(record={"history": False})  # no History tab
+Lens(record={"keep": "session", "images": False})
+```
+
+An empty dict keeps `Record()`. An unknown key raises `TypeError` that names
+it. Values raise as the `Record` constructor does.
+
+### `Lens.record`
+
+`lens.record -> Record | None`
+
+Returns the normalized `Record` this Lens keeps, or `None` when it keeps none.
+`Lens(record=True)` and `Lens(record={})` return `Record()`, and a dict returns
+the `Record` it describes.
+
+```python
+Lens(record={"history": False}).record
+# Record(keep='notebook', images=True, history=False)
+```
+
+Read it before calling `context().history()`. With `None`, `history()` raises
+`record_off`, `check()` returns no `LR` diagnostics, and a resolved request
+ends with its browser receipt. With `record.history` false the analyst has no
+History tab, so point them at the receipt.
 
 ### `Lens.context`
 
 `lens.context() -> LensContext`
 
-Returns detached selection references, lazy graph-context text, available
-selection-image bytes, and the captured selection-state revision.
+Returns a lazy brief for the current request, detached selection and chat
+request references, lazy graph-context text, available selection-image bytes,
+the captured selection-state revision, and the recorded requests when the Lens
+keeps a record.
 
 ```python
 context = lens.context()
+print(context.brief)
 selection = context.current
+if lens.record is not None:
+    earlier = context.history(selection) if selection else context.history()
 ```
+
+Read [`brief`](./reference/context#brief) first. It names the request, its
+trace, and what to read next.
+
+[`history()`](./reference/context#history) lists resolved requests with each
+cell they changed and whether that change still holds.
 
 The object does not update. Call `context()` again after notebook or Lens state
 changes. Existing contexts remain readable after `lens.close()`.
@@ -229,68 +382,139 @@ Pass `duration_ms=None` to hold until dismissal or replacement. A finite
 duration limits the whole reveal, including time spent on previous steps.
 Navigation never resets the timer or advances automatically. A held single
 reveal has a dismiss button; multiple steps also have arrows and a count.
-Reveals are transient and do not enter notebook state or History. In a live
-notebook, rerunning or deleting a referenced cell ends the reveal.
+Reveals are transient and stay out of notebook state and History. A reveal
+ends when a referenced cell or its upstream inputs rerun, or the cell is
+deleted.
 
 Target and revision rules match `start_activity()`. Reveal preserves selection
 state and keyboard focus, and replaces current activity. Call `reveal()` before
-`resolve()` with the same captured revision in one kernel call. History retains
-the target for the reveal, and the receipt appears after the reveal ends. A later
-attention event replaces the reveal.
+`resolve()` with the same captured revision in one kernel call. The resolution
+event carries each resolved selection's target, so the browser still finds the
+target when the reveal arrives after the selection closed. The receipt appears
+after the reveal ends. A later attention event replaces the reveal.
 
 `duration_ms` accepts 1 through 300,000 milliseconds. Labels accept 40 UTF-16
 code units. Reveal messages accept 1,000. See [Errors and
 limits](./reference/errors) for the complete validation contract.
 
+### `Lens.open_request`
+
+```python
+lens.open_request(
+    note: str,
+    cells: Sequence[str | CellReference] | None = None,
+) -> str
+```
+
+Opens a chat request and returns its ID. An agent opens one when the analyst
+asks in chat to change the notebook or explain a result in it, so the request
+appears beside the open selections and resolves with a receipt like a selection.
+
+```python
+request_id = lens.open_request(
+    "Drop refunds from the revenue chart",
+    cells=["Hbol"],
+)
+```
+
+- `note` quotes the analyst's message. It is nonblank and holds at most 4,000
+  UTF-16 code units.
+- `cells` names up to 16 cells the message is about, by ID or by the
+  [cell references](./reference/context#cell-references) Lens returns. Each must
+  be in the notebook.
+- Lens takes a baseline of every cell's code now. When the resolving Lens
+  keeps a record, edits made before resolution become the request's changes in
+  the record.
+- The request appears in `context.references["chatRequests"]` until it is
+  resolved. It has no selection, image, or label.
+- Opening a request leaves the selection revision unchanged, so a context read
+  before the call stays valid for `resolve()`.
+
+Raises `LensError` with `request_limit_reached` when 16 chat requests are open
+or their cells overflow the 24,000-byte chat reference budget, `cell_not_found`
+for a cell outside the notebook, and `runtime_unavailable` when Lens cannot
+read the notebook to check named cells. More than 16 cells raises
+`ValueError`. Chat requests belong to the notebook runtime. A chat request that
+is still open when the Lens closes stays open, and the next Lens in the same
+kernel lists it and can resolve it. The record of the Lens that resolves it
+keeps it.
+
 ### `Lens.resolve`
 
 ```python
 lens.resolve(
-    selection_ids: str | Sequence[str],
+    request_ids: str | Sequence[str],
     *,
     expected_revision: int,
     summary: str | None = None,
 ) -> int
 ```
 
-Moves one or more Open selections into History and returns the next
-selection-state revision.
+Resolves selection and chat requests and returns the selection-state revision
+after the call.
 
 ```python
 context = lens.context()
-selection_ids = [item["id"] for item in context.references["selections"]]
+request_ids = [
+    *(item["id"] for item in context.references["selections"]),
+    *(item["id"] for item in context.references["chatRequests"]),
+]
 
-if selection_ids:
+if request_ids:
     revision = lens.resolve(
-        selection_ids,
+        request_ids,
         expected_revision=context.revision,
         summary="Updated the result and verified the affected cells.",
     )
 ```
 
-Pass one ID string or a sequence of up to 64 unique strings. Lens validates the
-entire batch before changing state. The resolved selections share one resulting
-revision and optional summary of up to 240 UTF-16 code units. Their
-selection-image bytes are released.
+Pass one ID string or a sequence of up to 80 unique strings: selection IDs and
+chat request IDs in any mix. Lens checks every ID before changing state, and
+checks `expected_revision` when the batch holds a selection. Resolved
+selections close and share one new revision. Resolving only chat requests
+leaves the revision unchanged. A Lens without a record closes the requests and
+releases their selection images. With a record, every resolved request adds
+one line to the [request record](./data-and-trust#request-record), with the
+selection's image when `images` is true.
 
 Include `summary` to tell the user what changed or what you found and how you
-verified it. Lens stores it beside the original request in each History entry
-and displays it in the resolution receipt. Resolve separately with distinct
-summaries when requests have different outcomes, passing the returned revision
-to the next call.
+verified it. It holds at most 240 UTF-16 code units. The browser shows it in
+the resolution receipt. A record stores it beside the original request in each
+line, and History shows it there. Resolve separately with distinct summaries
+when requests have different outcomes, passing the returned revision to the
+next call.
 
-The state transition commits before Lens sends its best-effort resolution
-receipt. A receipt delivery failure does not roll back History. Expected errors are
-`lens_closed`, `revision_conflict`, `selection_not_found`, and
-`selection_context_limit`.
+A record that cannot take the lines raises `record_full` and leaves every
+request open. A failed write or receipt keeps the resolution, and the lines
+wait in memory for the next write. Expected errors are `lens_closed`,
+`revision_conflict`, `request_not_found`, and `record_full`.
+
+### `Lens.check`
+
+`lens.check() -> list[Diagnostic]`
+
+Checks open selections, and the record when the Lens keeps one, against the
+notebook now. Returns one `Diagnostic` per finding, warnings first, or an empty
+list when every check passed. [Checks](./reference/checks) lists the rules, the
+diagnostic keys, and the `python -m marimo_lens check` command for notebook
+files.
+
+```python
+for diagnostic in lens.check():
+    print(diagnostic["code"], diagnostic["message"])
+```
+
+Call it during a code-mode call so Lens can read marimo's notebook document.
+The only expected error is `lens_closed`.
 
 ### `Lens.close`
 
 `lens.close() -> None`
 
 Closes the Lens instance, cancels pending cell-output capture, and releases
-Open selections, History entries, and Lens-owned selection images. Repeated
-calls have no effect.
+Open selections and Lens-owned selection images. A record keeps its resolved
+requests. A file record stays on disk, and a memory record lasts until the
+kernel stops. Repeated calls have no effect.
 
 Later public operations raise `LensError(code="lens_closed")`.
 
@@ -306,7 +530,8 @@ Together they keep one Lens per notebook runtime.
 Returns a new `Lens` for marimo to show, or `None` when the notebook needs
 none. marimo calls it after a notebook cell that imports marimo runs
 successfully in the editor, then displays the returned Lens. The Lens belongs
-to that cell.
+to that cell and keeps no record. A notebook keeps a record with a cell that
+constructs `Lens(record=True)`, which replaces the automatic Lens.
 
 Returns `None` when:
 
@@ -343,8 +568,9 @@ notebook and the host document each show a dock for the same selections.
 
 ## Agent adapter
 
-`import marimo_lens` loads `marimo_lens.agent`, the module marimo registers as
-the `lens` capability. Read the agent resources from the installed package:
+`import marimo_lens` loads the `marimo_lens.agent` Python API. marimo registers
+`marimo_lens._capability` as its `lens` capability for instruction discovery.
+Read the agent resources from the installed package:
 
 ```python
 import marimo_lens
@@ -374,15 +600,20 @@ Returns the packaged `marimo-lens` Agent Skill.
 - `skill.body` gives the Markdown instruction body.
 - `skill.files` gives the packaged resource inventory.
 
-`help(marimo_lens.agent)` includes this core skill through
-`agent_plugins.read("marimo-lens")`. Load linked workflows with
-`skill.file("references/selections.md").read_text(encoding="utf-8")` when needed.
+[Connect an agent](./agents#read-the-packaged-briefing) shows how agents read
+the briefing and its references.
 
 Raises `agent_plugins.AgentPluginError` when the plugin contains no Lens skill.
 
 ### `add_lens_cell`
 
-`add_lens_cell(ctx) -> str`
+```python
+add_lens_cell(
+    ctx,
+    *,
+    record: Record | RecordOptions | bool | None = None,
+) -> str
+```
 
 Returns the existing agent-managed Lens cell ID or queues one collapsed Lens
 cell and returns its new ID.
@@ -394,6 +625,18 @@ import marimo_lens
 async with cm.get_context() as context:
     cell_id = marimo_lens.agent.add_lens_cell(context)
 ```
+
+`record` takes the forms `Lens(record=...)` takes, and the new cell spells it
+the shortest way: `_Lens()`, `_Lens(record=True)`, or a dict of the options
+that differ from their defaults, such as `_Lens(record={"keep": "session"})`.
+Pass it when the analyst asks for a record.
+`add_lens_cell(context, record=True)` writes files beside the notebook in the
+editor.
+
+When the notebook already holds an agent-managed Lens cell, a call without
+`record`, or with a `record` that matches the cell's, returns that cell's ID.
+A different `record` raises `LensError(code="lens_cell_exists")`, whose message
+names the cell's record. Edit that cell to change its record.
 
 Call `connect()` or `discover()` first to reuse an authored or automatically
 mounted Lens. This helper searches for agent-managed cells.
@@ -408,8 +651,9 @@ after `close()`. A cell whose Lens is open keeps that Lens and its Open
 selections.
 
 `ctx` must expose `create_cell()`, `run_cell()`, and `cells.find()`, and found
-cells must report `status`. Objects without those methods raise `TypeError`. Several agent-managed Lens cells raise
-`LensError(code="lens_ambiguous")`.
+cells must report `status`. Objects without those methods raise `TypeError`. A
+`record` that `Lens` rejects raises the same `TypeError` or `ValueError`.
+Several agent-managed Lens cells raise `LensError(code="lens_ambiguous")`.
 
 ### `discover`
 
@@ -474,11 +718,14 @@ selection owned by that instance.
 | Member                                      | Contract                                            |
 | ------------------------------------------- | --------------------------------------------------- |
 | `identity`                                  | Opaque string for reconnecting across kernel calls. |
+| `record`                                    | Returns `Lens.record`: the `Record` or `None`.      |
 | `context()`                                 | Delegates to `Lens.context()`.                      |
 | `cell_image(cell_id, *, expected_revision)` | Requests a fresh, unmarked cell-output PNG.         |
 | `start_activity(...)`                       | Delegates to `Lens.start_activity()`.               |
 | `stop_activity(activity)`                   | Delegates to `Lens.stop_activity()`.                |
 | `reveal(...)`                               | Delegates to `Lens.reveal()`.                       |
+| `open_request(note, cells)`                 | Delegates to `Lens.open_request()`.                 |
+| `check()`                                   | Delegates to `Lens.check()`.                        |
 | `resolve(...)`                              | Delegates to `Lens.resolve()`.                      |
 
 #### `mounted.cell_image(cell_id, *, expected_revision) -> bytes | None`

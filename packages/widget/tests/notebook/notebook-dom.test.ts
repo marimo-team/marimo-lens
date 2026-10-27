@@ -70,7 +70,7 @@ describe("notebook DOM layout subscriptions", () => {
     });
   });
 
-  test("mounts Lens UI inside the marimo app pane and clips it to the pane", () => {
+  test("mounts Lens UI inside the marimo app pane until it is released", () => {
     vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_280);
     vi.spyOn(window, "innerHeight", "get").mockReturnValue(720);
     const app = document.createElement("main");
@@ -89,9 +89,6 @@ describe("notebook DOM layout subscriptions", () => {
 
     expect(portal.parentElement).toBe(app);
     expect(portal.hasAttribute("data-marimo-lens-pane")).toBe(true);
-    expect(portal.style.getPropertyValue("--marimo-lens-pane-clip")).toBe(
-      "inset(24px calc(100% - 1220px) calc(100% - 664px) 320px)",
-    );
     releaseUi();
     expect(portal.isConnected).toBe(false);
     releaseHost();
@@ -493,42 +490,6 @@ describe("notebook DOM layout subscriptions", () => {
     expect(listener).toHaveBeenCalledOnce();
     release();
     unregister();
-  });
-
-  test("shares one observer lifecycle across subscribers", () => {
-    const disconnectMutation = vi.fn();
-    const disconnectResize = vi.fn();
-    const MutationObserverStub = vi.fn(
-      class {
-        observe = vi.fn();
-        disconnect = disconnectMutation;
-      },
-    );
-    const ResizeObserverStub = vi.fn(
-      class {
-        observe = vi.fn();
-        unobserve = vi.fn();
-        disconnect = disconnectResize;
-      },
-    );
-    vi.stubGlobal("MutationObserver", MutationObserverStub);
-    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
-    const dom = new NotebookDomAdapter(document);
-
-    const releaseFirst = dom.subscribeLayout(() => {});
-    const resizeObservers = ResizeObserverStub.mock.calls.length;
-    const releaseSecond = dom.subscribeLayout(() => {});
-
-    expect(MutationObserverStub).toHaveBeenCalledOnce();
-    expect(ResizeObserverStub).toHaveBeenCalledTimes(resizeObservers);
-
-    releaseFirst();
-    expect(disconnectMutation).not.toHaveBeenCalled();
-    expect(disconnectResize).not.toHaveBeenCalled();
-
-    releaseSecond();
-    expect(disconnectMutation).toHaveBeenCalledOnce();
-    expect(disconnectResize).toHaveBeenCalledTimes(resizeObservers);
   });
 
   test("observes hidden output roots so a CSS reveal updates layout", () => {

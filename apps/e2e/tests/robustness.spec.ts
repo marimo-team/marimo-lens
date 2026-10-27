@@ -1,6 +1,6 @@
 import { expect, type Page } from "@playwright/test";
 
-import { runAction, selectOutput, test } from "./support";
+import { editNote, runAction, selectOutput, test } from "./support";
 
 declare global {
   interface Window {
@@ -29,8 +29,8 @@ async function interceptEncoding(page: Page, mode: "fail" | "hold") {
 }
 
 async function openSelections(page: Page) {
-  await page.getByRole("button", { name: /^Open selections,/ }).click();
-  await expect(page.getByRole("region", { name: "Selections", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /^Requests,/ }).click();
+  await expect(page.getByRole("region", { name: "Requests", exact: true })).toBeVisible();
 }
 
 async function reopen(page: Page, label: string) {
@@ -40,7 +40,7 @@ async function reopen(page: Page, label: string) {
     .getByRole("button", { name: `Reopen ${label}`, exact: true })
     .first()
     .click();
-  await page.getByRole("button", { name: "Close selections" }).click();
+  await page.getByRole("button", { name: "Close requests" }).click();
 }
 
 test("stale and partially invalid agent resolutions preserve the current annotations atomically", async ({
@@ -49,11 +49,9 @@ test("stale and partially invalid agent resolutions preserve the current annotat
   await selectOutput(page, "point", "S1", "Original request");
   await runAction(page, "Remember revision");
   await openSelections(page);
-  await page.getByRole("button", { name: "Edit note for S1", exact: true }).click();
-  await page
-    .getByRole("textbox", { name: "Note for selection S1" })
-    .fill("User changed the request");
-  await page.getByRole("dialog").getByRole("button", { name: "Done", exact: true }).click();
+  const editor = await editNote(page, "S1");
+  await editor.getByRole("textbox").fill("User changed the request");
+  await editor.getByRole("button", { name: "Done", exact: true }).click();
   const current = await runAction(page);
   const stale = await runAction(page, "Resolve remembered");
   expect(stale.error).toEqual({ code: "revision_conflict", revision: current.references.revision });
@@ -63,16 +61,14 @@ test("stale and partially invalid agent resolutions preserve the current annotat
   });
   expect(stale.images).toEqual(current.images);
   const invalid = await runAction(page, "Resolve unknown");
-  expect(invalid.error?.code).toBe("selection_not_found");
+  expect(invalid.error?.code).toBe("request_not_found");
   expect(invalid.references).toMatchObject({
     revision: current.references.revision,
     selections: current.references.selections,
   });
   expect(invalid.images).toEqual(current.images);
   expect((await runAction(page, "Resolve")).references.selections).toEqual([]);
-  await expect(
-    page.getByRole("button", { name: "Open selections, 0 open, 1 in history" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Requests, 0 open, 1 in history" })).toBeVisible();
 });
 
 test("an encoder failure preserves text context and reopening captures fresh evidence", async ({
@@ -112,7 +108,8 @@ test("deleting a selection while PNG encoding is pending cannot resurrect it or 
   expect(pending.references.selections[0].snapshot.status).toBe("pending");
   await openSelections(page);
   await page.getByRole("button", { name: "Remove selection S1", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Selections", exact: true })).toBeHidden();
+  // Removing the last open request empties the sheet, which closes it.
+  await expect(page.getByRole("region", { name: "Requests", exact: true })).toBeHidden();
   await page.evaluate(() => window.encodingGate.release());
   await selectOutput(page, "region", "S2", "The next request still works");
   const result = await runAction(page);
@@ -222,9 +219,7 @@ test("the selection limit rejects overflow and deletion restores capacity", asyn
   await interceptEncoding(page, "fail");
   await selectOutput(page, "point", "S1", "First selection");
   expect((await runAction(page, "Seed 63 selections")).references.selections).toHaveLength(63);
-  await expect(
-    page.getByRole("button", { name: "Open selections, 63 open, 0 in history" }),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Requests, 63 open, 0 in history" })).toBeVisible();
   await selectOutput(page, "point", "S64", "Last available selection");
   const full = await runAction(page);
   expect(full.references.selections).toHaveLength(64);
@@ -243,7 +238,12 @@ test("the selection limit rejects overflow and deletion restores capacity", asyn
   });
   await openSelections(page);
   await page.getByRole("button", { name: "Remove selection S1", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Selections", exact: true })).toBeHidden();
+  const sheet = page.getByRole("region", { name: "Requests", exact: true });
+  await expect(sheet.getByRole("button", { name: "Remove selection S1", exact: true })).toHaveCount(
+    0,
+  );
+  await sheet.getByRole("button", { name: "Close requests" }).click();
+  await expect(sheet).toBeHidden();
   await page.evaluate(() => window.encodingGate.release());
   await selectOutput(page, "region", "S65", "Capacity is available again");
   const recovered = await runAction(page);
@@ -252,7 +252,7 @@ test("the selection limit rejects overflow and deletion restores capacity", asyn
   expect(recovered.references.selections.at(-1)?.snapshot.status).toBe("available");
   await openSelections(page);
   await page.getByRole("button", { name: "Clear selections", exact: true }).click();
-  await expect(page.getByRole("region", { name: "Selections", exact: true })).toBeHidden();
+  await expect(page.getByRole("region", { name: "Requests", exact: true })).toBeHidden();
   expect((await runAction(page)).images).toEqual({});
 });
 
@@ -283,50 +283,54 @@ test("unmounting during capture settles the interrupted image after remount", as
     .toBe("available");
 });
 
-test("touch dragging and cancellation leave the next dock action usable", async ({ page }) => {
-  const session = await page.context().newCDPSession(page);
-  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
-  const start = (await grip.boundingBox())!;
-  const dock = page.locator("[data-marimo-lens-dock]");
-  const before = (await dock.boundingBox())!;
-  const x = start.x + start.width / 2;
-  const y = start.y + start.height / 2;
-  await session.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x, y, id: 1 }],
-  });
-  await session.send("Input.dispatchTouchEvent", {
-    type: "touchMove",
-    touchPoints: [{ x: x + 40, y: y - 120, id: 1 }],
-  });
-  await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(before.y - 120, 0);
-  await page.getByRole("button", { name: "Collapse Lens" }).click();
-  const pill = page.getByRole("button", { name: "Open Lens", exact: true });
-  // The dock's resize observer re-anchors the collapsed pill before the next paint.
-  await page.evaluate(
-    () =>
-      new Promise<void>((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-      ),
-  );
-  const closed = (await pill.boundingBox())!;
-  await session.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: closed.x + 20, y: closed.y + 20, id: 1 }],
-  });
-  await session.send("Input.dispatchTouchEvent", {
-    type: "touchMove",
-    touchPoints: [{ x: closed.x + 40, y: closed.y - 80, id: 1 }],
-  });
-  await session.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
-  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(closed.y, 0);
-  await pill.click();
-  await expect(grip).toBeVisible();
-  await session.detach();
-});
+test(
+  "touch dragging and cancellation leave the next dock action usable",
+  { tag: "@single-project" },
+  async ({ page }) => {
+    const session = await page.context().newCDPSession(page);
+    const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+    const start = (await grip.boundingBox())!;
+    const dock = page.locator("[data-marimo-lens-dock]");
+    const before = (await dock.boundingBox())!;
+    const x = start.x + start.width / 2;
+    const y = start.y + start.height / 2;
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y, id: 1 }],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: x + 40, y: y - 120, id: 1 }],
+    });
+    await session.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(before.y - 120, 0);
+    await page.getByRole("button", { name: "Collapse Lens" }).click();
+    const pill = page.getByRole("button", { name: "Expand Lens", exact: true });
+    // The dock's resize observer re-anchors the collapsed pill before the next paint.
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    );
+    const closed = (await pill.boundingBox())!;
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: closed.x + 20, y: closed.y + 20, id: 1 }],
+    });
+    await session.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: closed.x + 40, y: closed.y - 80, id: 1 }],
+    });
+    await session.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+    await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(closed.y, 0);
+    await pill.click();
+    await expect(grip).toBeVisible();
+    await session.detach();
+  },
+);
 
-test("touch dragging creates a region selection", async ({ page }) => {
+test("touch dragging creates a region selection", { tag: "@single-project" }, async ({ page }) => {
   const session = await page.context().newCDPSession(page);
   const target = page.getByRole("region", { name: "Revenue by month" });
   await target.scrollIntoViewIfNeeded();
@@ -358,46 +362,50 @@ test("touch dragging creates a region selection", async ({ page }) => {
   await session.detach();
 });
 
-test("invalid or unavailable position storage preserves dock controls", async ({ page }) => {
-  const grip = page.getByRole("button", { name: "Move Lens", exact: true });
-  const views = page.getByRole("combobox", { name: "Lens views" });
-  const remount = async () => {
-    await views.selectOption("Hidden");
-    await expect(grip).toHaveCount(0);
-    await views.selectOption("Single");
-    await expect(grip).toBeVisible();
-  };
-  await page.evaluate(() =>
-    localStorage.setItem("marimo-lens:dock-position:v1", '{"x":null,"y":1e999}'),
-  );
-  await remount();
-  const dock = page.locator("[data-marimo-lens-dock]");
-  const initial = (await dock.boundingBox())!;
-  expect(initial.y + initial.height).toBeLessThan(page.viewportSize()!.height);
-  await page.evaluate(() => {
-    const get = Storage.prototype.getItem;
-    const set = Storage.prototype.setItem;
-    Storage.prototype.getItem = function (key) {
-      if (key.startsWith("marimo-lens:")) throw new DOMException("Denied", "SecurityError");
-      return get.call(this, key);
+test(
+  "invalid or unavailable position storage preserves dock controls",
+  { tag: "@single-project" },
+  async ({ page }) => {
+    const grip = page.getByRole("button", { name: "Move Lens", exact: true });
+    const views = page.getByRole("combobox", { name: "Lens views" });
+    const remount = async () => {
+      await views.selectOption("Hidden");
+      await expect(grip).toHaveCount(0);
+      await views.selectOption("Single");
+      await expect(grip).toBeVisible();
     };
-    Storage.prototype.setItem = function (key, value) {
-      if (key.startsWith("marimo-lens:")) throw new DOMException("Denied", "SecurityError");
-      return set.call(this, key, value);
-    };
-  });
-  await remount();
-  await grip.press("Shift+ArrowUp");
-  await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(initial.y - 40, 0);
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.getByRole("button", { name: "Collapse Lens" }).click();
-  await expect(page.getByRole("button", { name: "Open Lens", exact: true })).toBeVisible();
-  expect(
-    await dock.evaluate(
-      (element) =>
-        element
-          .getAnimations({ subtree: true })
-          .filter((animation) => animation.playState === "running").length,
-    ),
-  ).toBe(0);
-});
+    await page.evaluate(() =>
+      localStorage.setItem("marimo-lens:dock-position:v1", '{"x":null,"y":1e999}'),
+    );
+    await remount();
+    const dock = page.locator("[data-marimo-lens-dock]");
+    const initial = (await dock.boundingBox())!;
+    expect(initial.y + initial.height).toBeLessThan(page.viewportSize()!.height);
+    await page.evaluate(() => {
+      const get = Storage.prototype.getItem;
+      const set = Storage.prototype.setItem;
+      Storage.prototype.getItem = function (key) {
+        if (key.startsWith("marimo-lens:")) throw new DOMException("Denied", "SecurityError");
+        return get.call(this, key);
+      };
+      Storage.prototype.setItem = function (key, value) {
+        if (key.startsWith("marimo-lens:")) throw new DOMException("Denied", "SecurityError");
+        return set.call(this, key, value);
+      };
+    });
+    await remount();
+    await grip.press("Shift+ArrowUp");
+    await expect.poll(async () => (await dock.boundingBox())!.y).toBeCloseTo(initial.y - 40, 0);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.getByRole("button", { name: "Collapse Lens" }).click();
+    await expect(page.getByRole("button", { name: "Expand Lens", exact: true })).toBeVisible();
+    expect(
+      await dock.evaluate(
+        (element) =>
+          element
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running").length,
+      ),
+    ).toBe(0);
+  },
+);

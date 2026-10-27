@@ -93,6 +93,9 @@ export function useDocumentInteractions(options: {
           })
         : () => {};
       const onPointerDown = (event: PointerEvent) => {
+        // A new press starts a new gesture. Clear a canceled drag's pointer ID
+        // so it cannot swallow this press's release.
+        canceledPointerIds.current.delete(event.pointerId);
         const workflow = uiRef.current.workflow;
         if (workflow.mode !== "armed" || event.button !== 0) return;
         const target = targetForEvent(event);
@@ -100,7 +103,6 @@ export function useDocumentInteractions(options: {
         cursorElement = target.element;
         setCursor(cursorElement);
         const point = parentViewportPoint(event, surface.frame);
-        canceledPointerIds.current.delete(event.pointerId);
         event.preventDefault();
         event.stopPropagation();
         try {
@@ -140,6 +142,8 @@ export function useDocumentInteractions(options: {
         if (canceledPointerIds.current.delete(event.pointerId)) {
           event.preventDefault();
           event.stopPropagation();
+          // The canceled press would still click what lies under the pointer.
+          guardNextClick(surface.document);
           return;
         }
         const workflow = uiRef.current.workflow;
