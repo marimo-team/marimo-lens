@@ -12,10 +12,10 @@ description: >-
 
 Lens holds open requests and, when it keeps a record, the code each resolved
 request changed. Code mode owns cells and edits. Run `help(cm)` once per
-kernel. Reuse this skill for the installed version.
+kernel.
 
 Each block is one kernel call. Scratchpad names disappear between calls. Save
-the printed identity, request ID, and revision for subsequent calls.
+the printed identity, request ID, and revision.
 
 ## Start: request, brief, and code together
 
@@ -47,9 +47,6 @@ elif request is None or request["channel"] == "chat":
 `context.request` is the brief's request. `context.current` is the selection.
 Complete the saved request ID even if another request opens.
 
-`mounted.record` is the Lens's `Record`, or `None`. Check it before
-`context.history()`, which raises `record_off` without a record.
-
 For a selection, append this image export to the same call. Open the printed
 path if you can read images. Otherwise say you could not see the marked part.
 
@@ -77,8 +74,8 @@ Report missing image evidence. Reveal replaces activity. If blocked, call
 ## Inspect and edit
 
 Read bodies, errors, `ctx.graph.ancestors(cell_id)`, and needed
-`ctx.globals[name]` values together. When `mounted.record` is not `None`, also
-read `context.history(context.request)` and `context.history(cell_id)` for each
+`ctx.globals[name]` values together. When `mounted.record` is not `None`
+(otherwise `context.history()` raises `record_off`), also read `context.history(context.request)` and `context.history(cell_id)` for each
 cell you edit. Preserve `in_force` changes unless asked to reverse them, then
 name them in the summary. For `undone`, `missing` names lost statements and
 `movedTo` the cells that hold them now. The brief names other cells the
@@ -95,14 +92,12 @@ async with cm.get_context() as ctx:
     ctx.run_cell("Hbol")
 ```
 
-Substitute the cell ID and the replacement. marimo raises `StaleCellError`
-when the cell changed after you read it: read it again and reassess. Verify
-in a fresh call after queued edits and runs finish.
+marimo raises `StaleCellError` when the cell changed after you read it: read
+it again and reassess. Verify in a fresh call after queued runs finish.
 
 ## Verify visual edits
 
-Check touched cells' status, errors, and values in a fresh call. For visual
-edits, capture the result in that verification call:
+For visual edits, capture the result in the verification call:
 
 ```python
 import marimo._code_mode as cm
@@ -114,10 +109,10 @@ await ctx.screenshot(cell.id, save_to="/tmp/lens-output.png")
 print("/tmp/lens-output.png")
 ```
 
-Open the PNG, then delete it. This needs Playwright and Chromium in the kernel
-environment. Otherwise use the
+Open the PNG, then delete it. Without Playwright and Chromium in the kernel
+environment, use the
 [Workflow](references/workflow.md#capture-a-current-cell-image) browser capture
-recipe, which returns the PNG in a later call.
+recipe.
 
 ## Finish: verify, reveal, resolve
 
@@ -165,7 +160,7 @@ changed, stop activity and reassess. Chat instructions override older notes.
 
 Resolve answered requests too, even with no edit: the summary is the answer
 the analyst sees. When only the analyst can decide, ask and keep the request
-open until they answer. Keep blocked or unverified requests open.
+open, as with blocked or unverified requests.
 
 Batch shared outcomes. Resolve others separately, passing the returned revision
 onward. Selection resolution advances it. Chat leaves it unchanged. Use the
@@ -193,18 +188,16 @@ mounted.reveal(
 )
 ```
 
-Each step carries its label and message. Dismissal and replacement end the
-Trail, and so does a rerun of a referenced cell or its upstream inputs, or
-deleting the cell.
+Each step carries its label and message. Dismissal, replacement, and a rerun
+or deletion of a referenced cell end the Trail.
 
 ## Mounting and deeper reference
 
 For missing Lens, queue `marimo_lens.agent.add_lens_cell(ctx)` inside
 `async with cm.get_context() as ctx`, then reconnect in a fresh call. It mounts
-`Lens()`, which keeps no record. Pass `record=True` or a dict such as
-`record={"keep": "session"}` only when the analyst asks. `record=True` writes
-files beside the notebook. An existing agent cell with another record raises
-`lens_cell_exists`. Edit that cell to change it.
+`Lens()` with no record. Pass `record=True` (files beside the notebook) or
+`record={"keep": "session"}` only when the analyst asks. An existing agent cell
+with another record raises `lens_cell_exists`: edit that cell to change it.
 For `lens_ambiguous`, inspect `marimo_lens.agent.discover(ctx)` and choose by
 the request and dock. Ask if unclear. For `lens_unavailable`, reconnect once
 with identity omitted and inspect fresh context.
