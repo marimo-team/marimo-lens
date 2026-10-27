@@ -33,6 +33,12 @@ import {
 import { DECLARED_TARGET_SELECTOR, TARGET_SCOPE } from "@/notebook/target-surface";
 import { intersectBounds, windowViewportBounds, type ViewportBounds } from "@/notebook/viewport";
 
+// marimo's save, layout, command, and run buttons stack in this column, and
+// its menu, settings, and shutdown buttons sit in this row.
+const MARIMO_COLUMN_SELECTOR = '[data-testid="chrome-controls-bottom-right"]';
+const MARIMO_ROW_SELECTOR = '[data-testid="chrome-controls-top-right"]';
+const CONTROLS_GAP = 8;
+
 const TOPOLOGY_SELECTOR = [
   OUTPUT_ROOT_SELECTOR,
   DECLARED_TARGET_SELECTOR,
@@ -140,6 +146,35 @@ export class NotebookDomAdapter {
       intersectBounds(windowBounds, pane) ??
       new this.window.DOMRect(windowBounds.left, windowBounds.top, 0, 0)
     );
+  }
+
+  /**
+   * The area Lens lays out its dock and surfaces in: the viewport bounds below
+   * marimo's top-right controls and left of its bottom-right control column.
+   * Those controls render outside the `#App` pane that Lens paints in, so they
+   * would cover Lens UI beneath them.
+   */
+  layoutBounds(): ViewportBounds {
+    const bounds = this.viewportBounds();
+    if (!this.#pane || this.#viewportRoot() !== this.#pane) return bounds;
+    let { left, top, right, bottom } = bounds;
+    const column = this.#controls(MARIMO_COLUMN_SELECTOR, bounds);
+    if (column) right = Math.max(left, column.left - CONTROLS_GAP);
+    const row = this.#controls(MARIMO_ROW_SELECTOR, bounds);
+    if (row) top = Math.min(bottom, row.bottom + CONTROLS_GAP);
+    return new this.window.DOMRect(left, top, right - left, bottom - top);
+  }
+
+  #controls(selector: string, bounds: ViewportBounds): DOMRect | null {
+    const rect = this.document.querySelector(selector)?.getBoundingClientRect();
+    return rect &&
+      rect.width > 0 &&
+      rect.left < bounds.right &&
+      rect.right > bounds.left &&
+      rect.top < bounds.bottom &&
+      rect.bottom > bounds.top
+      ? rect
+      : null;
   }
 
   registerHost(host: Element): () => void {

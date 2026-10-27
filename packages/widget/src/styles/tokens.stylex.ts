@@ -55,7 +55,9 @@ export const darkTheme = stylex.createTheme(colors, {
 });
 
 export const media = stylex.defineConsts({
-  compact: "@media (max-width: 300px)",
+  // The requests sheet is the container: marimo's side panels and controls
+  // narrow it well below the viewport width on a phone.
+  compact: "@container (max-width: 320px)",
   mobile: "@media (max-width: 640px)",
   hover: "@media (hover: hover) and (pointer: fine)",
   coarsePointer: "@media (pointer: coarse)",

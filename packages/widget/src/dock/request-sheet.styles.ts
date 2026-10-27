@@ -11,6 +11,7 @@ export const sheetStyles = stylex.create({
     maxHeight: "inherit",
     overflow: "hidden",
     flexDirection: "column",
+    containerType: "inline-size",
     color: colors.foreground,
     backgroundColor: colors.surface,
     borderWidth: 1,

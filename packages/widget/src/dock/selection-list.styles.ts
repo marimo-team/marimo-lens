@@ -94,13 +94,17 @@ export const selectionListStyles = stylex.create({
   },
   metadata: {
     display: "flex",
-    flexWrap: "wrap",
+    minWidth: 0,
     alignItems: "center",
     gap: 3,
     color: colors.mutedForeground,
     fontSize: 11,
-    overflowWrap: "anywhere",
-    whiteSpace: "normal",
+    whiteSpace: "nowrap",
+  },
+  metadataLabel: {
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   availability: {
     fontWeight: 500,
