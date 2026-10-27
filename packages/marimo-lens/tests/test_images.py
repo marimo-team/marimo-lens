@@ -7,8 +7,9 @@ from array import array
 from collections.abc import Callable
 
 import pytest
-from marimo_lens._images import (
-    ImageError,
+from marimo_lens._selection import images
+from marimo_lens._selection.images import (
+    Rejection,
     prepare_selection_image,
     validate_output_png,
 )
@@ -78,7 +79,7 @@ def test_selection_image_rejects_metadata_that_does_not_match_png(
     metadata = snapshot_metadata(data)
     mutate(metadata)
 
-    with pytest.raises(ImageError) as raised:
+    with pytest.raises(Rejection) as raised:
         prepare_selection_image("selection-1", metadata, data, other_bytes=0)
 
     assert raised.value.code == code
@@ -89,7 +90,7 @@ def test_selection_image_rejects_corrupt_png_checksum() -> None:
     data[-1] ^= 1
     metadata = snapshot_metadata(bytes(data))
 
-    with pytest.raises(ImageError) as raised:
+    with pytest.raises(Rejection) as raised:
         prepare_selection_image("selection-1", metadata, data, other_bytes=0)
 
     assert raised.value.code == "invalid_png"
@@ -109,7 +110,7 @@ def test_selection_image_rejects_corrupt_png_checksum() -> None:
 def test_selection_image_rejects_png_data_that_cannot_be_decoded(
     image_data: bytes,
 ) -> None:
-    with pytest.raises(ImageError) as raised:
+    with pytest.raises(Rejection) as raised:
         prepare_selection_image(
             "selection-1",
             snapshot_metadata(image_data),
@@ -127,7 +128,7 @@ def test_selection_image_rejects_declared_dimensions_before_decompression() -> N
         height=1,
     )
 
-    with pytest.raises(ImageError) as raised:
+    with pytest.raises(Rejection) as raised:
         prepare_selection_image(
             "selection-1",
             snapshot_metadata(image_data, width=2049, height=1),
@@ -138,37 +139,42 @@ def test_selection_image_rejects_declared_dimensions_before_decompression() -> N
     assert raised.value.code == "image_dimensions_exceeded"
 
 
-def test_selection_image_measures_typed_memoryviews_in_bytes() -> None:
+def test_selection_image_measures_typed_memoryviews_in_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     data = png()
     assert len(data) % 2 == 0
     typed_buffer = memoryview(array("B", data)).cast("H")
     assert len(typed_buffer) < typed_buffer.nbytes
+    monkeypatch.setattr(images, "MAX_IMAGE_BYTES", len(data) - 1)
 
-    with pytest.raises(ImageError) as raised:
+    with pytest.raises(Rejection) as raised:
         prepare_selection_image(
             "selection-1",
             snapshot_metadata(data),
             typed_buffer,
             other_bytes=0,
-            max_image_bytes=len(data) - 1,
         )
 
     assert raised.value.code == "image_too_large"
 
 
-def test_selection_image_enforces_total_budget() -> None:
+def test_selection_image_enforces_total_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     first_data = png(2, 2)
     second_data = png(3, 3)
-    limit = len(first_data) + len(second_data) - 1
+    monkeypatch.setattr(
+        images, "MAX_TOTAL_IMAGE_BYTES", len(first_data) + len(second_data) - 1
+    )
     first = prepare_selection_image(
         "selection-1",
         snapshot_metadata(first_data),
         first_data,
         other_bytes=0,
-        max_total_bytes=limit,
     )
 
-    with pytest.raises(ImageError) as raised:
+    with pytest.raises(Rejection) as raised:
         prepare_selection_image(
             "selection-2",
             snapshot_metadata(
@@ -179,7 +185,6 @@ def test_selection_image_enforces_total_budget() -> None:
             ),
             second_data,
             other_bytes=len(first.data),
-            max_total_bytes=limit,
         )
 
     assert raised.value.code == "image_store_full"
@@ -211,7 +216,7 @@ def test_output_image_rejects_metadata_that_does_not_match_png(
     metadata = _output_metadata(data, request_id="request-1", width=2, height=2)
     mutate(metadata)
 
-    with pytest.raises(ImageError) as raised:
+    with pytest.raises(Rejection) as raised:
         validate_output_png("request-1", metadata, data)
 
     assert raised.value.code == "image_metadata_mismatch"
@@ -220,7 +225,7 @@ def test_output_image_rejects_metadata_that_does_not_match_png(
 def test_output_image_rejects_another_request_identity() -> None:
     data = png()
 
-    with pytest.raises(ImageError) as raised:
+    with pytest.raises(Rejection) as raised:
         validate_output_png(
             "request-1",
             _output_metadata(data, request_id="request-2", width=2, height=2),

@@ -75,7 +75,7 @@ first `help(cm)` call. That help lists `lens` under installed capabilities.
   Lens results as JSON. A block that ends with an expression also returns that
   value's rendered HTML in `output`.
 - **Errors.** An uncaught `LensError` sets `success` to `false`, and the last
-  `stderr` line reads `marimo_lens.errors.LensError: <code>: <message>`. Route
+  `stderr` line reads `marimo_lens.LensError: <code>: <message>`. Route
   recovery by that code.
 - **Targeting.** Pass `--file` on every call of a multi-call workflow. Session
   IDs change when the page reloads. The kernel and its Lens survive the reload,

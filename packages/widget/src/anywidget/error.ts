@@ -1,3 +1,5 @@
+import { parseErrorCause } from "@marimo-lens/protocol";
+
 export class LensProtocolError extends Error {
   readonly code: string;
   readonly revision?: number;
@@ -8,4 +10,9 @@ export class LensProtocolError extends Error {
     this.code = code;
     this.revision = revision;
   }
+}
+
+/** The message a failure carries, or `fallback` when it has none. */
+export function errorMessage(cause: unknown, fallback: string): string {
+  return parseErrorCause(cause)?.message || fallback;
 }

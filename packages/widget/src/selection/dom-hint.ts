@@ -3,6 +3,8 @@ import type { DomHint } from "@marimo-lens/protocol";
 import { relativeOutputBounds } from "@marimo-lens/image-capture";
 import { boundedUtf16 } from "@marimo-lens/protocol";
 
+import { isShadowRoot } from "@/notebook/open-tree";
+
 const MAX_TEXT_LENGTH = 240;
 const MAX_LABEL_LENGTH = 160;
 const MAX_PATH_LENGTH = 240;
@@ -43,10 +45,6 @@ function elementPath(element: Element, output: HTMLElement): string {
     }
   }
   return parts.join(" > ");
-}
-
-function isShadowRoot(root: Node): root is ShadowRoot {
-  return root.nodeType === 11 && "host" in root;
 }
 
 function pathPart(element: Element): string {

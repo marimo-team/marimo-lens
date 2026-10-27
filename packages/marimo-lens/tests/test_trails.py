@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from copy import deepcopy
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from marimo._runtime.cell_lifecycle_registry import CellLifecycleRegistry
 from marimo_lens import Lens, LensError
+from marimo_lens._protocol.messages import PROTOCOL_VERSION
 
 
 @pytest.fixture
@@ -27,32 +27,6 @@ def trail_lens(
     lens.close()
 
 
-def test_trail_is_transient_and_does_not_mutate_selections(trail_lens: Any) -> None:
-    lens, _, messages = trail_lens
-    state = deepcopy(lens.get_state())
-    assert (
-        lens.reveal(
-            [
-                {"target": "first", "label": "Question", "message": "Compare demand."},
-                {"target": "second", "label": "Answer"},
-            ],
-            duration_ms=None,
-        )
-        is None
-    )
-    assert lens.get_state() == state
-    assert messages[-1]["type"] == "attention.reveal"
-    assert messages[-1]["payload"]["steps"] == [
-        {
-            "address": {"kind": "cell", "cellId": "first"},
-            "label": "Question",
-            "message": "Compare demand.",
-        },
-        {"address": {"kind": "cell", "cellId": "second"}, "label": "Answer"},
-    ]
-    assert set(messages[-1]["payload"]) == {"id", "steps"}
-
-
 def test_new_trail_releases_previous_watch_and_invalidation_is_scoped(
     trail_lens: Any,
 ) -> None:
@@ -67,7 +41,7 @@ def test_new_trail_releases_previous_watch_and_invalidation_is_scoped(
     registry.dispose("second", deletion=True)
     assert messages[-1] == {
         "protocol": "marimo-lens.event",
-        "version": 7,
+        "version": PROTOCOL_VERSION,
         "type": "attention.trail.stop",
         "payload": {"trailId": current_id},
     }

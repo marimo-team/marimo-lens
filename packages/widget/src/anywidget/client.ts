@@ -1,39 +1,66 @@
 import type {
   AttentionEvent,
+  ClientCommand,
+  CommandPayload,
+  CommandType,
   ImageAction,
   LensResponse,
   Selection,
   SelectionResolvedEvent,
   StoredSnapshot,
-  TransportInput,
+  TransportEnvelope,
+  TransportValue,
 } from "@marimo-lens/protocol";
 
-import { parseTransportEnvelope } from "@marimo-lens/protocol";
+import {
+  ClearSelectionsResponsePayloadSchema,
+  ClientCommandSchema,
+  SelectionMutationResponsePayloadSchema,
+  SelectionPutResponsePayloadSchema,
+  SnapshotResponsePayloadSchema,
+  WIDGET_TRANSPORT_VERSION,
+  parseAttentionEvent,
+  parseContract,
+  parseLensResponse,
+  parseSelectionResolvedEvent,
+  parseTransportEnvelope,
+} from "@marimo-lens/protocol";
 
 import type { LensWidgetModel, OutputCaptureHandler } from "@/anywidget/transport";
 
 import { LensProtocolError } from "@/anywidget/error";
-import { EventRouter } from "@/anywidget/event-router";
-import { OutputCaptureTransport } from "@/anywidget/output-capture-transport";
-import { RequestClient } from "@/anywidget/request-client";
+import { exactBytes, OutputCaptureTransport } from "@/anywidget/output-capture-transport";
 
 export { LensProtocolError };
 
+const REQUEST_TIMEOUT_MS = 20_000;
+
 export type SnapshotAsset = {
   snapshot: StoredSnapshot;
-  bytes: Uint8Array;
+  bytes: Uint8Array<ArrayBuffer>;
+};
+
+type Reply = { response: LensResponse; buffers: DataView[] };
+
+type PendingRequest = {
+  command: ClientCommand;
+  resolve: (reply: Reply) => void;
+  reject: (error: Error) => void;
+  timeout: number;
 };
 
 export class LensProtocolClient {
   readonly #model: LensWidgetModel;
-  readonly #requests: RequestClient;
-  readonly #events = new EventRouter();
+  readonly #window: Window;
+  readonly #pending = new Map<string, PendingRequest>();
+  readonly #resolvedListeners = new Set<(event: SelectionResolvedEvent) => void>();
+  readonly #attentionListeners = new Set<(event: AttentionEvent) => void>();
   readonly #captures: OutputCaptureTransport;
   #started = false;
 
   constructor(model: LensWidgetModel, ownerWindow: Window) {
     this.#model = model;
-    this.#requests = new RequestClient(model, ownerWindow);
+    this.#window = ownerWindow;
     this.#captures = new OutputCaptureTransport(model, ownerWindow);
   }
 
@@ -41,7 +68,6 @@ export class LensProtocolClient {
     if (this.#started) return;
     this.#model.on("msg:custom", this.#handleMessage);
     this.#started = true;
-    this.#requests.connect();
     this.#captures.connect();
   }
 
@@ -49,16 +75,25 @@ export class LensProtocolClient {
     this.#captures.disconnect();
     if (this.#started) this.#model.off("msg:custom", this.#handleMessage);
     this.#started = false;
-    this.#requests.disconnect();
-    this.#events.clear();
+    for (const pending of this.#pending.values()) {
+      this.#window.clearTimeout(pending.timeout);
+      pending.reject(
+        new LensProtocolError("client_disposed", "Lens closed before the request completed"),
+      );
+    }
+    this.#pending.clear();
+    this.#resolvedListeners.clear();
+    this.#attentionListeners.clear();
   }
 
   onSelectionResolved(listener: (event: SelectionResolvedEvent) => void): () => void {
-    return this.#events.onSelectionResolved(listener);
+    this.#resolvedListeners.add(listener);
+    return () => this.#resolvedListeners.delete(listener);
   }
 
   onAttention(listener: (event: AttentionEvent) => void): () => void {
-    return this.#events.onAttention(listener);
+    this.#attentionListeners.add(listener);
+    return () => this.#attentionListeners.delete(listener);
   }
 
   onOutputCapture(handler: OutputCaptureHandler): () => void {
@@ -71,89 +106,282 @@ export class LensProtocolClient {
     expectedRevision: number,
     bytes?: Uint8Array,
   ): Promise<LensResponse> {
-    if (imageAction === "replace" && !bytes) {
-      return Promise.reject(
-        new LensProtocolError("invalid_command", "Replacing a snapshot requires one PNG buffer"),
-      );
-    }
-    if (imageAction !== "replace" && bytes) {
-      return Promise.reject(
-        new LensProtocolError("invalid_command", `${imageAction} cannot include a PNG buffer`),
-      );
-    }
-    return this.#requests
-      .send(
-        "selection.put",
-        { selection, imageAction, expectedRevision },
-        bytes ? [exactArrayBuffer(bytes)] : [],
-      )
-      .then(({ response }) => response);
+    return this.#mutate(
+      "selection.put",
+      { selection, imageAction, expectedRevision },
+      bytes ? [exactBytes(bytes).buffer] : [],
+    );
   }
 
   activateSelection(selectionId: string, expectedRevision: number): Promise<LensResponse> {
-    return this.#requests
-      .send("selection.activate", { selectionId, expectedRevision })
-      .then(({ response }) => response);
+    return this.#mutate("selection.activate", { selectionId, expectedRevision });
   }
 
   deleteSelection(selectionId: string, expectedRevision: number): Promise<LensResponse> {
-    return this.#requests
-      .send("selection.delete", { selectionId, expectedRevision })
-      .then(({ response }) => response);
+    return this.#mutate("selection.delete", { selectionId, expectedRevision });
   }
 
-  reopenSelection(
-    selectionId: string,
-    resolutionRevision: number,
-    expectedRevision: number,
-  ): Promise<LensResponse> {
-    return this.#requests
-      .send("selection.reopen", {
-        selectionId,
-        resolutionRevision,
-        expectedRevision,
-      })
-      .then(({ response }) => response);
+  reopenSelection(payload: CommandPayload<"selection.reopen">): Promise<LensResponse> {
+    return this.#mutate("selection.reopen", payload);
   }
 
   clearSelections(expectedRevision: number): Promise<LensResponse> {
-    return this.#requests
-      .send("selections.clear", { expectedRevision })
-      .then(({ response }) => response);
+    return this.#mutate("selections.clear", { expectedRevision });
   }
 
   clearHistory(expectedRevision: number): Promise<LensResponse> {
-    return this.#requests
-      .send("history.clear", { expectedRevision })
-      .then(({ response }) => response);
+    return this.#mutate("history.clear", { expectedRevision });
   }
 
   async getSnapshot(selectionId: string): Promise<SnapshotAsset> {
-    const { payload, buffers } = await this.#requests.send("snapshot.get", { selectionId });
-    return {
-      snapshot: payload.snapshot,
-      bytes: exactBytes(buffers[0]),
-    };
+    const { response, buffers } = await this.#send("snapshot.get", { selectionId });
+    const payload = parseReply(() =>
+      parseContract(SnapshotResponsePayloadSchema, response.payload, "Snapshot response"),
+    );
+    if (payload.selectionId !== selectionId || payload.snapshot.id !== `image:${selectionId}`) {
+      throw new LensProtocolError(
+        "invalid_response",
+        "Snapshot response must identify the requested selection",
+      );
+    }
+    return { snapshot: payload.snapshot, bytes: exactBytes(buffers[0]) };
   }
 
-  readonly #handleMessage = (message: TransportInput, buffers: DataView[] = []): void => {
+  #mutate<TType extends CommandType>(
+    type: TType,
+    payload: CommandPayload<TType>,
+    buffers: ArrayBuffer[] = [],
+  ): Promise<LensResponse> {
+    return this.#send(type, payload, buffers).then(({ response }) => response);
+  }
+
+  #send<TType extends CommandType>(
+    type: TType,
+    payload: CommandPayload<TType>,
+    buffers: ArrayBuffer[] = [],
+  ): Promise<Reply> {
+    if (!this.#started) {
+      return Promise.reject(
+        new LensProtocolError("client_disposed", "Lens is not connected to its widget model"),
+      );
+    }
+    const requestId = createRequestId(this.#window);
+    let command: ClientCommand;
+    try {
+      command = parseContract(
+        ClientCommandSchema,
+        {
+          protocol: "marimo-lens.command",
+          version: WIDGET_TRANSPORT_VERSION,
+          requestId,
+          type,
+          payload,
+        },
+        "Lens command",
+      );
+      validateOutgoingBuffers(command, buffers);
+    } catch (error) {
+      return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+    }
+
+    return new Promise<Reply>((resolve, reject) => {
+      const timeout = this.#window.setTimeout(() => {
+        this.#pending.delete(requestId);
+        reject(
+          new LensProtocolError(
+            "timeout",
+            "Lens did not respond. Check the notebook connection, then try again.",
+          ),
+        );
+      }, REQUEST_TIMEOUT_MS);
+      this.#pending.set(requestId, { command, resolve, reject, timeout });
+      try {
+        this.#model.send(command, undefined, buffers);
+      } catch (error) {
+        this.#window.clearTimeout(timeout);
+        this.#pending.delete(requestId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
+    }).then((reply) => {
+      if (!reply.response.ok) {
+        throw new LensProtocolError(
+          reply.response.error.code,
+          reply.response.error.message,
+          reply.response.revision,
+        );
+      }
+      return reply;
+    });
+  }
+
+  readonly #handleMessage = (message: TransportValue, buffers: DataView[] = []): void => {
     const envelope = parseTransportEnvelope(message);
     if (!envelope) return;
-    if (this.#captures.accept(envelope, buffers)) return;
-    if (this.#events.accept(envelope, buffers)) return;
-    this.#requests.accept(envelope, buffers);
+    switch (envelope.protocol) {
+      case "marimo-lens.command":
+        this.#captures.accept(envelope, buffers);
+        return;
+      case "marimo-lens.event":
+        this.#acceptEvent(envelope, buffers);
+        return;
+      case "marimo-lens.response":
+        this.#acceptResponse(envelope, buffers);
+    }
   };
+
+  #acceptEvent(message: TransportEnvelope, buffers: readonly DataView[]): void {
+    if (buffers.length !== 0) return;
+    if (message.type === "selection.resolved") {
+      const event = tryParse(() => parseSelectionResolvedEvent(message));
+      if (event) dispatch(this.#resolvedListeners, event);
+    } else {
+      const event = tryParse(() => parseAttentionEvent(message));
+      if (event) dispatch(this.#attentionListeners, event);
+    }
+  }
+
+  #acceptResponse(message: TransportEnvelope, buffers: DataView[]): void {
+    const requestId = message.requestId;
+    const pending = requestId === undefined ? undefined : this.#pending.get(requestId);
+    if (!pending) return;
+    this.#window.clearTimeout(pending.timeout);
+    this.#pending.delete(pending.command.requestId);
+    try {
+      const response = parseLensResponse(message);
+      validateReply(pending.command, response, buffers);
+      pending.resolve({ response, buffers });
+    } catch (error) {
+      pending.reject(
+        error instanceof LensProtocolError
+          ? error
+          : new LensProtocolError(
+              "invalid_response",
+              error instanceof Error ? error.message : String(error),
+            ),
+      );
+    }
+  }
 }
 
-function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer;
+function validateOutgoingBuffers(command: ClientCommand, buffers: readonly ArrayBuffer[]): void {
+  const expected =
+    command.type === "selection.put" && command.payload.imageAction === "replace" ? 1 : 0;
+  if (buffers.length === expected) return;
+  throw new LensProtocolError(
+    "invalid_command",
+    expected === 1
+      ? "Replacing a snapshot requires one PNG buffer"
+      : `${command.type} cannot include a PNG buffer`,
+  );
 }
 
-function exactBytes(view: DataView): Uint8Array {
-  const bytes = new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy;
+/** Check the buffers a reply carries and that a mutation advanced the revision once. */
+function validateReply(
+  command: ClientCommand,
+  response: LensResponse,
+  buffers: readonly DataView[],
+): void {
+  const expected = response.ok && command.type === "snapshot.get" ? 1 : 0;
+  if (buffers.length !== expected) {
+    throw new LensProtocolError(
+      "invalid_response",
+      `${command.type} response must contain ${expected === 0 ? "no buffers" : "one PNG buffer"}`,
+    );
+  }
+  if (
+    response.ok &&
+    "expectedRevision" in command.payload &&
+    response.revision !== command.payload.expectedRevision + 1
+  ) {
+    throw new LensProtocolError(
+      "invalid_response",
+      "Selection mutation response must advance the requested revision once",
+      response.revision,
+    );
+  }
+  if (!response.ok) {
+    parseContract(ClearSelectionsResponsePayloadSchema, response.payload, "Failed Lens response");
+    return;
+  }
+  switch (command.type) {
+    case "selection.put": {
+      const payload = parseContract(
+        SelectionPutResponsePayloadSchema,
+        response.payload,
+        "Selection put response",
+      );
+      if (payload.selection.id !== command.payload.selection.id) {
+        throw new LensProtocolError(
+          "invalid_response",
+          "Selection put response must identify the submitted selection",
+        );
+      }
+      return;
+    }
+    case "selection.activate":
+    case "selection.delete":
+    case "selection.reopen": {
+      const payload = parseContract(
+        SelectionMutationResponsePayloadSchema,
+        response.payload,
+        "Selection mutation response",
+      );
+      if (payload.selectionId !== command.payload.selectionId) {
+        throw new LensProtocolError(
+          "invalid_response",
+          "Selection mutation response must identify the requested selection",
+        );
+      }
+      return;
+    }
+    case "selections.clear":
+    case "history.clear":
+      parseContract(
+        ClearSelectionsResponsePayloadSchema,
+        response.payload,
+        "Clear selections response",
+      );
+  }
+}
+
+/** Parse a reply payload, reporting a contract failure as an invalid response. */
+function parseReply<T>(parse: () => T): T {
+  try {
+    return parse();
+  } catch (error) {
+    throw new LensProtocolError(
+      "invalid_response",
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+function dispatch<T>(listeners: ReadonlySet<(event: T) => void>, event: T): void {
+  const failures: unknown[] = [];
+  for (const listener of listeners) {
+    try {
+      listener(event);
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length > 0) throw failures[0];
+}
+
+function tryParse<T>(parse: () => T): T | null {
+  try {
+    return parse();
+  } catch {
+    return null;
+  }
+}
+
+function createRequestId(ownerWindow: Window): string {
+  const ownerGlobal = ownerWindow.self;
+  return (
+    ownerWindow.crypto.randomUUID?.() ??
+    `request-${ownerGlobal.Date.now().toString(36)}-${ownerGlobal.Math.random()
+      .toString(36)
+      .slice(2, 10)}`
+  );
 }

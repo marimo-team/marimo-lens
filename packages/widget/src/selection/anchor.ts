@@ -2,6 +2,8 @@ import type { RectAnchor, SelectionAnchor } from "@marimo-lens/protocol";
 
 import { outputContentMetrics } from "@marimo-lens/image-capture";
 
+import { composedParent } from "@/notebook/open-tree";
+
 export type ViewportAnchor =
   | { kind: "point"; x: number; y: number }
   | { kind: "rect"; x: number; y: number; width: number; height: number };
@@ -41,6 +43,34 @@ export function anchorToViewport(
     y,
     width: anchor.width * metrics.width * metrics.scaleX,
     height: anchor.height * metrics.height * metrics.scaleY,
+  };
+}
+
+/** The viewport point at the center of an anchor. */
+export function anchorCenter(
+  output: HTMLElement,
+  anchor: SelectionAnchor,
+): { x: number; y: number } {
+  const viewport = anchorToViewport(output, anchor);
+  return viewport.kind === "point"
+    ? viewport
+    : { x: viewport.x + viewport.width / 2, y: viewport.y + viewport.height / 2 };
+}
+
+/** Convert a viewport point to fractions of the output's scrollable content. */
+export function viewportToContent(output: HTMLElement, x: number, y: number) {
+  const metrics = outputContentMetrics(output);
+  return {
+    x: clamp(
+      ((x - metrics.bounds.left) / metrics.scaleX + metrics.scrollLeft) / metrics.width,
+      0,
+      1,
+    ),
+    y: clamp(
+      ((y - metrics.bounds.top) / metrics.scaleY + metrics.scrollTop) / metrics.height,
+      0,
+      1,
+    ),
   };
 }
 
@@ -93,7 +123,7 @@ export function attachToNestedScroll(
       ancestorBaselines.push(baseline);
       if (isScrollFrame(current)) frames.push(baseline);
     }
-    current = parentElementAcrossShadow(current);
+    current = composedParent(current);
   }
   return current === output ? { frames, ancestorBaselines } : { frames: [], ancestorBaselines: [] };
 }
@@ -206,9 +236,6 @@ function acceptsScroll(overflow: string): boolean {
   return overflow === "auto" || overflow === "scroll";
 }
 
-function parentElementAcrossShadow(element: Element): Element | null {
-  if (element.parentElement) return element.parentElement;
-  const root = element.getRootNode();
-  const ownerWindow = element.ownerDocument.defaultView;
-  return ownerWindow && root instanceof ownerWindow.ShadowRoot ? root.host : null;
+export function sameAnchor(left: SelectionAnchor, right: SelectionAnchor): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }

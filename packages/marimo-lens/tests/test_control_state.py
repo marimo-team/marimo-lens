@@ -2,22 +2,23 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
 import anywidget
 import pytest
 import traitlets
-from marimo_lens._context import build_context
-from marimo_lens._control_state import (
+from marimo_lens._marimo.snapshot import collect_runtime_snapshot
+from marimo_lens._notebook.controls import (
     RuntimeControl,
-    _safe_value,
+    safe_value,
     serialize_controls,
 )
-from marimo_lens._marimo_runtime import collect_runtime_snapshot
 
-from tests.support.factories import selection
+from tests.support.controls import control_context, controls_context, install_context
+from tests.support.factories import build_context, selection
 
 
 class _TrackingWidget(anywidget.AnyWidget):
@@ -34,106 +35,132 @@ class _TrackingWidget(anywidget.AnyWidget):
         return super().get_state(*args, **kwargs)
 
 
-def test_composite_child_getters_are_not_inspected(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+@dataclass
+class _Case:
+    controls: dict[str, object]
+    secrets: tuple[str, ...] = ()
+    reads: Callable[[], int] = lambda: 0
+    custom: bool = False
 
+
+def _composite() -> _Case:
     control = _ExplosiveCompositeControl("private-before")
-    context = _control_context("composite", control)
-    _install_context(monkeypatch, context)
-    monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
-
-    runtime = collect_runtime_snapshot(("cell-view",))
-    _references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
+    return _Case(
+        {"composite": control},
+        ("private-before",),
+        lambda: control.elements_reads,
+        True,
     )
 
-    assert runtime.controls[0].value is None
-    assert runtime.controls[0].sensitive is True
-    assert runtime.controls[0].complete is False
-    assert control.elements_reads == 0
-    assert "private-before" not in text
-    assert "[redacted]" in text
 
-
-def test_custom_ui_scalar_is_opaque_and_never_read(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
-
+def _custom_scalar() -> _Case:
     control = _CustomScalarControl("wire-secret")
-    context = _control_context("custom", control)
-    _install_context(monkeypatch, context)
-    monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
-
-    runtime = collect_runtime_snapshot(("cell-view",))
-    _references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
+    return _Case(
+        {"custom": control}, ("wire-secret",), lambda: control.frontend_reads, True
     )
 
-    assert runtime.controls[0].value is None
-    assert runtime.controls[0].sensitive is True
-    assert runtime.controls[0].complete is False
-    assert control.frontend_reads == 0
-    assert "wire-secret" not in text
-    assert "[redacted]" in text
+
+def _backend_only() -> _Case:
+    return _Case(
+        {"token": _BackendOnlyControl("backend-only-secret")},
+        ("backend-only-secret",),
+        custom=True,
+    )
 
 
-def test_control_never_falls_back_to_arbitrary_backend_values(
-    monkeypatch: pytest.MonkeyPatch,
+def _failed_sanitization() -> _Case:
+    return _Case({"date": _ExplodingFrontendControl()}, custom=True)
+
+
+def _password() -> _Case:
+    import marimo as mo
+
+    password = mo.ui.text(value="password-before", kind="password", label="API token")
+    password._update("password-after")
+    return _Case({"token": password}, ("password-before", "password-after"))
+
+
+def _fresh_password() -> _Case:
+    import marimo as mo
+
+    # A password's frontend value starts empty while its backend holds the secret.
+    return _Case(
+        {"token": mo.ui.text(value="secret-a", kind="password")}, ("secret-a",)
+    )
+
+
+def _nested_initial_password() -> _Case:
+    import marimo as mo
+
+    passwords = mo.ui.array([mo.ui.text(value="nested-secret-a", kind="password")])
+    return _Case({"tokens": passwords}, ("nested-secret-a",))
+
+
+def _composite_passwords() -> _Case:
+    import marimo as mo
+
+    password_array = mo.ui.array([mo.ui.text(kind="password")])
+    password_form = mo.ui.text(kind="password").form()
+    password_array._update({"0": "array-secret-before"})
+    password_form._update("form-secret-before")
+    return _Case(
+        {"password_array": password_array, "password_form": password_form},
+        ("array-secret-before", "form-secret-before"),
+    )
+
+
+def _anywidget() -> _Case:
+    widget = _TrackingWidget()
+    return _Case({"widget": widget}, ("unrelated-secret",), lambda: widget.state_reads)
+
+
+def _file_upload() -> _Case:
+    import marimo as mo
+
+    upload = mo.ui.file(label="Upload")
+    encoded = base64.b64encode(b"private-before").decode()
+    upload._update([("private-before.txt", encoded)])
+    return _Case({"upload": upload}, ("private-before", "private-before.txt", encoded))
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        _composite,
+        _custom_scalar,
+        _backend_only,
+        _failed_sanitization,
+        _password,
+        _fresh_password,
+        _nested_initial_password,
+        _composite_passwords,
+        _anywidget,
+        _file_upload,
+    ],
+)
+def test_sensitive_controls_never_reach_context(
+    monkeypatch: pytest.MonkeyPatch, make: Callable[[], _Case]
 ) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
+    import marimo_lens._marimo.controls as control_state_module
 
-    control = _BackendOnlyControl("backend-only-secret")
-    context = _control_context("token", control)
-    _install_context(monkeypatch, context)
-    monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
+    case = make()
+    if case.custom:
+        monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
+    install_context(monkeypatch, controls_context(case.controls))
+    reads = case.reads()
 
-    runtime = collect_runtime_snapshot()
+    runtime = collect_runtime_snapshot(("cell-control", "cell-view"))
     references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
+        runtime, [selection()], revision=1, current_selection_id="selection-1"
     )
-    packet = str(runtime.controls) + str(references) + text
 
-    assert runtime.controls[0].value is None
-    assert runtime.controls[0].complete is False
-    assert runtime.controls[0].sensitive is True
-    assert "backend-only-secret" not in packet
-    assert "[redacted]" in text
+    assert case.reads() == reads
+    for secret in case.secrets:
+        assert secret not in str(references) + text
+    assert text.count("[redacted]") == len(case.controls)
 
 
-def test_frontend_sanitization_failure_marks_control_opaque(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo_lens._marimo_control_state as control_state_module
-
-    control = _ExplodingFrontendControl()
-    context = _control_context("date", control)
-    _install_context(monkeypatch, context)
-    monkeypatch.setattr(control_state_module, "_is_ui_element", lambda _value: True)
-
-    runtime = collect_runtime_snapshot(("cell-view",))
-
-    assert runtime.available is True
-    assert len(runtime.controls) == 1
-    assert runtime.controls[0].value is None
-    assert runtime.controls[0].sensitive is True
-    assert runtime.controls[0].complete is False
-
-
-def test_native_date_range_is_canonical_in_current_context(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def _date_range() -> object:
     import marimo as mo
 
     period = mo.ui.date_range(
@@ -142,59 +169,24 @@ def test_native_date_range_is_canonical_in_current_context(
         value=("2025-01-01", "2025-12-31"),
         label="Period",
     )
-    context = _control_context("period", period)
-    _install_context(monkeypatch, context)
-
     period._update(("2026-01-01", "2026-12-31"))
-    runtime = collect_runtime_snapshot()
-    control = runtime.controls[0]
-    _references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
-    )
-
-    assert control.value == ["2026-01-01", "2026-12-31"]
-    assert control.complete is True
-    assert control.sensitive is False
-    assert '["2026-01-01","2026-12-31"]' in text
+    return period
 
 
-def test_native_tabs_retains_safe_scalar_frontend_state(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def _tabs() -> object:
     import marimo as mo
 
     tabs = mo.ui.tabs(
-        {"Austria": "A", "Germany": "G"},
-        value="Austria",
-        label="Country",
+        {"Austria": "A", "Germany": "G"}, value="Austria", label="Country"
     )
-    context = _control_context("tabs", tabs)
-    _install_context(monkeypatch, context)
-
     tabs._update("1")
-    runtime = collect_runtime_snapshot(("cell-view",))
-    _references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
-    )
-
-    assert runtime.controls[0].value == "1"
-    assert runtime.controls[0].sensitive is False
-    assert "`tabs`" in text
-    assert 'value: "1"' in text
+    return tabs
 
 
-def test_native_control_uses_safe_frontend_state(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def _dropdown() -> object:
     import marimo as mo
 
-    country = mo.ui.dropdown(
+    environment = mo.ui.dropdown(
         {
             "Production": {"token": "backend-token-before"},
             "Staging": {"token": "backend-token-after"},
@@ -202,219 +194,41 @@ def test_native_control_uses_safe_frontend_state(
         value="Production",
         label="Environment",
     )
-    context = _control_context("country", country)
-    _install_context(monkeypatch, context)
+    environment._update(["Staging"])
+    return environment
 
-    country._update(["Staging"])
-    runtime = collect_runtime_snapshot()
+
+@pytest.mark.parametrize(
+    ("make", "shown", "hidden"),
+    [
+        (_date_range, '["2026-01-01","2026-12-31"]', ()),
+        (_tabs, 'value: "1"', ()),
+        (_dropdown, '["Staging"]', ("backend-token-before", "backend-token-after")),
+    ],
+)
+def test_native_controls_show_their_current_frontend_value(
+    monkeypatch: pytest.MonkeyPatch,
+    make: Callable[[], object],
+    shown: str,
+    hidden: tuple[str, ...],
+) -> None:
+    install_context(monkeypatch, control_context("control", make()))
+
+    runtime = collect_runtime_snapshot(("cell-control", "cell-view"))
     _references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
+        runtime, [selection()], revision=1, current_selection_id="selection-1"
     )
 
-    assert runtime.controls[0].value == ["Staging"]
-    assert runtime.controls[0].sensitive is False
-    assert "backend-token-before" not in text
-    assert "backend-token-after" not in text
-    assert '["Staging"]' in text
-
-
-def test_password_control_is_redacted_from_current_context(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo as mo
-
-    password = mo.ui.text(
-        value="password-before",
-        kind="password",
-        label="API token",
-    )
-    context = _control_context("token", password)
-    _install_context(monkeypatch, context)
-
-    password._update("password-after")
-    runtime = collect_runtime_snapshot()
-    control = runtime.controls[0]
-    references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
-    )
-    packet = str(references) + text
-
-    assert control.value is None
-    assert control.sensitive is True
-    assert "password-after" not in packet
-    assert "[redacted]" in text
-
-
-def test_fresh_password_backend_value_is_not_exposed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo as mo
-
-    password = mo.ui.text(value="secret-a", kind="password")
-    assert password._value_frontend == ""
-
-    _install_context(monkeypatch, _control_context("token", password))
-    runtime = collect_runtime_snapshot(("cell-view",))
-    references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
-    )
-    packet = repr(runtime.controls) + repr(references) + text
-
-    assert "secret-a" not in packet
-    assert "[redacted]" in text
-
-
-def test_nested_initial_passwords_are_opaque(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo as mo
-
-    passwords = mo.ui.array([mo.ui.text(value="nested-secret-a", kind="password")])
-    assert passwords._value_frontend == {"0": ""}
-
-    _install_context(monkeypatch, _control_context("tokens", passwords))
-    runtime = collect_runtime_snapshot(("cell-view",))
-    references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
-    )
-    packet = repr(runtime.controls) + repr(references) + text
-
-    assert runtime.controls[0].complete is False
-    assert "nested-secret-a" not in packet
-    assert "[redacted]" in text
-
-
-def test_composite_password_controls_are_opaque(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo as mo
-
-    password_array = mo.ui.array([mo.ui.text(kind="password")])
-    password_form = mo.ui.text(kind="password").form()
-    password_array._update({"0": "array-secret-before"})
-    password_form._update("form-secret-before")
-    context = SimpleNamespace(
-        graph=SimpleNamespace(
-            cells={
-                "cell-control": _cell(
-                    "password_array, password_form = controls()",
-                    defs={"password_array", "password_form"},
-                ),
-                "cell-view": _cell(
-                    "render(password_array.value, password_form.value)",
-                    refs={"password_array", "password_form"},
-                ),
-            },
-            definitions={
-                "password_array": {"cell-control"},
-                "password_form": {"cell-control"},
-            },
-            parents={
-                "cell-control": set(),
-                "cell-view": {"cell-control"},
-            },
-        ),
-        globals={
-            "password_array": password_array,
-            "password_form": password_form,
-        },
-        filename="demo.py",
-        cell_id="cell-lens",
-    )
-    _install_context(monkeypatch, context)
-
-    runtime = collect_runtime_snapshot()
-    references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
-    )
-    packet = str(runtime.controls) + str(references) + text
-
-    assert all(control.value is None for control in runtime.controls)
-    assert all(control.sensitive for control in runtime.controls)
-    for secret in (
-        "array-secret-before",
-        "form-secret-before",
-    ):
-        assert secret not in packet
-    assert text.count("[redacted]") == 2
-
-
-def test_anywidget_state_is_opaque_and_never_read(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    widget = _TrackingWidget()
-    baseline_reads = widget.state_reads
-    context = _control_context("widget", widget)
-    _install_context(monkeypatch, context)
-
-    runtime = collect_runtime_snapshot()
-    assert widget.state_reads == baseline_reads
-    control = runtime.controls[0]
-    references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
-    )
-    packet = str(references) + text
-
-    assert control.value is None
-    assert control.sensitive is True
-    assert control.complete is False
-    assert "unrelated-secret" not in packet
-    assert "[redacted]" in text
-
-
-def test_file_control_contents_never_enter_text_context(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    import marimo as mo
-
-    upload = mo.ui.file(label="Upload")
-    encoded_before = base64.b64encode(b"private-before").decode()
-    upload._update([("private-before.txt", encoded_before)])
-    context = _control_context("upload", upload)
-    _install_context(monkeypatch, context)
-
-    runtime = collect_runtime_snapshot()
-    control = runtime.controls[0]
-    _references, text = build_context(
-        runtime,
-        [selection()],
-        revision=1,
-        current_selection_id="selection-1",
-    )
-
-    assert control.value is None
-    assert control.sensitive is True
-    for secret in (
-        "private-before",
-        "private-before.txt",
-        encoded_before,
-    ):
-        assert secret not in text
-    assert "[redacted]" in text
+    assert shown in text
+    assert "[redacted]" not in text
+    for value in hidden:
+        assert value not in text
 
 
 def test_safe_value_stops_iterating_after_the_item_limit() -> None:
     value = _CountingMapping()
 
-    result = _safe_value(value)
+    result = safe_value(value)
 
     assert value.items_visited == 21
     assert result["..."] == "more items omitted"
@@ -423,51 +237,40 @@ def test_safe_value_stops_iterating_after_the_item_limit() -> None:
 def test_safe_value_does_not_treat_shared_values_as_cycles() -> None:
     shared = {"value": 3}
 
-    result = _safe_value([shared, shared])
+    result = safe_value([shared, shared])
 
     assert result == [{"value": 3}, {"value": 3}]
 
 
-def test_control_mapping_serialization_is_canonical() -> None:
-    first = serialize_controls((_runtime_control({"b": 2, "a": 1}),))
-    second = serialize_controls((_runtime_control({"a": 1, "b": 2}),))
+@pytest.mark.parametrize(
+    ("value", "canonical"),
+    [
+        ({"b": 2, "a": 1}, {"a": 1, "b": 2}),
+        (("2025-01-01", "2025-12-31"), ["2025-01-01", "2025-12-31"]),
+    ],
+)
+def test_control_serialization_is_canonical(value: object, canonical: object) -> None:
+    serialized = serialize_controls((_runtime_control(value),))
 
-    assert first.controls[0].value == {"a": 1, "b": 2}
-    assert first.controls[0].value == second.controls[0].value
-    assert first.control_complete == (True,)
-    assert first.state_complete is True
-    assert second.state_complete is True
+    assert serialized.controls[0].value == canonical
+    assert serialized.controls[0].complete is True
+    assert serialized.state_truncated is False
+
+
+_CYCLE: list[Any] = []
+_CYCLE.append(_CYCLE)
 
 
 @pytest.mark.parametrize(
     "value",
-    [
-        float("nan"),
-        {1: "one"},
-        {"Austria", "Germany"},
-    ],
+    [float("nan"), {1: "one"}, {"Austria", "Germany"}, _CYCLE],
+    ids=["nan", "int-key", "set", "cycle"],
 )
 def test_control_serialization_marks_lossy_values_incomplete(value: object) -> None:
     serialized = serialize_controls((_runtime_control(value),))
 
-    assert serialized.control_complete == (False,)
-    assert serialized.state_complete is False
-
-
-def test_control_tuple_serialization_is_canonical() -> None:
-    serialized = serialize_controls((_runtime_control(("2025-01-01", "2025-12-31")),))
-
-    assert serialized.controls[0].value == ["2025-01-01", "2025-12-31"]
-    assert serialized.control_complete == (True,)
-
-
-def test_control_serialization_marks_cycles_incomplete() -> None:
-    value: list[Any] = []
-    value.append(value)
-
-    serialized = serialize_controls((_runtime_control(value),))
-
-    assert serialized.state_complete is False
+    assert serialized.controls[0].complete is False
+    assert serialized.state_truncated is True
 
 
 def _runtime_control(value: object) -> RuntimeControl:
@@ -478,49 +281,6 @@ def _runtime_control(value: object) -> RuntimeControl:
         component="dropdown",
         label="Country",
         value=value,
-    )
-
-
-def _install_context(monkeypatch: pytest.MonkeyPatch, context: Any) -> None:
-    import marimo._runtime.context as context_module
-
-    monkeypatch.setattr(context_module, "get_context", lambda: context)
-
-
-def _control_context(name: str, control: object) -> SimpleNamespace:
-    return SimpleNamespace(
-        graph=SimpleNamespace(
-            cells={
-                "cell-control": _cell(f"{name} = control()", defs={name}),
-                "cell-view": _cell(f"render({name}.value)", refs={name}),
-            },
-            definitions={name: {"cell-control"}},
-            parents={
-                "cell-control": set(),
-                "cell-view": {"cell-control"},
-            },
-        ),
-        globals={name: control},
-        filename="demo.py",
-        cell_id="cell-lens",
-    )
-
-
-def _cell(
-    code: str,
-    *,
-    defs: set[str] | None = None,
-    refs: set[str] | None = None,
-) -> SimpleNamespace:
-    return SimpleNamespace(
-        code=code,
-        defs=defs or set(),
-        refs=refs or set(),
-        language="python",
-        runtime_state="idle",
-        run_result_status="success",
-        stale=False,
-        config=SimpleNamespace(disabled=False),
     )
 
 

@@ -3,9 +3,13 @@ from __future__ import annotations
 import hashlib
 import struct
 import zlib
+from collections.abc import Mapping, Sequence
 from typing import Any
 
-from marimo_lens._runtime import RuntimeCell, RuntimeSnapshot
+from marimo_lens import LensContext, LensReferences
+from marimo_lens._context.build import standalone_text
+from marimo_lens._notebook.snapshot import RuntimeCell, RuntimeSnapshot
+from marimo_lens._selection.references import build_references
 
 
 def png(width: int = 2, height: int = 2) -> bytes:
@@ -111,6 +115,39 @@ def snapshot(
         available_cell_ids=frozenset(cell.id for cell in cells),
         cells=tuple(cells),
         controls=(),
+    )
+
+
+def build_context(
+    runtime: RuntimeSnapshot,
+    selections: Sequence[Mapping[str, Any]],
+    *,
+    revision: int,
+    current_selection_id: str | None,
+) -> tuple[LensReferences, str]:
+    """Return the references and text a Lens builds."""
+
+    references = build_references(
+        runtime,
+        selections,
+        revision=revision,
+        current_selection_id=current_selection_id,
+    )
+    return references, standalone_text(runtime, selections, current_selection_id)
+
+
+def lens_context(
+    references: Mapping[str, object],
+    *,
+    text: str = "",
+    images: Mapping[str, bytes] | None = None,
+) -> LensContext:
+    """Return a context with fixed references, as a code-mode fake would."""
+
+    return LensContext._create(
+        references=references,
+        text=lambda: text,
+        images=images or {},
     )
 
 

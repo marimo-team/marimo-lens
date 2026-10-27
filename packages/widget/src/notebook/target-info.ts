@@ -11,7 +11,7 @@ import {
   type TransportValue,
 } from "@marimo-lens/protocol";
 
-import type { TargetSurface } from "@/notebook/selection-target";
+import type { TargetSurface } from "@/notebook/target-surface";
 
 import { outputlessCellFromRoot } from "@/notebook/output-root";
 import { referencedSources } from "@/notebook/projection-sources";
@@ -26,7 +26,7 @@ function readInfo(element: Element): TargetInfo | null {
 }
 
 /** Labels are presentation only; target identity and notebook authority stay separate. */
-export function targetInfo(target: TargetSurface): TargetInfo {
+export function targetInfo(target: Pick<TargetSurface, "target" | "element">): TargetInfo {
   const info = targetPresentation(target);
   const renderSource = readJson(target.element, RENDER_SOURCE_ATTRIBUTE, parseRenderSource);
   if (renderSource) info.renderSource = renderSource;
@@ -50,7 +50,7 @@ function readJson<T>(
   }
 }
 
-function targetPresentation(target: TargetSurface): TargetInfo {
+function targetPresentation(target: Pick<TargetSurface, "target" | "element">): TargetInfo {
   const explicit = readInfo(target.element);
   if (explicit?.detail) return explicit;
   const hosts = target.element.hasAttribute(SOURCE_INPUTS_ATTRIBUTE)

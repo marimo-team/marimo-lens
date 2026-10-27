@@ -1,4 +1,4 @@
-import type { Selection, TargetSelector } from "@marimo-lens/protocol";
+import type { Selection } from "@marimo-lens/protocol";
 
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 import type { ViewportBounds } from "@/notebook/viewport";
@@ -9,9 +9,8 @@ export function revealSelection(
   dom: NotebookDomAdapter,
   selection: Selection,
   motion: RevealMotion,
-  selector: TargetSelector,
 ): boolean {
-  const output = dom.getTarget(selection.target, selector)?.element;
+  const output = dom.getTarget(selection.target)?.element;
   if (!output || isSubstantiallyVisible(output.getBoundingClientRect(), dom.viewportBounds())) {
     return false;
   }

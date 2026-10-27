@@ -53,10 +53,10 @@ caps the retained closure and reports omitted IDs and counts.
 
 Runtime access belongs in:
 
-- `packages/marimo-lens/src/marimo_lens/_marimo_runtime.py`
-- `packages/marimo-lens/src/marimo_lens/_marimo_control_state.py`
+- `packages/marimo-lens/src/marimo_lens/_marimo/snapshot.py`
+- `packages/marimo-lens/src/marimo_lens/_marimo/controls.py`
 
-Detached record types belong in `_runtime.py` and `_control_state.py`. Keep
+Detached record types belong in `_notebook/`. Keep
 marimo imports and private descriptor access out of context projection and the
 browser packages.
 
@@ -133,8 +133,8 @@ Control capture uses a conservative display policy:
   catches failed reads and reports bounded unavailable or opaque descriptions.
 - Lens excludes itself from the captured control inventory.
 
-Keep the safety policy in `_marimo_control_state.py` and the renderer-neutral
-bounded serialization in `_control_state.py`. A new control kind needs tests for
+Keep the safety policy in `_marimo/controls.py` and the renderer-neutral
+bounded serialization in `_notebook/controls.py`. A new control kind needs tests for
 identity, value visibility, sensitive values, incomplete metadata, failing
 descriptors, and budget behavior.
 
@@ -228,32 +228,32 @@ to make one renderer easier to capture.
 The public [resource limits table](../docs/reference/errors.md#resource-limits) owns exact user-visible
 values. Internal owners include:
 
-| Limit group                                                          | Source                                                         |
-| -------------------------------------------------------------------- | -------------------------------------------------------------- |
-| Identifiers, notes, labels, messages, selectors, and protocol values | `_protocol_models.py` and `packages/protocol/src/contracts.ts` |
-| Selection and History encoded state                                  | `_selection_state.py`                                          |
-| Compact references                                                   | `_references.py`                                               |
-| Relevant cells and source                                            | `_provenance.py`                                               |
-| Controls and serialized values                                       | `_control_state.py`                                            |
-| Standalone text sections                                             | `_text_context.py`                                             |
-| One PNG and total stored PNG bytes                                   | `_images.py` and `packages/image-capture/src/evidence/png.ts`  |
+| Limit group                                                          | Source                                                                  |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Identifiers, notes, labels, messages, selectors, and protocol values | `_core/bounds.py` and `packages/protocol/src/contracts/transport.ts`    |
+| Selection and History encoded state                                  | `_selection/state.py`                                                   |
+| Compact references                                                   | `_selection/references.py`                                              |
+| Relevant cells and source                                            | `_notebook/provenance.py`                                               |
+| Controls and serialized values                                       | `_notebook/controls.py`                                                 |
+| Standalone text sections                                             | `_context/text.py`                                                      |
+| One PNG and total stored PNG bytes                                   | `_selection/images.py` and `packages/image-capture/src/evidence/png.ts` |
 
 Change a public limit in its source owners, both schema languages when
 applicable, boundary tests, and `docs/reference/errors.md` in one patch.
 
 ## Source map
 
-| Concern                             | Source                                                          |
-| ----------------------------------- | --------------------------------------------------------------- |
-| Compose `LensContext`               | `packages/marimo-lens/src/marimo_lens/_context.py`              |
-| Public context types                | `packages/marimo-lens/src/marimo_lens/context.py`               |
-| marimo graph and runtime adaptation | `packages/marimo-lens/src/marimo_lens/_marimo_runtime.py`       |
-| Detached runtime records            | `packages/marimo-lens/src/marimo_lens/_runtime.py`              |
-| Provenance closure and ranking      | `packages/marimo-lens/src/marimo_lens/_provenance.py`           |
-| marimo control adaptation           | `packages/marimo-lens/src/marimo_lens/_marimo_control_state.py` |
-| Bounded control serialization       | `packages/marimo-lens/src/marimo_lens/_control_state.py`        |
-| Compact references                  | `packages/marimo-lens/src/marimo_lens/_references.py`           |
-| Standalone text                     | `packages/marimo-lens/src/marimo_lens/_text_context.py`         |
-| Python PNG validation               | `packages/marimo-lens/src/marimo_lens/_images.py`               |
-| Browser raster and composition      | `packages/image-capture/src/evidence/`                          |
-| Cell-output mailbox                 | `packages/marimo-lens/src/marimo_lens/_output_capture.py`       |
+| Concern                             | Source                                                                            |
+| ----------------------------------- | --------------------------------------------------------------------------------- |
+| Compose `LensContext`               | `packages/marimo-lens/src/marimo_lens/_context/build.py`                          |
+| Public context types                | `packages/marimo-lens/src/marimo_lens/_core/types.py`, `_context/lens_context.py` |
+| marimo graph and runtime adaptation | `packages/marimo-lens/src/marimo_lens/_marimo/snapshot.py`                        |
+| Detached runtime records            | `packages/marimo-lens/src/marimo_lens/_notebook/snapshot.py`                      |
+| Provenance closure and ranking      | `packages/marimo-lens/src/marimo_lens/_notebook/provenance.py`                    |
+| marimo control adaptation           | `packages/marimo-lens/src/marimo_lens/_marimo/controls.py`                        |
+| Bounded control serialization       | `packages/marimo-lens/src/marimo_lens/_notebook/controls.py`                      |
+| Compact references                  | `packages/marimo-lens/src/marimo_lens/_selection/references.py`                   |
+| Standalone text                     | `packages/marimo-lens/src/marimo_lens/_context/text.py`                           |
+| Python PNG validation               | `packages/marimo-lens/src/marimo_lens/_selection/images.py`                       |
+| Browser raster and composition      | `packages/image-capture/src/evidence/`                                            |
+| Cell-output mailbox                 | `packages/marimo-lens/src/marimo_lens/_widget/capture.py`                         |

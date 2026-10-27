@@ -101,6 +101,13 @@ export const ui = stylex.create({
   mono: {
     fontFamily: fonts.mono,
   },
+  empty: {
+    margin: 0,
+    padding: "24px 16px",
+    color: colors.mutedForeground,
+    fontSize: 12,
+    textAlign: "center",
+  },
   visuallyHidden: {
     position: "fixed",
     width: 1,

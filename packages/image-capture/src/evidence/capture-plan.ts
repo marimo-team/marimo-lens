@@ -2,8 +2,8 @@ import type { DomHintBounds, SelectionAnchor } from "@marimo-lens/protocol";
 
 import type { CaptureRegion } from "./raster";
 
-import { anchorForDetail } from "./evidence-layout";
 import {
+  anchorForDetail,
   contentBoundsInOutput,
   type OutputContentMetrics,
   outputContentMetrics,

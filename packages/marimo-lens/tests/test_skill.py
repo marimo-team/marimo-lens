@@ -14,7 +14,9 @@ from typing import Any, cast
 import marimo._code_mode as code_mode
 import marimo_lens.agent as lens_agent
 import pytest
-from marimo_lens.context import LensContext
+from marimo_lens._context.lens_context import LensContext
+
+from tests.support.factories import lens_context
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 
@@ -363,8 +365,8 @@ def _code_mode_block(relative_path: str, heading: str) -> str:
 
 
 def _context() -> LensContext:
-    return LensContext(
-        references={
+    return lens_context(
+        {
             "revision": 4,
             "generatedAt": "2026-08-03T13:31:31Z",
             "notebook": {"path": "notebook.py", "available": True},

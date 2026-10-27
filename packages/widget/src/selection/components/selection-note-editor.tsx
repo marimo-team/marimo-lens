@@ -1,10 +1,10 @@
-import type { Selection, TargetSelector } from "@marimo-lens/protocol";
+import type { Selection } from "@marimo-lens/protocol";
 
 import * as stylex from "@stylexjs/stylex";
 import { Trash2 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 
-import { useNotebookDom } from "@/notebook/notebook-dom";
+import { useNotebookDom } from "@/notebook/notebook-dom-context";
 import { anchorToViewport } from "@/selection/anchor";
 import { SelectionKindMark } from "@/selection/components/selection-kind-mark";
 import { selectionTitle } from "@/selection/selection-description";
@@ -15,8 +15,6 @@ import { noteEditorStyles } from "./selection-note-editor.styles";
 
 type SelectionNoteEditorProps = {
   selection: Selection;
-  selector: TargetSelector;
-  initialNote: string;
   saving: boolean;
   mutationPending: boolean;
   motion: "animate" | "instant";
@@ -28,8 +26,6 @@ type SelectionNoteEditorProps = {
 
 export function SelectionNoteEditor({
   selection,
-  selector,
-  initialNote,
   saving,
   mutationPending,
   motion,
@@ -40,14 +36,11 @@ export function SelectionNoteEditor({
 }: SelectionNoteEditorProps) {
   const surfaceRef = useRef<HTMLDialogElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [draft, setDraft] = useState(initialNote);
+  const [draft, setDraft] = useState(selection.note);
   const fieldId = useId();
   const errorId = useId();
   const dom = useNotebookDom();
-  const anchor = editorAnchor(
-    dom.getTarget(selection.target, selector)?.element ?? null,
-    selection,
-  );
+  const anchor = editorAnchor(dom.getTarget(selection.target)?.element ?? null, selection);
   const position = useAnchoredSurface({
     anchor,
     open: true,
@@ -95,32 +88,10 @@ export function SelectionNoteEditor({
           if (!mutationPending) onSave(draft);
           return;
         }
-        if (event.key !== "Tab") return;
-        const controls = Array.from(
-          event.currentTarget.querySelectorAll<HTMLElement>(
-            "textarea:not(:disabled), button:not(:disabled)",
-          ),
-        );
-        const first = controls[0];
-        const last = controls.at(-1);
-        const active = dom.activeElement;
-        if (event.shiftKey && active === first) {
-          event.preventDefault();
-          last?.focus({ preventScroll: true });
-        } else if (!event.shiftKey && active === last) {
-          event.preventDefault();
-          first?.focus({ preventScroll: true });
-        }
+        keepTabInside(event, dom.activeElement);
       }}
     >
-      <header {...stylex.props(noteEditorStyles.header)}>
-        <span {...stylex.props(ui.mono, noteEditorStyles.selection)}>{selection.label}</span>
-        <span aria-hidden="true">·</span>
-        <span {...stylex.props(noteEditorStyles.target)} title={selectionTitle(selection)}>
-          <span {...stylex.props(ui.mono)}>{selection.description.label}</span>
-        </span>
-        <SelectionKindMark kind={selection.anchor.kind} push />
-      </header>
+      <NoteEditorHeader selection={selection} />
 
       <label {...stylex.props(ui.visuallyHidden)} htmlFor={fieldId}>
         Note for selection {selection.label}
@@ -180,7 +151,39 @@ export function SelectionNoteEditor({
   );
 }
 
-function isSaveShortcut(event: KeyboardEvent): boolean {
+function NoteEditorHeader({ selection }: { selection: Selection }) {
+  return (
+    <header {...stylex.props(noteEditorStyles.header)}>
+      <span {...stylex.props(ui.mono, noteEditorStyles.selection)}>{selection.label}</span>
+      <span aria-hidden="true">·</span>
+      <span {...stylex.props(noteEditorStyles.target)} title={selectionTitle(selection)}>
+        <span {...stylex.props(ui.mono)}>{selection.description.label}</span>
+      </span>
+      <SelectionKindMark kind={selection.anchor.kind} push />
+    </header>
+  );
+}
+
+/** Cycle Tab through the editor's own controls, as a modal dialog does. */
+function keepTabInside(event: KeyboardEvent<HTMLDialogElement>, active: Element | null): void {
+  if (event.key !== "Tab") return;
+  const controls = Array.from(
+    event.currentTarget.querySelectorAll<HTMLElement>(
+      "textarea:not(:disabled), button:not(:disabled)",
+    ),
+  );
+  const first = controls[0];
+  const last = controls.at(-1);
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last?.focus({ preventScroll: true });
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first?.focus({ preventScroll: true });
+  }
+}
+
+function isSaveShortcut(event: globalThis.KeyboardEvent): boolean {
   return (
     event.key === "Enter" &&
     (event.ctrlKey || event.metaKey) &&

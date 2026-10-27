@@ -1,6 +1,6 @@
 import { useLayoutEffect, useReducer, useState, type CSSProperties, type RefObject } from "react";
 
-import { useNotebookDom } from "@/notebook/notebook-dom";
+import { useNotebookDom } from "@/notebook/notebook-dom-context";
 
 type AnchoredSurfacePlacement = "above" | "below";
 
@@ -26,13 +26,13 @@ type AnchoredSurfaceOptions = {
   preferredPlacement: AnchoredSurfacePlacement;
   gap: number;
   width: number;
-  align?: "center" | "start";
-  horizontalOffset?: number;
-  edgePadding?: number;
   surfaceHeight?: number;
   surfaceRef?: RefObject<HTMLElement | null>;
   fallback?: AnchoredSurfaceFallback;
 };
+
+// The surface keeps this distance from the viewport edges.
+const edgePadding = 12;
 
 export function useAnchoredSurface({
   anchor,
@@ -40,9 +40,6 @@ export function useAnchoredSurface({
   preferredPlacement,
   gap,
   width: requestedWidth,
-  align = "center",
-  horizontalOffset = 0,
-  edgePadding = 12,
   surfaceHeight,
   surfaceRef,
   fallback = { inset: {}, placement: preferredPlacement },
@@ -64,9 +61,9 @@ export function useAnchoredSurface({
     if (!open || !surface) return undefined;
     const measure = () => setMeasuredHeight(surface.getBoundingClientRect().height);
     measure();
-    const observer = ownerWindow.ResizeObserver ? new ownerWindow.ResizeObserver(measure) : null;
-    observer?.observe(surface);
-    return () => observer?.disconnect();
+    const observer = new ownerWindow.ResizeObserver(measure);
+    observer.observe(surface);
+    return () => observer.disconnect();
   }, [open, ownerWindow, surfaceRef]);
 
   const viewport = dom.viewportBounds();
@@ -84,11 +81,8 @@ export function useAnchoredSurface({
   }
 
   const width = Math.min(requestedWidth, Math.max(0, viewport.width - edgePadding * 2));
-  const alignedLeft =
-    (align === "center" ? anchor.rect.left + anchor.rect.width / 2 - width / 2 : anchor.rect.left) +
-    horizontalOffset;
   const left = clamp(
-    alignedLeft,
+    anchor.rect.left + anchor.rect.width / 2 - width / 2,
     viewport.left + edgePadding,
     Math.max(viewport.left + edgePadding, viewport.right - width - edgePadding),
   );

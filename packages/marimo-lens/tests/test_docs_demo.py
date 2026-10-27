@@ -14,7 +14,7 @@ import pytest
 def test_quickstart_trail_checks_every_target_before_revealing(
     monkeypatch: pytest.MonkeyPatch, missing: tuple[str, ...]
 ) -> None:
-    import marimo_lens._marimo_runtime as runtime
+    import marimo_lens._marimo.snapshot as runtime
 
     names = ("starter_revenue", "starter_chart", "starter_peak")
     snapshot = SimpleNamespace(

@@ -4,9 +4,7 @@ import {
   WIDGET_TRANSPORT_VERSION,
   boundedUtf16,
   hasTextContent,
-  OutputCaptureFailurePayloadSchema,
   OutputCaptureImageSchema,
-  OutputCaptureResponsePayloadSchema,
   parseContract,
   parseLensState,
   parseOutputCaptureCommand,
@@ -134,11 +132,6 @@ export class OutputCaptureTransport {
   }
 
   #replySuccess(command: OutputCaptureCommand, asset: OutputCaptureAsset): void {
-    const payload = parseContract(
-      OutputCaptureResponsePayloadSchema,
-      { outputCellId: command.payload.outputCellId, image: asset.image },
-      "Output capture response",
-    );
     this.#model.send(
       {
         protocol: "marimo-lens.response",
@@ -146,21 +139,16 @@ export class OutputCaptureTransport {
         requestId: command.requestId,
         ok: true,
         revision: this.#currentRevision(),
-        payload,
+        payload: { outputCellId: command.payload.outputCellId, image: asset.image },
       },
       undefined,
-      [exactArrayBuffer(asset.bytes)],
+      [exactBytes(asset.bytes).buffer],
     );
   }
 
   #replyFailure(command: OutputCaptureCommand, code: string, message: string): void {
     const errorCode = boundedUtf16(code, 128);
     const errorMessage = boundedUtf16(message, 500);
-    const payload = parseContract(
-      OutputCaptureFailurePayloadSchema,
-      { outputCellId: command.payload.outputCellId },
-      "Output capture failure",
-    );
     this.#model.send(
       {
         protocol: "marimo-lens.response",
@@ -168,7 +156,7 @@ export class OutputCaptureTransport {
         requestId: command.requestId,
         ok: false,
         revision: this.#currentRevision(),
-        payload,
+        payload: { outputCellId: command.payload.outputCellId },
         error: {
           code: hasTextContent(errorCode) ? errorCode : "capture_failed",
           message: hasTextContent(errorMessage) ? errorMessage : "Output capture failed",
@@ -219,7 +207,7 @@ function validateAsset(
   if (image.id !== `image:${command.requestId}` || asset.bytes.byteLength === 0) {
     throw new LensProtocolError("capture_failed", "Output capture returned invalid image data");
   }
-  return { image, bytes: new Uint8Array(asset.bytes) };
+  return { image, bytes: asset.bytes };
 }
 
 type CaptureFailure = {
@@ -257,8 +245,9 @@ function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
   });
 }
 
-function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
-  const copy = new Uint8Array(bytes.byteLength);
-  copy.set(bytes);
-  return copy.buffer;
+/** Copy `view` into a buffer of its own, as model messages send whole buffers. */
+export function exactBytes(view: ArrayBufferView): Uint8Array<ArrayBuffer> {
+  const copy = new Uint8Array(view.byteLength);
+  copy.set(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+  return copy;
 }

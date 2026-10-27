@@ -5,21 +5,25 @@ from __future__ import annotations
 from importlib import metadata
 
 from . import agent as agent
-from ._mount import automatic_lens, notebook_lens
-from .activity import ActivityHandle
-from .context import (
+from ._context.lens_context import LensContext
+from ._core.errors import LensError
+from ._core.types import (
+    ActivityHandle,
     CellReference,
-    LensContext,
     LensReferences,
     NotebookReference,
+    RevealStep,
     SelectionReference,
     SelectionTargetReference,
 )
-from .errors import LensError
-from .reveal import RevealStep
-from .widget import Lens
+from ._widget.lens import Lens
+from ._widget.mount import automatic_lens, notebook_lens
 
 __version__ = metadata.version("marimo-lens")
+
+# Code-mode tracebacks name the error by its module, and agents match on
+# `marimo_lens.LensError`.
+LensError.__module__ = __name__
 
 __all__ = [
     "ActivityHandle",

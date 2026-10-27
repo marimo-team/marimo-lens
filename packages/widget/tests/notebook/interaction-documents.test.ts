@@ -73,19 +73,25 @@ describe("interaction documents", () => {
     await paint();
     expect(roots).not.toHaveBeenCalled();
 
+    // Content that brings no frame and no shadow root leaves the scan alone.
     host.dataset.progress = "reading";
-    await Promise.resolve();
     output.append(document.createElement("span"));
+    await paint();
+    expect(roots).not.toHaveBeenCalled();
+
+    output.dataset.progress = "reading";
+    await Promise.resolve();
+    const added = output.appendChild(document.createElement("iframe"));
     await Promise.resolve();
     expect(roots).not.toHaveBeenCalled();
     await paint();
     expect(roots).toHaveBeenCalledOnce();
-    expect(attach.mock.calls.map(([surface]) => surface.frame)).toEqual([null, frame]);
+    expect(attach.mock.calls.map(([surface]) => surface.frame)).toEqual([null, frame, added]);
     expect(detachOwner).not.toHaveBeenCalled();
     expect(detachFrame).not.toHaveBeenCalled();
     dispose();
     expect(detachOwner).toHaveBeenCalledOnce();
-    expect(detachFrame).toHaveBeenCalledOnce();
+    expect(detachFrame).toHaveBeenCalledTimes(2);
   });
 
   test("refreshes frame eligibility and navigation without rescanning unchanged structure", async () => {
@@ -183,14 +189,15 @@ describe("interaction documents", () => {
 
   test("releases a removed shadow root while continuing to observe the live document", () => {
     const observed = new Set<Node>();
-    let notifyMutation: ((root: Node) => void) | undefined;
+    const recordMutations = mutationRecorder(window.MutationObserver);
+    let notifyMutation: ((root: Node, records: MutationRecord[]) => void) | undefined;
     vi.stubGlobal(
       "MutationObserver",
       vi.fn(
         class implements MutationObserver {
           constructor(callback: MutationCallback) {
-            notifyMutation = (root) => {
-              if (observed.has(root)) callback([], this);
+            notifyMutation = (root, records) => {
+              if (observed.has(root)) callback(records, this);
             };
           }
 
@@ -222,16 +229,26 @@ describe("interaction documents", () => {
       },
       () => () => {},
     );
-    host.remove();
-    notifyMutation?.(document.body);
+    notifyMutation?.(
+      document.body,
+      recordMutations(document.body, () => host.remove()),
+    );
     const pending = [...frames.entries()][0];
     if (!pending) throw new Error("Shadow-root removal did not schedule a topology refresh");
     frames.delete(pending[0]);
     pending[1](0);
 
-    notifyMutation?.(shadow);
+    notifyMutation?.(
+      shadow,
+      recordMutations(shadow, () => shadow.append(document.createElement("span"))),
+    );
     expect(frames.size).toBe(0);
-    notifyMutation?.(document.body);
+    const next = document.createElement("div");
+    next.attachShadow({ mode: "open" });
+    notifyMutation?.(
+      document.body,
+      recordMutations(document.body, () => document.body.append(next)),
+    );
     expect(frames.size).toBe(1);
 
     dispose();
@@ -331,3 +348,16 @@ describe("interaction documents", () => {
     expect(frame.style.getPropertyValue("pointer-events")).toBe("");
   });
 });
+
+// The observer under test is stubbed, so the DOM's own observer records each
+// change for the stub to deliver.
+function mutationRecorder(Observer: typeof MutationObserver) {
+  return (root: Node, change: () => void): MutationRecord[] => {
+    const observer = new Observer(() => {});
+    observer.observe(root, { childList: true, subtree: true });
+    change();
+    const records = observer.takeRecords();
+    observer.disconnect();
+    return records;
+  };
+}

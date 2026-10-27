@@ -1,16 +1,12 @@
 import type { Selection, SelectionAnchor } from "@marimo-lens/protocol";
 
-import { outputContentMetrics } from "@marimo-lens/image-capture";
-
-import type { TargetSurface } from "@/notebook/selection-target";
+import type { TargetSurface } from "@/notebook/target-surface";
 import type { ViewportPoint } from "@/notebook/types";
 
-export type SelectionMotion = "animate" | "instant";
-export type SelectionSheetTab = "open" | "history";
+import { viewportToContent } from "@/selection/anchor";
 
-type PendingSelection = {
-  selection: Selection;
-};
+export type SelectionMotion = "animate" | "instant";
+export type RequestSheetTab = "open" | "history";
 
 export type WorkflowState =
   | { mode: "idle" }
@@ -31,13 +27,13 @@ export type WorkflowState =
 
 export type UiState = {
   workflow: WorkflowState;
-  pendingSelections: PendingSelection[];
+  pendingSelections: Selection[];
   optimisticCurrentSelectionId: string | null;
-  busySelectionIds: string[];
+  busySelectionIds: ReadonlySet<string>;
   clearPending: boolean;
   historyClearPending: boolean;
-  listOpen: boolean;
-  sheetTab: SelectionSheetTab;
+  sheetOpen: boolean;
+  sheetTab: RequestSheetTab;
   focusedHistoryRevision: number | null;
   announcement: string;
 };
@@ -45,6 +41,7 @@ export type UiState = {
 export type UiAction =
   | { type: "arm" }
   | { type: "disarm" }
+  | { type: "toggleArm" }
   | { type: "focusTarget"; target: TargetSurface | null }
   | {
       type: "startDrag";
@@ -53,37 +50,36 @@ export type UiAction =
       point: ViewportPoint;
     }
   | { type: "moveDrag"; pointerId: number; point: ViewportPoint }
-  | { type: "selectionQueued"; pending: PendingSelection; motion?: SelectionMotion }
-  | { type: "selectionCommitted"; selectionId: string; label: string }
-  | { type: "selectionFailed"; selectionId: string; message: string }
+  | { type: "selectionQueued"; selection: Selection; motion?: SelectionMotion }
+  /** The queued selection was committed or failed, as `announcement` says. */
+  | { type: "selectionSettled"; selectionId: string; announcement: string }
   | { type: "selectionActivated"; selectionId: string }
-  | { type: "activationCommitted"; selectionId: string }
-  | { type: "activationFailed"; selectionId: string; message: string }
+  | { type: "activationSettled"; selectionId: string; failure?: string }
   | { type: "editNote"; selectionId: string; motion?: SelectionMotion }
   | { type: "closeNote" }
-  | { type: "noteSaveStarted"; selectionId: string }
   | { type: "noteSaveSucceeded"; selectionId: string; label: string }
   | { type: "noteSaveFailed"; selectionId: string; message: string }
   | { type: "mutationStarted"; selectionId: string }
   | { type: "mutationFinished"; selectionId: string }
-  | { type: "clearStarted" }
-  | { type: "clearFinished" }
-  | { type: "historyClearStarted" }
-  | { type: "historyClearFinished" }
+  | { type: "setClearPending"; pending: boolean }
+  | { type: "setHistoryClearPending"; pending: boolean }
   | { type: "historyReopened"; selectionId: string; label: string }
-  | { type: "setSheetTab"; tab: SelectionSheetTab }
+  | { type: "setSheetTab"; tab: RequestSheetTab }
+  /** Keep the tab a sheet fell through to when its own tab emptied. */
+  | { type: "sheetFellThrough"; tab: RequestSheetTab }
   | { type: "openHistory"; resolutionRevision: number }
-  | { type: "setListOpen"; open: boolean }
+  | { type: "setSheetOpen"; open: boolean }
+  | { type: "toggleSheet" }
   | { type: "announce"; message: string };
 
 export const INITIAL_UI_STATE: UiState = {
   workflow: { mode: "idle" },
   pendingSelections: [],
   optimisticCurrentSelectionId: null,
-  busySelectionIds: [],
+  busySelectionIds: new Set(),
   clearPending: false,
   historyClearPending: false,
-  listOpen: false,
+  sheetOpen: false,
   sheetTab: "open",
   focusedHistoryRevision: null,
   announcement: "",
@@ -91,11 +87,18 @@ export const INITIAL_UI_STATE: UiState = {
 
 export function uiReducer(state: UiState, action: UiAction): UiState {
   switch (action.type) {
+    case "toggleArm":
+      return uiReducer(
+        state,
+        state.workflow.mode === "armed" || state.workflow.mode === "dragging"
+          ? { type: "disarm" }
+          : { type: "arm" },
+      );
     case "arm":
       return {
         ...state,
         workflow: { mode: "armed", activeTarget: null },
-        listOpen: false,
+        sheetOpen: false,
         announcement: "Select mode active. Click a point or drag a region.",
       };
     case "disarm":
@@ -144,58 +147,30 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
         ...state,
         workflow: {
           mode: "editingNote",
-          selectionId: action.pending.selection.id,
+          selectionId: action.selection.id,
           motion: action.motion ?? "animate",
         },
-        pendingSelections: [...state.pendingSelections, action.pending],
-        optimisticCurrentSelectionId: action.pending.selection.id,
-        announcement: `${action.pending.selection.label} selected.`,
+        pendingSelections: [...state.pendingSelections, action.selection],
+        optimisticCurrentSelectionId: action.selection.id,
+        announcement: `${action.selection.label} selected.`,
       };
-    case "selectionCommitted":
+    case "selectionSettled":
       return {
         ...state,
-        pendingSelections: state.pendingSelections.filter(
-          ({ selection }) => selection.id !== action.selectionId,
-        ),
-        optimisticCurrentSelectionId:
-          state.optimisticCurrentSelectionId === action.selectionId
-            ? null
-            : state.optimisticCurrentSelectionId,
-        announcement: `${action.label} selected.`,
-      };
-    case "selectionFailed":
-      return {
-        ...state,
-        pendingSelections: state.pendingSelections.filter(
-          ({ selection }) => selection.id !== action.selectionId,
-        ),
-        optimisticCurrentSelectionId:
-          state.optimisticCurrentSelectionId === action.selectionId
-            ? null
-            : state.optimisticCurrentSelectionId,
-        announcement: action.message,
+        pendingSelections: state.pendingSelections.filter(({ id }) => id !== action.selectionId),
+        optimisticCurrentSelectionId: releaseOptimistic(state, action.selectionId),
+        announcement: action.announcement,
       };
     case "selectionActivated":
       return {
         ...state,
         optimisticCurrentSelectionId: action.selectionId,
       };
-    case "activationCommitted":
+    case "activationSettled":
       return {
         ...state,
-        optimisticCurrentSelectionId:
-          state.optimisticCurrentSelectionId === action.selectionId
-            ? null
-            : state.optimisticCurrentSelectionId,
-      };
-    case "activationFailed":
-      return {
-        ...state,
-        optimisticCurrentSelectionId:
-          state.optimisticCurrentSelectionId === action.selectionId
-            ? null
-            : state.optimisticCurrentSelectionId,
-        announcement: action.message,
+        optimisticCurrentSelectionId: releaseOptimistic(state, action.selectionId),
+        announcement: action.failure ?? state.announcement,
       };
     case "editNote":
       return {
@@ -206,15 +181,10 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
           motion: action.motion ?? "animate",
         },
         optimisticCurrentSelectionId: action.selectionId,
-        listOpen: false,
+        sheetOpen: false,
       };
     case "closeNote":
       return { ...state, workflow: { mode: "idle" } };
-    case "noteSaveStarted":
-      return {
-        ...state,
-        busySelectionIds: addUnique(state.busySelectionIds, action.selectionId),
-      };
     case "noteSaveSucceeded":
       return {
         ...state,
@@ -222,11 +192,8 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
           state.workflow.mode === "editingNote" && state.workflow.selectionId === action.selectionId
             ? { mode: "idle" }
             : state.workflow,
-        busySelectionIds: removeValue(state.busySelectionIds, action.selectionId),
-        optimisticCurrentSelectionId:
-          state.optimisticCurrentSelectionId === action.selectionId
-            ? null
-            : state.optimisticCurrentSelectionId,
+        busySelectionIds: without(state.busySelectionIds, action.selectionId),
+        optimisticCurrentSelectionId: releaseOptimistic(state, action.selectionId),
         announcement: `${action.label} note updated.`,
       };
     case "noteSaveFailed":
@@ -236,27 +203,23 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
           state.workflow.mode === "editingNote" && state.workflow.selectionId === action.selectionId
             ? { ...state.workflow, error: action.message }
             : state.workflow,
-        busySelectionIds: removeValue(state.busySelectionIds, action.selectionId),
+        busySelectionIds: without(state.busySelectionIds, action.selectionId),
         announcement: action.message,
       };
     case "mutationStarted":
       return {
         ...state,
-        busySelectionIds: addUnique(state.busySelectionIds, action.selectionId),
+        busySelectionIds: new Set(state.busySelectionIds).add(action.selectionId),
       };
     case "mutationFinished":
       return {
         ...state,
-        busySelectionIds: removeValue(state.busySelectionIds, action.selectionId),
+        busySelectionIds: without(state.busySelectionIds, action.selectionId),
       };
-    case "clearStarted":
-      return { ...state, clearPending: true };
-    case "clearFinished":
-      return { ...state, clearPending: false };
-    case "historyClearStarted":
-      return { ...state, historyClearPending: true };
-    case "historyClearFinished":
-      return { ...state, historyClearPending: false };
+    case "setClearPending":
+      return { ...state, clearPending: action.pending };
+    case "setHistoryClearPending":
+      return { ...state, historyClearPending: action.pending };
     case "historyReopened":
       return {
         ...state,
@@ -271,22 +234,22 @@ export function uiReducer(state: UiState, action: UiAction): UiState {
         sheetTab: action.tab,
         focusedHistoryRevision: null,
       };
+    case "sheetFellThrough":
+      return { ...state, sheetTab: action.tab };
     case "openHistory":
       return {
         ...state,
-        listOpen: true,
+        sheetOpen: true,
         sheetTab: "history",
         focusedHistoryRevision: action.resolutionRevision,
       };
-    case "setListOpen":
-      return { ...state, listOpen: action.open };
+    case "setSheetOpen":
+      return { ...state, sheetOpen: action.open };
+    case "toggleSheet":
+      return { ...state, sheetOpen: !state.sheetOpen };
     case "announce":
       return { ...state, announcement: action.message };
   }
-}
-
-export function locksCompetingInteractions(state: UiState): boolean {
-  return state.clearPending || state.historyClearPending || state.workflow.mode === "editingNote";
 }
 
 export function previewAnchor(workflow: WorkflowState): SelectionAnchor | null {
@@ -301,9 +264,9 @@ export function gestureAnchor(
 ): SelectionAnchor {
   const deltaX = Math.abs(end.x - start.x);
   const deltaY = Math.abs(end.y - start.y);
-  const first = normalizedPoint(output, start);
+  const first = viewportToContent(output, start.x, start.y);
   if (deltaX < 5 || deltaY < 5) return { kind: "point", ...first };
-  const last = normalizedPoint(output, end);
+  const last = viewportToContent(output, end.x, end.y);
   const width = Math.abs(last.x - first.x);
   const height = Math.abs(last.y - first.y);
   if (width === 0 || height === 0) return { kind: "point", ...first };
@@ -316,30 +279,15 @@ export function gestureAnchor(
   };
 }
 
-export function normalizedPoint(output: HTMLElement, point: ViewportPoint): ViewportPoint {
-  const metrics = outputContentMetrics(output);
-  return {
-    x: clamp(
-      ((point.x - metrics.bounds.left) / metrics.scaleX + metrics.scrollLeft) / metrics.width,
-      0,
-      1,
-    ),
-    y: clamp(
-      ((point.y - metrics.bounds.top) / metrics.scaleY + metrics.scrollTop) / metrics.height,
-      0,
-      1,
-    ),
-  };
+/** Drop the optimistic current selection once `selectionId` settles, unless another took its place. */
+function releaseOptimistic(state: UiState, selectionId: string): string | null {
+  return state.optimisticCurrentSelectionId === selectionId
+    ? null
+    : state.optimisticCurrentSelectionId;
 }
 
-function addUnique(values: string[], value: string): string[] {
-  return values.includes(value) ? values : [...values, value];
-}
-
-function removeValue(values: string[], value: string): string[] {
-  return values.filter((candidate) => candidate !== value);
-}
-
-function clamp(value: number, minimum: number, maximum: number): number {
-  return Math.min(maximum, Math.max(minimum, value));
+function without(values: ReadonlySet<string>, value: string): ReadonlySet<string> {
+  const next = new Set(values);
+  next.delete(value);
+  return next;
 }

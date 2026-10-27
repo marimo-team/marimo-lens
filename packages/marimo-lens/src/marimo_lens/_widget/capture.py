@@ -1,0 +1,296 @@
+"""Single-slot browser output capture for agent consumers."""
+
+from __future__ import annotations
+
+import threading
+from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
+from typing import Any
+from uuid import uuid4
+
+from .._core.errors import LensError, Rejection, require_cell, revision_conflict
+from .._notebook.snapshot import RuntimeCellStatus
+from .._protocol.codec import (
+    ProtocolError,
+    capture_command,
+    parse_capture_response,
+    request_id_from,
+)
+from .._selection.images import validate_output_png
+
+CAPTURE_TIMEOUT_SECONDS = 20.0
+
+
+@dataclass(slots=True)
+class _Capture:
+    request_id: str
+    cell_id: str
+    revision: int
+    timeout: threading.Timer
+    image: bytes | None = None
+    error_code: str | None = None
+    error: str | None = None
+
+
+class OutputCaptureSlot:
+    """Return one browser-rendered PNG across consecutive kernel calls."""
+
+    __slots__ = (
+        "_browser_ready",
+        "_cell_status",
+        "_closed",
+        "_lock",
+        "_record",
+        "_revision",
+        "_send",
+        "_timeout_seconds",
+    )
+
+    def __init__(
+        self,
+        *,
+        lock: threading.RLock,
+        send: Callable[[dict[str, Any]], None],
+        revision: Callable[[], int],
+        cell_status: Callable[[str], RuntimeCellStatus],
+        timeout_seconds: float = CAPTURE_TIMEOUT_SECONDS,
+    ) -> None:
+        self._lock = lock
+        self._send = send
+        self._revision = revision
+        self._cell_status = cell_status
+        self._timeout_seconds = timeout_seconds
+        self._record: _Capture | None = None
+        self._browser_ready = False
+        self._closed = False
+
+    def image(
+        self,
+        cell_id: str,
+        *,
+        expected_revision: int,
+    ) -> bytes | None:
+        """Return captured bytes or start the capture and return ``None``."""
+
+        with self._lock:
+            self._require_open()
+            revision = self._revision()
+            if revision != expected_revision:
+                self._release_record()
+                raise revision_conflict(expected_revision, revision)
+            record = self._record_for_revision(revision)
+            if (
+                record is not None
+                and record.cell_id == cell_id
+                and record.revision == expected_revision
+            ):
+                return self._read(record)
+            if record is not None and _capture_pending(record):
+                self._raise_busy(record)
+
+        cell_status = self._cell_status(cell_id)
+
+        with self._lock:
+            self._require_open()
+            revision = self._revision()
+            if revision != expected_revision:
+                self._release_record()
+                raise revision_conflict(expected_revision, revision)
+            record = self._record_for_revision(revision)
+            if (
+                record is not None
+                and record.cell_id == cell_id
+                and record.revision == expected_revision
+            ):
+                return self._read(record)
+            if record is not None and _capture_pending(record):
+                self._raise_busy(record)
+            self._release_record()
+            require_cell(cell_status, revision=revision)
+            if not self._browser_ready:
+                raise LensError(
+                    "browser_unavailable",
+                    "The displayed Lens cannot capture notebook output.",
+                    revision=revision,
+                )
+
+            request_id = str(uuid4())
+            command = capture_command(
+                request_id=request_id,
+                cell_id=cell_id,
+            )
+            timeout = threading.Timer(
+                self._timeout_seconds,
+                self._timed_out,
+                args=(request_id,),
+            )
+            timeout.daemon = True
+            self._record = _Capture(
+                request_id=request_id,
+                cell_id=cell_id,
+                revision=revision,
+                timeout=timeout,
+            )
+            timeout.start()
+            try:
+                self._send(command)
+            except Exception:  # noqa: BLE001 - transport callbacks are untrusted
+                self._release_record()
+                raise LensError(
+                    "capture_failed",
+                    "Lens could not send the capture request to the browser.",
+                    revision=revision,
+                ) from None
+            return None
+
+    def set_browser_ready(self, ready: bool) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._browser_ready = ready
+            record = self._record
+            if (
+                not ready
+                and record is not None
+                and record.image is None
+                and record.error_code is None
+            ):
+                _fail_capture(
+                    record,
+                    code="browser_unavailable",
+                    message="The displayed Lens became unavailable during capture.",
+                )
+
+    def accept_response(
+        self,
+        content: Mapping[str, Any],
+        buffers: Sequence[bytes | bytearray | memoryview],
+    ) -> None:
+        request_id = request_id_from(content)
+        if not request_id:
+            return
+        with self._lock:
+            if self._closed:
+                return
+            record = self._record
+            if (
+                record is None
+                or record.request_id != request_id
+                or record.image is not None
+            ):
+                return
+            if record.error_code is not None:
+                return
+            try:
+                response = parse_capture_response(content, buffers)
+                if response.cell_id != record.cell_id:
+                    raise ProtocolError(
+                        "invalid_response",
+                        "Cell capture response does not identify its request cell.",
+                    )
+                if response.image is None:
+                    _fail_capture(
+                        record,
+                        code=_capture_error_code(response.error_code),
+                        message=response.error or "Cell output capture failed.",
+                    )
+                    return
+                record.image = validate_output_png(
+                    request_id,
+                    response.image,
+                    buffers[0],
+                )
+                record.timeout.cancel()
+            except (ProtocolError, Rejection) as error:
+                _fail_capture(record, code="capture_failed", message=str(error))
+            except Exception:  # noqa: BLE001 - isolate malformed browser replies
+                _fail_capture(
+                    record,
+                    code="capture_failed",
+                    message="Lens could not store the captured cell output.",
+                )
+
+    def close(self) -> None:
+        with self._lock:
+            if self._closed:
+                return
+            self._closed = True
+            self._release_record()
+            self._browser_ready = False
+
+    def _read(self, record: _Capture) -> bytes | None:
+        if record.error_code is not None:
+            self._release_record()
+            raise LensError(
+                record.error_code,
+                record.error or "Cell output capture failed.",
+                revision=self._revision(),
+            )
+        if record.image is None:
+            return None
+        image = record.image
+        self._release_record()
+        return image
+
+    def _timed_out(self, request_id: str) -> None:
+        with self._lock:
+            record = self._record
+            if (
+                record is None
+                or record.request_id != request_id
+                or not _capture_pending(record)
+            ):
+                return
+            _fail_capture(
+                record,
+                code="capture_timeout",
+                message="The browser did not finish the cell capture in time.",
+            )
+
+    def _release_record(self) -> None:
+        record = self._record
+        if record is not None:
+            record.timeout.cancel()
+        self._record = None
+
+    def _record_for_revision(self, revision: int) -> _Capture | None:
+        record = self._record
+        if record is not None and record.revision != revision:
+            self._release_record()
+            return None
+        return record
+
+    def _require_open(self) -> None:
+        if self._closed:
+            raise LensError(
+                "lens_closed",
+                "Lens is closed.",
+                revision=self._revision(),
+            )
+
+    def _raise_busy(self, record: _Capture) -> None:
+        raise LensError(
+            "capture_busy",
+            (
+                f"Lens is already capturing output for cell {record.cell_id!r}. "
+                "Poll that cell before requesting another one."
+            ),
+            revision=self._revision(),
+        )
+
+
+def _capture_error_code(value: str | None) -> str:
+    if value in {"browser_unavailable", "capture_timeout", "output_unavailable"}:
+        return value
+    return "capture_failed"
+
+
+def _capture_pending(record: _Capture) -> bool:
+    return record.image is None and record.error_code is None
+
+
+def _fail_capture(record: _Capture, *, code: str, message: str) -> None:
+    record.timeout.cancel()
+    record.image = None
+    record.error_code = code
+    record.error = message

@@ -1,20 +1,18 @@
 import type { Selection } from "@marimo-lens/protocol";
 
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { NotebookDomAdapter, NotebookDomProvider } from "@/notebook/notebook-dom";
+import { NotebookDomAdapter } from "@/notebook/notebook-dom";
+import { NotebookDomProvider } from "@/notebook/notebook-dom-context";
 import { SelectionNoteEditor } from "@/selection/components/selection-note-editor";
 
 import { selectionFixture } from "../../support/fixtures";
+import { render } from "../../support/render";
 
-let root: Root | null = null;
 let notebookDom: NotebookDomAdapter | null = null;
 
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   notebookDom?.dispose();
   notebookDom = null;
   document.body.replaceChildren();
@@ -65,26 +63,18 @@ describe("selection note editor", () => {
   test("preserves local typing while the selection state changes", () => {
     const onSave = vi.fn<(note: string) => void>();
     const selection = selectionFixture({ note: "", snapshot: { status: "pending" } });
-    renderEditor(selection, onSave);
+    const { rerender } = renderEditor(selection, onSave);
     const textarea = document.querySelector<HTMLTextAreaElement>("textarea")!;
     act(() => setTextareaValue(textarea, "Compare this peak with the threshold"));
 
-    act(() => {
-      root?.render(
-        withNotebookDom(
-          editor(
-            {
-              ...selection,
-              snapshot: {
-                status: "failed",
-                capturedAt: "2026-07-14T12:00:00Z",
-              },
-            },
-            onSave,
-          ),
+    rerender(
+      withNotebookDom(
+        editor(
+          { ...selection, snapshot: { status: "failed", capturedAt: "2026-07-14T12:00:00Z" } },
+          onSave,
         ),
-      );
-    });
+      ),
+    );
 
     expect(textarea.value).toBe("Compare this peak with the threshold");
   });
@@ -102,13 +92,12 @@ describe("selection note editor", () => {
   });
 
   test("renders as a nonmodal dialog", () => {
-    renderEditor(selectionFixture(), () => {});
+    const { unmount } = renderEditor(selectionFixture(), () => {});
     const editor = document.querySelector<HTMLDialogElement>("[data-marimo-lens-note-editor]")!;
 
     expect(editor.open).toBe(true);
 
-    act(() => root?.unmount());
-    root = null;
+    unmount();
     expect(document.querySelector("[data-marimo-lens-note-editor]")).toBeNull();
   });
 
@@ -198,11 +187,9 @@ function renderEditor(
   const output = document.createElement("div");
   output.id = "output-cell-1";
   output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 240);
-  const container = document.createElement("div");
-  document.body.append(output, container);
+  document.body.append(output);
   notebookDom = new NotebookDomAdapter(document);
-  root = createRoot(container);
-  act(() => root?.render(withNotebookDom(editor(selection, onSave, overrides))));
+  return render(withNotebookDom(editor(selection, onSave, overrides)));
 }
 
 function editor(
@@ -213,8 +200,6 @@ function editor(
   return (
     <SelectionNoteEditor
       selection={selection}
-      selector={null}
-      initialNote={selection.note}
       saving={false}
       mutationPending={false}
       motion="instant"

@@ -125,7 +125,7 @@ PY
   while the kernel, its Lens, and the saved identity remain.
 - An uncaught `LensError` sets `success` to `false`. The last `stderr` line
   names its code, as in `LensError: lens_unavailable: No Lens is available in
-the active notebook.`
+  the active notebook.`
 - When `marimo pair` reports an unknown outcome, read fresh Lens context before
   repeating a mutation. A committed `resolve()` has already moved its
   selections to History.

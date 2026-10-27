@@ -1,4 +1,10 @@
+import { afterEach } from "vite-plus/test";
+
+import { unmountAll } from "./support/render";
+
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+afterEach(unmountAll);
 
 if (!HTMLElement.prototype.scrollTo) {
   Object.defineProperty(HTMLElement.prototype, "scrollTo", {
@@ -33,6 +39,21 @@ if (!("ResizeObserver" in globalThis)) {
   }
   Object.assign(globalThis, { ResizeObserver: ResizeObserverStub });
 }
+
+// jsdom gives each iframe a fresh window without the stub above.
+const frameDocument = Object.getOwnPropertyDescriptor(
+  HTMLIFrameElement.prototype,
+  "contentDocument",
+)!;
+Object.defineProperty(HTMLIFrameElement.prototype, "contentDocument", {
+  configurable: true,
+  get(this: HTMLIFrameElement) {
+    const frame: Document | null = frameDocument.get!.call(this);
+    const view = frame?.defaultView;
+    if (view && !view.ResizeObserver) view.ResizeObserver = globalThis.ResizeObserver;
+    return frame;
+  },
+});
 
 if (!HTMLDialogElement.prototype.showModal) {
   Object.defineProperties(HTMLDialogElement.prototype, {

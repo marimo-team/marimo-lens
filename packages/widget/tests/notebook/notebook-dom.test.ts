@@ -132,7 +132,7 @@ describe("notebook DOM layout subscriptions", () => {
     const releaseUi = dom.registerUiRoot(root);
     const listener = vi.fn();
     const releaseLayout = dom.subscribeLayout(listener);
-    const otherTarget = dom.targetFromElement(other, null)!;
+    const otherTarget = dom.targetFromElement(other)!;
 
     fullscreen = output;
     document.dispatchEvent(new Event("fullscreenchange"));
@@ -142,17 +142,16 @@ describe("notebook DOM layout subscriptions", () => {
     expect(dom.viewportBounds()).toMatchObject({ left: 0, top: 0, width: 1_280, height: 720 });
     expect(listener).toHaveBeenCalled();
     expect(note.value).toBe("Keep this note");
-    expect(dom.listTargets(null).map(({ target }) => target.cellIds)).toEqual([["cell"]]);
-    expect(dom.getTarget(otherTarget.target, null)).toBeNull();
-    expect(dom.targetFromElement(other, null)).toBeNull();
-    const resolveEvent = vi.fn((event: Event) => dom.targetFromEvent(event, null));
+    expect(dom.listTargets().map(({ target }) => target.cellIds)).toEqual([["cell"]]);
+    expect(dom.getTarget(otherTarget.target)).toBeNull();
+    expect(dom.targetFromElement(other)).toBeNull();
+    const resolveEvent = vi.fn((event: Event) => dom.targetFromEvent(event));
     other.addEventListener("pointerdown", resolveEvent, { once: true });
     other.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     expect(resolveEvent).toHaveReturnedWith(null);
-    expect(dom.targetFromElement(output, null)?.element).toBe(output);
+    expect(dom.targetFromElement(output)?.element).toBe(output);
     expect(dom.getOutputCell("other")).toBeNull();
     expect(dom.getCell("other")).toBeNull();
-    expect(dom.listOutputCells().map(({ id }) => id)).toEqual(["cell"]);
 
     fullscreen = null;
     document.dispatchEvent(new Event("fullscreenchange"));
@@ -161,8 +160,8 @@ describe("notebook DOM layout subscriptions", () => {
     expect(portal.parentElement).toBe(app);
     expect(dom.viewportBounds()).toMatchObject({ left: 320, top: 24, width: 900, height: 640 });
     expect(dom.uiRoot).toBe(root);
-    expect(dom.getTarget(otherTarget.target, null)?.element).toBe(other);
-    expect(dom.targetFromElement(other, null)?.element).toBe(other);
+    expect(dom.getTarget(otherTarget.target)?.element).toBe(other);
+    expect(dom.targetFromElement(other)?.element).toBe(other);
     expect(dom.getCell("other")).toBe(otherCell);
     releaseUi();
     fullscreen = output;
@@ -292,7 +291,7 @@ describe("notebook DOM layout subscriptions", () => {
       "ResizeObserver",
       class {
         constructor(callback: ResizeObserverCallback) {
-          resized = () => callback([], this);
+          resized = () => callback([...observed].map(resizeEntry), this);
         }
         observe(element: Element) {
           observed.add(element);
@@ -339,7 +338,7 @@ describe("notebook DOM layout subscriptions", () => {
     const dom = new NotebookDomAdapter(document);
     const targets: HTMLElement[][] = [];
     const release = dom.subscribeLayout(() => {
-      targets.push(dom.listTargets(null).map(({ element }) => element));
+      targets.push(dom.listTargets().map(({ element }) => element));
     });
     heading.dataset.marimoLensTarget = "";
     await paint();
@@ -348,6 +347,99 @@ describe("notebook DOM layout subscriptions", () => {
     await paint();
     expect(targets.at(-1)).toEqual([]);
     release();
+  });
+
+  test("finds a target that arrives or leaves inside a larger subtree", async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML = "<main></main>";
+    const dom = new NotebookDomAdapter(document);
+    const targets: string[][] = [];
+    const release = dom.subscribeLayout(() => {
+      targets.push(dom.listTargets().map(({ element }) => element.id));
+    });
+    const section = document.createElement("section");
+    section.innerHTML = '<div><h2 id="summary" data-marimo-lens-target></h2></div>';
+    section.querySelector("h2")!.getBoundingClientRect = () => new DOMRect(0, 0, 400, 100);
+
+    document.querySelector("main")!.append(section);
+    await paint();
+    const added = targets.at(-1);
+    section.remove();
+    await paint();
+
+    expect(added).toEqual(["summary"]);
+    expect(targets.at(-1)).toEqual([]);
+    release();
+  });
+
+  test("typing outside every target leaves the target map alone", async () => {
+    vi.useFakeTimers();
+    document.body.innerHTML =
+      '<main><h1 id="intro" data-marimo-lens-target></h1><div class="editor"></div></main>';
+    const dom = new NotebookDomAdapter(document);
+    const listener = vi.fn();
+    const release = dom.subscribeLayout(listener);
+    await paint();
+    const scan = vi.spyOn(document, "querySelectorAll");
+
+    const editor = document.querySelector(".editor")!;
+    for (const character of "net = sales") {
+      editor.append(Object.assign(document.createElement("span"), { textContent: character }));
+      await paint();
+    }
+
+    expect(scan).not.toHaveBeenCalled();
+    expect(listener).toHaveBeenCalled();
+    release();
+  });
+
+  test("keeps notifying while any layout subscriber remains", async () => {
+    vi.useFakeTimers();
+    const dom = new NotebookDomAdapter(document);
+    const appendOutput = async (id: string) => {
+      document.body.append(Object.assign(document.createElement("div"), { id }));
+      await paint();
+    };
+    const first = vi.fn();
+    const second = vi.fn();
+    const releaseFirst = dom.subscribeLayout(first);
+    const releaseSecond = dom.subscribeLayout(second);
+
+    releaseFirst();
+    await appendOutput("output-a");
+    expect(second).toHaveBeenCalled();
+    expect(first).not.toHaveBeenCalled();
+
+    releaseSecond();
+    const third = vi.fn();
+    const releaseThird = dom.subscribeLayout(third);
+    await appendOutput("output-b");
+    expect(third).toHaveBeenCalled();
+    releaseThird();
+  });
+
+  test("attaches frames inside the targets a new selector configures", () => {
+    document.body.innerHTML =
+      '<div id="output-chart"><section class="chart"><iframe></iframe></section></div>';
+    const section = document.querySelector<HTMLElement>(".chart")!;
+    section.getBoundingClientRect = () => new DOMRect(0, 0, 400, 300);
+    const frame = document.querySelector("iframe")!;
+    const dom = new NotebookDomAdapter(document);
+    const frames: (HTMLIFrameElement | null)[] = [];
+    const stop = dom.observeInteractionSurfaces(
+      { includeTargetFrames: true, lockSelectionGestures: true },
+      (surface) => {
+        frames.push(surface.frame);
+        return () => {};
+      },
+    );
+    expect(frames).not.toContain(frame);
+
+    dom.setSelector(".chart");
+    dom.publishSelector();
+
+    expect(frames).toContain(frame);
+    stop();
   });
 
   test("stops scrolling ancestors across a shadow root at their current positions", () => {
@@ -412,10 +504,9 @@ describe("notebook DOM layout subscriptions", () => {
         disconnect = disconnectMutation;
       },
     );
-    const resizeObserve = vi.fn();
     const ResizeObserverStub = vi.fn(
       class {
-        observe = resizeObserve;
+        observe = vi.fn();
         unobserve = vi.fn();
         disconnect = disconnectResize;
       },
@@ -425,10 +516,11 @@ describe("notebook DOM layout subscriptions", () => {
     const dom = new NotebookDomAdapter(document);
 
     const releaseFirst = dom.subscribeLayout(() => {});
+    const resizeObservers = ResizeObserverStub.mock.calls.length;
     const releaseSecond = dom.subscribeLayout(() => {});
 
     expect(MutationObserverStub).toHaveBeenCalledOnce();
-    expect(ResizeObserverStub).toHaveBeenCalledOnce();
+    expect(ResizeObserverStub).toHaveBeenCalledTimes(resizeObservers);
 
     releaseFirst();
     expect(disconnectMutation).not.toHaveBeenCalled();
@@ -436,7 +528,7 @@ describe("notebook DOM layout subscriptions", () => {
 
     releaseSecond();
     expect(disconnectMutation).toHaveBeenCalledOnce();
-    expect(disconnectResize).toHaveBeenCalledOnce();
+    expect(disconnectResize).toHaveBeenCalledTimes(resizeObservers);
   });
 
   test("observes hidden output roots so a CSS reveal updates layout", () => {

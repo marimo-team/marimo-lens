@@ -3,11 +3,11 @@ import { LocateFixed, MousePointer2 } from "lucide-react";
 import { useLayoutEffect, useRef, type CSSProperties, type ReactNode } from "react";
 
 import { intersectBounds, type ViewportBounds } from "@/notebook/viewport";
-import { ui } from "@/styles/primitives";
 import {
   TARGET_ATTENTION_TOP_GUTTER,
   type TargetAttentionPresentation,
 } from "@/transient/target-attention";
+import { LiveRegion } from "@/ui/components/lens-status";
 
 import { transientStyles } from "./transient.styles";
 
@@ -71,7 +71,7 @@ export function projectTargetAttentionSurface(
   };
 }
 
-export function projectTargetAttention(
+function projectTargetAttention(
   presentation: TargetAttentionPresentation | null,
   ownerWindow: Window,
   measurement?: TargetAttentionLabelMeasurement,
@@ -145,10 +145,6 @@ export function TargetAttentionIndicator({
 
   if (!view) return null;
   const { presentation } = view;
-  const { message } = presentation;
-  const targetLabel = presentation.locator.label;
-  const status = presentation.label ?? (presentation.kind === "activity" ? "Working" : "Ready");
-  const detail = message;
 
   return (
     <div
@@ -158,12 +154,7 @@ export function TargetAttentionIndicator({
         presentation.phase === "exiting" && transientStyles.exiting,
       )}
       data-marimo-lens-target-attention
-      data-kind={presentation.kind}
-      data-phase={presentation.phase}
-      data-target-kind={presentation.locator.kind}
-      data-target-label={targetLabel}
-      data-marimo-lens-ui
-      aria-hidden={controls ? undefined : true}
+      {...attentionAttributes(presentation, controls)}
     >
       <div {...stylex.props(transientStyles.ring)} style={view.ring} />
       <div
@@ -182,22 +173,12 @@ export function TargetAttentionIndicator({
             aria-hidden="true"
           />
         )}
-        <span {...stylex.props(transientStyles.attentionStatus)} data-marimo-lens-attention-status>
-          {status}
-        </span>
-        {!presentation.trail && (
-          <span {...stylex.props(transientStyles.target)}>{targetLabel}</span>
-        )}
-        {detail ? (
-          <span
-            key={presentation.sequence}
-            {...stylex.props(transientStyles.attentionMessage)}
-            data-marimo-lens-attention-message
-          >
-            {detail}
-          </span>
-        ) : null}
-        {controls}
+        <AttentionText
+          presentation={presentation}
+          status={presentation.label ?? (presentation.kind === "activity" ? "Working" : "Ready")}
+          placement="label"
+          controls={controls}
+        />
       </div>
     </div>
   );
@@ -208,8 +189,6 @@ export function TargetAttentionFallback({
   reason,
   controls,
 }: TargetAttentionFallbackView & { controls?: ReactNode }) {
-  const { message } = presentation;
-  const targetLabel = presentation.locator.label;
   const status =
     presentation.label ??
     (presentation.kind === "activity"
@@ -228,12 +207,7 @@ export function TargetAttentionFallback({
         presentation.phase === "exiting" && transientStyles.exitingNotice,
       )}
       data-marimo-lens-target-attention-notice
-      data-kind={presentation.kind}
-      data-phase={presentation.phase}
-      data-target-kind={presentation.locator.kind}
-      data-target-label={targetLabel}
-      data-marimo-lens-ui
-      aria-hidden={controls ? undefined : true}
+      {...attentionAttributes(presentation, controls)}
     >
       <LocateFixed
         {...stylex.props(transientStyles.notificationIcon)}
@@ -241,13 +215,65 @@ export function TargetAttentionFallback({
         strokeWidth={2}
         aria-hidden="true"
       />
-      <span {...stylex.props(transientStyles.noticeStatus)} data-marimo-lens-attention-status>
+      <AttentionText
+        presentation={presentation}
+        status={status}
+        placement="notice"
+        controls={controls}
+      />
+    </div>
+  );
+}
+
+function attentionAttributes(presentation: TargetAttentionPresentation, controls: ReactNode) {
+  return {
+    "data-kind": presentation.kind,
+    "data-phase": presentation.phase,
+    "data-target-kind": presentation.locator.kind,
+    "data-target-label": presentation.locator.label,
+    "data-marimo-lens-ui": true,
+    "aria-hidden": controls ? undefined : true,
+  };
+}
+
+/** The status, target, message, and Trail controls, beside the target or in the dock. */
+function AttentionText({
+  presentation,
+  status,
+  placement,
+  controls,
+}: {
+  presentation: TargetAttentionPresentation;
+  status: string;
+  placement: "label" | "notice";
+  controls: ReactNode;
+}) {
+  const { message } = presentation;
+  const label = placement === "label";
+  return (
+    <>
+      <span
+        {...stylex.props(label ? transientStyles.attentionStatus : transientStyles.noticeStatus)}
+        data-marimo-lens-attention-status
+      >
         {status}
       </span>
-      {!presentation.trail && <span {...stylex.props(transientStyles.target)}>{targetLabel}</span>}
-      {message ? <span {...stylex.props(transientStyles.noticeMessage)}>{message}</span> : null}
+      {!presentation.trail && (
+        <span {...stylex.props(transientStyles.target)}>{presentation.locator.label}</span>
+      )}
+      {message ? (
+        <span
+          key={label ? presentation.sequence : undefined}
+          {...stylex.props(
+            label ? transientStyles.attentionMessage : transientStyles.noticeMessage,
+          )}
+          data-marimo-lens-attention-message={label || undefined}
+        >
+          {message}
+        </span>
+      ) : null}
       {controls}
-    </div>
+    </>
   );
 }
 
@@ -283,16 +309,11 @@ export function TargetAttentionAnnouncement({
   presentation: TargetAttentionPresentation | null;
 }) {
   return (
-    <output
-      {...stylex.props(ui.visuallyHidden)}
-      data-marimo-lens-target-attention-status
-      aria-live="polite"
-      aria-atomic="true"
-    >
+    <LiveRegion data-marimo-lens-target-attention-status>
       {presentation ? (
         <span key={presentation.sequence}>{attentionAnnouncement(presentation)}</span>
       ) : null}
-    </output>
+    </LiveRegion>
   );
 }
 

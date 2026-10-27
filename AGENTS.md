@@ -27,15 +27,15 @@ Build the browser assets before Python tests. `Lens` loads the generated
 ## Architecture in five rules
 
 - Python owns Lens-instance selections, History entries, selection-image bytes, runtime
-  context, revision checks, and the public API. `widget.py` is the composition
-  root.
+  context, revision checks, and the public API. `_widget/lens.py` is the
+  composition root. Inner Python layers import only the layers below them, as
+  `packages/marimo-lens/tests/test_package_layers.py` enforces.
 - The browser owns gestures, selection-image composition, notebook DOM access,
   the dock, and transient activity, reveal, and resolution-receipt presentation.
 - `@marimo-lens/protocol` is the innermost TypeScript package.
   `@marimo-lens/image-capture` depends on it, and `@marimo-lens/widget`
   composes both packages.
-- marimo runtime access stays in `_marimo_runtime.py` and
-  `_marimo_control_state.py`. Notebook DOM access stays in
+- marimo runtime access stays in `_marimo/`. Notebook DOM access stays in
   `packages/widget/src/notebook/`.
 - esbuild bundles the widget into one ESM file and one stylesheet. Hatch
   packages both files into the wheel and source distribution.
@@ -54,18 +54,18 @@ runtime and notebook adapters.
 
 ## Change routing
 
-Unqualified Python filenames in this table live in
+Unqualified Python paths in this table live in
 `packages/marimo-lens/src/marimo_lens/`.
 
-| Change                          | Primary source                                                                 | Required companions                                      |
-| ------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------- |
-| Public Python API               | `widget.py`, `context.py`, `errors.py`                                         | Package README, API docs, and Python boundary tests      |
-| Selection lifecycle or History  | `_selection_state.py`, `_protocol*.py`, `packages/protocol/`, widget selection | Python and browser contract tests, context, built assets |
-| Runtime context                 | `_runtime.py`, `_marimo_*.py`, `_provenance.py`, `_context.py`                 | Context tests and public context reference               |
-| Agent capture or feedback       | `_output_capture.py`, `_protocol*.py`, widget anywidget and transient modules  | Transport tests, image tests, and built assets           |
-| Browser interaction             | Widget `app/`, `notebook/`, `selection/`, `transient/`, `ui/`, and `styles/`   | Owning package checks, tests, and build                  |
-| PNG composition                 | `packages/image-capture/`                                                      | Image-capture checks and tests                           |
-| Bundling, packaging, or release | Vite, Hatch, workspace manifests, `Makefile`, and `scripts/`                   | Built assets, archive checks, and contributor docs       |
+| Change                          | Primary source                                                                                 | Required companions                                      |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Public Python API               | `__init__.py`, `_widget/lens.py`, `_widget/arguments.py`, `_context/lens_context.py`, `_core/` | Package README, API docs, and Python boundary tests      |
+| Selection lifecycle or History  | `_selection/`, `_protocol/`, `packages/protocol/`, widget selection                            | Python and browser contract tests, context, built assets |
+| Runtime context                 | `_notebook/`, `_marimo/`, `_context/`                                                          | Context tests and public context reference               |
+| Agent capture or feedback       | `_widget/capture.py`, `_protocol/`, widget anywidget and transient modules                     | Transport tests, image tests, and built assets           |
+| Browser interaction             | `packages/widget/src/` folders                                                                 | Owning package checks, tests, and build                  |
+| PNG composition                 | `packages/image-capture/`                                                                      | Image-capture checks and tests                           |
+| Bundling, packaging, or release | Vite, Hatch, workspace manifests, `Makefile`, and `scripts/`                                   | Built assets, archive checks, and contributor docs       |
 
 ## Conventions
 

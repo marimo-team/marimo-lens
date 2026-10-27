@@ -1,19 +1,18 @@
 import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type { AnchoredSurfaceAnchor } from "@/ui/anchored-surface";
 
-import { NotebookDomAdapter, NotebookDomProvider } from "@/notebook/notebook-dom";
+import { NotebookDomAdapter } from "@/notebook/notebook-dom";
+import { NotebookDomProvider } from "@/notebook/notebook-dom-context";
 import { useAnchoredSurface } from "@/ui/anchored-surface";
 
-let root: Root | null = null;
+import { render } from "../support/render";
+
 const adapters = new Set<NotebookDomAdapter>();
 const releases = new Set<() => void>();
 
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   for (const release of releases) release();
   releases.clear();
   for (const adapter of adapters) adapter.dispose();
@@ -23,15 +22,10 @@ afterEach(() => {
 });
 
 describe("anchored surfaces", () => {
-  test("clamps the surface and follows its anchor on scroll", () => {
+  test("clamps the surface inside the viewport and follows its anchor on scroll", () => {
     vi.spyOn(window, "innerWidth", "get").mockReturnValue(320);
     vi.spyOn(window, "innerHeight", "get").mockReturnValue(600);
-    const frames: FrameRequestCallback[] = [];
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => {
-      frames.push(callback);
-      return frames.length;
-    });
-    vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    const frames = queueFrames(window);
     const anchorElement = document.createElement("button");
     document.body.appendChild(anchorElement);
     let rect = new DOMRect(290, 400, 20, 20);
@@ -55,6 +49,30 @@ describe("anchored surfaces", () => {
     expect(surface.style.top).toBe("130px");
   });
 
+  test("follows an anchor through scrolling in the anchor's own window", () => {
+    const frame = document.createElement("iframe");
+    document.body.appendChild(frame);
+    const ownerDocument = frame.contentDocument;
+    const ownerWindow = frame.contentWindow;
+    if (!ownerDocument || !ownerWindow) throw new Error("Iframe document must be available");
+    const frames = queueFrames(ownerWindow);
+    const anchorElement = ownerDocument.createElement("button");
+    ownerDocument.body.appendChild(anchorElement);
+    let rect = new DOMRect(40, 100, 20, 20);
+
+    renderProbe(anchorElement, () => rect);
+    const surface = document.querySelector<HTMLOutputElement>("[data-test-surface]")!;
+    const initialTop = px(surface.style.top);
+    rect = new DOMRect(40, 140, 20, 20);
+
+    act(() => {
+      ownerWindow.dispatchEvent(new Event("scroll"));
+    });
+    act(() => frames.shift()?.(0));
+
+    expect(px(surface.style.top)).toBe(initialTop + 40);
+  });
+
   test("subscribes through the anchor element's owner window", () => {
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
@@ -67,14 +85,13 @@ describe("anchored surfaces", () => {
     const ownerRemove = vi.spyOn(ownerWindow, "removeEventListener");
     const primaryAdd = vi.spyOn(window, "addEventListener");
 
-    renderProbe(anchorElement, () => new DOMRect(40, 100, 20, 20));
+    const view = renderProbe(anchorElement, () => new DOMRect(40, 100, 20, 20));
 
     expect(ownerAdd).toHaveBeenCalledWith("resize", expect.any(Function));
     expect(ownerAdd).toHaveBeenCalledWith("scroll", expect.any(Function), true);
     expect(primaryAdd).not.toHaveBeenCalledWith("resize", expect.any(Function));
 
-    act(() => root?.unmount());
-    root = null;
+    view.unmount();
     expect(ownerRemove).toHaveBeenCalledWith("resize", expect.any(Function));
     expect(ownerRemove).toHaveBeenCalledWith("scroll", expect.any(Function), true);
   });
@@ -100,11 +117,11 @@ describe("anchored surfaces", () => {
     renderProbe(anchor, () => anchorRect, host, surfaceHeight);
 
     const surface = document.querySelector<HTMLOutputElement>("[data-test-surface]")!;
-    const left = Number.parseFloat(surface.style.left);
-    const width = Number.parseFloat(surface.style.width);
+    const left = px(surface.style.left);
+    const width = px(surface.style.width);
     const top = surface.style.top
-      ? Number.parseFloat(surface.style.top)
-      : window.innerHeight - Number.parseFloat(surface.style.bottom) - surfaceHeight;
+      ? px(surface.style.top)
+      : window.innerHeight - px(surface.style.bottom) - surfaceHeight;
     expect({
       left: left >= 332,
       right: left + width <= 1_208,
@@ -113,12 +130,13 @@ describe("anchored surfaces", () => {
     }).toEqual({ left: true, right: true, top: true, bottom: true });
   });
 
-  test("places an unanchored surface relative to the marimo app pane", () => {
+  test("insets an unanchored surface from the marimo app pane", () => {
     vi.spyOn(window, "innerWidth", "get").mockReturnValue(1_280);
     vi.spyOn(window, "innerHeight", "get").mockReturnValue(720);
+    const pane = new DOMRect(320, 40, 900, 640);
     const app = document.createElement("main");
     app.id = "App";
-    app.getBoundingClientRect = () => new DOMRect(320, 40, 900, 640);
+    app.getBoundingClientRect = () => pane;
     const host = document.createElement("span");
     app.append(host);
     document.body.append(app);
@@ -126,31 +144,42 @@ describe("anchored surfaces", () => {
     renderProbe(null, () => new DOMRect(), host);
 
     const surface = document.querySelector<HTMLOutputElement>("[data-test-surface]")!;
-    expect({ right: surface.style.right, bottom: surface.style.bottom }).toEqual({
-      right: "76px",
-      bottom: "112px",
-    });
+    expect({
+      right: pane.right - (1_280 - px(surface.style.right)),
+      bottom: pane.bottom - (720 - px(surface.style.bottom)),
+    }).toEqual(FALLBACK_INSET);
   });
 });
+
+const FALLBACK_INSET = { right: 16, bottom: 72 };
+
+function px(value: string): number {
+  return Number.parseFloat(value);
+}
+
+function queueFrames(target: Window): FrameRequestCallback[] {
+  const frames: FrameRequestCallback[] = [];
+  vi.spyOn(target, "requestAnimationFrame").mockImplementation((callback) => {
+    frames.push(callback);
+    return frames.length;
+  });
+  vi.spyOn(target, "cancelAnimationFrame").mockImplementation(() => {});
+  return frames;
+}
 
 function renderProbe(
   element: Element | null,
   getRect: () => DOMRectReadOnly,
   host: Element | null = null,
   surfaceHeight?: number,
-): void {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
+): ReturnType<typeof render> {
   const adapter = new NotebookDomAdapter(element?.ownerDocument ?? document);
   if (host) releases.add(adapter.registerHost(host));
   adapters.add(adapter);
-  root = createRoot(container);
-  act(() =>
-    root?.render(
-      <NotebookDomProvider adapter={adapter}>
-        <SurfaceProbe element={element} getRect={getRect} surfaceHeight={surfaceHeight} />
-      </NotebookDomProvider>,
-    ),
+  return render(
+    <NotebookDomProvider adapter={adapter}>
+      <SurfaceProbe element={element} getRect={getRect} surfaceHeight={surfaceHeight} />
+    </NotebookDomProvider>,
   );
 }
 
@@ -171,7 +200,7 @@ function SurfaceProbe({
     gap: 10,
     width: 264,
     surfaceHeight,
-    fallback: { inset: { right: 16, bottom: 72 }, placement: "above" },
+    fallback: { inset: FALLBACK_INSET, placement: "above" },
   });
   return <output data-test-surface data-placement={position.placement} style={position.style} />;
 }

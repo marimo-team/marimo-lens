@@ -1,26 +1,22 @@
 import type { Selection } from "@marimo-lens/protocol";
 
 import { act, Profiler } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
+import { SelectionList } from "@/dock/selection-list";
+import { documentIdentity } from "@/notebook/document-identity";
 import { NotebookDomAdapter } from "@/notebook/notebook-dom";
-import { documentIdentity } from "@/notebook/selection-target";
-import { SelectionList } from "@/selection/components/selection-list";
 import { SelectionOverlay } from "@/selection/components/selection-overlay";
-import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
 import { useAvailableSelectionIds } from "@/selection/target-availability";
 
-import { selectionFixture } from "../support/fixtures";
+import { outputFixture, selectionFixture } from "../support/fixtures";
+import { LensTestProvider, lensState } from "../support/lens";
 import { NotebookDomTestProvider } from "../support/notebook-dom";
-
-let root: Root | null = null;
+import { render } from "../support/render";
 
 beforeEach(() => vi.useFakeTimers());
 
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   document.body.replaceChildren();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -33,22 +29,16 @@ describe("target availability", () => {
     const subscribe = vi
       .spyOn(NotebookDomAdapter.prototype, "subscribeLayout")
       .mockReturnValue(release);
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-    const render = (selections: Selection[]) =>
-      act(() =>
-        root?.render(
-          <NotebookDomTestProvider>
-            <AvailabilityProbe selections={selections} />
-          </NotebookDomTestProvider>,
-        ),
-      );
-    render([]);
+    const probe = (selections: Selection[]) => (
+      <NotebookDomTestProvider>
+        <AvailabilityProbe selections={selections} />
+      </NotebookDomTestProvider>
+    );
+    const { rerender } = render(probe([]));
     expect(subscribe).not.toHaveBeenCalled();
-    render([selectionFixture()]);
+    rerender(probe([selectionFixture()]));
     expect(subscribe).toHaveBeenCalledOnce();
-    render([]);
+    rerender(probe([]));
     expect(release).toHaveBeenCalledOnce();
   });
 
@@ -63,17 +53,12 @@ describe("target availability", () => {
     });
     const output = setupOutput(first.target.cellIds[0]!);
     setupOutput("other-cell");
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-    act(() =>
-      root?.render(
-        <NotebookDomTestProvider>
-          <Profiler id="availability" onRender={commit}>
-            <AvailabilityProbe selections={[first, second, other]} />
-          </Profiler>
-        </NotebookDomTestProvider>,
-      ),
+    const { container } = render(
+      <NotebookDomTestProvider>
+        <Profiler id="availability" onRender={commit}>
+          <AvailabilityProbe selections={[first, second, other]} />
+        </Profiler>
+      </NotebookDomTestProvider>,
     );
     expect(container.textContent).toBe("3");
     const commits = commit.mock.calls.length;
@@ -90,16 +75,10 @@ describe("target availability", () => {
   test("detaches when its exact output disappears and reattaches only to the same cell id", async () => {
     const selection = selectionFixture();
     const output = setupOutput(selection.target.cellIds[0]!);
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() =>
-      root?.render(
-        <NotebookDomTestProvider>
-          <AvailabilitySurface selection={selection} />
-        </NotebookDomTestProvider>,
-      ),
+    render(
+      <NotebookDomTestProvider>
+        <AvailabilitySurface selection={selection} />
+      </NotebookDomTestProvider>,
     );
     expect(marker(selection)).not.toBeNull();
     expect(document.querySelector("[data-marimo-lens-target-unavailable]")).toBeNull();
@@ -141,16 +120,10 @@ describe("target availability", () => {
     let width = 0;
     const output = setupOutput(selection.target.cellIds[0]!);
     output.getBoundingClientRect = () => new DOMRect(20, 20, width, 240);
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() =>
-      root?.render(
-        <NotebookDomTestProvider>
-          <AvailabilityProbe selections={[selection]} />
-        </NotebookDomTestProvider>,
-      ),
+    const { container } = render(
+      <NotebookDomTestProvider>
+        <AvailabilityProbe selections={[selection]} />
+      </NotebookDomTestProvider>,
     );
     expect(container.textContent).toBe("0");
 
@@ -183,16 +156,10 @@ describe("target availability", () => {
         domSelector: "#summary",
       },
     });
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() =>
-      root?.render(
-        <NotebookDomTestProvider>
-          <AvailabilityProbe selections={[selection]} selector="#summary" />
-        </NotebookDomTestProvider>,
-      ),
+    const { container } = render(
+      <NotebookDomTestProvider selector="#summary">
+        <AvailabilityProbe selections={[selection]} />
+      </NotebookDomTestProvider>,
     );
     expect(container.textContent).toBe("1");
 
@@ -203,46 +170,26 @@ describe("target availability", () => {
   });
 });
 
-function AvailabilityProbe({
-  selections,
-  selector = null,
-}: {
-  selections: Selection[];
-  selector?: string | null;
-}) {
-  const available = useAvailableSelectionIds(selections, selector);
+function AvailabilityProbe({ selections }: { selections: Selection[] }) {
+  const available = useAvailableSelectionIds(selections);
   return <span>{available.size}</span>;
 }
 
 function AvailabilitySurface({ selection }: { selection: Selection }) {
   const selections = [selection];
-  const availableSelectionIds = useAvailableSelectionIds(selections, null);
-  const snapshotLoader = new SelectionSnapshotLoader(async () => {
-    throw new Error("Snapshot loading is not expected in this test");
-  });
+  const availableSelectionIds = useAvailableSelectionIds(selections);
   return (
     <>
-      <SelectionList
-        selections={selections}
-        currentSelectionId={selection.id}
-        availableSelectionIds={availableSelectionIds}
-        capturingSelectionIds={new Set()}
-        busySelectionIds={new Set()}
-        clearing={false}
-        onActivate={() => {}}
-        onEditNote={() => {}}
-        onDelete={() => {}}
-        onClear={() => {}}
-        snapshotLoader={snapshotLoader}
-      />
+      <LensTestProvider
+        state={lensState({ selections, currentSelectionId: selection.id, availableSelectionIds })}
+      >
+        <SelectionList />
+      </LensTestProvider>
       <SelectionOverlay
         selections={selections}
         currentSelectionId={selection.id}
-        availableSelectionIds={availableSelectionIds}
-        selector={null}
         workflow={{ mode: "idle" }}
         busySelectionIds={new Set()}
-        capturingSelectionIds={new Set()}
         onActivate={() => {}}
         onEditNote={() => {}}
         onReposition={() => {}}
@@ -254,15 +201,7 @@ function AvailabilitySurface({ selection }: { selection: Selection }) {
 }
 
 function setupOutput(outputCellId: string): HTMLElement {
-  const output = document.createElement("div");
-  output.id = `output-${outputCellId}`;
-  output.getBoundingClientRect = () => new DOMRect(20, 20, 400, 240);
-  Object.defineProperties(output, {
-    scrollWidth: { configurable: true, value: 400 },
-    scrollHeight: { configurable: true, value: 240 },
-  });
-  document.body.appendChild(output);
-  return output;
+  return outputFixture(outputCellId, new DOMRect(20, 20, 400, 240));
 }
 
 async function mutateDocument(mutation: () => void): Promise<void> {

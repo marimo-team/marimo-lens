@@ -3,7 +3,6 @@ import * as stylex from "@stylexjs/stylex";
 import darkLogo from "../assets/marimo-lens-mark-dark.svg";
 import lightLogo from "../assets/marimo-lens-mark-light.svg";
 import { useLensTheme } from "../theme";
-import { logoStyles } from "./lens-dock.styles";
 
 export function LensLogo() {
   const theme = useLensTheme();
@@ -18,3 +17,11 @@ export function LensLogo() {
     />
   );
 }
+
+const logoStyles = stylex.create({
+  image: {
+    display: "block",
+    width: 28,
+    height: 28,
+  },
+});

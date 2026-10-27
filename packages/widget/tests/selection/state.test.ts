@@ -1,83 +1,43 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import {
-  INITIAL_UI_STATE,
-  gestureAnchor,
-  locksCompetingInteractions,
-  uiReducer,
-} from "@/selection/state";
+import { INITIAL_UI_STATE, gestureAnchor, uiReducer } from "@/selection/state";
 
 import { selectionFixture } from "../support/fixtures";
 
 describe("selection workflow", () => {
-  test("opens optional note editing as soon as pointer release queues a selection", () => {
-    const output = document.createElement("div");
-    output.getBoundingClientRect = () => new DOMRect(0, 0, 400, 200);
-    Object.defineProperties(output, {
-      scrollWidth: { value: 400 },
-      scrollHeight: { value: 200 },
-    });
-    const armed = uiReducer(INITIAL_UI_STATE, { type: "arm" });
-    const dragging = uiReducer(armed, {
-      type: "startDrag",
-      target: {
-        key: "cell-1",
-        target: {
-          kind: "notebook",
-          cellIds: ["cell-1"],
-          documentId: "document-1",
-          documentPath: "/",
-        },
-        element: output,
-      },
-      pointerId: 4,
-      point: { x: 20, y: 30 },
-    });
-    const selection = selectionFixture({ note: "", snapshot: { status: "pending" } });
-    const queued = uiReducer(dragging, {
-      type: "selectionQueued",
-      pending: { selection },
-    });
+  test.each([
+    { gesture: "pointer release", motion: undefined, expected: "animate" },
+    { gesture: "keyboard selection", motion: "instant", expected: "instant" },
+  ] as const)(
+    "opens optional note editing as soon as a $gesture queues a selection",
+    ({ motion, expected }) => {
+      const selection = selectionFixture({ note: "", snapshot: { status: "pending" } });
+      const armed = uiReducer(INITIAL_UI_STATE, { type: "arm" });
 
-    expect(queued.workflow).toEqual({
-      mode: "editingNote",
-      selectionId: selection.id,
-      motion: "animate",
-    });
-    expect(queued.pendingSelections[0]?.selection).toEqual(selection);
-    expect(queued.optimisticCurrentSelectionId).toBe(selection.id);
-    expect(queued.announcement).toBe("S1 selected.");
-  });
+      const queued = uiReducer(armed, { type: "selectionQueued", selection, motion });
+
+      expect(queued.workflow).toEqual({
+        mode: "editingNote",
+        selectionId: selection.id,
+        motion: expected,
+      });
+      expect(queued.pendingSelections[0]).toEqual(selection);
+      expect(queued.optimisticCurrentSelectionId).toBe(selection.id);
+      expect(queued.announcement).toBe("S1 selected.");
+    },
+  );
 
   test("commits a pending selection and preserves it as current", () => {
     const selection = selectionFixture({ note: "", snapshot: { status: "pending" } });
-    const queued = uiReducer(INITIAL_UI_STATE, {
-      type: "selectionQueued",
-      pending: { selection },
-    });
+    const queued = uiReducer(INITIAL_UI_STATE, { type: "selectionQueued", selection });
     const committed = uiReducer(queued, {
-      type: "selectionCommitted",
+      type: "selectionSettled",
       selectionId: selection.id,
-      label: selection.label,
+      announcement: "S1 selected.",
     });
 
     expect(committed.pendingSelections).toEqual([]);
     expect(committed.optimisticCurrentSelectionId).toBeNull();
-  });
-
-  test("preserves instant motion when a queued keyboard selection opens note editing", () => {
-    const selection = selectionFixture({ note: "", snapshot: { status: "pending" } });
-    const queued = uiReducer(INITIAL_UI_STATE, {
-      type: "selectionQueued",
-      pending: { selection },
-      motion: "instant",
-    });
-
-    expect(queued.workflow).toEqual({
-      mode: "editingNote",
-      selectionId: selection.id,
-      motion: "instant",
-    });
   });
 
   test("opens optional note editing without changing selection identity", () => {
@@ -90,7 +50,6 @@ describe("selection workflow", () => {
       selectionId: "selection-1",
       motion: "animate",
     });
-    expect(locksCompetingInteractions(editing)).toBe(true);
     expect(uiReducer(editing, { type: "closeNote" }).workflow).toEqual({ mode: "idle" });
   });
 
@@ -133,7 +92,7 @@ describe("selection workflow", () => {
     expect(reopened.optimisticCurrentSelectionId).toBe("selection-2");
     expect(
       uiReducer(reopened, {
-        type: "activationCommitted",
+        type: "activationSettled",
         selectionId: "selection-2",
       }).optimisticCurrentSelectionId,
     ).toBeNull();
@@ -141,7 +100,7 @@ describe("selection workflow", () => {
 
   test("preserves another note draft when an earlier save completes", () => {
     const saving = uiReducer(INITIAL_UI_STATE, {
-      type: "noteSaveStarted",
+      type: "mutationStarted",
       selectionId: "selection-1",
     });
     const editing = uiReducer(saving, {
@@ -155,7 +114,7 @@ describe("selection workflow", () => {
       label: "S1",
     });
     expect(succeeded.workflow).toEqual(editing.workflow);
-    expect(succeeded.busySelectionIds).toEqual([]);
+    expect(succeeded.busySelectionIds.size).toBe(0);
 
     const failed = uiReducer(editing, {
       type: "noteSaveFailed",
@@ -163,7 +122,7 @@ describe("selection workflow", () => {
       message: "Connection lost",
     });
     expect(failed.workflow).toEqual(editing.workflow);
-    expect(failed.busySelectionIds).toEqual([]);
+    expect(failed.busySelectionIds.size).toBe(0);
     expect(failed.announcement).toBe("Connection lost");
   });
 

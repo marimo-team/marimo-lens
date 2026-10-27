@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, cast
-
 import pytest
-from marimo_lens._provenance import resolve_provenance
-from pydantic import ValidationError
+from marimo_lens._notebook import provenance as provenance_module
+from marimo_lens._notebook.provenance import resolve_provenance
 
 from tests.support.factories import cell, snapshot
 
@@ -49,7 +47,11 @@ def test_provenance_keeps_topological_order_and_dag_roles() -> None:
     assert provenance.referenced_names == frozenset({"data", "source"})
 
 
-def test_provenance_prioritizes_selected_cell_and_reports_limits() -> None:
+def test_provenance_prioritizes_selected_cell_and_reports_limits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(provenance_module, "MAX_RELEVANT_CELLS", 2)
+    monkeypatch.setattr(provenance_module, "MAX_TEXT_SOURCE_CHARACTERS", 12)
     runtime = snapshot(
         cell("cell-root", code="r" * 10),
         cell("cell-parent", code="p" * 10, upstream=("cell-root",)),
@@ -60,12 +62,7 @@ def test_provenance_prioritizes_selected_cell_and_reports_limits() -> None:
         ),
     )
 
-    provenance = resolve_provenance(
-        runtime,
-        ["cell-view"],
-        max_cells=2,
-        max_source_characters=12,
-    )
+    provenance = resolve_provenance(runtime, ["cell-view"])
 
     assert {item.cell.id for item in provenance.cells} == {
         "cell-view",
@@ -88,7 +85,10 @@ def test_provenance_keeps_every_supported_selected_output() -> None:
     assert provenance.omitted_cell_ids == ()
 
 
-def test_provenance_bounds_reported_omissions_and_keeps_full_relevance() -> None:
+def test_provenance_bounds_reported_omissions_and_keeps_full_relevance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(provenance_module, "MAX_RELEVANT_CELLS", 1)
     cells = tuple(
         cell(
             f"cell-{index}",
@@ -99,40 +99,9 @@ def test_provenance_bounds_reported_omissions_and_keeps_full_relevance() -> None
         for index in range(1_000)
     )
 
-    provenance = resolve_provenance(
-        snapshot(*cells),
-        ["cell-999"],
-        max_cells=1,
-    )
+    provenance = resolve_provenance(snapshot(*cells), ["cell-999"])
 
     assert len(provenance.omitted_cell_ids) == 16
     assert provenance.omitted_cell_count == 999
     assert len(provenance.referenced_names) == 1_000
     assert "value-0" in provenance.referenced_names
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("max_cells", 0),
-        ("max_cells", True),
-        ("max_cells", 1.0),
-        ("max_source_characters", -1),
-        ("max_source_characters", False),
-        ("max_source_characters", 1.0),
-    ],
-)
-def test_provenance_requires_strict_integer_bounds(field: str, value: object) -> None:
-    with pytest.raises(ValidationError):
-        if field == "max_cells":
-            resolve_provenance(
-                snapshot(cell("cell-1")),
-                ["cell-1"],
-                max_cells=cast(Any, value),
-            )
-        else:
-            resolve_provenance(
-                snapshot(cell("cell-1")),
-                ["cell-1"],
-                max_source_characters=cast(Any, value),
-            )

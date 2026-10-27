@@ -4,7 +4,7 @@ import type {
   LensState,
   OutputCaptureCommand,
   OutputCaptureImage,
-  TransportInput,
+  TransportValue,
   WIDGET_TRANSPORT_VERSION,
 } from "@marimo-lens/protocol";
 
@@ -16,7 +16,7 @@ type OutputCaptureReadinessEvent = {
 };
 
 type WidgetOutboundMessage = ClientCommand | LensResponse | OutputCaptureReadinessEvent;
-type WidgetMessageHandler = (message: TransportInput, buffers: DataView[]) => void;
+type WidgetMessageHandler = (message: TransportValue, buffers: DataView[]) => void;
 
 export type LensWidgetModel = {
   get(key: "_state"): LensState;

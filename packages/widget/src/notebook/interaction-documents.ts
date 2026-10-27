@@ -1,6 +1,6 @@
 import type { ViewportPoint } from "@/notebook/types";
 
-import { containsOpenTree } from "@/notebook/open-tree";
+import { containsOpenTree, descendantElements, someOpenTreeElement } from "@/notebook/open-tree";
 
 export type InteractionSurface = {
   document: Document;
@@ -35,7 +35,7 @@ export function observeInteractionSurfaces(
   const ownerWindow = requireOwnerWindow(ownerDocument);
   let tree: OpenTreeScan | null = null;
   const observer = new ownerWindow.MutationObserver((records) => {
-    let structureChanged = records.length === 0;
+    let structureChanged = false;
     let attributesChanged = false;
     for (const record of records) {
       const element =
@@ -43,11 +43,16 @@ export function observeInteractionSurfaces(
       if (element?.closest("[data-marimo-lens-ui]")) continue;
       if (element?.shadowRoot && !observedRoots.has(element.shadowRoot)) structureChanged = true;
       if (record.type === "childList") {
-        structureChanged ||= [...record.addedNodes, ...record.removedNodes].some(
-          (node) => node.nodeType === 1,
-        );
+        structureChanged ||=
+          tree === null ||
+          [...record.addedNodes].some(holdsFrameOrShadow) ||
+          (record.removedNodes.length > 0 && scanLostNodes(tree));
       } else if (record.type === "attributes" && element instanceof ownerWindow.HTMLElement) {
-        attributesChanged = true;
+        // Only an attribute on a frame or one of its ancestors can move it into or out of a target.
+        attributesChanged ||=
+          options.lockSelectionGestures ||
+          tree === null ||
+          tree.frames.some((frame) => containsOpenTree(element, frame));
       }
     }
     if (structureChanged) tree = null;
@@ -209,11 +214,12 @@ function discoverInteractionSurfaces(
   return surfaces;
 }
 
-function scanOpenTree(root: ParentNode): OpenTreeScan {
+/** List the iframes and open shadow roots below `root`, across open shadow trees. */
+export function scanOpenTree(root: ParentNode): OpenTreeScan {
   const frames: HTMLIFrameElement[] = [];
   const shadows: ShadowRoot[] = [];
-  const visit = (tree: ParentNode) => {
-    for (const element of tree.querySelectorAll("*")) {
+  const visit = (tree: Node) => {
+    for (const element of descendantElements(tree)) {
       if (isIFrameElement(element)) frames.push(element);
       if (!element.shadowRoot) continue;
       shadows.push(element.shadowRoot);
@@ -228,6 +234,24 @@ function isIFrameElement(element: Element): element is HTMLIFrameElement {
   return (
     element.localName === "iframe" &&
     element instanceof requireOwnerWindow(element.ownerDocument).HTMLIFrameElement
+  );
+}
+
+/** Return whether an added node brings an iframe or an open shadow root. */
+function holdsFrameOrShadow(node: Node): boolean {
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  // SAFETY: the node type was checked above.
+  const element = node as Element;
+  if (element.localName === "iframe" || element.shadowRoot) return true;
+  if (element.querySelector("iframe")) return true;
+  return someOpenTreeElement(element, (descendant) => descendant.shadowRoot !== null);
+}
+
+/** Return whether a scanned frame or shadow root left the document. */
+function scanLostNodes(tree: OpenTreeScan): boolean {
+  return (
+    tree.frames.some((frame) => !frame.isConnected) ||
+    tree.shadows.some((shadow) => !shadow.host.isConnected)
   );
 }
 

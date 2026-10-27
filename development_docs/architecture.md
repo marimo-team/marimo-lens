@@ -61,16 +61,16 @@ selection image status or image metadata.
 
 1. Python owns Lens-instance state. This includes open selections, History,
    selection-image bytes, revision checks, runtime context, and the public API.
-   `packages/marimo-lens/src/marimo_lens/widget.py` is the Python composition
-   root.
+   The `Lens` widget in `packages/marimo-lens/src/marimo_lens/_widget/lens.py`
+   is the Python composition root.
 2. The browser owns gestures, DOM access, selection-image composition, the
    dock, and transient activity, reveal, and resolution-receipt presentation.
 3. Dependencies point from composition toward primitives. The Python build
    consumes the widget. The widget consumes image capture and protocol. Image
    capture consumes protocol.
 4. Host access stays behind adapters. marimo runtime access belongs in
-   `_marimo_runtime.py` and `_marimo_control_state.py`. Notebook DOM access
-   belongs in `packages/widget/src/notebook/`.
+   `_marimo/`. Notebook DOM access belongs in
+   `packages/widget/src/notebook/`.
 5. Generated resources cross the language boundary through the build. StyleX
    extracts component styles, esbuild produces one ESM file and one stylesheet,
    and Hatch packages both resources and the Agent Plugin into the wheel and
@@ -103,12 +103,51 @@ Arrows mean “depends on” or “builds from.”
 Cross-package TypeScript imports use package names. Python performs no DOM
 queries. The browser performs no marimo graph reads.
 
+## Python package layers
+
+The `marimo_lens` package exports its public names from `__init__.py` and
+`agent.py`. Runtime modules live in layers. A layer imports only the layers
+listed above it in this table, and only `_marimo` and `_widget` import marimo,
+AnyWidget, or traitlets.
+`packages/marimo-lens/tests/test_package_layers.py` enforces both rules.
+
+| Layer        | Owns                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
+| `_core`      | Public types, `LensError`, `Rejection`, limits, and bounded scalars                                    |
+| `_schema`    | Pydantic shapes for selections and History, shared by state and transport                              |
+| `_notebook`  | Detached runtime snapshots, provenance, and control serialization                                      |
+| `_selection` | The revisioned `SelectionState` aggregate, selection images, and compact references                    |
+| `_context`   | `LensContext` and standalone text                                                                      |
+| `_session`   | `LensSession` use cases                                                                                |
+| `_protocol`  | Validation of browser commands, responses, and events                                                  |
+| `_marimo`    | Kernel reads, notebook snapshots, and marimo control adaptation                                        |
+| `_widget`    | The `Lens` widget, argument validation, command dispatch, output capture, the registry, and the mounts |
+
+## Widget folders
+
+`@marimo-lens/widget` keeps its source in folders under `packages/widget/src/`.
+A folder imports only the folders listed above it, and the
+`no-restricted-imports` rules in the root `vite.config.ts` enforce that order.
+
+| Folder      | Owns                                                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------------------- |
+| `styles`    | StyleX tokens and shared style primitives                                                            |
+| `anywidget` | The AnyWidget model, command transport, and output-capture transport                                 |
+| `notebook`  | Notebook DOM access, target identity, output roots, and the viewport                                 |
+| `ui`        | Theme, focus, anchored surfaces, the portal, and the logo                                            |
+| `selection` | The interaction reducer, selection actions, capture, and overlays                                    |
+| `context`   | `LensContext`, its state, actions, and meta                                                          |
+| `history`   | The History list                                                                                     |
+| `transient` | Activity, reveal, and resolution-receipt presentation                                                |
+| `dock`      | The document-scoped dock, its position and motion, the selections sheet, and the open-selection list |
+| `app`       | View ownership, the Lens controller, and the composition into one view                               |
+
 ## State and data flow
 
 ```text
 browser gesture
   -> validated command and optional PNG buffer
-  -> Python SelectionStore commit
+  -> Python LensSession transition
   -> synchronized _state trait
   -> browser views
 

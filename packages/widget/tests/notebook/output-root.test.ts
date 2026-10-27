@@ -3,11 +3,16 @@ import { afterEach, describe, expect, test } from "vite-plus/test";
 import {
   deepestElementAtPoint,
   getOutputCell,
-  listOutputCells,
-  outputCellFromElement,
-  outputCellFromEvent,
+  listOutputRoots,
   registerLensHostOutput as registerHost,
 } from "@/notebook/output-root";
+import {
+  listTargetSurfaces,
+  targetFromElement,
+  targetFromEvent,
+} from "@/notebook/selection-target";
+
+import { outputFixture } from "../support/fixtures";
 
 const hostReleases: Array<() => void> = [];
 
@@ -23,12 +28,13 @@ afterEach(() => {
   Reflect.deleteProperty(document, "elementsFromPoint");
 });
 
+/** The output cell a pointer target resolves to, as the selection target names it. */
+function outputOf(target: ReturnType<typeof targetFromElement>) {
+  return target ? { id: target.target.cellIds[0], element: target.element } : null;
+}
+
 function visibleOutput(id: string): HTMLElement {
-  const output = document.createElement("div");
-  output.id = `output-${id}`;
-  output.getBoundingClientRect = () => new DOMRect(0, 0, 320, 180);
-  document.body.appendChild(output);
-  return output;
+  return outputFixture(id, new DOMRect(0, 0, 320, 180));
 }
 
 function visibleIsland(id: string) {
@@ -55,7 +61,7 @@ describe("marimo output resolution", () => {
     const light = visibleOutput("light");
     first.append(light);
     const last = visibleOutput("last");
-    expect(listOutputCells(document).map(({ element }) => element)).toEqual([
+    expect(listOutputRoots(document).map(({ element }) => element)).toEqual([
       first,
       nested,
       light,
@@ -71,11 +77,17 @@ describe("marimo output resolution", () => {
     shadow.appendChild(mark);
     output.appendChild(host);
 
-    expect(outputCellFromElement(mark)).toMatchObject({ id: "chart-cell", element: output });
+    expect(outputOf(targetFromElement(mark, null))).toMatchObject({
+      id: "chart-cell",
+      element: output,
+    });
 
     const event = new Event("pointerdown", { composed: true });
     Object.defineProperty(event, "composedPath", { value: () => [mark, shadow, host, output] });
-    expect(outputCellFromEvent(event)).toMatchObject({ id: "chart-cell", element: output });
+    expect(outputOf(targetFromEvent(event, null))).toMatchObject({
+      id: "chart-cell",
+      element: output,
+    });
   });
 
   test("excludes the Lens host output from pointer and keyboard discovery", () => {
@@ -87,7 +99,7 @@ describe("marimo output resolution", () => {
     const notebookOutput = visibleOutput("analysis-cell");
 
     expect(getOutputCell(document, "lens-cell")).toBeNull();
-    expect(listOutputCells(document)).toEqual([{ id: "analysis-cell", element: notebookOutput }]);
+    expect(listOutputRoots(document)).toEqual([{ id: "analysis-cell", element: notebookOutput }]);
 
     release();
     expect(getOutputCell(document, "lens-cell")).toMatchObject({
@@ -116,16 +128,19 @@ describe("marimo output resolution", () => {
   test("resolves a hydrated marimo island to its rendered output surface", () => {
     const { island, content } = visibleIsland("island-cell");
 
-    expect(outputCellFromElement(content)).toEqual({ id: "island-cell", element: content });
+    expect(outputOf(targetFromElement(content, null))).toEqual({
+      id: "island-cell",
+      element: content,
+    });
     expect(getOutputCell(document, "island-cell")).toEqual({
       id: "island-cell",
       element: content,
     });
-    expect(listOutputCells(document)).toEqual([{ id: "island-cell", element: content }]);
+    expect(listOutputRoots(document)).toEqual([{ id: "island-cell", element: content }]);
 
     const release = registerLensHostOutput(content);
-    expect(outputCellFromElement(island)).toBeNull();
-    expect(listOutputCells(document)).toEqual([]);
+    expect(outputOf(targetFromElement(island, null))).toBeNull();
+    expect(listOutputRoots(document)).toEqual([]);
     release();
   });
 
@@ -137,7 +152,10 @@ describe("marimo output resolution", () => {
     island.appendChild(output);
     document.body.appendChild(island);
 
-    expect(outputCellFromElement(output)).toEqual({ id: "static-cell", element: output });
+    expect(outputOf(targetFromElement(output, null))).toEqual({
+      id: "static-cell",
+      element: output,
+    });
   });
 
   test("keeps a display-contents island wrapper inside the output surface", () => {
@@ -152,7 +170,10 @@ describe("marimo output resolution", () => {
     island.appendChild(output);
     document.body.appendChild(island);
 
-    expect(outputCellFromElement(wrapper)).toEqual({ id: "widget-cell", element: output });
+    expect(outputOf(targetFromElement(wrapper, null))).toEqual({
+      id: "widget-cell",
+      element: output,
+    });
   });
 
   test("resolves a host-configured output element", () => {
@@ -161,7 +182,10 @@ describe("marimo output resolution", () => {
     output.getBoundingClientRect = () => new DOMRect(0, 0, 320, 180);
     document.body.appendChild(output);
 
-    expect(outputCellFromElement(output)).toEqual({ id: "embedded-cell", element: output });
+    expect(outputOf(targetFromElement(output, null))).toEqual({
+      id: "embedded-cell",
+      element: output,
+    });
     expect(getOutputCell(document, "embedded-cell")).toEqual({
       id: "embedded-cell",
       element: output,
@@ -183,7 +207,7 @@ describe("marimo output resolution", () => {
     const notebookOutput = visibleOutput("analysis-cell");
 
     expect(getOutputCell(document, "lens-cell")).toBeNull();
-    expect(listOutputCells(document)).toEqual([{ id: "analysis-cell", element: notebookOutput }]);
+    expect(listOutputRoots(document)).toEqual([{ id: "analysis-cell", element: notebookOutput }]);
   });
 
   test("ignores events originating in Lens UI", () => {
@@ -193,7 +217,7 @@ describe("marimo output resolution", () => {
     const event = new Event("pointerdown", { composed: true });
     Object.defineProperty(event, "composedPath", { value: () => [button, document.body] });
 
-    expect(outputCellFromEvent(event)).toBeNull();
+    expect(outputOf(targetFromEvent(event, null))).toBeNull();
   });
 
   test("skips Lens UI inside an open shadow root when resolving a point", () => {
@@ -247,7 +271,7 @@ describe("marimo output resolution", () => {
     output.style.display = "none";
 
     expect(getOutputCell(document, "hidden-cell")).toBeNull();
-    expect(listOutputCells(document)).toEqual([]);
+    expect(listTargetSurfaces(document, null)).toEqual([]);
   });
 
   test("keeps output lookup scoped to the mounted notebook document", () => {

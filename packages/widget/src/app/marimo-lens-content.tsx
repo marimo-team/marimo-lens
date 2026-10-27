@@ -1,30 +1,16 @@
-import type { Selection } from "@marimo-lens/protocol";
+import { useCallback, useState } from "react";
 
-import { captureOutputSnapshot } from "@marimo-lens/image-capture";
+import type { TargetAttentionPresentation } from "@/transient/target-attention";
+
 import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
-
-import { LensProtocolError, type LensProtocolClient } from "@/anywidget/client";
-import { useLensModel } from "@/anywidget/model";
-import { useLatestCommitted } from "@/app/committed-ref";
-import { useResolutionReceipt } from "@/app/resolution-receipt";
-import { useNotebookDom, type NotebookDomAdapter } from "@/notebook/notebook-dom";
-import { targetBelongsToDocument } from "@/notebook/selection-target";
+  defaultDependencies,
+  useLensController,
+  type LensDependencies,
+} from "@/app/use-lens-controller";
+import { LensContext } from "@/context/lens-context";
+import { LensDock } from "@/dock/lens-dock";
 import { SelectionNoteEditor } from "@/selection/components/selection-note-editor";
-import { SelectionOverlay, type AdjustmentCancel } from "@/selection/components/selection-overlay";
-import { useDocumentInteractions } from "@/selection/document-interactions";
-import { revealSelection } from "@/selection/reveal";
-import { useSelectionActions } from "@/selection/selection-actions";
-import { SelectionSnapshotLoader } from "@/selection/selection-snapshot-loader";
-import { INITIAL_UI_STATE, locksCompetingInteractions, uiReducer } from "@/selection/state";
-import { useAvailableSelectionIds } from "@/selection/target-availability";
+import { SelectionOverlay } from "@/selection/components/selection-overlay";
 import {
   TargetAttentionAnnouncement,
   TargetAttentionFallback,
@@ -32,84 +18,94 @@ import {
   projectTargetAttentionSurface,
 } from "@/transient/target-attention-indicator";
 import { TrailControls } from "@/transient/trail-controls";
-import { useTargetAttention } from "@/transient/use-target-attention";
-import { LensDock } from "@/ui/components/lens-dock";
 import { LensPortal } from "@/ui/components/lens-portal";
 import { LensStatus } from "@/ui/components/lens-status";
 import { focusSelectionOrDock } from "@/ui/focus";
 
-export type MarimoLensContentDependencies = {
-  captureOutputSnapshot: typeof captureOutputSnapshot;
-  useLensModel: typeof useLensModel;
-  useSelectionActions: typeof useSelectionActions;
-};
+export function MarimoLensContent({
+  dependencies = defaultDependencies,
+}: {
+  dependencies?: LensDependencies;
+}) {
+  const lens = useLensController(dependencies);
+  const { state } = lens.context;
+  const { presentation } = lens;
+  const surface = useAttentionSurface(presentation, lens.dom.window);
+  const trailControls =
+    presentation?.trail && !state.sheet.open && !lens.note ? (
+      <TrailControls trail={presentation.trail} />
+    ) : null;
+  const { selectionActions, dispatch, note } = lens;
 
-type MarimoLensContentProps = {
-  dependencies?: MarimoLensContentDependencies;
-};
+  return (
+    <LensContext value={lens.context}>
+      <LensPortal css={lens.css}>
+        <LensDock
+          notice={
+            surface.fallback ? (
+              <TargetAttentionFallback {...surface.fallback} controls={trailControls} />
+            ) : null
+          }
+        />
 
-const defaultDependencies: MarimoLensContentDependencies = {
-  captureOutputSnapshot,
-  useLensModel,
-  useSelectionActions,
-};
+        <SelectionOverlay
+          selections={state.selections}
+          currentSelectionId={state.currentSelectionId}
+          workflow={lens.ui.workflow}
+          busySelectionIds={state.busySelectionIds}
+          registerAdjustment={lens.adjustment.registerAdjustment}
+          releaseAdjustment={lens.adjustment.releaseAdjustment}
+          onActivate={(selection) => selectionActions.activateSelection(selection.id)}
+          onEditNote={(selection, motion) => selectionActions.openNote(selection.id, motion)}
+          onReposition={selectionActions.repositionSelection}
+        />
 
-export function MarimoLensContent(props?: MarimoLensContentProps) {
-  const dependencies = props?.dependencies ?? defaultDependencies;
-  const dom = useNotebookDom();
-  const model = dependencies.useLensModel(dom.window);
-  useLayoutEffect(() => dom.configureSelector(model.selector), [dom, model.selector]);
-  const [ui, dispatch] = useReducer(uiReducer, INITIAL_UI_STATE);
-  const uiRef = useLatestCommitted(ui);
-  const stateRef = useLatestCommitted(model.state);
-  const canceledPointerIds = useRef(new Set<number>());
-  const activeAdjustment = useRef<AdjustmentCancel | null>(null);
+        <TargetAttentionIndicator
+          view={surface.view}
+          onLabelMeasure={surface.measureLabel}
+          controls={trailControls}
+        />
 
-  const registerAdjustment = useCallback((cancel: AdjustmentCancel) => {
-    activeAdjustment.current?.();
-    activeAdjustment.current = cancel;
-  }, []);
-  const releaseAdjustment = useCallback((cancel: AdjustmentCancel) => {
-    if (activeAdjustment.current === cancel) activeAdjustment.current = null;
-  }, []);
-  const cancelAdjustment = useCallback(() => {
-    const cancel = activeAdjustment.current;
-    if (!cancel) return false;
-    activeAdjustment.current = null;
-    cancel();
-    return true;
-  }, []);
+        {note ? (
+          <SelectionNoteEditor
+            key={`${note.selection.id}:${note.selection.note}`}
+            selection={note.selection}
+            saving={state.busySelectionIds.has(note.selection.id)}
+            mutationPending={state.busySelectionIds.has(note.selection.id) || state.clearPending}
+            motion={note.motion}
+            saveError={note.error}
+            onSave={(text) => selectionActions.saveNote(note.selection.id, text)}
+            onCancel={() => {
+              dispatch({ type: "closeNote" });
+              focusSelectionOrDock(lens.dom, note.selection.id);
+            }}
+            onDelete={() => selectionActions.deleteSelection(note.selection)}
+          />
+        ) : null}
 
-  useEffect(
-    () => () => {
-      activeAdjustment.current?.();
-      activeAdjustment.current = null;
-    },
-    [],
+        <LensStatus message={lens.ui.announcement} />
+        <TargetAttentionAnnouncement presentation={presentation} />
+      </LensPortal>
+    </LensContext>
   );
+}
 
-  const actions = dependencies.useSelectionActions({
-    stateRef,
-    dispatch,
-    dom,
-    selector: model.selector,
-    protocol: model.protocol,
-  });
-  const { invalidateSnapshotCapture, settleUnavailableSnapshot } = actions;
-  useOutputCapture(model.protocol, dom, dependencies.captureOutputSnapshot);
-  const targetAttention = useTargetAttention(model.protocol, dom, model.state, model.selector);
-  const trailId = targetAttention?.trail?.id;
-  useEffect(() => {
-    if (trailId) dispatch({ type: "setListOpen", open: false });
-  }, [trailId]);
-  const [targetAttentionLabel, setTargetAttentionLabel] = useState<{
+/**
+ * Place target attention beside its target, or in the dock when the label
+ * does not fit. The label reports its measured size once it renders.
+ */
+function useAttentionSurface(
+  presentation: TargetAttentionPresentation | null,
+  ownerWindow: Window,
+) {
+  const [label, setLabel] = useState<{
     sequence: number;
     height: number;
     maxWidth: number;
   } | null>(null);
-  const measureTargetAttentionLabel = useCallback(
+  const measureLabel = useCallback(
     (sequence: number, measurement: { height: number; maxWidth: number }) => {
-      setTargetAttentionLabel((current) =>
+      setLabel((current) =>
         current?.sequence === sequence &&
         current.height === measurement.height &&
         current.maxWidth === measurement.maxWidth
@@ -119,265 +115,10 @@ export function MarimoLensContent(props?: MarimoLensContentProps) {
     },
     [],
   );
-  const resolutionReceipt = useResolutionReceipt({
-    state: model.state,
-    protocol: model.protocol,
-    dom,
-    dispatch,
-    invalidateSnapshotCapture,
-    attentionKind: targetAttention?.kind ?? null,
-  });
-  const targetAttentionSurface = projectTargetAttentionSurface(
-    targetAttention,
-    dom.window,
-    targetAttentionLabel !== null && targetAttentionLabel.sequence === targetAttention?.sequence
-      ? targetAttentionLabel
-      : undefined,
+  const surface = projectTargetAttentionSurface(
+    presentation,
+    ownerWindow,
+    label !== null && label.sequence === presentation?.sequence ? label : undefined,
   );
-  const snapshotLoader = useMemo(
-    () => new SelectionSnapshotLoader((selectionId) => model.protocol.getSnapshot(selectionId)),
-    [model.protocol],
-  );
-  useEffect(() => () => snapshotLoader.clear(), [snapshotLoader]);
-
-  useDocumentInteractions({
-    workflow: ui.workflow,
-    uiRef,
-    dispatch,
-    dom,
-    selector: model.selector,
-    beginSelection: actions.beginSelection,
-    canceledPointerIds,
-    cancelAdjustment,
-  });
-
-  const selections = useMemo(
-    () =>
-      mergeSelections(
-        model.state.selections,
-        ui.pendingSelections.map(({ selection }) => selection),
-      ),
-    [model.state.selections, ui.pendingSelections],
-  );
-  const currentSelectionId = ui.optimisticCurrentSelectionId ?? model.state.currentSelectionId;
-  const availableSelectionIds = useAvailableSelectionIds(selections, model.selector);
-  const busySelectionIds = useMemo(() => new Set(ui.busySelectionIds), [ui.busySelectionIds]);
-  const capturingSelectionIds = useMemo(() => {
-    const ids = new Set<string>();
-    for (const selection of selections) {
-      if (selection.snapshot.status === "pending") ids.add(selection.id);
-    }
-    return ids;
-  }, [selections]);
-
-  useEffect(() => {
-    for (const selection of selections) {
-      if (
-        selection.snapshot.status === "pending" &&
-        targetBelongsToDocument(selection.target, dom.document) &&
-        !availableSelectionIds.has(selection.id)
-      ) {
-        settleUnavailableSnapshot(selection.id);
-      }
-    }
-  }, [availableSelectionIds, dom, selections, settleUnavailableSnapshot]);
-
-  const noteWorkflow = ui.workflow.mode === "editingNote" ? ui.workflow : null;
-  const noteSelection = noteWorkflow
-    ? (selections.find(({ id }) => id === noteWorkflow.selectionId) ?? null)
-    : null;
-  const trailControls =
-    targetAttention?.trail && !ui.listOpen && !noteSelection ? (
-      <TrailControls trail={targetAttention.trail} />
-    ) : null;
-  useEffect(() => {
-    const workflow = ui.workflow;
-    if (
-      workflow.mode === "editingNote" &&
-      !selections.some(({ id }) => id === workflow.selectionId)
-    ) {
-      dispatch({ type: "closeNote" });
-    }
-    if (ui.listOpen && selections.length === 0 && model.state.history.length === 0) {
-      dispatch({ type: "setListOpen", open: false });
-    } else if (
-      ui.listOpen &&
-      ui.sheetTab === "open" &&
-      selections.length === 0 &&
-      model.state.history.length > 0
-    ) {
-      dispatch({ type: "setSheetTab", tab: "history" });
-    } else if (
-      ui.listOpen &&
-      ui.sheetTab === "history" &&
-      model.state.history.length === 0 &&
-      selections.length > 0
-    ) {
-      dispatch({ type: "setSheetTab", tab: "open" });
-    }
-  }, [model.state.history.length, selections, ui.listOpen, ui.sheetTab, ui.workflow]);
-
-  const interactionLocked = locksCompetingInteractions(ui);
-
-  return (
-    <>
-      <LensPortal css={model.css}>
-        <LensDock
-          selections={selections}
-          history={model.state.history}
-          currentSelectionId={currentSelectionId}
-          availableSelectionIds={availableSelectionIds}
-          selector={model.selector}
-          armed={ui.workflow.mode === "armed" || ui.workflow.mode === "dragging"}
-          listOpen={ui.listOpen}
-          sheetTab={ui.sheetTab}
-          focusedHistoryRevision={ui.focusedHistoryRevision}
-          clearPending={ui.clearPending}
-          historyClearPending={ui.historyClearPending}
-          capturingSelectionIds={capturingSelectionIds}
-          busySelectionIds={busySelectionIds}
-          interactionLocked={interactionLocked}
-          resolutionReceipt={resolutionReceipt.receipt}
-          onResolutionReceiptInteractionChange={resolutionReceipt.setInteraction}
-          targetAttentionFallback={
-            targetAttentionSurface.fallback ? (
-              <TargetAttentionFallback
-                {...targetAttentionSurface.fallback}
-                controls={trailControls}
-              />
-            ) : null
-          }
-          onToggleArmed={() =>
-            dispatch(
-              ui.workflow.mode === "armed" || ui.workflow.mode === "dragging"
-                ? { type: "disarm" }
-                : { type: "arm" },
-            )
-          }
-          onToggleList={() => {
-            if (!ui.listOpen && selections.length === 0 && model.state.history.length > 0) {
-              dispatch({ type: "setSheetTab", tab: "history" });
-            }
-            dispatch({ type: "setListOpen", open: !ui.listOpen });
-          }}
-          onSheetTabChange={(tab) => dispatch({ type: "setSheetTab", tab })}
-          onOpenHistory={(event) =>
-            dispatch({
-              type: "openHistory",
-              resolutionRevision: event.revision,
-            })
-          }
-          onClearSelections={actions.clearSelections}
-          onClearHistory={actions.clearHistory}
-          onReopenSelection={(receipt) => {
-            if (dom.getTarget(receipt.target, model.selector)) {
-              actions.reopenSelection(receipt);
-            } else {
-              dispatch({ type: "announce", message: "Target unavailable in this document." });
-            }
-          }}
-          onActivateSelection={(selection, motion) => {
-            if (dom.getTarget(selection.target, model.selector)) {
-              revealSelection(dom, selection, motion, model.selector);
-            } else {
-              dispatch({ type: "announce", message: "Target unavailable." });
-            }
-            actions.activateSelection(selection.id);
-          }}
-          onEditNote={(selection, motion) => actions.openNote(selection.id, motion)}
-          onDeleteSelection={actions.deleteSelection}
-          snapshotLoader={snapshotLoader}
-        />
-
-        <SelectionOverlay
-          selections={selections}
-          currentSelectionId={currentSelectionId}
-          availableSelectionIds={availableSelectionIds}
-          selector={model.selector}
-          workflow={ui.workflow}
-          busySelectionIds={busySelectionIds}
-          capturingSelectionIds={capturingSelectionIds}
-          registerAdjustment={registerAdjustment}
-          releaseAdjustment={releaseAdjustment}
-          onActivate={(selection) => actions.activateSelection(selection.id)}
-          onEditNote={(selection, motion) => actions.openNote(selection.id, motion)}
-          onReposition={actions.repositionSelection}
-        />
-
-        <TargetAttentionIndicator
-          view={targetAttentionSurface.view}
-          onLabelMeasure={measureTargetAttentionLabel}
-          controls={trailControls}
-        />
-
-        {noteSelection && noteWorkflow ? (
-          <SelectionNoteEditor
-            key={`${noteSelection.id}:${noteSelection.note}`}
-            selection={noteSelection}
-            selector={model.selector}
-            initialNote={noteSelection.note}
-            saving={busySelectionIds.has(noteSelection.id)}
-            mutationPending={busySelectionIds.has(noteSelection.id) || ui.clearPending}
-            motion={noteWorkflow.motion}
-            saveError={noteWorkflow.error}
-            onSave={(note) => actions.saveNote(noteSelection.id, note)}
-            onCancel={() => {
-              dispatch({ type: "closeNote" });
-              focusSelectionOrDock(dom, noteSelection.id);
-            }}
-            onDelete={() => actions.deleteSelection(noteSelection)}
-          />
-        ) : null}
-
-        <LensStatus message={ui.announcement} />
-        <TargetAttentionAnnouncement presentation={targetAttention} />
-      </LensPortal>
-    </>
-  );
-}
-
-function mergeSelections(stored: Selection[], pending: Selection[]): Selection[] {
-  const merged = new Map(stored.map((selection) => [selection.id, selection]));
-  for (const selection of pending) {
-    if (!merged.has(selection.id)) merged.set(selection.id, selection);
-  }
-  return [...merged.values()];
-}
-
-function useOutputCapture(
-  protocol: LensProtocolClient,
-  dom: NotebookDomAdapter,
-  capture: typeof captureOutputSnapshot,
-): void {
-  useEffect(
-    () =>
-      protocol.onOutputCapture(async (command, signal) => {
-        await dom.afterNextPaint(signal);
-        const output = dom.getOutputCell(command.payload.outputCellId);
-        if (!output) {
-          throw new LensProtocolError(
-            "output_unavailable",
-            `Output ${command.payload.outputCellId} is unavailable`,
-          );
-        }
-        const element = output.element;
-        const result = await capture({
-          imageId: `image:${command.requestId}`,
-          output: element,
-          signal,
-        });
-        const current = dom.getOutputCell(command.payload.outputCellId);
-        if (!element.isConnected || current?.element !== element) {
-          throw new LensProtocolError(
-            "capture_failed",
-            "The output changed before capture completed",
-          );
-        }
-        return {
-          image: result.metadata,
-          bytes: result.bytes,
-        };
-      }),
-    [capture, dom, protocol],
-  );
+  return { ...surface, measureLabel };
 }

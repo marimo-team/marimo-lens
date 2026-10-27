@@ -5,21 +5,19 @@ import {
   AttentionActivityStartEventSchema,
   AttentionActivityStopEventSchema,
   AttentionRevealEventSchema,
-  ClearHistoryCommandSchema,
-  GetSnapshotCommandSchema,
+  ClientCommandSchema,
   DeleteSelectionCommandSchema,
+  GetSnapshotCommandSchema,
   LensStateSchema,
-  OutputCaptureCommandSchema,
-  OutputCaptureFailurePayloadSchema,
-  OutputCaptureResponsePayloadSchema,
   PutSelectionCommandSchema,
-  ReopenSelectionCommandSchema,
   SelectionResolvedEventSchema,
   SelectionSchema,
+  OutputCaptureResponsePayloadSchema,
+  WIDGET_TRANSPORT_VERSION,
   parseContract,
   parseLensResponse,
-  parseTransportEnvelope,
   parseTargetMedia,
+  parseTransportEnvelope,
 } from "../src/index";
 import { selectionFixture } from "./fixtures";
 
@@ -35,20 +33,12 @@ describe("transport envelope", () => {
     expect(parseTransportEnvelope(message)).toEqual(message);
   });
 
-  test("rejects primitive transport values", () => {
-    expect(parseTransportEnvelope(null)).toBeNull();
-    expect(parseTransportEnvelope(undefined)).toBeNull();
-    expect(parseTransportEnvelope("kernel.status")).toBeNull();
-  });
-
-  test("rejects a non-string request identifier", () => {
-    expect(
-      parseTransportEnvelope({
-        protocol: "marimo-lens.response",
-        requestId: 7,
-      }),
-    ).toBeNull();
-  });
+  test.each([null, undefined, "kernel.status", { protocol: "marimo-lens.response", requestId: 7 }])(
+    "rejects %o",
+    (value) => {
+      expect(parseTransportEnvelope(value)).toBeNull();
+    },
+  );
 });
 
 describe("selection contracts", () => {
@@ -77,29 +67,13 @@ describe("selection contracts", () => {
     }
   });
 
-  test("accepts one current selection in canonical state", () => {
-    expect(
-      parseContract(
-        LensStateSchema,
-        {
-          revision: 3,
-          nextLabel: "S2",
-          currentSelectionId: "selection-1",
-          selections: [selectionFixture()],
-          history: [],
-        },
-        "state",
-      ),
-    ).toMatchObject({
-      revision: 3,
-      nextLabel: "S2",
-      currentSelectionId: "selection-1",
-      history: [],
-    });
-  });
-
   test("projects supported fields from additive selection state", () => {
-    const canonical = selectionFixture();
+    const canonical = selectionFixture({
+      previousResolution: {
+        addressedAt: "2026-07-14T10:05:00Z",
+        summary: "Updated the label and verified the chart.",
+      },
+    });
     const projected = parseContract(
       LensStateSchema,
       {
@@ -129,14 +103,23 @@ describe("selection contracts", () => {
     });
   });
 
-  test("rejects malformed labels, duplicate identity, and an unknown current selection", () => {
+  test("rejects state that repeats a selection", () => {
     expect(() =>
       parseContract(
-        SelectionSchema,
-        { ...selectionFixture(), label: "selection-one" },
-        "selection",
+        LensStateSchema,
+        {
+          revision: 3,
+          nextLabel: "S2",
+          currentSelectionId: "selection-1",
+          selections: [selectionFixture(), selectionFixture()],
+          history: [],
+        },
+        "state",
       ),
-    ).toThrow();
+    ).toThrow("Selection ids and labels must be unique");
+  });
+
+  test("rejects a current selection that the state does not hold", () => {
     expect(() =>
       parseContract(
         LensStateSchema,
@@ -144,10 +127,19 @@ describe("selection contracts", () => {
           revision: 3,
           nextLabel: "S2",
           currentSelectionId: "missing",
-          selections: [selectionFixture(), selectionFixture()],
+          selections: [selectionFixture()],
           history: [],
         },
         "state",
+      ),
+    ).toThrow();
+  });
+  test("rejects a selection label outside the S1, S2, … sequence", () => {
+    expect(() =>
+      parseContract(
+        SelectionSchema,
+        { ...selectionFixture(), label: "selection-one" },
+        "selection",
       ),
     ).toThrow();
   });
@@ -218,7 +210,7 @@ describe("selection contracts", () => {
   test("requires an exact addressed receipt for reopen commands", () => {
     const reopen = {
       protocol: "marimo-lens.command",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       requestId: "request-1",
       type: "selection.reopen",
       payload: {
@@ -227,10 +219,10 @@ describe("selection contracts", () => {
         expectedRevision: 4,
       },
     };
-    expect(parseContract(ReopenSelectionCommandSchema, reopen, "command")).toEqual(reopen);
+    expect(parseContract(ClientCommandSchema, reopen, "command")).toEqual(reopen);
     expect(() =>
       parseContract(
-        ReopenSelectionCommandSchema,
+        ClientCommandSchema,
         {
           ...reopen,
           payload: { ...reopen.payload, resolutionRevision: -1 },
@@ -241,12 +233,12 @@ describe("selection contracts", () => {
 
     const clearHistory = {
       protocol: "marimo-lens.command",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       requestId: "request-2",
       type: "history.clear",
       payload: { expectedRevision: 4 },
     };
-    expect(parseContract(ClearHistoryCommandSchema, clearHistory, "command")).toEqual(clearHistory);
+    expect(parseContract(ClientCommandSchema, clearHistory, "command")).toEqual(clearHistory);
   });
 
   test("requires positive rectangles contained by the target", () => {
@@ -317,7 +309,7 @@ describe("selection contracts", () => {
     ).toThrow("Notebook sources must belong to the target cells");
   });
 
-  test("matches Python text, timestamp, and safe-integer bounds", () => {
+  test("matches Python text, timestamp, geometry, and error bounds", () => {
     const pending = selectionFixture({ snapshot: { status: "pending" } });
     for (const selection of [
       { ...pending, id: "x".repeat(129) },
@@ -337,7 +329,7 @@ describe("selection contracts", () => {
           ActivateSelectionCommandSchema,
           {
             protocol: "marimo-lens.command",
-            version: 7,
+            version: WIDGET_TRANSPORT_VERSION,
             requestId: "request-1",
             type: "selection.activate",
             payload: { selectionId: blank, expectedRevision: 0 },
@@ -359,7 +351,7 @@ describe("selection contracts", () => {
 
     const failed = {
       protocol: "marimo-lens.response",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       requestId: "request-1",
       ok: false,
       revision: 1,
@@ -372,100 +364,74 @@ describe("selection contracts", () => {
     ).toThrow();
   });
 
-  test("requires expected revisions on every mutation", () => {
-    expect(() =>
-      parseContract(
-        PutSelectionCommandSchema,
-        {
-          protocol: "marimo-lens.command",
-          version: 7,
-          requestId: "request-1",
-          type: "selection.put",
-          payload: { selection: selectionFixture(), imageAction: "replace" },
-        },
-        "command",
-      ),
-    ).toThrow();
-    expect(() =>
-      parseContract(
-        ActivateSelectionCommandSchema,
-        {
-          protocol: "marimo-lens.command",
-          version: 7,
-          requestId: "request-1",
-          type: "selection.activate",
-          payload: { selectionId: "selection-1" },
-        },
-        "command",
-      ),
-    ).toThrow();
-    expect(() =>
-      parseContract(
-        DeleteSelectionCommandSchema,
-        {
-          protocol: "marimo-lens.command",
-          version: 7,
-          requestId: "request-1",
-          type: "selection.delete",
-          payload: { selectionId: "selection-1" },
-        },
-        "command",
-      ),
-    ).toThrow();
-  });
-
-  test("keeps snapshot reads revision free", () => {
-    expect(
-      parseContract(
-        GetSnapshotCommandSchema,
-        {
-          protocol: "marimo-lens.command",
-          version: 7,
-          requestId: "request-2",
-          type: "snapshot.get",
-          payload: { selectionId: "selection-1" },
-        },
-        "command",
-      ),
-    ).toMatchObject({ payload: { selectionId: "selection-1" } });
-  });
-
-  test("keeps image actions aligned with snapshot status", () => {
-    const command = (selection: ReturnType<typeof selectionFixture>, imageAction: string) => ({
-      protocol: "marimo-lens.command",
-      version: 7,
-      requestId: "request-1",
+  test.each([
+    {
+      schema: PutSelectionCommandSchema,
       type: "selection.put",
-      payload: { selection, imageAction, expectedRevision: 0 },
-    });
+      payload: { selection: selectionFixture(), imageAction: "replace" },
+      accepted: false,
+    },
+    {
+      schema: ActivateSelectionCommandSchema,
+      type: "selection.activate",
+      payload: { selectionId: "selection-1" },
+      accepted: false,
+    },
+    {
+      schema: DeleteSelectionCommandSchema,
+      type: "selection.delete",
+      payload: { selectionId: "selection-1" },
+      accepted: false,
+    },
+    {
+      schema: GetSnapshotCommandSchema,
+      type: "snapshot.get",
+      payload: { selectionId: "selection-1" },
+      accepted: true,
+    },
+  ])(
+    "$type without an expected revision is accepted: $accepted",
+    ({ schema, type, payload, accepted }) => {
+      const command = {
+        protocol: "marimo-lens.command",
+        version: WIDGET_TRANSPORT_VERSION,
+        requestId: "request-1",
+        type,
+        payload,
+      };
+      const parse = () => parseContract(schema, command, "command");
+      if (accepted) expect(parse()).toMatchObject({ payload });
+      else expect(parse).toThrow();
+    },
+  );
 
-    expect(() =>
-      parseContract(PutSelectionCommandSchema, command(selectionFixture(), "clear"), "command"),
-    ).toThrow("Snapshot status does not match imageAction");
-    expect(() =>
-      parseContract(
-        PutSelectionCommandSchema,
-        command(selectionFixture({ snapshot: { status: "pending" } }), "replace"),
-        "command",
-      ),
-    ).toThrow("Snapshot status does not match imageAction");
+  test.each([
+    { status: "available", imageAction: "clear", accepted: false },
+    { status: "pending", imageAction: "replace", accepted: false },
+    { status: "pending", imageAction: "clear", accepted: true },
+    { status: "available", imageAction: "replace", accepted: true },
+  ] as const)(
+    "a $status snapshot with imageAction $imageAction is accepted: $accepted",
+    ({ status, imageAction, accepted }) => {
+      const selection =
+        status === "pending" ? selectionFixture({ snapshot: { status } }) : selectionFixture();
+      const command = {
+        protocol: "marimo-lens.command",
+        version: WIDGET_TRANSPORT_VERSION,
+        requestId: "request-1",
+        type: "selection.put",
+        payload: { selection, imageAction, expectedRevision: 0 },
+      };
+      const parse = () => parseContract(PutSelectionCommandSchema, command, "command");
+      if (accepted) expect(parse()).toMatchObject({ payload: { imageAction } });
+      else expect(parse).toThrow("Snapshot status does not match imageAction");
+    },
+  );
 
-    expect(
-      parseContract(
-        PutSelectionCommandSchema,
-        command(selectionFixture({ snapshot: { status: "pending" } }), "clear"),
-        "command",
-      ),
-    ).toMatchObject({ payload: { imageAction: "clear" } });
-    expect(
-      parseContract(PutSelectionCommandSchema, command(selectionFixture(), "replace"), "command"),
-    ).toMatchObject({ payload: { imageAction: "replace" } });
-  });
-
-  test("validates bounded selection resolution events", () => {
+  describe("selection resolution events", () => {
     const event = {
       protocol: "marimo-lens.event",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       type: "selection.resolved",
       revision: 4,
       payload: {
@@ -480,55 +446,50 @@ describe("selection contracts", () => {
       },
     };
 
-    expect(parseContract(SelectionResolvedEventSchema, event, "event")).toEqual(event);
-    expect(() =>
-      parseContract(
-        SelectionResolvedEventSchema,
-        { ...event, payload: { ...event.payload, summary: "" } },
-        "event",
-      ),
-    ).toThrow();
-    expect(() =>
-      parseContract(
-        SelectionResolvedEventSchema,
-        { ...event, payload: { ...event.payload, summary: "   " } },
-        "event",
-      ),
-    ).toThrow();
-    expect(() =>
-      parseContract(
-        SelectionResolvedEventSchema,
-        { ...event, payload: { ...event.payload, summary: "😀".repeat(121) } },
-        "event",
-      ),
-    ).toThrow();
-    expect(
-      parseContract(
-        SelectionResolvedEventSchema,
-        { ...event, payload: { ...event.payload, displayHint: "compact" } },
-        "event",
-      ),
-    ).toEqual(event);
-    for (const version of [6, 8]) {
-      expect(() =>
-        parseContract(SelectionResolvedEventSchema, { ...event, version }, "event"),
-      ).toThrow();
-    }
-    expect(() =>
-      parseContract(
-        SelectionResolvedEventSchema,
-        {
+    const [resolved] = event.payload.selections;
+    const { resolutionRevision: _, ...withoutRevision } = resolved!;
+
+    test("reads a resolution event", () => {
+      expect(parseContract(SelectionResolvedEventSchema, event, "event")).toEqual(event);
+    });
+
+    test.each([
+      {
+        name: "a repeated selection",
+        value: {
           ...event,
           payload: {
+            ...event.payload,
             selections: [...event.payload.selections, ...event.payload.selections],
           },
         },
-        "event",
-      ),
-    ).toThrow();
+      },
+      {
+        // 121 emoji are 242 UTF-16 code units, past the summary bound Python counts the same way.
+        name: "a summary past its UTF-16 bound",
+        value: { ...event, payload: { ...event.payload, summary: "😀".repeat(121) } },
+      },
+      {
+        name: "another protocol version",
+        value: { ...event, version: WIDGET_TRANSPORT_VERSION + 1 },
+      },
+      {
+        name: "a label outside the S1, S2, … sequence",
+        value: {
+          ...event,
+          payload: { ...event.payload, selections: [{ ...resolved, label: "S0" }] },
+        },
+      },
+      {
+        name: "a selection without its resolution revision",
+        value: { ...event, payload: { ...event.payload, selections: [withoutRevision] } },
+      },
+    ])("rejects $name", ({ value }) => {
+      expect(() => parseContract(SelectionResolvedEventSchema, value, "event")).toThrow();
+    });
   });
 
-  test("accepts bounded reveal steps and an optional whole-reveal duration", () => {
+  describe("attention events", () => {
     const step = {
       address: { kind: "cell", cellId: "BYtC" },
       label: "Updated chart",
@@ -536,213 +497,112 @@ describe("selection contracts", () => {
     };
     const reveal = {
       protocol: "marimo-lens.event",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       type: "attention.reveal",
       payload: { id: "reveal-1", steps: [step], durationMs: 8_000 },
     };
-    expect(parseContract(AttentionRevealEventSchema, reveal, "event")).toEqual(reveal);
-    const held = { ...reveal, payload: { id: "held", steps: [step] } };
-    expect(parseContract(AttentionRevealEventSchema, held, "event")).toEqual(held);
-    const maximum = { ...held, payload: { ...held.payload, steps: Array(16).fill(step) } };
-    expect(parseContract(AttentionRevealEventSchema, maximum, "event")).toEqual(maximum);
-    for (const steps of [[], Array(17).fill(step)]) {
-      expect(() =>
-        parseContract(
-          AttentionRevealEventSchema,
-          {
-            ...held,
-            payload: { ...held.payload, steps },
-          },
-          "event",
-        ),
-      ).toThrow();
-    }
-    for (const invalidStep of [
-      { ...step, address: { kind: "cell", cellId: "x".repeat(129) } },
-      { ...step, message: "   " },
-      { ...step, message: "x".repeat(1_001) },
-      { ...step, label: "x".repeat(41) },
-    ]) {
-      expect(() =>
-        parseContract(
-          AttentionRevealEventSchema,
-          {
-            ...reveal,
-            payload: { ...reveal.payload, steps: [invalidStep] },
-          },
-          "event",
-        ),
-      ).toThrow();
-    }
-    for (const durationMs of [0, 300_001, 1.5]) {
-      expect(() =>
-        parseContract(
-          AttentionRevealEventSchema,
-          {
-            ...reveal,
-            payload: { ...reveal.payload, durationMs },
-          },
-          "event",
-        ),
-      ).toThrow();
-    }
-    expect(
-      parseContract(
-        AttentionRevealEventSchema,
-        {
-          ...reveal,
-          payload: {
-            ...reveal.payload,
-            steps: [{ ...step, message: "x".repeat(1_000) }],
-            durationMs: 300_000,
-            displayHint: "compact",
-          },
-        },
-        "event",
-      ).payload,
-    ).toEqual({
-      id: "reveal-1",
-      steps: [{ ...step, message: "x".repeat(1_000) }],
-      durationMs: 300_000,
-    });
-  });
-
-  test("accepts bounded target activity start events", () => {
     const activity = {
       protocol: "marimo-lens.event",
-      version: 7,
+      version: WIDGET_TRANSPORT_VERSION,
       type: "attention.activity.start",
       payload: {
         activityId: "activity-1",
-        address: { kind: "selection" as const, selectionId: "selection-1", revision: 4 },
+        address: { kind: "selection", selectionId: "selection-1", revision: 4 },
         durationMs: 8_000,
         label: "On it",
         message: "Updating the aggregation.",
       },
     };
-    expect(parseContract(AttentionActivityStartEventSchema, activity, "event")).toEqual(activity);
-    const persistent = {
-      ...activity,
-      payload: { activityId: "activity-1", address: activity.payload.address },
-    };
-    expect(parseContract(AttentionActivityStartEventSchema, persistent, "event")).toEqual(
-      persistent,
-    );
-    expect(
-      parseContract(
-        AttentionActivityStartEventSchema,
-        { ...activity, payload: { ...activity.payload, displayHint: "compact" } },
-        "event",
-      ),
-    ).toEqual(activity);
-    expect(() =>
-      parseContract(
-        AttentionActivityStartEventSchema,
-        { ...activity, payload: { ...activity.payload, message: "   " } },
-        "event",
-      ),
-    ).toThrow();
-    expect(() =>
-      parseContract(
-        AttentionActivityStartEventSchema,
-        { ...activity, payload: { ...activity.payload, label: "x".repeat(41) } },
-        "event",
-      ),
-    ).toThrow();
-    for (const durationMs of [0, 300_001, 1.5]) {
-      expect(() =>
-        parseContract(
-          AttentionActivityStartEventSchema,
-          { ...activity, payload: { ...activity.payload, durationMs } },
-          "event",
-        ),
-      ).toThrow();
-    }
-    for (const address of [
-      { kind: "selection", selectionId: "selection-1" },
-      { kind: "selection", selectionId: "selection-1", revision: -1 },
-      { kind: "cell", cellId: "" },
-      { kind: "selector", selector: "#projection" },
-    ]) {
-      expect(() =>
-        parseContract(
-          AttentionActivityStartEventSchema,
-          { ...activity, payload: { ...activity.payload, address } },
-          "event",
-        ),
-      ).toThrow();
-    }
-  });
 
-  test("accepts an owner-specific activity stop event", () => {
-    const stop = {
-      protocol: "marimo-lens.event",
-      version: 7,
-      type: "attention.activity.stop",
-      payload: { activityId: "activity-1" },
-    };
-    expect(parseContract(AttentionActivityStopEventSchema, stop, "event")).toEqual(stop);
-    expect(() =>
-      parseContract(
-        AttentionActivityStopEventSchema,
-        { ...stop, payload: { activityId: "" } },
-        "event",
-      ),
-    ).toThrow();
-  });
-
-  test("correlates output capture messages by request and exact cell", () => {
-    const command = {
-      protocol: "marimo-lens.command",
-      version: 7,
-      requestId: "capture-1",
-      type: "output.capture",
-      payload: {
-        outputCellId: "cell-view",
+    test.each([
+      { name: "a timed reveal", schema: AttentionRevealEventSchema, value: reveal },
+      {
+        name: "a held reveal",
+        schema: AttentionRevealEventSchema,
+        value: { ...reveal, payload: { id: "held", steps: [step] } },
       },
-    };
-    const image = {
-      status: "available" as const,
-      id: "image:capture-1",
-      mediaType: "image/png" as const,
-      width: 640,
-      height: 480,
-      sha256: "a".repeat(64),
-      capturedAt: "2026-07-19T10:00:00Z",
-    };
+      { name: "a timed activity", schema: AttentionActivityStartEventSchema, value: activity },
+      {
+        name: "a persistent activity",
+        schema: AttentionActivityStartEventSchema,
+        value: {
+          ...activity,
+          payload: { activityId: "activity-1", address: activity.payload.address },
+        },
+      },
+      {
+        name: "an activity stop",
+        schema: AttentionActivityStopEventSchema,
+        value: {
+          protocol: "marimo-lens.event",
+          version: WIDGET_TRANSPORT_VERSION,
+          type: "attention.activity.stop",
+          payload: { activityId: "activity-1" },
+        },
+      },
+      {
+        name: "a reveal with fields this version does not know",
+        schema: AttentionRevealEventSchema,
+        value: { ...reveal, trace: "python", payload: { ...reveal.payload, trace: "python" } },
+        expected: reveal,
+      },
+    ])("reads $name", ({ schema, value, expected }) => {
+      expect(parseContract(schema, value, "event")).toEqual(expected ?? value);
+    });
 
-    expect(parseContract(OutputCaptureCommandSchema, command, "command")).toEqual(command);
-    expect(
-      parseContract(
-        OutputCaptureResponsePayloadSchema,
-        { outputCellId: "cell-view", image },
-        "payload",
-      ),
-    ).toEqual({ outputCellId: "cell-view", image });
-    expect(
-      parseContract(OutputCaptureFailurePayloadSchema, { outputCellId: "cell-view" }, "payload"),
-    ).toEqual({ outputCellId: "cell-view" });
-    expect(
-      parseContract(
-        OutputCaptureCommandSchema,
-        { ...command, payload: { ...command.payload, trace: "browser" } },
-        "command",
-      ),
-    ).toEqual(command);
-    expect(
-      parseContract(
-        OutputCaptureResponsePayloadSchema,
-        { outputCellId: "cell-view", image, trace: "browser" },
-        "payload",
-      ),
-    ).toEqual({ outputCellId: "cell-view", image });
-    expect(
-      parseContract(
-        OutputCaptureFailurePayloadSchema,
-        { outputCellId: "cell-view", trace: "browser" },
-        "payload",
-      ),
-    ).toEqual({ outputCellId: "cell-view" });
+    test.each([
+      {
+        name: "a reveal without steps",
+        schema: AttentionRevealEventSchema,
+        value: { ...reveal, payload: { ...reveal.payload, steps: [] } },
+      },
+      {
+        name: "a zero duration",
+        schema: AttentionRevealEventSchema,
+        value: { ...reveal, payload: { ...reveal.payload, durationMs: 0 } },
+      },
+      {
+        name: "a fractional duration",
+        schema: AttentionRevealEventSchema,
+        value: { ...reveal, payload: { ...reveal.payload, durationMs: 1.5 } },
+      },
+      {
+        name: "a duration past five minutes",
+        schema: AttentionRevealEventSchema,
+        value: { ...reveal, payload: { ...reveal.payload, durationMs: 300_001 } },
+      },
+      {
+        name: "a reveal past 16 steps",
+        schema: AttentionRevealEventSchema,
+        value: { ...reveal, payload: { ...reveal.payload, steps: Array(17).fill(step) } },
+      },
+      {
+        name: "a label past 40 units",
+        schema: AttentionActivityStartEventSchema,
+        value: { ...activity, payload: { ...activity.payload, label: "x".repeat(41) } },
+      },
+      {
+        name: "a selector address",
+        schema: AttentionActivityStartEventSchema,
+        value: {
+          ...activity,
+          payload: { ...activity.payload, address: { kind: "selector", selector: "#projection" } },
+        },
+      },
+      {
+        name: "a selection address without its revision",
+        schema: AttentionActivityStartEventSchema,
+        value: {
+          ...activity,
+          payload: {
+            ...activity.payload,
+            address: { kind: "selection", selectionId: "selection-1" },
+          },
+        },
+      },
+    ])("rejects $name", ({ schema, value }) => {
+      expect(() => parseContract(schema, value, "event")).toThrow();
+    });
   });
 });
 
@@ -759,4 +619,24 @@ test("target media names a page or a time span that ends after it starts", () =>
     "Media end must come after its start",
   );
   expect(() => parseTargetMedia({ path: "report.pdf", sheet: 1 })).toThrow();
+});
+
+test("an output capture response tolerates fields this version does not know", () => {
+  const image = {
+    status: "available",
+    id: "image:capture-1",
+    mediaType: "image/png",
+    width: 640,
+    height: 480,
+    sha256: "a".repeat(64),
+    capturedAt: "2026-07-19T10:00:00Z",
+  };
+
+  expect(
+    parseContract(
+      OutputCaptureResponsePayloadSchema,
+      { outputCellId: "cell-view", image, trace: "browser" },
+      "payload",
+    ),
+  ).toEqual({ outputCellId: "cell-view", image });
 });

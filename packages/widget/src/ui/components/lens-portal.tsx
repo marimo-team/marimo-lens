@@ -2,7 +2,7 @@ import * as stylex from "@stylexjs/stylex";
 import { useLayoutEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
-import { useNotebookDom } from "@/notebook/notebook-dom";
+import { useNotebookDom } from "@/notebook/notebook-dom-context";
 import { createLensSurface } from "@/ui/lens-surface";
 import { useLensTheme } from "@/ui/theme";
 

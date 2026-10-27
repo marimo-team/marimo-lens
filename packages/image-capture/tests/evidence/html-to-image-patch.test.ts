@@ -4,8 +4,7 @@ import { toPng as toPngEs } from "html-to-image/es/index";
 import { cloneNode } from "html-to-image/lib/clone-node";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { anchorForDetail } from "../../src/evidence/evidence-layout";
-import { relativeOutputBounds } from "../../src/evidence/geometry";
+import { anchorForDetail, relativeOutputBounds } from "../../src/evidence/geometry";
 import { captureSelectionSnapshot } from "../../src/evidence/image";
 import { assertCapturableIframes, elementCaptureGeometry } from "../../src/evidence/raster";
 

@@ -13,8 +13,8 @@ class _RuntimeScope:
 
 
 class _CellLifecycle:
-    # Earlier marimo formatting installs its widget comm globally. Its comm then
-    # registers resources here, which a cell-less context creates immediately.
+    # A test that registered marimo's formatters leaves its anywidget comm
+    # provider installed, and each comm it opens registers a lifecycle item here.
     def add(self, item: Any) -> None:
         item.create(None)
 
@@ -179,17 +179,11 @@ def test_automatic_lens_is_limited_to_the_editor(
     assert _lens(runtime, automatic_lens()) is None
 
 
-def test_open_lens_suppresses_the_automatic_lens(runtime: SimpleNamespace) -> None:
-    authored = _lens(runtime, Lens())
-
-    assert automatic_lens() is None
-    assert notebook_lens() is authored
-
-
 def test_notebook_lens_returns_the_oldest_open_lens(runtime: SimpleNamespace) -> None:
     first, second = Lens(), Lens()
     runtime.lenses.extend((first, second))
 
+    assert automatic_lens() is None
     assert notebook_lens() is first
     first.close()
     assert notebook_lens() is second

@@ -1,17 +1,19 @@
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
+import { documentIdentity, targetBelongsToDocument } from "@/notebook/document-identity";
 import { registerLensHostOutput } from "@/notebook/output-root";
 import {
-  documentIdentity,
   getTargetSurface,
   listTargetSurfaces,
-  targetBelongsToDocument,
   targetFromElement,
   validateTargetSelector,
 } from "@/notebook/selection-target";
 import { collectDomHint } from "@/selection/dom-hint";
 
+const releases: Array<() => void> = [];
+
 afterEach(() => {
+  for (const release of releases.splice(0)) release();
   document.body.replaceChildren();
   vi.restoreAllMocks();
 });
@@ -354,12 +356,13 @@ describe("selection targets", () => {
     const target = targetFromElement(output, null)!.target;
 
     vi.resetModules();
-    const nextModule = await import("@/notebook/selection-target");
+    const nextTargets = await import("@/notebook/selection-target");
+    const nextIdentity = await import("@/notebook/document-identity");
 
-    expect(nextModule.getTargetSurface(document, target, null)?.element).toBe(output);
+    expect(nextTargets.getTargetSurface(document, target, null)?.element).toBe(output);
     const frame = document.createElement("iframe");
     document.body.appendChild(frame);
-    expect(nextModule.targetBelongsToDocument(target, frame.contentDocument!)).toBe(false);
+    expect(nextIdentity.targetBelongsToDocument(target, frame.contentDocument!)).toBe(false);
   });
 
   test("keeps notebook targeting on canonical output roots by default", () => {
@@ -406,26 +409,54 @@ describe("selection targets", () => {
     expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([output]);
   });
 
-  test("a cell whose output root has no box keeps its code unselectable", () => {
-    document.body.innerHTML =
-      '<div id="output-slide" style="display:contents"></div><div id="cell-slide" data-cell-id="slide"><div class="cm-line">chart</div></div>';
-    const cell = visible(document.getElementById("cell-slide")!);
+  test.each([
+    {
+      cell: "whose output root has no box",
+      mount: () => {
+        document.body.innerHTML =
+          '<div id="output-slide" style="display:contents"></div><div data-cell-id="slide"><div class="cm-line">chart</div></div>';
+        return { code: document, outputs: [] };
+      },
+    },
+    {
+      cell: "whose output renders in an open shadow root",
+      mount: () => {
+        document.body.innerHTML =
+          '<div data-cell-id="chart"><div class="cm-line">chart</div><div id="host"></div></div>';
+        const output = visible(document.createElement("div"));
+        output.id = "output-chart";
+        document.getElementById("host")!.attachShadow({ mode: "open" }).appendChild(output);
+        return { code: document, outputs: [output] };
+      },
+    },
+    {
+      cell: "in an open shadow root without output",
+      mount: () => {
+        const host = document.createElement("div");
+        const shadow = host.attachShadow({ mode: "open" });
+        shadow.innerHTML =
+          '<div data-cell-id="shadow"><div class="cm-line">rate = 0.07</div></div>';
+        document.body.appendChild(host);
+        return { code: shadow, outputs: [] };
+      },
+    },
+    {
+      cell: "that renders Lens",
+      mount: () => {
+        document.body.innerHTML =
+          '<div data-cell-id="lens"><div class="cm-line">lens</div><div id="output-lens"><span></span></div></div>';
+        visible(document.getElementById("output-lens")!);
+        releases.push(registerLensHostOutput(document.querySelector("#output-lens span")!));
+        return { code: document, outputs: [] };
+      },
+    },
+  ])("keeps the code of a cell $cell unselectable", ({ mount }) => {
+    const { code, outputs } = mount();
+    const line = code.querySelector(".cm-line")!;
+    visible(line.closest<HTMLElement>("[data-cell-id]")!);
 
-    expect(targetFromElement(cell.querySelector(".cm-line"), null)).toBeNull();
-    expect(listTargetSurfaces(document, null)).toEqual([]);
-  });
-
-  test("a cell whose output renders in an open shadow root keeps its code unselectable", () => {
-    document.body.innerHTML =
-      '<div id="cell-chart" data-cell-id="chart"><div class="cm-line">chart</div><div id="host"></div></div>';
-    const cell = visible(document.getElementById("cell-chart")!);
-    const shadow = document.getElementById("host")!.attachShadow({ mode: "open" });
-    const output = visible(document.createElement("div"));
-    output.id = "output-chart";
-    shadow.appendChild(output);
-
-    expect(targetFromElement(cell.querySelector(".cm-line"), null)).toBeNull();
-    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([output]);
+    expect(targetFromElement(line, null)).toBeNull();
+    expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual(outputs);
   });
 
   test("a cell with a configured output root elsewhere lists one surface", () => {
@@ -436,30 +467,6 @@ describe("selection targets", () => {
     const custom = visible(document.getElementById("custom")!);
 
     expect(listTargetSurfaces(document, null).map(({ element }) => element)).toEqual([custom]);
-  });
-
-  test("an output-less cell in an open shadow root is not a target", () => {
-    const host = document.createElement("div");
-    const shadow = host.attachShadow({ mode: "open" });
-    shadow.innerHTML =
-      '<div id="cell-shadow" data-cell-id="shadow"><div class="cm-line">rate = 0.07</div></div>';
-    document.body.appendChild(host);
-    const cell = visible(shadow.getElementById("cell-shadow")!);
-
-    expect(targetFromElement(cell.querySelector(".cm-line"), null)).toBeNull();
-    expect(listTargetSurfaces(document, null)).toEqual([]);
-  });
-
-  test("the cell that renders Lens stays unselectable", () => {
-    document.body.innerHTML =
-      '<div id="cell-lens" data-cell-id="lens"><div class="cm-line">lens</div><div id="output-lens"><span></span></div></div>';
-    const cell = visible(document.getElementById("cell-lens")!);
-    visible(document.getElementById("output-lens")!);
-    const release = registerLensHostOutput(cell.querySelector("span")!);
-
-    expect(targetFromElement(cell.querySelector(".cm-line"), null)).toBeNull();
-    expect(listTargetSurfaces(document, null)).toEqual([]);
-    release();
   });
 
   test("lists notebook outputs mounted in an open shadow root", () => {
@@ -693,41 +700,39 @@ describe("selection targets", () => {
     );
   });
 
-  test("skips roots whose producer list exceeds its bound", () => {
+  test.each([
+    {
+      bound: "producer list",
+      exceed: (section: HTMLElement) => {
+        for (let index = 0; index < 65; index += 1) {
+          const producer = document.createElement("span");
+          producer.dataset.marimoLensCellId = `cell-${index}`;
+          section.appendChild(producer);
+        }
+      },
+    },
+    {
+      bound: "producer ID",
+      exceed: (section: HTMLElement) => {
+        section.dataset.marimoLensCellId = "x".repeat(129);
+      },
+    },
+    {
+      bound: "document path",
+      exceed: () => {
+        const originalPath = window.location.pathname;
+        window.history.replaceState(null, "", `/${"x".repeat(1_025)}`);
+        releases.push(() => window.history.replaceState(null, "", originalPath));
+      },
+    },
+  ])("skips roots whose $bound exceeds its protocol bound", ({ exceed }) => {
     const section = visible(document.createElement("section"));
     section.dataset.feedbackTarget = "";
-    for (let index = 0; index < 65; index += 1) {
-      const producer = document.createElement("span");
-      producer.dataset.marimoLensCellId = `cell-${index}`;
-      section.appendChild(producer);
-    }
+    exceed(section);
     document.body.appendChild(section);
 
     expect(targetFromElement(section, "[data-feedback-target]")).toBeNull();
     expect(listTargetSurfaces(document, "[data-feedback-target]")).toEqual([]);
-  });
-
-  test("skips roots with producer IDs outside the protocol bound", () => {
-    const section = visible(document.createElement("section"));
-    section.dataset.feedbackTarget = "";
-    section.dataset.marimoLensCellId = "x".repeat(129);
-    document.body.appendChild(section);
-
-    expect(targetFromElement(section, "[data-feedback-target]")).toBeNull();
-  });
-
-  test("skips roots whose document path exceeds the protocol bound", () => {
-    const originalPath = window.location.pathname;
-    window.history.replaceState(null, "", `/${"x".repeat(1_025)}`);
-    try {
-      const section = visible(document.createElement("section"));
-      section.dataset.feedbackTarget = "";
-      document.body.appendChild(section);
-
-      expect(targetFromElement(section, "[data-feedback-target]")).toBeNull();
-    } finally {
-      window.history.replaceState(null, "", originalPath);
-    }
   });
 });
 

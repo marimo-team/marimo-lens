@@ -1,27 +1,19 @@
 import type { CaptureResult } from "@marimo-lens/image-capture";
-import type {
-  ImageAction,
-  LensState,
-  Selection,
-  SelectionAnchor,
-  TargetSelector,
-} from "@marimo-lens/protocol";
+import type { ImageAction, LensState, Selection } from "@marimo-lens/protocol";
 
 import { captureSelectionSnapshot } from "@marimo-lens/image-capture";
-import { isAbortCause, parseErrorCause } from "@marimo-lens/protocol";
+import { isAbortCause } from "@marimo-lens/protocol";
 
 import type { LensProtocolClient } from "@/anywidget/client";
 import type { NotebookDomAdapter } from "@/notebook/notebook-dom";
 
-type RevisionedResult = { revision: number };
-type RevisionedMutation = (state: LensState) => Promise<RevisionedResult>;
-type EnqueueMutation = <T>(mutation: () => Promise<T>) => Promise<T>;
-type RunRevisioned = (
-  mutation: RevisionedMutation,
-  postcondition: (state: LensState) => boolean,
-) => Promise<void>;
+import { sameAnchor } from "@/selection/anchor";
+
+import type { Mutation, Revision } from "./revisioned-mutations";
 
 export type SelectionSnapshotCapture = typeof captureSelectionSnapshot;
+
+const TARGET_CHANGED = "The target changed before snapshot capture completed.";
 
 export type SelectionCaptureJob = {
   ticket: symbol;
@@ -32,11 +24,10 @@ export type SelectionCaptureJob = {
 export class SelectionCapture {
   readonly #stateRef: { current: LensState };
   readonly #dom: NotebookDomAdapter;
-  readonly #selector: TargetSelector;
   readonly #protocol: LensProtocolClient;
   readonly #currentSignal: () => AbortSignal;
-  readonly #enqueueMutation: EnqueueMutation;
-  readonly #runRevisioned: RunRevisioned;
+  readonly #revise: (revision: Revision) => Promise<void>;
+  readonly #mutate: (mutation: Mutation) => void;
   readonly #announce: (message: string) => void;
   readonly #captureSnapshot: SelectionSnapshotCapture;
   readonly #jobs = new Map<string, SelectionCaptureJob>();
@@ -44,21 +35,19 @@ export class SelectionCapture {
   constructor(options: {
     stateRef: { current: LensState };
     dom: NotebookDomAdapter;
-    selector: TargetSelector;
     protocol: LensProtocolClient;
     currentSignal: () => AbortSignal;
-    enqueueMutation: EnqueueMutation;
-    runRevisioned: RunRevisioned;
+    revise: (revision: Revision) => Promise<void>;
+    mutate: (mutation: Mutation) => void;
     announce: (message: string) => void;
     captureSnapshot?: SelectionSnapshotCapture;
   }) {
     this.#stateRef = options.stateRef;
     this.#dom = options.dom;
-    this.#selector = options.selector;
     this.#protocol = options.protocol;
     this.#currentSignal = options.currentSignal;
-    this.#enqueueMutation = options.enqueueMutation;
-    this.#runRevisioned = options.runRevisioned;
+    this.#revise = options.revise;
+    this.#mutate = options.mutate;
     this.#announce = options.announce;
     this.#captureSnapshot = options.captureSnapshot ?? captureSelectionSnapshot;
   }
@@ -95,39 +84,27 @@ export class SelectionCapture {
     }
   }
 
-  settleUnavailable(
-    selectionId: string,
-    error = "The target changed before snapshot capture completed.",
-  ): void {
-    this.#settleFailed(selectionId, error);
-  }
-
-  #settleFailed(selectionId: string, error: string): void {
+  /** Record a failed image for a selection whose capture cannot complete. */
+  settleUnavailable(selectionId: string, error = TARGET_CHANGED): void {
     this.invalidate(selectionId);
-    const signal = this.#currentSignal();
-    void this.#enqueueMutation(async () => {
-      try {
-        await this.#runRevisioned(
-          (state) => {
-            const current = state.selections.find((selection) => selection.id === selectionId);
-            if (!current || current.snapshot.status !== "pending") {
-              return Promise.resolve(localResponse(state.revision));
-            }
-            return this.#protocol.putSelection(
-              { ...current, snapshot: this.#failedSnapshot(error) },
-              "clear",
-              state.revision,
-            );
-          },
-          (latest) => {
-            const current = latest.selections.find((selection) => selection.id === selectionId);
-            return !current || current.snapshot.status !== "pending";
-          },
+    if (this.#currentSignal().aborted) return;
+    this.#mutate({
+      run: (state) => {
+        const current = state.selections.find((selection) => selection.id === selectionId);
+        if (!current || current.snapshot.status !== "pending") {
+          return Promise.resolve({ revision: state.revision });
+        }
+        return this.#protocol.putSelection(
+          { ...current, snapshot: this.#failedSnapshot(error) },
+          "clear",
+          state.revision,
         );
-      } catch (error) {
-        if (signal.aborted || isAbortCause(error)) return;
-        this.#announce(errorMessage(error, "Snapshot capture could not be settled"));
-      }
+      },
+      until: (latest) => {
+        const current = latest.selections.find((selection) => selection.id === selectionId);
+        return !current || current.snapshot.status !== "pending";
+      },
+      failed: "Snapshot capture could not be settled",
     });
   }
 
@@ -158,7 +135,7 @@ export class SelectionCapture {
     } catch (error) {
       if (!this.isActive(selection.id, job)) return;
       if (!signal.aborted && !isAbortCause(error)) {
-        this.#settleFailed(selection.id, "Snapshot capture did not complete.");
+        this.settleUnavailable(selection.id, "Snapshot capture did not complete.");
       }
       throw error;
     } finally {
@@ -180,63 +157,67 @@ export class SelectionCapture {
     const lifecycleSignal = this.#currentSignal();
     const captureSignal = job.controller.signal;
     if (captureSignal.aborted || !this.isActive(selection.id, job)) return;
-    await this.#enqueueMutation(async () => {
-      if (captureSignal.aborted || !this.isActive(selection.id, job)) return;
-      let retainedOutdated = false;
-      let committedStatus = result.status;
-      let committedSnapshot: Selection["snapshot"] | null = null;
-      await this.#runRevisioned(
-        async (state) => {
-          const current = state.selections.find((candidate) => candidate.id === selection.id);
-          if (
-            !current ||
-            !sameTarget(current, selection) ||
-            !sameAnchor(current.anchor, selection.anchor)
-          ) {
-            return localResponse(state.revision);
-          }
-          const currentResult = this.#isCanonicalTarget(selection, output)
-            ? result
-            : this.#failedCapture();
-          committedStatus = currentResult.status;
-          committedSnapshot =
-            currentResult.status === "available"
-              ? currentResult.snapshot.metadata
-              : currentResult.snapshot;
-          if (currentResult.status === "failed" && current.snapshot.status === "outdated") {
-            retainedOutdated = true;
-            return localResponse(state.revision);
-          }
-          const imageAction: ImageAction =
-            currentResult.status === "available" ? "replace" : "clear";
-          return this.#protocol.putSelection(
-            { ...current, snapshot: committedSnapshot },
-            imageAction,
-            state.revision,
-            currentResult.status === "available" ? currentResult.snapshot.bytes : undefined,
-          );
-        },
-        (latest) => {
-          const current = latest.selections.find((candidate) => candidate.id === selection.id);
-          return (
-            !current ||
-            !sameTarget(current, selection) ||
-            !sameAnchor(current.anchor, selection.anchor) ||
-            (committedStatus === "failed" && current.snapshot.status === "outdated") ||
-            (committedSnapshot !== null && sameSnapshot(current.snapshot, committedSnapshot))
-          );
-        },
-      );
-      const current = this.#stateRef.current.selections.find(
-        (candidate) => candidate.id === selection.id,
-      );
-      if (
-        !lifecycleSignal.aborted &&
-        !captureSignal.aborted &&
-        this.isActive(selection.id, job) &&
-        current &&
-        sameAnchor(current.anchor, selection.anchor)
-      ) {
+    let skipped = false;
+    let retainedOutdated = false;
+    let committedStatus = result.status;
+    let committedSnapshot: Selection["snapshot"] | null = null;
+    await this.#revise({
+      run: async (state) => {
+        const current = state.selections.find((candidate) => candidate.id === selection.id);
+        skipped = captureSignal.aborted || !this.isActive(selection.id, job);
+        if (
+          skipped ||
+          !current ||
+          !sameTarget(current, selection) ||
+          !sameAnchor(current.anchor, selection.anchor)
+        ) {
+          return { revision: state.revision };
+        }
+        const currentResult: CaptureResult = this.#isCanonicalTarget(selection, output)
+          ? result
+          : { status: "failed", snapshot: this.#failedSnapshot() };
+        committedStatus = currentResult.status;
+        committedSnapshot =
+          currentResult.status === "available"
+            ? currentResult.snapshot.metadata
+            : currentResult.snapshot;
+        if (currentResult.status === "failed" && current.snapshot.status === "outdated") {
+          retainedOutdated = true;
+          return { revision: state.revision };
+        }
+        const imageAction: ImageAction = currentResult.status === "available" ? "replace" : "clear";
+        return this.#protocol.putSelection(
+          { ...current, snapshot: committedSnapshot },
+          imageAction,
+          state.revision,
+          currentResult.status === "available" ? currentResult.snapshot.bytes : undefined,
+        );
+      },
+      until: (latest) => {
+        const current = latest.selections.find((candidate) => candidate.id === selection.id);
+        return (
+          skipped ||
+          !current ||
+          !sameTarget(current, selection) ||
+          !sameAnchor(current.anchor, selection.anchor) ||
+          (committedStatus === "failed" && current.snapshot.status === "outdated") ||
+          (committedSnapshot !== null && sameSnapshot(current.snapshot, committedSnapshot))
+        );
+      },
+      done: () => {
+        const current = this.#stateRef.current.selections.find(
+          (candidate) => candidate.id === selection.id,
+        );
+        if (
+          skipped ||
+          lifecycleSignal.aborted ||
+          captureSignal.aborted ||
+          !this.isActive(selection.id, job) ||
+          !current ||
+          !sameAnchor(current.anchor, selection.anchor)
+        ) {
+          return;
+        }
         this.#announce(
           committedStatus === "available"
             ? "Image ready."
@@ -244,24 +225,15 @@ export class SelectionCapture {
               ? "Previous image retained. Move or reselect to capture a new observation."
               : "Image unavailable. Text context is ready.",
         );
-      }
+      },
     });
   }
 
   #isCanonicalTarget(selection: Selection, output: HTMLElement): boolean {
-    return (
-      output.isConnected &&
-      this.#dom.getTarget(selection.target, this.#selector)?.element === output
-    );
+    return output.isConnected && this.#dom.getTarget(selection.target)?.element === output;
   }
 
-  #failedCapture(): CaptureResult {
-    return { status: "failed", snapshot: this.#failedSnapshot() };
-  }
-
-  #failedSnapshot(
-    error = "The target changed before snapshot capture completed.",
-  ): Extract<Selection["snapshot"], { status: "failed" }> {
+  #failedSnapshot(error = TARGET_CHANGED): Extract<Selection["snapshot"], { status: "failed" }> {
     return {
       status: "failed",
       capturedAt: new this.#dom.window.Date().toISOString(),
@@ -270,22 +242,10 @@ export class SelectionCapture {
   }
 }
 
-function localResponse(revision: number): RevisionedResult {
-  return { revision };
-}
-
-function sameAnchor(left: SelectionAnchor, right: SelectionAnchor): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 function sameTarget(left: Selection, right: Selection): boolean {
   return JSON.stringify(left.target) === JSON.stringify(right.target);
 }
 
 function sameSnapshot(left: Selection["snapshot"], right: Selection["snapshot"]): boolean {
   return JSON.stringify(left) === JSON.stringify(right);
-}
-
-function errorMessage(cause: unknown, fallback: string): string {
-  return parseErrorCause(cause)?.message || fallback;
 }

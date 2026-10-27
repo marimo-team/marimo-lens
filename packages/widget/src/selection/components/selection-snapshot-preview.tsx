@@ -1,24 +1,20 @@
-import type { Selection, StoredSnapshot } from "@marimo-lens/protocol";
+import type { Selection } from "@marimo-lens/protocol";
 
-import { parseErrorCause } from "@marimo-lens/protocol";
 import * as stylex from "@stylexjs/stylex";
-import { AlertCircle, Clock3, Image as ImageIcon, LoaderCircle, X } from "lucide-react";
+import { AlertCircle, Clock3, Image as ImageIcon, LoaderCircle } from "lucide-react";
 import { useCallback, useEffect, useEffectEvent, useRef, useState, type RefObject } from "react";
 
-import type { SnapshotAsset } from "@/anywidget/client";
 import type {
   SelectionSnapshotLease,
   SelectionSnapshotLoader,
 } from "@/selection/selection-snapshot-loader";
 
-import { useNotebookDom } from "@/notebook/notebook-dom";
+import { errorMessage } from "@/anywidget/error";
+import { useNotebookDom } from "@/notebook/notebook-dom-context";
 import { iconButtonStyles, ui } from "@/styles/primitives";
-import {
-  useAnchoredSurface,
-  type AnchoredSurfaceAnchor,
-  type AnchoredSurfacePosition,
-} from "@/ui/anchored-surface";
+import { useAnchoredSurface, type AnchoredSurfaceAnchor } from "@/ui/anchored-surface";
 
+import { SnapshotPreviewDialog, type LoadedSnapshot } from "./selection-snapshot-dialog";
 import { snapshotStyles } from "./selection-snapshot-preview.styles";
 
 type SnapshotPreviewButtonProps = {
@@ -26,13 +22,6 @@ type SnapshotPreviewButtonProps = {
   capturing: boolean;
   variant?: "icon" | "label";
   snapshotLoader: SelectionSnapshotLoader;
-};
-
-type LoadedSnapshot = {
-  key: string;
-  asset: SnapshotAsset;
-  url: string;
-  urlApi: Pick<typeof URL, "createObjectURL" | "revokeObjectURL">;
 };
 
 type SnapshotAssetController = {
@@ -286,108 +275,6 @@ export function SnapshotPreviewButton({
   );
 }
 
-function SnapshotPreviewDialog({
-  surfaceRef,
-  selectionLabel,
-  snapshot,
-  position,
-  motion,
-  current,
-  loading,
-  error,
-  onPointerEnter,
-  onPointerLeave,
-  onClose,
-}: {
-  surfaceRef: RefObject<HTMLDialogElement | null>;
-  selectionLabel: string;
-  snapshot: StoredSnapshot;
-  position: AnchoredSurfacePosition;
-  motion: "animate" | "instant";
-  current: LoadedSnapshot | null;
-  loading: boolean;
-  error: string | null;
-  onPointerEnter: () => void;
-  onPointerLeave: () => void;
-  onClose: () => void;
-}) {
-  return (
-    <dialog
-      ref={surfaceRef}
-      open
-      {...stylex.props(
-        snapshotStyles.preview,
-        position.placement === "above" ? snapshotStyles.above : snapshotStyles.below,
-        motion === "instant" ? snapshotStyles.instant : snapshotStyles.animated,
-      )}
-      style={position.style}
-      data-placement={position.placement}
-      data-instant={motion === "instant" ? "true" : "false"}
-      data-marimo-lens-snapshot-preview
-      aria-label={`Selection image for ${selectionLabel}`}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-      onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        onClose();
-      }}
-    >
-      <header {...stylex.props(snapshotStyles.header)}>
-        <div {...stylex.props(snapshotStyles.heading)}>
-          <strong {...stylex.props(snapshotStyles.title)}>Selection image</strong>
-          <span {...stylex.props(snapshotStyles.metadata)}>
-            {selectionLabel} · {snapshot.width} × {snapshot.height}
-          </span>
-        </div>
-        <button
-          {...stylex.props(...iconButtonStyles)}
-          type="button"
-          onClick={onClose}
-          aria-label="Close preview"
-        >
-          <X size={15} aria-hidden="true" />
-        </button>
-      </header>
-      <div
-        {...stylex.props(snapshotStyles.image)}
-        data-marimo-lens-snapshot-image-container
-        aria-busy={loading ? "true" : undefined}
-      >
-        {current ? (
-          <img
-            {...stylex.props(snapshotStyles.bitmap)}
-            data-marimo-lens-snapshot-image
-            src={current.url}
-            width={current.asset.snapshot.width}
-            height={current.asset.snapshot.height}
-            alt={`Captured output for ${selectionLabel}`}
-          />
-        ) : loading ? (
-          <span {...stylex.props(snapshotStyles.imageStatus)}>
-            <LoaderCircle {...stylex.props(ui.spin)} size={16} aria-hidden="true" /> Loading image…
-          </span>
-        ) : (
-          <span
-            {...stylex.props(snapshotStyles.imageStatus, snapshotStyles.imageError)}
-            data-status="failed"
-          >
-            <AlertCircle size={16} aria-hidden="true" /> {error ?? "Image unavailable"}
-          </span>
-        )}
-      </div>
-      <footer {...stylex.props(snapshotStyles.caption)} aria-live="polite">
-        <span>This annotated image is available to vision-capable agents.</span>
-        {snapshot.status === "outdated" ? (
-          <strong {...stylex.props(snapshotStyles.captionWarning)}>
-            Captured before this selection moved.
-          </strong>
-        ) : null}
-      </footer>
-    </dialog>
-  );
-}
-
 function useSnapshotAsset({
   selectionId,
   snapshotKey,
@@ -500,8 +387,4 @@ function copyArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
   return copy.buffer;
-}
-
-function errorMessage(cause: unknown, fallback: string): string {
-  return parseErrorCause(cause)?.message || fallback;
 }

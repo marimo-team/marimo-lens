@@ -1,5 +1,3 @@
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import type { ViewportBounds } from "@/notebook/viewport";
@@ -9,33 +7,101 @@ import {
   TargetAttentionAnnouncement,
   TargetAttentionFallback,
   TargetAttentionIndicator,
-  projectTargetAttention,
   projectTargetAttentionSurface,
 } from "@/transient/target-attention-indicator";
 
-let root: Root | null = null;
+import { render } from "../support/render";
 
 afterEach(() => {
-  act(() => root?.unmount());
-  root = null;
   document.body.replaceChildren();
   vi.restoreAllMocks();
 });
 
 describe("target attention presentation", () => {
-  test("anchors a visible label above the target at its top-right edge", () => {
+  test.each([
+    {
+      layout: "a wide pane",
+      width: 1_280,
+      pane: WIDE_PANE,
+      bounds: new DOMRect(980, 80, 200, 160),
+      label: { right: 108, bottom: 648, maxWidth: 480 },
+    },
+    {
+      layout: "a narrow pane",
+      width: 480,
+      pane: NARROW_PANE,
+      bounds: new DOMRect(190, 80, 80, 160),
+      label: { right: 218, bottom: 648, maxWidth: 250 },
+    },
+    {
+      layout: "a pane that cuts off the target's left side",
+      width: 1_280,
+      pane: new DOMRect(500, 0, 700, 680),
+      bounds: new DOMRect(450, 100, 200, 160),
+      label: { right: 638, bottom: 628, maxWidth: 130 },
+    },
+    {
+      layout: "a pane that cuts off the target's right side",
+      width: 1_280,
+      pane: new DOMRect(300, 0, 600, 680),
+      bounds: new DOMRect(800, 100, 200, 160),
+      label: { right: 392, bottom: 628, maxWidth: 480 },
+    },
+  ])("places the label above the target inside $layout", ({ width, pane, bounds, label }) => {
     const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(980, 80, 200, 160);
+    target.getBoundingClientRect = () => bounds;
     document.body.appendChild(target);
-    const presentation = activityPresentation(target);
-    const ownerWindow = viewport(1280, 720);
+    const ownerWindow = viewport(width, 720);
 
-    const view = projectTargetAttention(presentation, ownerWindow);
+    const view = projectTargetAttentionSurface(
+      activityPresentation(target, undefined, pane),
+      ownerWindow,
+    ).view;
+    if (!view) throw new Error("Expected a visible label");
 
-    expect(view?.ring).toMatchObject({ top: 80, left: 980, width: 200, height: 160 });
-    expect(view?.label.right).toBe(108);
-    expect(view?.label.maxWidth).toBe(480);
-    expect(view?.label.bottom).toBe(648);
+    // The label is right-anchored and grows leftward up to its max width.
+    const labelRight = ownerWindow.innerWidth - Number(view.label.right);
+    const labelLeft = labelRight - Number(view.label.maxWidth);
+    const labelBottom = ownerWindow.innerHeight - Number(view.label.bottom);
+    expect(view.ring).toEqual({
+      top: bounds.top,
+      left: bounds.left,
+      width: bounds.width,
+      height: bounds.height,
+    });
+    expect(labelLeft).toBeGreaterThanOrEqual(pane.left);
+    expect(labelRight).toBeLessThanOrEqual(pane.right);
+    expect(labelRight).toBeGreaterThan(Math.max(bounds.left, pane.left));
+    expect(labelRight).toBeLessThanOrEqual(bounds.right);
+    expect(labelBottom).toBeLessThan(bounds.top);
+    expect(view.label).toEqual(label);
+  });
+
+  test.each([
+    { name: "an unmeasured label", kind: "activity", message: undefined, measurement: undefined },
+    {
+      name: "a long reveal message",
+      kind: "reveal",
+      message: "A".repeat(300),
+      measurement: { height: 226, maxWidth: 400 },
+    },
+  ] as const)("anchors $name above the target by its bottom edge", (options) => {
+    const target = document.createElement("section");
+    target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
+    document.body.appendChild(target);
+    const presentation: TargetAttentionPresentation = {
+      ...activityPresentation(target),
+      kind: options.kind,
+      message: options.message ?? "Updating the aggregation.",
+    };
+
+    const view = projectTargetAttentionSurface(
+      presentation,
+      viewport(1280, 720),
+      options.measurement,
+    ).view;
+
+    expect(view?.label.bottom).toBe(428);
     expect(view?.label.top).toBeUndefined();
   });
 
@@ -63,89 +129,26 @@ describe("target attention presentation", () => {
       ...activityPresentation(target, undefined, NARROW_PANE),
       framing: "pending" as const,
     };
-    const ownerWindow = viewport(480, 720);
 
-    expect(projectTargetAttentionSurface(presentation, ownerWindow)).toEqual({
+    expect(projectTargetAttentionSurface(presentation, viewport(480, 720))).toEqual({
       view: null,
       fallback: null,
     });
   });
 
-  test("uses fallback after offscreen framing settles", () => {
+  test("uses a quiet fallback after offscreen framing settles", () => {
     const target = document.createElement("section");
     target.getBoundingClientRect = () => new DOMRect(20, 740, 400, 240);
     document.body.appendChild(target);
     const presentation = activityPresentation(target, undefined, NARROW_PANE);
-    const ownerWindow = viewport(480, 720);
 
-    expect(projectTargetAttentionSurface(presentation, ownerWindow)).toEqual({
-      view: null,
-      fallback: { presentation, reason: "offscreen" },
-    });
-  });
+    const surface = projectTargetAttentionSurface(presentation, viewport(480, 720));
+    expect(surface).toEqual({ view: null, fallback: { presentation, reason: "offscreen" } });
 
-  test("anchors an above-target label by its bottom edge", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
-    document.body.appendChild(target);
-    const ownerWindow = viewport(1280, 720);
-
-    const view = projectTargetAttention(activityPresentation(target), ownerWindow);
-
-    expect(view?.label.bottom).toBe(428);
-    expect(view?.label.top).toBeUndefined();
-  });
-
-  test("keeps a long reveal message above its target", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
-    document.body.appendChild(target);
-    const presentation: TargetAttentionPresentation = {
-      ...activityPresentation(target),
-      kind: "reveal",
-      label: "Updated chart",
-      message: "A".repeat(300),
-    };
-    const ownerWindow = viewport(1280, 720);
-
-    const view = projectTargetAttention(presentation, ownerWindow, {
-      height: 226,
-      maxWidth: 400,
-    });
-
-    expect(view?.label.bottom).toBe(428);
-    expect(view?.label.top).toBeUndefined();
-  });
-
-  test("shrinks a right-anchored label to the remaining narrow viewport", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(190, 80, 80, 160);
-    document.body.appendChild(target);
-    const narrowWindow = viewport(480, 720);
-
-    const view = projectTargetAttention(
-      activityPresentation(target, undefined, NARROW_PANE),
-      narrowWindow,
+    render(surface.fallback ? <TargetAttentionFallback {...surface.fallback} /> : null);
+    expect(document.querySelector("[data-marimo-lens-target-attention-notice]")?.textContent).toBe(
+      "WorkingBYtCUpdating the aggregation.",
     );
-
-    expect(view?.label.right).toBe(218);
-    expect(view?.label.left).toBeUndefined();
-    expect(view?.label.maxWidth).toBe(250);
-  });
-
-  test("keeps the label inside the visible notebook pane", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(450, 100, 200, 160);
-    document.body.appendChild(target);
-    const ownerWindow = viewport(1_280, 720);
-
-    const view = projectTargetAttention(
-      activityPresentation(target, undefined, new DOMRect(500, 0, 700, 680)),
-      ownerWindow,
-    );
-
-    expect(view?.label.right).toBe(638);
-    expect(view?.label.maxWidth).toBe(130);
   });
 
   test("uses fallback when the target is hidden behind application chrome", () => {
@@ -166,20 +169,8 @@ describe("target attention presentation", () => {
     document.body.appendChild(target);
     const ownerWindow = viewport(1280, 720);
 
-    expect(projectTargetAttention(activityPresentation(target), ownerWindow)).toBeNull();
-  });
-
-  test("suppresses a rendered label that cannot fit above the target", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
-    document.body.appendChild(target);
-    const ownerWindow = viewport(480, 720);
-
     expect(
-      projectTargetAttention(activityPresentation(target, undefined, NARROW_PANE), ownerWindow, {
-        height: 226,
-        maxWidth: 400,
-      }),
+      projectTargetAttentionSurface(activityPresentation(target), ownerWindow).view,
     ).toBeNull();
   });
 
@@ -191,15 +182,17 @@ describe("target attention presentation", () => {
     const presentation = activityPresentation(target, undefined, NARROW_PANE);
     const measurement = { height: 226, maxWidth: 400 };
 
-    expect(projectTargetAttention(presentation, viewport(480, 720), measurement)).toBeNull();
+    expect(
+      projectTargetAttentionSurface(presentation, viewport(480, 720), measurement).view,
+    ).toBeNull();
 
     targetWidth = 900;
     expect(
-      projectTargetAttention(
+      projectTargetAttentionSurface(
         { ...presentation, bounds: target.getBoundingClientRect(), viewport: WIDE_PANE },
         viewport(1_280, 720),
         measurement,
-      )?.labelMaxWidth,
+      ).view?.labelMaxWidth,
     ).toBe(480);
   });
 
@@ -208,22 +201,17 @@ describe("target attention presentation", () => {
     target.getBoundingClientRect = () => new DOMRect(20, 300, 400, 240);
     document.body.appendChild(target);
     const presentation = activityPresentation(target);
-    const view = projectTargetAttention(presentation, window);
+    const view = projectTargetAttentionSurface(presentation, window).view;
     const onLabelMeasure = vi.fn();
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
-      function (this: HTMLElement) {
-        return this.hasAttribute("data-marimo-lens-target-attention-label")
-          ? new DOMRect(0, 0, 320, 226)
-          : new DOMRect();
-      },
-    );
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.hasAttribute("data-marimo-lens-target-attention-label")
+        ? new DOMRect(0, 0, 320, 226)
+        : new DOMRect();
+    });
 
-    act(() =>
-      root?.render(<TargetAttentionIndicator view={view} onLabelMeasure={onLabelMeasure} />),
-    );
+    render(<TargetAttentionIndicator view={view} onLabelMeasure={onLabelMeasure} />);
 
     expect(onLabelMeasure).toHaveBeenCalledWith(presentation.sequence, {
       height: 226,
@@ -236,18 +224,13 @@ describe("target attention presentation", () => {
     target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
     document.body.appendChild(target);
     const presentation = activityPresentation(target);
-    const view = projectTargetAttention(presentation, window);
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
+    const view = projectTargetAttentionSurface(presentation, window).view;
 
-    act(() =>
-      root?.render(
-        <>
-          <TargetAttentionIndicator view={view} />
-          <TargetAttentionAnnouncement presentation={presentation} />
-        </>,
-      ),
+    render(
+      <>
+        <TargetAttentionIndicator view={view} />
+        <TargetAttentionAnnouncement presentation={presentation} />
+      </>,
     );
 
     const indicator = document.querySelector<HTMLElement>("[data-marimo-lens-target-attention]");
@@ -266,155 +249,80 @@ describe("target attention presentation", () => {
     expect(target.attributes).toHaveLength(0);
   });
 
-  test("uses a quiet fallback when the target is offscreen", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(20, window.innerHeight + 10, 400, 240);
-    document.body.appendChild(target);
-    const presentation = activityPresentation(target);
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    expect(projectTargetAttention(presentation, window)).toBeNull();
-    act(() =>
-      root?.render(<TargetAttentionFallback presentation={presentation} reason="offscreen" />),
-    );
-    expect(document.querySelector("[data-marimo-lens-target-attention-notice]")?.textContent).toBe(
-      "WorkingBYtCUpdating the aggregation.",
-    );
-  });
-
-  test("uses one contextual activity label across visible and accessible states", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
-    document.body.appendChild(target);
-    const presentation = activityPresentation(target, "On it");
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() =>
-      root?.render(
-        <>
-          <TargetAttentionIndicator view={projectTargetAttention(presentation, window)} />
-          <TargetAttentionFallback presentation={presentation} reason="target-unavailable" />
-          <TargetAttentionAnnouncement presentation={presentation} />
-        </>,
-      ),
-    );
-
-    expect(
-      document.querySelector(
-        "[data-marimo-lens-target-attention] [data-marimo-lens-attention-status]",
-      )?.textContent,
-    ).toBe("On it");
-    expect(
-      document.querySelector(
-        "[data-marimo-lens-target-attention-notice] [data-marimo-lens-attention-status]",
-      )?.textContent,
-    ).toBe("On it");
-    expect(document.querySelector("[data-marimo-lens-target-attention-status]")?.textContent).toBe(
-      "On it in cell BYtC. Updating the aggregation.",
-    );
-  });
-
-  test("uses one contextual reveal label across visible and accessible states", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
-    document.body.appendChild(target);
-    const message =
-      "Updated the aggregation and verified the chart.\nThe regional totals now match the source table.";
-    const presentation: TargetAttentionPresentation = {
-      ...activityPresentation(target),
+  test.each([
+    {
+      name: "an activity label",
+      kind: "activity",
+      label: "On it",
+      message: "Updating the aggregation.",
+      reason: "target-unavailable",
+      status: "On it",
+      announcement: "On it in cell BYtC. Updating the aggregation.",
+    },
+    {
+      name: "a reveal label",
       kind: "reveal",
       label: "Updated chart",
-      message,
-    };
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
+      message: REVEAL_MESSAGE,
+      reason: "target-unavailable",
+      status: "Updated chart",
+      announcement: `Updated chart in cell BYtC. ${REVEAL_MESSAGE}`,
+    },
+    {
+      name: "no reveal label",
+      kind: "reveal",
+      label: null,
+      message: null,
+      reason: "label-space",
+      status: "Ready",
+      announcement: "Revealed cell BYtC.",
+    },
+  ] as const)(
+    "shows $name the same way in the indicator, notice, and announcement",
+    ({ kind, label, message, reason, status, announcement }) => {
+      const target = document.createElement("section");
+      target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
+      document.body.appendChild(target);
+      const presentation: TargetAttentionPresentation = {
+        ...activityPresentation(target),
+        kind,
+        label,
+        message,
+      };
 
-    act(() =>
-      root?.render(
+      render(
         <>
-          <TargetAttentionIndicator view={projectTargetAttention(presentation, window)} />
-          <TargetAttentionFallback presentation={presentation} reason="target-unavailable" />
+          <TargetAttentionIndicator
+            view={projectTargetAttentionSurface(presentation, window).view}
+          />
+          <TargetAttentionFallback presentation={presentation} reason={reason} />
           <TargetAttentionAnnouncement presentation={presentation} />
         </>,
-      ),
-    );
+      );
 
-    expect(
-      document.querySelector(
-        "[data-marimo-lens-target-attention] [data-marimo-lens-attention-status]",
-      )?.textContent,
-    ).toBe("Updated chart");
-    expect(
-      document.querySelector(
-        "[data-marimo-lens-target-attention-notice] [data-marimo-lens-attention-status]",
-      )?.textContent,
-    ).toBe("Updated chart");
-    expect(document.querySelector("[data-marimo-lens-attention-message]")?.textContent).toBe(
-      message,
-    );
-    expect(document.querySelector("[data-marimo-lens-target-attention-status]")?.textContent).toBe(
-      `Updated chart in cell BYtC. ${message}`,
-    );
-    expect(document.querySelector("[data-marimo-lens-working-indicator]")).toBeNull();
-  });
-
-  test("uses a quiet reveal label when no message is supplied", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(20, 80, 400, 240);
-    document.body.appendChild(target);
-    const presentation: TargetAttentionPresentation = {
-      ...activityPresentation(target),
-      kind: "reveal",
-      label: null,
-      message: null,
-    };
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() =>
-      root?.render(
-        <TargetAttentionIndicator view={projectTargetAttention(presentation, window)} />,
-      ),
-    );
-
-    expect(document.querySelector("[data-marimo-lens-attention-status]")?.textContent).toBe(
-      "Ready",
-    );
-  });
-
-  test("uses a neutral reveal fallback when a visible label cannot fit", () => {
-    const target = document.createElement("section");
-    target.getBoundingClientRect = () => new DOMRect(20, 160, 400, 240);
-    document.body.appendChild(target);
-    const presentation: TargetAttentionPresentation = {
-      ...activityPresentation(target, undefined, NARROW_PANE),
-      kind: "reveal",
-      label: null,
-      message: null,
-    };
-    const surface = projectTargetAttentionSurface(presentation, viewport(480, 720), {
-      height: 226,
-      maxWidth: 400,
-    });
-    const container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-
-    act(() =>
-      root?.render(surface.fallback ? <TargetAttentionFallback {...surface.fallback} /> : null),
-    );
-
-    expect(document.querySelector("[data-marimo-lens-attention-status]")?.textContent).toBe(
-      "Ready",
-    );
-  });
+      const indicator = document.querySelector("[data-marimo-lens-target-attention]");
+      const notice = document.querySelector("[data-marimo-lens-target-attention-notice]");
+      expect(indicator?.querySelector("[data-marimo-lens-attention-status]")?.textContent).toBe(
+        status,
+      );
+      expect(notice?.querySelector("[data-marimo-lens-attention-status]")?.textContent).toBe(
+        status,
+      );
+      expect(
+        indicator?.querySelector("[data-marimo-lens-attention-message]")?.textContent ?? null,
+      ).toBe(message);
+      expect(
+        document.querySelector("[data-marimo-lens-target-attention-status]")?.textContent,
+      ).toBe(announcement);
+      expect(!!document.querySelector("[data-marimo-lens-working-indicator]")).toBe(
+        kind === "activity",
+      );
+    },
+  );
 });
+
+const REVEAL_MESSAGE =
+  "Updated the aggregation and verified the chart.\nThe regional totals now match the source table.";
 
 const WIDE_PANE = new DOMRect(0, 0, 1_280, 720);
 const NARROW_PANE = new DOMRect(0, 0, 480, 720);
