@@ -268,8 +268,12 @@ def test_a_chat_request_without_cells_meets_every_recorded_request(
 
 
 def test_brief_follows_the_newest_request_and_lists_the_other_open_ones(
-    notebook: FakeNotebook,
+    monkeypatch: pytest.MonkeyPatch, notebook: FakeNotebook
 ) -> None:
+    from marimo_lens._session import session
+
+    # Every request opens within one clock tick, as on Windows' coarse clock.
+    monkeypatch.setattr(session, "utcnow", lambda: "2026-07-14T12:00:00+00:00")
     lens = BrowserLens()
     lens.put(selection(selection_id="s1", label="S1", note="Too high"))
     request_id = lens.open_request("Add a legend", cells=["cell-chart"])

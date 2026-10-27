@@ -55,6 +55,7 @@ def build_lens_context(
     record: RecordView | None,
     chat_requests: Sequence[Mapping[str, Any]],
     opened: Mapping[str, OpenRequest],
+    order: Mapping[str, int],
 ) -> LensContext:
     """Project one selection state, and the record when the Lens keeps one.
 
@@ -87,7 +88,7 @@ def build_lens_context(
         state.current_selection_id,
         chat_requests,
         images,
-        {selection_id: request.opened_at for selection_id, request in opened.items()},
+        order,
     )
 
     def build_brief() -> str:

@@ -12,7 +12,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from .._core.bounds import MAX_ATTENTION_MESSAGE, parse_timestamp
+from .._core.bounds import MAX_ATTENTION_MESSAGE
 from .._core.types import Diagnostic, RecordedChange, RecordedRequest
 from .._notebook.snapshot import (
     RuntimeCell,
@@ -49,27 +49,24 @@ def current_request(
     current_selection_id: str | None,
     chat_requests: Sequence[Mapping[str, Any]],
     images: Mapping[str, bytes],
-    opened_at: Mapping[str, str] | None = None,
+    order: Mapping[str, int] | None = None,
 ) -> BriefRequest | None:
     """Return the request opened last: the current selection or the newest chat.
 
-    ``opened_at`` maps a selection ID to when its request opened or reopened.
-    A selection missing from it counts from its creation time. A chat request
-    opened after the current selection is the agent's current request.
+    ``order`` gives each open request's position in the order requests opened
+    or reopened. Timestamps cannot order requests opened within one clock tick.
+    A chat request opened after the current selection is the agent's current
+    request.
     """
 
     selection = next(
         (item for item in selections if item["id"] == current_selection_id), None
     )
     chat = chat_requests[-1] if chat_requests else None
-    selection_opened = (
-        str((opened_at or {}).get(selection["id"]) or selection["createdAt"])
-        if selection is not None
-        else ""
-    )
+    positions = order or {}
     if chat is not None and (
         selection is None
-        or parse_timestamp(chat["openedAt"]) > parse_timestamp(selection_opened)
+        or positions.get(chat["id"], 0) > positions.get(selection["id"], -1)
     ):
         return BriefRequest(
             id=chat["id"],

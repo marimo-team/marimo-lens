@@ -128,6 +128,11 @@ class RequestLedger:
             except Exception:
                 _LOGGER.exception("A chat request watcher failed")
 
+    def order(self) -> dict[str, int]:
+        """Return each open request's position in the order requests opened."""
+
+        return {request_id: index for index, request_id in enumerate(self._open)}
+
     def unopened(self, request_ids: Iterable[str]) -> tuple[str, ...]:
         return tuple(
             request_id for request_id in request_ids if request_id not in self._open

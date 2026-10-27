@@ -292,6 +292,7 @@ class LensSession:
                 record=view,
                 chat_requests=chats,
                 opened=opened,
+                order=self._runtime.requests.order(),
             )
 
     def check(self) -> list[Diagnostic]:
