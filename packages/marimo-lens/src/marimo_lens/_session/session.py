@@ -14,6 +14,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from .._checks import check_record, check_selections
+from .._context.brief import MOUNTED_CALLS, BriefCalls
 from .._context.build import RecordView, build_lens_context, target_cell_ids
 from .._context.lens_context import LensContext
 from .._core.bounds import MAX_CHAT_REQUESTS, MAX_SELECTIONS, utcnow
@@ -77,10 +78,12 @@ class LensSession:
 
     History follows the record, the notebook, and the open selections, so the
     session publishes it when a view prepares, when a resolution lands, when
-    the open selections change, and on refresh.
+    the open selections change, and on refresh. ``clock`` stamps the times
+    requests open and resolve.
     """
 
     __slots__ = (
+        "_clock",
         "_closed",
         "_generation",
         "_notebook",
@@ -103,8 +106,10 @@ class LensSession:
         owner: str,
         publish: Callable[[dict[str, Any]], None],
         publish_history: Callable[[dict[str, Any]], None],
+        clock: Callable[[], str] | None = None,
     ) -> None:
         self._runtime = runtime
+        self._clock = utcnow if clock is None else clock
         self._notebook = notebook
         self._record = record
         self._owner = owner
@@ -263,7 +268,13 @@ class LensSession:
                 )
             return record.image
 
-    def context(self) -> LensContext:
+    def context(self, *, calls: BriefCalls = MOUNTED_CALLS) -> LensContext:
+        """Project the selection state, and the record when kept, into a context.
+
+        The brief names ``calls``, the calls its reader's host makes to fetch
+        more.
+        """
+
         with self._runtime.lock:
             self._require_open()
             state = self._state
@@ -293,6 +304,7 @@ class LensSession:
                 chat_requests=chats,
                 opened=opened,
                 order=self._runtime.requests.order(),
+                calls=calls,
             )
 
     def check(self) -> list[Diagnostic]:
@@ -350,7 +362,11 @@ class LensSession:
         require_cell(self._notebook.cell_status(cell_id), revision=revision)
         return (cell_id,)
 
-    def open_request(self, note: str, cell_ids: tuple[str, ...]) -> str:
+    def open_request(
+        self, note: str, cell_ids: tuple[str, ...], *, request_id: str | None = None
+    ) -> str:
+        """Open a chat request, with a new ``chat-`` ID unless ``request_id`` names one."""
+
         with self._runtime.lock:
             self._require_open()
             revision = self._state.revision
@@ -379,9 +395,11 @@ class LensSession:
                     revision=revision,
                 )
             request = OpenRequest(
-                id=f"chat-{uuid.uuid4().hex[:12]}",
+                id=f"chat-{uuid.uuid4().hex[:12]}"
+                if request_id is None
+                else request_id,
                 channel="chat",
-                opened_at=utcnow(),
+                opened_at=self._clock(),
                 baseline=notebook,
                 note=note,
                 cell_ids=cell_ids,
@@ -443,7 +461,7 @@ class LensSession:
                 if selection_ids
                 else (current, ())
             )
-            resolved_at = utcnow()
+            resolved_at = self._clock()
             if self._record is not None:
                 keep_images = self._record.choice.images
                 resolving = [
@@ -560,7 +578,7 @@ class LensSession:
         requests.sync_selections(
             self._owner,
             (record.id for record in state.records),
-            opened_at=utcnow(),
+            opened_at=self._clock(),
             baseline=baseline,
         )
         self._send(state)

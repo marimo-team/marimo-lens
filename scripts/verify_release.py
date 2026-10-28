@@ -74,6 +74,7 @@ def verify_release(expected_version: str) -> None:
         "references/targets.md",
         "references/selections.md",
         "references/workflow.md",
+        "references/notebook-files.md",
     }
     if {
         path.relative_to(skill.path).as_posix() for path in skill.files

@@ -9,22 +9,23 @@ Use `marimo_lens.agent.connect()` in the live notebook kernel to reuse an
 existing Lens. Notebook authors can mount `Lens` when the host has not already
 provided one.
 
-| Task                                       | API                                                                                                              |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Discover existing instances                | [`discover()`](#discover)                                                                                        |
-| Add the notebook interface                 | [`Lens`](#lens)                                                                                                  |
-| Keep a record of resolved requests         | [`Lens(record=...)`](#lens), [`Record`](#record), [`RecordOptions`](#recordoptions)                              |
-| Read the current request first             | [`LensContext.brief`](./reference/context#brief), [`LensContext.request`](./reference/context#request)           |
-| Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                          |
-| Check what recorded requests changed       | [`LensContext.history()`](./reference/context#history)                                                           |
-| Check selections and the record            | [`check()`](#lens-check), [Checks](./reference/checks)                                                           |
-| Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal) |
-| Record a request the analyst made in chat  | [`open_request()`](#lens-open-request)                                                                           |
-| Resolve requests                           | [`resolve()`](#lens-resolve)                                                                                     |
-| Show a user-paced notebook walkthrough     | [`reveal()`](#lens-reveal)                                                                                       |
-| Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                |
-| Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
-| Share the notebook's Lens with a host      | [`automatic_lens()`](#automatic-lens), [`notebook_lens()`](#notebook-lens)                                       |
+| Task                                       | API                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Discover existing instances                | [`discover()`](#discover)                                                                                          |
+| Add the notebook interface                 | [`Lens`](#lens)                                                                                                    |
+| Keep a record of resolved requests         | [`Lens(record=...)`](#lens), [`Record`](#record), [`RecordOptions`](#recordoptions)                                |
+| Read the current request first             | [`LensContext.brief`](./reference/context#brief), [`LensContext.request`](./reference/context#request)             |
+| Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                            |
+| Check what recorded requests changed       | [`LensContext.history()`](./reference/context#history)                                                             |
+| Check selections and the record            | [`check()`](#lens-check), [Checks](./reference/checks)                                                             |
+| Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal)   |
+| Record a request the analyst made in chat  | [`open_request()`](#lens-open-request)                                                                             |
+| Resolve requests                           | [`resolve()`](#lens-resolve)                                                                                       |
+| Show a user-paced notebook walkthrough     | [`reveal()`](#lens-reveal)                                                                                         |
+| Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                  |
+| Release a Lens instance                    | [`close()`](#lens-close)                                                                                           |
+| Share the notebook's Lens with a host      | [`automatic_lens()`](#automatic-lens), [`notebook_lens()`](#notebook-lens)                                         |
+| Work from a notebook file without a kernel | [`notebook_context()`](#notebook-context), [`record_request()`](#record-request), [`marimo-lens`](./reference/cli) |
 
 The caller roles are:
 
@@ -33,6 +34,9 @@ The caller roles are:
   `MountedLens` handle.
 - marimo and host integrations call the [host API](#host-api) to show one Lens
   per notebook runtime.
+- Evaluation harnesses, CI, and terminal agents call
+  [`notebook_context()`](#notebook-context) and
+  [`record_request()`](#record-request) on notebook files.
 
 Authors and agents share context, activity, reveal, and resolution behavior.
 The agent handle adds stable reconnection identity and current cell-output
@@ -66,6 +70,7 @@ The top-level package exports:
 from marimo_lens import (
     ActivityHandle,
     CellReference,
+    ChatRequest,
     ChatRequestReference,
     Diagnostic,
     Lens,
@@ -80,12 +85,15 @@ from marimo_lens import (
     RecordedRequest,
     RequestReference,
     RevealStep,
+    Selection,
     SelectionReference,
     SelectionTargetReference,
     __version__,
     agent,
     automatic_lens,
+    notebook_context,
     notebook_lens,
+    record_request,
 )
 ```
 
@@ -496,8 +504,8 @@ wait in memory for the next write. Expected errors are `lens_closed`,
 Checks open selections, and the record when the Lens keeps one, against the
 notebook now. Returns one `Diagnostic` per finding, warnings first, or an empty
 list when every check passed. [Checks](./reference/checks) lists the rules, the
-diagnostic keys, and the `python -m marimo_lens check` command for notebook
-files.
+diagnostic keys, and the [`marimo-lens check`](./reference/cli#check)
+command for notebook files.
 
 ```python
 for diagnostic in lens.check():
@@ -565,6 +573,232 @@ lens = marimo_lens.notebook_lens()
 
 Each browser document gives one Lens view interaction ownership, so the
 notebook and the host document each show a dock for the same selections.
+
+## Notebook files
+
+`notebook_context()` builds a `LensContext` from a notebook file, and
+`record_request()` writes a past request to a notebook's record. Neither needs
+a kernel or a browser. The [`marimo-lens context`](./reference/cli#context)
+command prints the context from a terminal.
+
+A notebook file is a document with no runtime. Lens loads it as a kernel
+started on the file would, without running it, and serves it to the same
+session that a `Lens` widget uses. Cell IDs are the ones marimo assigns by
+position when that kernel loads the file. Each cell reference's `codeHash` is
+the `code_hash` a marimo host reports for the cell.
+
+The file holds code, cell names, and the dataflow graph. Cell states come
+from the last run marimo saved in `__marimo__/session/` beside the notebook,
+while that run still matches the notebook:
+
+| Cell                                          | State      |
+| --------------------------------------------- | ---------- |
+| It is disabled, or a cell upstream of it is   | `disabled` |
+| It raised in the saved run                    | `failed`   |
+| It ran in the saved run without raising       | `idle`     |
+| Its code does not parse                       | `stale`    |
+
+Lens reads the saved run only when `marimo export session` would reuse it: the
+notebook's cells hold the code that ran, and the file's
+[inline script metadata](https://peps.python.org/pep-0723/), its dependency
+block, is unchanged. After an edit, or without a saved run, every cell whose
+code parses and is not disabled reads as `idle`. `marimo export session
+NOTEBOOK` runs the notebook and saves a new run. UI element values live in the
+kernel, so `context.text` lists no current controls.
+
+### `notebook_context`
+
+`notebook_context(notebook, *requests, images=None, record=True) -> LensContext`
+
+Returns the references, text, history, and images that `Lens.context()`
+returns for the same requests, and the same brief apart from the calls it
+names:
+
+```python
+import marimo_lens
+
+context = marimo_lens.notebook_context(
+    "sales.py",
+    marimo_lens.Selection(
+        cell="revenue_chart",
+        note="Central looks off",
+        mark=(0.42, 0.31),
+    ),
+)
+print(context.brief)
+```
+
+```text
+# Request S1 (selection)
+
+Note: "Central looks off"
+
+Part: a point on the output of its producing cell, "revenue_chart".
+Image: none (pending).
+
+Trace:
+- Cell `vblA` (revenue_chart): idle
+
+Earlier requests on these cells and upstream: none recorded.
+
+Next Lens calls:
+- context.history(context.request): earlier requests on its cells and upstream, with the statements each undone change lost.
+- context.text: the code of the selected cells and the cells upstream, with what each defines and reads.
+```
+
+The brief names `context.history(...)` and `context.text`, the calls this
+`LensContext` serves. `context.text` holds the code that a live Lens's agent
+reads through code mode.
+
+- `notebook`: a marimo notebook file, `.py` or `.md`.
+- `requests`: each a [`Selection`](#selection), a
+  [`ChatRequest`](#chatrequest), or a selection mapping as
+  the widget sends it, with `id`, `label`, `note`, `target`, `createdAt`,
+  `anchor`, `description`, `snapshot`, and optional `domHint` in the shapes
+  of the [Context reference](./reference/context). A mapping's cell IDs must
+  come from a kernel started on the current file, and Lens refuses an ID the
+  file does not hold. Lens keeps a mapping as
+  given, apart from its label. Lens opens the requests in order, and the last
+  one is the current request. A request without an ID takes its position,
+  as in `selection-1` or `chat-2`.
+- `images`: the PNG of each selection mapping whose `snapshot` is
+  `available`, keyed by selection ID, as bytes or a file path. The PNG must
+  match the snapshot's `sha256`, `width`, and `height`.
+- `record`: `True` reads the record a `Lens(record=True)` keeps beside the
+  notebook, and an absent file reads as an empty record. A path reads that
+  record file and the `images/` folder beside it. `False` gives the context
+  of a `Lens()` that keeps no record.
+
+Selections take the labels a live Lens gives them, `S1`, `S2`, and so on,
+after the highest label in the record. History follows each recorded cell by
+its code, as a new kernel does.
+
+Raises `ValueError` when marimo cannot load the notebook, the record path
+names no file, a request names a cell the file does not hold, a `Selection`
+has an invalid mark, note, or DOM hint, a `ChatRequest` has a blank note, a
+mapping is no valid selection, two requests share an ID, or an image is
+missing, unused, or does not match its selection. The message names the
+change to make. A `ChatRequest` whose note is no string or whose cells are no
+sequence of names raises `TypeError`, and more than 16 chat requests raise
+`LensError(code="request_limit_reached")`. An image file that cannot be read
+raises `OSError`.
+
+### `record_request`
+
+`record_request(before, after, request, *, record, resolved_at, summary=None, opened_at=None) -> str`
+
+Writes one resolved request to a notebook's record and returns its ID. Lens
+opens the request on the `before` file, reloads the notebook from the `after`
+file, and resolves the request with `summary`:
+
+```python
+import marimo_lens
+
+marimo_lens.record_request(
+    "states/r1-before.py",
+    "states/r1-after.py",
+    marimo_lens.Selection(
+        cell="region_chart",
+        note="Leave the two cross-regional wars out of the charts.",
+        id="r1",
+    ),
+    record="wars/__marimo__/lens/wars.py.jsonl",
+    summary="Filtered the Cross-Regional wars out of the wars the charts show.",
+    resolved_at="2026-09-02T10:12:00Z",
+)
+```
+
+The record gains the line a live Lens writes for the request: its note, its
+selection and label or its chat cells, the code of each changed cell before
+and after, and the summary.
+marimo matches the cells of `after` to those of `before` by their code, as
+its editor does when a notebook changes on disk, so an edited cell keeps its
+ID and an added cell is new. Record requests oldest first. `notebook_context`
+and History then report whether each change holds and which request undid
+it.
+
+- `before`, `after`: the notebook file when the request opened and when it
+  resolved.
+- `request`: a [`Selection`](#selection) or a [`ChatRequest`](#chatrequest),
+  naming the cells of `before`.
+- `record`: the record file to append to, such as
+  `__marimo__/lens/<notebook>.jsonl` beside the notebook, where
+  `Lens(record=True)` and `notebook_context` read it. Lens creates the file
+  and its folder.
+- `resolved_at`: when the request resolved, an ISO 8601 time with a UTC
+  offset.
+- `summary`: the resolution summary.
+- `opened_at`: when the request opened. Defaults to `resolved_at`.
+
+A record line is one resolution of a request, so `record_request` refuses a
+request ID the record already holds at the same `resolved_at` instant. Give
+each request an `id` so that recording it twice fails. A request without one
+gets a new ID on every call.
+
+Raises `ValueError` for a notebook marimo cannot load, a time that is invalid
+or an `opened_at` after `resolved_at`, a request the record already holds,
+and the request errors of `notebook_context`. Raises `TypeError` for a
+request of another type, a non-string `summary`, and as `notebook_context`
+does. Raises `OSError` when an image file cannot be read or the record cannot
+be written, such as a read-only `__marimo__` folder.
+
+### `ChatRequest`
+
+`ChatRequest(note, cells=(), id=None)`
+
+Describes a request an analyst made in chat, as `mounted.open_request()`
+opens it. `note` quotes the message, `cells` names the cells it is about by
+name or ID, and `id` is the request ID the record keeps. A request without an
+ID gets a `chat-` ID.
+
+```python
+request_id = marimo_lens.record_request(
+    "states/r1-after.py",
+    "states/r2-after.py",
+    marimo_lens.ChatRequest(
+        "Name the wars the charts leave out.", cells=("region_chart",), id="r2"
+    ),
+    record="wars/__marimo__/lens/wars.py.jsonl",
+    summary="Listed the two cross-regional wars under the chart.",
+    resolved_at="2026-09-02T10:40:00Z",
+)
+print(request_id)
+```
+
+```text
+r2
+```
+
+### `Selection`
+
+`Selection(cell, note="", mark=None, dom_hint=None, image=None, id=None)`
+
+Describes a selection on one cell's output, as an analyst makes it in the
+browser. Lens turns it into the selection the widget sends for a notebook
+target.
+
+| Field      | Type                                  | Meaning                                                                                                                                                       |
+| ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cell`     | `str`                                 | The target cell's name, or its ID.                                                                                                                            |
+| `note`     | `str`                                 | The analyst's note.                                                                                                                                           |
+| `mark`     | `tuple[float, ...] \| None`           | `(x, y)` for a point or `(x, y, width, height)` for a region, in fractions of the output with `(0, 0)` at its top-left corner. `None` marks the whole output. |
+| `dom_hint` | `Mapping[str, Any] \| None`           | The element under the mark in the [DOM hint shape](./reference/context#dom-hint-shape). Name the pointed data here, such as the `ariaLabel` of a bar. Lens refuses other keys. |
+| `image`    | `bytes \| str \| os.PathLike \| None` | The PNG the analyst saw. Without one, the selection image status is `pending`.                                                                                |
+| `id`       | `str \| None`                         | The selection ID, which the record keeps as the request ID. `notebook_context` numbers selections without one, and `record_request` gives each a random ID.   |
+
+The mark becomes the selection's [anchor](./reference/context#anchor-shapes),
+and the target description takes the cell's name, or `Cell <id>` for an
+unnamed cell, as the widget labels a plain output:
+
+```python
+marimo_lens.Selection(
+    cell="revenue_chart",
+    note="Central looks off",
+    mark=(0.3, 0.2, 0.2, 0.6),
+    dom_hint={"tag": "path", "ariaLabel": "region: Central; amount: 1200"},
+    image="pointed.png",
+)
+```
 
 ## Agent adapter
 

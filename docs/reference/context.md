@@ -33,7 +33,9 @@ print({selection_id: len(png) for selection_id, png in context.images.items()})
 
 ## Construction
 
-`lens.context()` and `mounted.context()` create every `LensContext`. Calling
+`lens.context()` and `mounted.context()` create a `LensContext` from the live
+notebook, and [`marimo_lens.notebook_context()`](../api#notebook-context)
+creates one from a notebook file. Calling
 `LensContext()` directly raises `TypeError`. To keep the evidence, save
 `context.brief`, `context.references`, `context.text`, the bytes in
 `context.images`, and `context.history()` when the Lens keeps a record. Each
@@ -283,7 +285,7 @@ The compact `snapshot` reference contains a `status` field:
 
 | Status      | Meaning                                                               |
 | ----------- | --------------------------------------------------------------------- |
-| `pending`   | Browser capture has not completed.                                    |
+| `pending`   | Browser capture has not completed, or a file context has no PNG.      |
 | `available` | `context.images[id]` contains the current selection image.            |
 | `outdated`  | `context.images[id]` contains the image from before the marker moved. |
 | `failed`    | Capture failed and `context.images` has no image for the selection.   |
@@ -326,7 +328,7 @@ characters in this order:
 
 1. The request label or ID, its channel, and the note.
 2. The part: a point or region, the target, its captured description, and
-   whether `context.images` holds the image the analyst saw.
+   where the image the analyst saw is, such as `context.images["9f2c..."]`.
 3. The trace: each producing cell by ID and name, or by the names it defines
    when it has no name, with its state (`idle`,
    `stale`, `failed`, `queued`, `running`, or `disabled`), each source cell with
@@ -340,8 +342,11 @@ characters in this order:
    record has none, and the brief says the Lens keeps no record.
 6. The other open requests in both channels, at most 8.
 7. The Lens calls that fetch more, with the IDs and revision to pass. The list
-   names `context.history()` only when the Lens keeps a record. When the brief
-   exceeds its budget, the earlier sections shorten and this one stays whole.
+   names `context.history()` only when the Lens keeps a record. A context
+   from a [notebook file](../api#notebook-files) names `context.text` in
+   place of the `mounted` calls, and the [`marimo-lens context`](./cli#context)
+   command names its own `--format` options. When the brief exceeds its
+   budget, the earlier sections shorten and this one stays whole.
 
 ```text
 # Request S3 (selection)
@@ -349,7 +354,7 @@ characters in this order:
 Note: "Central looks off, can you check the returns?"
 
 Part: a point on the output of its producing cell, "Revenue by region".
-Image: the analyst's view is in context.images.
+Image: the analyst's view is in context.images["9f2c..."].
 
 Trace:
 - Cell `Hbol` (revenue_chart): stale
@@ -360,7 +365,6 @@ Earlier requests on these cells and upstream, changes in force first:
 
 Next Lens calls:
 - context.history(context.request): earlier requests on its cells and upstream, with the statements each undone change lost.
-- context.images["9f2c..."]: the PNG the analyst saw.
 - mounted.check() after editing: stale or failed outputs, changed cells, and record issues.
 - mounted.reveal(...), then mounted.resolve(["9f2c..."], expected_revision=5, summary=...), with a summary of at most 240 characters.
 ```

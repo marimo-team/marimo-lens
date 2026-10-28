@@ -23,6 +23,7 @@ from ._core.types import (
     SelectionReference,
     SelectionTargetReference,
 )
+from ._file_context import ChatRequest, Selection, notebook_context, record_request
 from ._widget.lens import Lens
 from ._widget.mount import automatic_lens, notebook_lens
 
@@ -35,6 +36,7 @@ LensError.__module__ = __name__
 __all__ = [
     "ActivityHandle",
     "CellReference",
+    "ChatRequest",
     "ChatRequestReference",
     "Diagnostic",
     "Lens",
@@ -49,10 +51,13 @@ __all__ = [
     "RecordedRequest",
     "RequestReference",
     "RevealStep",
+    "Selection",
     "SelectionReference",
     "SelectionTargetReference",
     "__version__",
     "agent",
     "automatic_lens",
+    "notebook_context",
     "notebook_lens",
+    "record_request",
 ]

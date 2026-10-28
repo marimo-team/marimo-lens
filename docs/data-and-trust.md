@@ -27,7 +27,9 @@ the notebook's `__marimo__/lens/` folder.
 | Annotated selection pixels                   | Browser capture at selection time | `LensContext.images` PNG bytes   |
 | Current cell-output pixels                   | Agent-requested browser capture   | One-use `cell_image()` PNG bytes |
 | Notebook path and cell IDs                   | Active marimo runtime             | Compact references and text      |
+| Cell code and states of a notebook file      | The file and marimo's saved run   | `notebook_context()` and the CLI |
 | Resolved requests and the code they changed  | `resolve()` with a record         | `context.history()` and the file |
+| Past requests written from notebook files    | `record_request()`                | `context.history()` and the file |
 
 A DOM hint can contain the element tag, role, accessible label, title, rendered
 text, a short structural path, and normalized bounds. A configured DOM target

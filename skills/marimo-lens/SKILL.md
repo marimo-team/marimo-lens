@@ -209,3 +209,4 @@ Read a packaged reference with
 - [Selections](references/selections.md): multiple selections or notebooks.
 - [Setup](references/setup.md): installation and mounting.
 - [Targets](references/targets.md): HTML and widgets.
+- [Notebook files](references/notebook-files.md): context with no kernel.

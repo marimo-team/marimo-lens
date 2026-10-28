@@ -46,6 +46,7 @@ const reference = [
   { text: "LensContext", link: "/reference/context" },
   { text: "HTML attributes", link: "/reference/attributes" },
   { text: "Checks", link: "/reference/checks" },
+  { text: "Command line", link: "/reference/cli" },
   { text: "Errors and limits", link: "/reference/errors" },
   { text: "Compatibility", link: "/compatibility" },
 ];
