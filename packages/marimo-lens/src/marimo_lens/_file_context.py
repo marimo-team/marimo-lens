@@ -35,13 +35,16 @@ from ._marimo.notebook_file import NotebookFile
 from ._notebook.snapshot import RuntimeSnapshot, cell_label
 from ._record.file_journal import FileJournal
 from ._schema.model import dump_model
-from ._schema.selection import PointAnchor, RectAnchor, SelectionInput
+from ._schema.selection import DomHint, PointAnchor, RectAnchor, SelectionInput
 from ._selection.images import validate_png
 from ._session.runtime import LensRuntime
 from ._session.session import LensSession
 from ._widget.arguments import optional_text, request_cells, request_note
 
 _DOCUMENT_ID = "document:notebook-file"
+_DOM_HINT_KEYS = frozenset(
+    field.alias or name for name, field in DomHint.model_fields.items()
+)
 _MAX_LISTED_CELLS = 24
 _TIMESTAMP = TypeAdapter(TimestampText)
 # A ``LensContext`` from a notebook file serves context calls, and no mounted
@@ -56,8 +59,8 @@ class Selection:
     """A selection on one cell's output, as an analyst makes it in the browser.
 
     Pass it to ``notebook_context`` or ``record_request``. Lens labels it and
-    keeps its anchor, note, DOM hint, and image as the widget does for a
-    notebook target.
+    keeps its mark, note, DOM hint, and image as the widget does for a
+    notebook target, and describes the output by its cell's name, else its ID.
 
     .. code-block:: python
 
@@ -79,8 +82,8 @@ class Selection:
             output as a region.
         dom_hint: The element under the mark in the DOM hint shape, with
             ``tag`` and optional ``role``, ``ariaLabel``, ``title``,
-            ``text``, ``path``, and ``bounds``. Name the datum here, for
-            example the ``aria-label`` a chart gives the mark.
+            ``text``, ``path``, and ``bounds``. Name the pointed data here,
+            for example in the ``ariaLabel`` a chart gives the element.
         image: The PNG the analyst saw, as bytes or a file path. Without
             one, the selection image status is ``pending``.
         id: The selection's ID, which the record keeps as the request ID.
@@ -130,10 +133,10 @@ def notebook_context(
     """Return the Lens context for requests on a notebook file.
 
     Lens loads the file as a new kernel would, without running it, opens the
-    requests in order, and builds the brief, references, text, and history
-    that ``Lens.context()`` returns for the same requests. The last request
-    is the current one. The brief names the calls on the returned context,
-    ``context.text`` among them.
+    requests in order, and builds the references, text, and history that
+    ``Lens.context()`` returns for the same requests, and the same brief
+    apart from its calls. The last request is the current one. The brief
+    names the calls on the returned context, ``context.text`` among them.
 
     .. code-block:: python
 
@@ -145,11 +148,11 @@ def notebook_context(
 
     The file holds code, cell names, and the dataflow graph. marimo keeps
     the results of the last run in ``__marimo__/session/`` beside the
-    notebook. A cell whose code ran there reads as failed when it raised and
-    as idle otherwise. A cell whose code differs from that run, or whose
-    upstream does, reads as stale. Without that file, each cell that parses
-    reads as idle. Control values stay in the kernel, so the text lists no
-    current controls.
+    notebook. While that run matches the notebook, as ``marimo export
+    session`` decides, a cell reads as failed when it raised there and as
+    idle otherwise. Without a matching run, each cell that parses reads as
+    idle. Control values stay in the kernel, so the text lists no current
+    controls.
 
     Arguments:
         notebook: The marimo notebook file.
@@ -226,13 +229,12 @@ def notebook_session(
 def record_request(
     before: str | os.PathLike[str],
     after: str | os.PathLike[str],
-    request: Request,
+    request: Selection | ChatRequest,
     *,
+    record: str | os.PathLike[str],
     resolved_at: str,
     summary: str | None = None,
     opened_at: str | None = None,
-    images: Mapping[str, ImageSource] | None = None,
-    record: str | os.PathLike[str] | None = None,
 ) -> str:
     """Write one resolved request to a notebook's record.
 
@@ -251,9 +253,9 @@ def record_request(
             "states/r1-before.py",
             "states/r1-after.py",
             marimo_lens.Selection(cell="region_chart", note="Leave the wars out"),
+            record="__marimo__/lens/wars.py.jsonl",
             summary="Filtered the cross-regional wars out of the charts.",
             resolved_at="2026-09-02T10:12:00Z",
-            record="__marimo__/lens/wars.py.jsonl",
         )
 
     Record requests oldest first. ``notebook_context`` and History then
@@ -262,16 +264,16 @@ def record_request(
     Arguments:
         before: The notebook file when the request opened.
         after: The notebook file when the request resolved.
-        request: The ``Selection``, ``ChatRequest``, or selection mapping,
-            naming the cells of ``before``.
+        request: The ``Selection`` or ``ChatRequest``, naming the cells of
+            ``before``.
+        record: The record file to append to, such as the
+            ``__marimo__/lens/<notebook>.jsonl`` a Lens keeps beside the
+            notebook. Lens creates the file and its folder when needed.
         resolved_at: When the request resolved, as an ISO 8601 time with a
             UTC offset, such as ``2026-09-02T10:12:00Z``.
         summary: The resolution summary the analyst sees, at most 240
             characters.
         opened_at: When the request opened. Defaults to ``resolved_at``.
-        images: The PNG of a selection mapping, as in ``notebook_context``.
-        record: The record file to append to. Defaults to the record beside
-            ``after``. Lens creates the file and its folder when needed.
 
     Returns:
         The request ID, which the record keeps as the line's ``id``.
@@ -286,27 +288,29 @@ def record_request(
             written.
     """
 
+    if not isinstance(request, (Selection, ChatRequest)):
+        raise TypeError(
+            f"record_request takes a Selection or a ChatRequest. Got {request!r}."
+        )
     summary = optional_text(summary, name="summary")
     resolved = _timestamp(resolved_at, "resolved_at")
     opened = resolved if opened_at is None else _timestamp(opened_at, "opened_at")
     if parse_timestamp(opened) > parse_timestamp(resolved):
         raise ValueError(f"opened_at {opened} comes after resolved_at {resolved}.")
     after_path = _path(after)
-    location = record_path_for(after_path) if record is None else _path(record)
+    location = _path(record)
     # Record lines keep code, so the saved run's cell states go unread.
     file = NotebookFile(_path(before), last_run=False)
     now = opened
     journal = _journal(location)
     session = _session(file, journal, clock=lambda: now)
-    pending = dict(images or {})
     given = _prepared(
         request,
         file.contents,
-        pending,
+        {},
         created_at=opened,
         suffix=uuid.uuid4().hex[:12],
     )
-    _require_used(pending)
     request_id = _id(given)
     # A record line is one resolution of a request: its ID and time.
     if any(
@@ -489,6 +493,12 @@ def _prepared(
                 f"dom_hint must be a mapping such as {{'tag': 'path'}}. "
                 f"Got {selection.dom_hint!r}."
             )
+        unknown = set(selection.dom_hint) - _DOM_HINT_KEYS
+        if unknown:
+            raise ValueError(
+                f"dom_hint has no {', '.join(map(repr, sorted(map(str, unknown))))}. "
+                f"Its keys are {', '.join(sorted(_DOM_HINT_KEYS))}."
+            )
         payload["domHint"] = dict(selection.dom_hint)
     return _validated(payload, f"The selection on {selection.cell!r}"), image
 
@@ -524,8 +534,7 @@ def _open(session: LensSession, request: _Prepared) -> None:
     if status == "available" and image is None:
         raise ValueError(
             f"Selection {selection.id!r} names a captured image. Pass its PNG "
-            "in images or with --image, or set its snapshot to "
-            "{'status': 'pending'}."
+            "in images, or set its snapshot to {'status': 'pending'}."
         )
     if status != "available" and image is not None:
         raise ValueError(

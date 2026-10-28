@@ -541,7 +541,9 @@ command's `--format` options and `--image` path for `marimo-lens context`. A
 `Selection` becomes the `SelectionInput` the widget
 sends for a plain cell output: the anchor from `mark`, the description label
 from the cell name, and an `available` snapshot when it carries a PNG. A
-selection mapping is validated as given.
+selection mapping is validated as given. The parity test in
+`test_notebook_context.py` holds both forms to the context of a live Lens.
+`record_request()` takes the `Selection` and `ChatRequest` forms only.
 
 `record_request()` opens the request on the `before` file, then
 `NotebookFile.reload()` loads the `after` file and calls marimo's
@@ -551,14 +553,15 @@ session then resolves the request, and the session clock stamps the given
 `opened_at` and `resolved_at`.
 
 A file snapshot takes run state from the session file marimo writes in
-`__marimo__/session/`, through marimo's `get_session_cache_file()`. marimo
-keys each saved cell by the `hash_code()` of the code it ran, so a cell whose
-current code has a saved entry takes `exception` or `success` from its
-outputs. A cell without one is stale, and so is a cell that reads a name no
-registered cell defines once a saved cell's code is gone, with marimo's
-`transitive_closure()` of both downstream. `DirectedGraph.is_disabled()`
-marks disabled cells with or without a session file, and without one, other
-cells that parse read as `idle`. `record_request()` and `check_notebook()`
+`__marimo__/session/`, through marimo's `get_session_cache_file()`, when
+marimo's `is_session_snapshot_stale()` accepts it. That is the test
+`marimo export session` runs before it reuses a session: the multiset of cell
+code hashes and the inline script metadata hash must match. Lens applies
+that test whole, so a file's cell states agree with marimo's. A cell then takes
+`exception` or `success` from the outputs saved under the `hash_code()` of its
+code. `DirectedGraph.is_disabled()` marks disabled cells with or without a
+session file, and without an accepted one, other cells that parse read as
+`idle`. `record_request()` and `check_notebook()`
 load the file with `last_run=False`, since neither reads cell states. The file holds no
 controls, so the text has no `Current controls` section. The public
 [Python API](../docs/api.md#notebook-files) owns the contract.

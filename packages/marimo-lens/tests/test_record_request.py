@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import io
-import json
 import pathlib
 from typing import Any
 
@@ -13,7 +11,6 @@ from marimo_lens import (
     notebook_context,
     record_request,
 )
-from marimo_lens.__main__ import main
 
 from tests.support.browser import BrowserLens
 from tests.support.factories import selection
@@ -44,9 +41,11 @@ def test_a_recorded_request_reads_as_one_resolved_through_a_live_lens(
     notebook = _write(tmp_path / "live", "sales.py", SALES)
     kernel = start_kernel(monkeypatch, notebook)
     net_id = kernel_cells(notebook)["net"][0]
-    pointed = selection(
-        selection_id="r1", note="Drop small sales", output_cell_id=net_id
-    )
+    pointed = {
+        **selection(selection_id="r1", note="Drop small sales", output_cell_id=net_id),
+        # The widget describes a plain output by its cell's name.
+        "description": {"label": "net"},
+    }
     lens = BrowserLens(record=True)
     lens.put(pointed)
     kernel.set(net_id, "net = sales[sales.amount > 100]")
@@ -58,7 +57,13 @@ def test_a_recorded_request_reads_as_one_resolved_through_a_live_lens(
     request_id = record_request(
         _write(tmp_path / "files", "before.py", SALES),
         _write(tmp_path / "files", "after.py", FILTERED),
-        pointed,
+        Selection(
+            cell="net",
+            note="Drop small sales",
+            mark=(0.25, 0.75),
+            dom_hint=pointed["domHint"],
+            id="r1",
+        ),
         summary="Raised the cut.",
         resolved_at=live[0]["resolvedAt"],
         opened_at=live[0]["openedAt"],
@@ -168,117 +173,34 @@ def test_request_times_must_be_ordered_iso_times(
     tmp_path: pathlib.Path, times: dict[str, Any], message: str
 ) -> None:
     before = _write(tmp_path, "before.py", SALES)
+    record = tmp_path / "record.jsonl"
 
     with pytest.raises(ValueError, match=message):
-        record_request(before, before, Selection(cell="net"), **times)
-    assert not (tmp_path / "__marimo__").exists()
+        record_request(before, before, Selection(cell="net"), record=record, **times)
+    assert not record.exists()
 
 
-def test_cli_records_requests_beside_the_notebook(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    notebook = _write(tmp_path, "sales.py", FILTERED)
-    _write(tmp_path / "states", "r1-before.py", SALES)
-    _write(tmp_path / "states", "r1-after.py", FILTERED)
-    requests = _write(
-        tmp_path,
-        "requests.json",
-        json.dumps(
-            [
-                {
-                    "before": "states/r1-before.py",
-                    "after": "states/r1-after.py",
-                    "selection": {
-                        "cell": "net",
-                        "note": "Drop small sales",
-                        "mark": [0.4, 0.3],
-                        "id": "r1",
-                    },
-                    "summary": "Raised the cut.",
-                    "resolved_at": "2026-09-02T10:12:00Z",
-                },
-                {
-                    "before": "states/r1-after.py",
-                    "after": "states/r1-after.py",
-                    "chat": {"note": "Is the cut right?", "cells": ["net"], "id": "r2"},
-                    "summary": "Yes: refunds stay out.",
-                    "resolved_at": "2026-09-02T11:00:00Z",
-                },
-            ]
-        ),
-    )
-
-    assert main(["record", str(notebook), str(requests)]) == 0
-    assert capsys.readouterr().out == "r1\nr2\n"
-    assert main(["context", str(notebook), "--cell", "net", "--format", "history"]) == 0
-    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
-    assert [(row["id"], row["channel"], row["summary"]) for row in rows] == [
-        ("r1", "selection", "Raised the cut."),
-        ("r2", "chat", "Yes: refunds stay out."),
-    ]
-
-
-def test_cli_names_the_request_it_cannot_record(
-    tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_a_request_is_recorded_once_per_resolution(tmp_path: pathlib.Path) -> None:
     notebook = _write(tmp_path, "sales.py", SALES)
-    requests = _write(
-        tmp_path,
-        "requests.json",
-        json.dumps(
-            [
-                {
-                    "before": "sales.py",
-                    "after": "sales.py",
-                    "chat": {"note": "Why?"},
-                    "resolved_at": "2026-09-02T10:12:00Z",
-                },
-                {"before": "sales.py", "after": 3, "selection": {"cell": "net"}},
-            ]
-        ),
-    )
-
-    assert main(["record", str(notebook), str(requests)]) == 2
-    output = capsys.readouterr()
-    assert output.out.startswith("chat-")
-    assert "requests.json: request 2: after must be a path string." in output.err
-    assert main(["record", str(tmp_path / "sale.py"), str(requests)]) == 2
-    assert "no notebook file" in capsys.readouterr().err
-
-
-def test_cli_reads_requests_from_standard_input_beside_the_working_directory(
-    tmp_path: pathlib.Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    notebook = _write(tmp_path, "sales.py", SALES)
-    _write(tmp_path / "states", "before.py", SALES)
-    request = {
-        "before": "states/before.py",
-        "after": "sales.py",
-        "chat": {"note": "Why?", "id": "c1"},
-        "resolved_at": "2026-09-02T10:12:00Z",
-    }
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps([request])))
-
-    assert main(["record", str(notebook), "-"]) == 0
-    assert capsys.readouterr().out == "c1\n"
-
-
-def test_a_request_is_recorded_once_beside_its_after_file(
-    tmp_path: pathlib.Path,
-) -> None:
-    before = _write(tmp_path / "states", "before.py", SALES)
-    after = _write(tmp_path, "sales.py", SALES)
+    record = tmp_path / "record.jsonl"
     request = ChatRequest("Is the cut right?", cells=("net",), id="c1")
-    record_request(before, after, request, resolved_at="2026-09-02T10:12:00Z")
+    record_request(
+        notebook, notebook, request, record=record, resolved_at="2026-09-02T10:12:00Z"
+    )
 
     with pytest.raises(ValueError, match="already holds request 'c1'"):
-        record_request(before, after, request, resolved_at="2026-09-02T10:12:00+00:00")
-    record_request(before, after, request, resolved_at="2026-09-03T10:12:00Z")
-    assert [row["id"] for row in notebook_context(after).history()] == ["c1", "c1"]
-    assert notebook_context(before).history() == []
+        record_request(
+            notebook,
+            notebook,
+            request,
+            record=record,
+            resolved_at="2026-09-02T10:12:00+00:00",
+        )
+    record_request(
+        notebook, notebook, request, record=record, resolved_at="2026-09-03T10:12:00Z"
+    )
+    rows = notebook_context(notebook, record=record).history()
+    assert [row["id"] for row in rows] == ["c1", "c1"]
 
 
 def test_a_record_lens_cannot_write_fails_the_request(tmp_path: pathlib.Path) -> None:

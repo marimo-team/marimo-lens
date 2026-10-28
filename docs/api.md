@@ -578,8 +578,8 @@ notebook and the host document each show a dock for the same selections.
 
 `notebook_context()` builds a `LensContext` from a notebook file, and
 `record_request()` writes a past request to a notebook's record. Neither needs
-a kernel or a browser. The [`marimo-lens`](./reference/cli) command runs both
-from a terminal.
+a kernel or a browser. The [`marimo-lens context`](./reference/cli#context)
+command prints the context from a terminal.
 
 A notebook file is a document with no runtime. Lens loads it as a kernel
 started on the file would, without running it, and serves it to the same
@@ -589,28 +589,30 @@ the `code_hash` a marimo host reports for the cell.
 
 The file holds code, cell names, and the dataflow graph. Cell states come
 from the last run marimo saved in `__marimo__/session/` beside the notebook,
-which marimo matches to cells by the code each ran:
+while that run still matches the notebook:
 
-| Cell                                                               | State      |
-| ------------------------------------------------------------------ | ---------- |
-| It is disabled, or a cell upstream of it is                        | `disabled` |
-| Its code ran in the saved run and raised                           | `failed`   |
-| Its code ran in the saved run without raising                      | `idle`     |
-| Its code, or a cell upstream of it, changed since the saved run    | `stale`    |
-| It reads a name whose defining cell changed, broke, or was deleted | `stale`    |
-| Its code does not parse                                            | `stale`    |
+| Cell                                          | State      |
+| --------------------------------------------- | ---------- |
+| It is disabled, or a cell upstream of it is   | `disabled` |
+| It raised in the saved run                    | `failed`   |
+| It ran in the saved run without raising       | `idle`     |
+| Its code does not parse                       | `stale`    |
 
-Without a saved run, every cell whose code parses and is not disabled reads as
-`idle`, as in a notebook marimo opened without running. `marimo export session
-NOTEBOOK` runs the notebook and saves a run. UI element values live in the
+Lens reads the saved run only when `marimo export session` would reuse it: the
+notebook's cells hold the code that ran, and the file's
+[inline script metadata](https://peps.python.org/pep-0723/), its dependency
+block, is unchanged. After an edit, or without a saved run, every cell whose
+code parses and is not disabled reads as `idle`. `marimo export session
+NOTEBOOK` runs the notebook and saves a new run. UI element values live in the
 kernel, so `context.text` lists no current controls.
 
 ### `notebook_context`
 
 `notebook_context(notebook, *requests, images=None, record=True) -> LensContext`
 
-Returns the brief, references, text, history, and images that
-`Lens.context()` returns for the same requests on a fresh kernel:
+Returns the references, text, history, and images that `Lens.context()`
+returns for the same requests, and the same brief apart from the calls it
+names:
 
 ```python
 import marimo_lens
@@ -683,7 +685,7 @@ raises `OSError`.
 
 ### `record_request`
 
-`record_request(before, after, request, *, resolved_at, summary=None, opened_at=None, images=None, record=None) -> str`
+`record_request(before, after, request, *, record, resolved_at, summary=None, opened_at=None) -> str`
 
 Writes one resolved request to a notebook's record and returns its ID. Lens
 opens the request on the `before` file, reloads the notebook from the `after`
@@ -700,9 +702,9 @@ marimo_lens.record_request(
         note="Leave the two cross-regional wars out of the charts.",
         id="r1",
     ),
+    record="wars/__marimo__/lens/wars.py.jsonl",
     summary="Filtered the Cross-Regional wars out of the wars the charts show.",
     resolved_at="2026-09-02T10:12:00Z",
-    record="wars/__marimo__/lens/wars.py.jsonl",
 )
 ```
 
@@ -717,15 +719,16 @@ it.
 
 - `before`, `after`: the notebook file when the request opened and when it
   resolved.
-- `request`: a [`Selection`](#selection), a [`ChatRequest`](#chatrequest),
-  or a selection mapping, naming the cells of `before`.
+- `request`: a [`Selection`](#selection) or a [`ChatRequest`](#chatrequest),
+  naming the cells of `before`.
+- `record`: the record file to append to, such as
+  `__marimo__/lens/<notebook>.jsonl` beside the notebook, where
+  `Lens(record=True)` and `notebook_context` read it. Lens creates the file
+  and its folder.
 - `resolved_at`: when the request resolved, an ISO 8601 time with a UTC
   offset.
 - `summary`: the resolution summary.
 - `opened_at`: when the request opened. Defaults to `resolved_at`.
-- `images`: the PNG of a selection mapping, as in `notebook_context`.
-- `record`: the record file to append to. Defaults to the record beside
-  `after`. Lens creates the file and its folder.
 
 A record line is one resolution of a request, so `record_request` refuses a
 request ID the record already holds at the same `resolved_at` instant. Give
@@ -735,9 +738,9 @@ gets a new ID on every call.
 Raises `ValueError` for a notebook marimo cannot load, a time that is invalid
 or an `opened_at` after `resolved_at`, a request the record already holds,
 and the request errors of `notebook_context`. Raises `TypeError` for a
-non-string `summary` and as `notebook_context` does. Raises `OSError` when an
-image file cannot be read or the record cannot be written, such as a
-read-only `__marimo__` folder.
+request of another type, a non-string `summary`, and as `notebook_context`
+does. Raises `OSError` when an image file cannot be read or the record cannot
+be written, such as a read-only `__marimo__` folder.
 
 ### `ChatRequest`
 
@@ -755,9 +758,9 @@ request_id = marimo_lens.record_request(
     marimo_lens.ChatRequest(
         "Name the wars the charts leave out.", cells=("region_chart",), id="r2"
     ),
+    record="wars/__marimo__/lens/wars.py.jsonl",
     summary="Listed the two cross-regional wars under the chart.",
     resolved_at="2026-09-02T10:40:00Z",
-    record="wars/__marimo__/lens/wars.py.jsonl",
 )
 print(request_id)
 ```
@@ -779,7 +782,7 @@ target.
 | `cell`     | `str`                                 | The target cell's name, or its ID.                                                                                                                            |
 | `note`     | `str`                                 | The analyst's note.                                                                                                                                           |
 | `mark`     | `tuple[float, ...] \| None`           | `(x, y)` for a point or `(x, y, width, height)` for a region, in fractions of the output with `(0, 0)` at its top-left corner. `None` marks the whole output. |
-| `dom_hint` | `Mapping[str, Any] \| None`           | The element under the mark in the [DOM hint shape](./reference/context#dom-hint-shape). Name the datum here, such as the `aria-label` a chart gives a bar.    |
+| `dom_hint` | `Mapping[str, Any] \| None`           | The element under the mark in the [DOM hint shape](./reference/context#dom-hint-shape). Name the pointed data here, such as the `ariaLabel` of a bar. Lens refuses other keys. |
 | `image`    | `bytes \| str \| os.PathLike \| None` | The PNG the analyst saw. Without one, the selection image status is `pending`.                                                                                |
 | `id`       | `str \| None`                         | The selection ID, which the record keeps as the request ID. `notebook_context` numbers selections without one, and `record_request` gives each a random ID.   |
 

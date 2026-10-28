@@ -285,7 +285,7 @@ The compact `snapshot` reference contains a `status` field:
 
 | Status      | Meaning                                                               |
 | ----------- | --------------------------------------------------------------------- |
-| `pending`   | Browser capture has not completed.                                    |
+| `pending`   | Browser capture has not completed, or a file context has no PNG.      |
 | `available` | `context.images[id]` contains the current selection image.            |
 | `outdated`  | `context.images[id]` contains the image from before the marker moved. |
 | `failed`    | Capture failed and `context.images` has no image for the selection.   |

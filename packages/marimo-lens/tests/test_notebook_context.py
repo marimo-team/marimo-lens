@@ -60,16 +60,20 @@ def test_file_context_matches_the_context_of_a_lens_on_the_running_notebook(
     lens.resolve(request_id, expected_revision=lens.revision)
     path.write_text(SALES.replace("sales[sales.amount > 0]", "sales"))
     image = png()
-    pointed = selection(
-        selection_id="selection-live",
-        note="Central looks off",
-        output_cell_id=chart_id,
-    )
+    pointed = {
+        **selection(
+            selection_id="selection-live",
+            note="Central looks off",
+            output_cell_id=chart_id,
+        ),
+        # The widget describes a plain output by its cell's name.
+        "description": {"label": "revenue_chart"},
+    }
     lens.put(pointed, image=image)
     with kernel.code_mode():
         live = lens.context()
 
-    from_file = notebook_context(
+    captured = notebook_context(
         path,
         {
             **pointed,
@@ -77,22 +81,34 @@ def test_file_context_matches_the_context_of_a_lens_on_the_running_notebook(
         },
         images={"selection-live": image},
     )
-
-    file_body, file_calls = _calls(from_file.brief)
-    live_body, live_calls = _calls(live.brief)
-    assert "Earlier requests on these cells and upstream" in file_body
-    assert "in force on" in file_body
-    assert file_body == live_body
-    assert file_calls == [
-        *(line for line in live_calls if not line.startswith("- mounted.")),
-        (
-            "- context.text: the code of the selected cells and the cells upstream, "
-            "with what each defines and reads."
+    described = notebook_context(
+        path,
+        Selection(
+            cell="revenue_chart",
+            note="Central looks off",
+            mark=(0.25, 0.75),
+            dom_hint=pointed["domHint"],
+            image=image,
+            id="selection-live",
         ),
-    ]
-    assert from_file.text == live.text
-    assert from_file.images == live.images
-    assert from_file.history(from_file.request) == live.history(live.request)
+    )
+
+    live_body, live_calls = _calls(live.brief)
+    for from_file in (captured, described):
+        file_body, file_calls = _calls(from_file.brief)
+        assert "Earlier requests on these cells and upstream" in file_body
+        assert "in force on" in file_body
+        assert file_body == live_body
+        assert file_calls == [
+            *(line for line in live_calls if not line.startswith("- mounted.")),
+            (
+                "- context.text: the code of the selected cells and the cells "
+                "upstream, with what each defines and reads."
+            ),
+        ]
+        assert from_file.text == live.text
+        assert from_file.images == live.images
+        assert from_file.history(from_file.request) == live.history(live.request)
 
 
 def test_a_selection_records_the_mark_note_hint_and_image(path: pathlib.Path) -> None:
@@ -254,7 +270,6 @@ def test_cells_read_as_the_last_run_marimo_saved_left_them(
         SALES.replace("sales = load()", "sales = [3, -1, 4]")
         .replace("sales[sales.amount > 0]", "[x for x in sales if x > 0]")
         .replace("    chart(net)", "    sum(net) / 0")
-        + "\n\n@app.cell\ndef here():\n    where = (__file__, len([1]))\n    return (where,)\n"
     )
     saved = _save_run(path, raised="revenue_chart")
     source = path.read_text()
@@ -266,29 +281,17 @@ def test_cells_read_as_the_last_run_marimo_saved_left_them(
             .brief.split("Trace:\n- Cell ", 1)[1]
             .split("\n", 1)[0]
             .rsplit(": ", 1)[1]
-            for cell in ("data", "net", "revenue_chart", "here")
+            for cell in ("data", "net", "revenue_chart")
         }
 
-    assert states(source) == {
-        "data": "idle",
-        "net": "idle",
-        "revenue_chart": "failed",
-        "here": "idle",
-    }
-    assert states(source.replace("x > 0", "x > 1")) == {
-        "data": "idle",
-        "net": "stale",
-        "revenue_chart": "stale",
-        "here": "idle",
-    }
-    # An upstream cell that no longer parses leaves its readers without inputs.
-    assert states(source.replace("[3, -1, 4]", "[3, -1, 4")) == {
-        "data": "stale",
-        "net": "stale",
-        "revenue_chart": "stale",
-        "here": "idle",
-    }
-    unread = {"data": "idle", "net": "idle", "revenue_chart": "idle", "here": "idle"}
+    unread = {"data": "idle", "net": "idle", "revenue_chart": "idle"}
+    assert states(source) == {"data": "idle", "net": "idle", "revenue_chart": "failed"}
+    # marimo export session runs the notebook again after any of these.
+    assert states(source.replace("x > 0", "x > 1")) == unread
+    assert (
+        states('# /// script\n# dependencies = ["polars"]\n# ///\n' + source) == unread
+    )
+    assert states(source) == {"data": "idle", "net": "idle", "revenue_chart": "failed"}
     saved.write_text(saved.read_text().replace('"version": "1"', '"version": "0"'))
     assert states(source) == unread
     saved.write_text("{}")
@@ -356,6 +359,11 @@ def test_a_record_path_reads_that_record(
         ),
         ((Selection(cell="net", mark=cast(Any, (0.5,))),), None, "mark must be"),
         ((Selection(cell="net", dom_hint={"role": "img"}),), None, "domHint.tag"),
+        (
+            (Selection(cell="net", dom_hint={"tag": "path", "arialabel": "Central"}),),
+            None,
+            "dom_hint has no 'arialabel'",
+        ),
         ((selection(snapshot=snapshot_metadata(png())),), None, "Pass its PNG"),
         ((selection(),), {"selection-1": png()}, "needs status 'available'"),
         ((selection(),), {"selection-2": png()}, "images names 'selection-2'"),
@@ -475,18 +483,6 @@ def test_cli_brief_names_the_image_file(
     )
 
 
-def test_cli_refuses_selection_files_that_hold_no_selection(
-    path: pathlib.Path, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    empty = tmp_path / "empty.json"
-    empty.write_text("[]")
-
-    status = main(["context", str(path), "--selection", str(empty), "--image", "x.png"])
-
-    assert status == 2
-    assert "hold no selection" in capsys.readouterr().err
-
-
 def test_cli_prints_text_history_and_json(
     path: pathlib.Path, kernel: FakeNotebook, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -505,6 +501,8 @@ def test_cli_prints_text_history_and_json(
 
     assert main(["context", str(path), "--cell", "data", "--format", "history"]) == 0
     upstream_only = capsys.readouterr().out
+    assert main([*arguments, "--no-record", "--format", "json"]) == 0
+    unrecorded = json.loads(capsys.readouterr().out)
 
     assert "## Relevant cells" in text
     assert [row["note"] for row in history] == ["Keep refunds"]
@@ -513,40 +511,7 @@ def test_cli_prints_text_history_and_json(
     assert full["text"] == text.rstrip("\n")
     assert full["request"]["note"] == ""
     assert set(full) == {"request", "references", "brief", "text", "history"}
-
-
-def test_cli_takes_a_selection_file_and_its_image(
-    path: pathlib.Path, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    image = png()
-    chart_id = kernel_cells(path)["revenue_chart"][0]
-    selection_file = tmp_path / "selection.json"
-    selection_file.write_text(
-        json.dumps(
-            selection(output_cell_id=chart_id, snapshot=snapshot_metadata(image))
-        )
-    )
-    image_file = tmp_path / "pointed.png"
-    image_file.write_bytes(image)
-
-    status = main(
-        [
-            "context",
-            str(path),
-            "--selection",
-            str(selection_file),
-            "--image",
-            str(image_file),
-            "--no-record",
-            "--format",
-            "json",
-        ]
-    )
-
-    assert status == 0
-    full = json.loads(capsys.readouterr().out)
-    assert full["references"]["selections"][0]["snapshot"]["status"] == "available"
-    assert full["history"] is None
+    assert unrecorded["history"] is None
 
 
 def test_cli_reports_an_unknown_cell(
@@ -589,10 +554,8 @@ def test_a_record_path_must_name_a_record_file(
 @pytest.mark.parametrize(
     ("arguments", "message"),
     [
-        ([], "name the selection with --cell or --selection"),
-        (["--selection", "s.json", "--note", "Look"], "describe the --cell selection"),
+        ([], "required: --cell"),
         (["--cell", "net", "--no-record", "--format", "history"], "drop --no-record"),
-        (["--selection", "-", "--selection", "-"], "one --selection"),
     ],
 )
 def test_cli_refuses_arguments_that_name_no_context(

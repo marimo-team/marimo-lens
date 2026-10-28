@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import builtins
 import dataclasses
 import json
 import pathlib
@@ -159,14 +158,20 @@ def _saved_run(notebook: pathlib.Path) -> Mapping[str, bool] | None:
 
     marimo keeps the outputs of the last run in ``__marimo__/session/`` beside
     the notebook, keyed by the ``code_hash`` of the code each cell ran. None
-    means marimo saved no run Lens can read.
+    means no saved run, or one ``marimo export session`` would run again
+    because the notebook's code or script metadata changed since.
     """
 
+    from marimo._export._session_cache import is_session_snapshot_stale
     from marimo._schemas.session import VERSION
     from marimo._session.state.serialize import get_session_cache_file
+    from marimo._utils.marimo_path import MarimoPath
 
+    saved = get_session_cache_file(notebook)
     try:
-        session = json.loads(get_session_cache_file(notebook).read_text("utf-8"))
+        if is_session_snapshot_stale(saved, MarimoPath(notebook)):
+            return None
+        session = json.loads(saved.read_text("utf-8"))
         if session["version"] != VERSION:
             return None
         return {
@@ -183,15 +188,13 @@ def _saved_run(notebook: pathlib.Path) -> Mapping[str, bool] | None:
 def _states(
     graph: DirectedGraph, saved: Mapping[str, bool] | None
 ) -> dict[str, dict[str, Any]]:
-    """Return the run state each registered cell's output has for its code.
+    """Return the run state each registered cell's output has.
 
-    A disabled cell reads as disabled, as a kernel reports it. With a saved
-    run, an output is stale when its cell's code changed after the run, or
-    when a name it reads lost its definition, and so is every output
-    downstream, as marimo marks cells whose inputs changed.
+    A disabled cell reads as disabled, as a kernel reports it. A saved run
+    that still matches the notebook gives every other cell the result its
+    code had there.
     """
 
-    from marimo._runtime.dataflow import transitive_closure
     from marimo._utils.code import hash_code
 
     states: dict[str, dict[str, Any]] = {
@@ -201,34 +204,10 @@ def _states(
     }
     if saved is None:
         return states
-    hashes = {
-        cell_id: hash_code(cell.code)
-        for cell_id, cell in graph.cells.items()
-        if cell.code
-    }
-    changed = {
-        cell_id for cell_id, code_hash in hashes.items() if code_hash not in saved
-    }
-    if not saved.keys() <= set(hashes.values()):
-        # A saved cell's code is gone: edited, deleted, or no longer parsing.
-        changed |= {
-            cell_id
-            for cell_id, cell in graph.cells.items()
-            if any(
-                name not in graph.definitions
-                and not hasattr(builtins, name)
-                # The kernel supplies dunder names such as ``__file__``.
-                and not (name.startswith("__") and name.endswith("__"))
-                for name in cell.refs
-            )
-        }
-    stale = transitive_closure(graph, changed) if changed else set()
-    for cell_id, code_hash in hashes.items():
-        state = states.setdefault(cell_id, {})
-        if cell_id in stale:
-            state["stale"] = True
-        else:
-            state.setdefault(
-                "run_result_status", "exception" if saved[code_hash] else "success"
+    for cell_id, cell in graph.cells.items():
+        raised = saved.get(hash_code(cell.code)) if cell.code else None
+        if raised is not None:
+            states.setdefault(
+                cell_id, {"run_result_status": "exception" if raised else "success"}
             )
     return states

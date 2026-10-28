@@ -1,6 +1,6 @@
 ---
 title: Command line
-description: The marimo-lens command prints Lens context for a selection on a notebook file, writes past requests to a notebook's record, and checks the record.
+description: The marimo-lens command prints Lens context for a selection on a notebook file and checks the notebook's record.
 ---
 
 # Command line
@@ -12,7 +12,6 @@ no kernel or browser. Installing `marimo-lens` adds it, and
 | Command                           | Does                                                        |
 | --------------------------------- | ----------------------------------------------------------- |
 | [`marimo-lens context`](#context) | Prints the Lens context for a selection on a notebook file. |
-| [`marimo-lens record`](#record)   | Writes past requests to a notebook's record.                |
 | [`marimo-lens check`](#check)     | Prints the `LR` diagnostics of each notebook's record.      |
 
 [Notebook files](../api#notebook-files) describes how Lens reads a file and
@@ -57,16 +56,14 @@ run marimo saved beside the notebook, as
 | Option             | Meaning                                                                                                                                       |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
 | `--cell CELL`      | The selected cell's name or ID.                                                                                                               |
-| `--note NOTE`      | The analyst's note on the `--cell` selection.                                                                                                 |
+| `--note NOTE`      | The analyst's note.                                                                                                                           |
 | `--mark X,Y`       | A point in fractions of the output, with `0,0` at its top-left corner. `X,Y,WIDTH,HEIGHT` marks a region. The default marks the whole output. |
 | `--dom-hint JSON`  | The element under the mark in the [DOM hint shape](./context#dom-hint-shape), such as `'{"tag": "path", "ariaLabel": "region: Central"}'`.    |
-| `--image PNG`      | The PNG the analyst saw. It belongs to the `--cell` selection, or else to the last `--selection`.                                             |
-| `--selection FILE` | A JSON file, or `-` for standard input, holding a selection mapping as the widget sends it, or a list of them. Repeat it for more.            |
+| `--image PNG`      | The PNG the analyst saw.                                                                                                                      |
 
-Name at least one selection. The `--cell` selection comes after every
-`--selection` and is the current request. A selection mapping's `snapshot`
-names its PNG by `sha256`, so pass `--image` with a mapping whose image status
-is `available`.
+`--cell` is required. The options describe one [`Selection`](../api#selection),
+the current request. To replay selections a widget captured, pass their
+mappings to [`notebook_context()`](../api#notebook-context) from Python.
 
 ### Record and output options
 
@@ -82,61 +79,6 @@ is `available`.
 The command exits with `2` and names the change to make when marimo cannot
 load the notebook, the record path names no file, `--cell` names no cell, or
 a selection is invalid.
-
-## `record`
-
-`marimo-lens record NOTEBOOK REQUESTS` appends each selection or chat request
-in `REQUESTS`, oldest first, to the record beside `NOTEBOOK`, through
-[`record_request()`](../api#record-request). It prints each request's ID:
-
-```bash
-marimo-lens record wars.py requests.json
-```
-
-```json
-[
-  {
-    "before": "states/r1-before.py",
-    "after": "states/r1-after.py",
-    "selection": {
-      "cell": "region_chart",
-      "note": "Leave the two cross-regional wars out of the charts.",
-      "id": "r1"
-    },
-    "summary": "Filtered the Cross-Regional wars out of the wars the charts show.",
-    "resolved_at": "2026-09-02T10:12:00Z"
-  },
-  {
-    "before": "states/r1-after.py",
-    "after": "states/r2-after.py",
-    "chat": {
-      "note": "Name the wars the charts leave out.",
-      "cells": ["region_chart"],
-      "id": "r2"
-    },
-    "summary": "Listed the two cross-regional wars under the chart.",
-    "resolved_at": "2026-09-02T10:40:00Z"
-  }
-]
-```
-
-```text
-r1
-r2
-```
-
-Each request takes `before`, `after`, a `selection` or a `chat`,
-`resolved_at`, and optional `summary` and `opened_at`. A selection takes the
-[`Selection`](../api#selection) fields `cell`, `note`, `mark` as a list,
-`dom_hint`, `image`, and `id`. A chat takes the
-[`ChatRequest`](../api#chatrequest) fields `note`, `cells` as a list, and
-`id`. Paths are relative to `REQUESTS`, and `-` reads the list from standard
-input with paths relative to the working directory. The command stops with
-exit `2` at the first request it cannot record, names it as `request N`, and
-keeps the requests it already wrote. A request with an `id` that the record
-already holds at the same `resolved_at` fails, so a batch whose requests carry
-IDs fails on its first recorded request when it runs again. Drop the written
-requests and run the rest.
 
 ## `check`
 
