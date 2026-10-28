@@ -1,0 +1,110 @@
+packages/marimo-lens/src/marimo_lens/_session/session.py
+  s_31551dae73c5a1::t_d68618b33a362e 266,272,302
+  s_31551dae73c5a1::t_e9aeeca3bd6211 267-271
+packages/marimo-lens/src/marimo_lens/_context/brief.py
+  s_31551dae73c5a1::t_7dff0231b3c92a 98,103-104,124,139,144,332-334,346-347
+  s_31551dae73c5a1::t_cea804b671bc2f 108-119
+development_docs/build-and-distribution.md
+  s_31551dae73c5a1::t_1949e82e16453f 95
+docs/api.md
+  s_31551dae73c5a1::t_e26f46677b0f5e 37,86,92,504-505
+  s_31551dae73c5a1::t_78ec773b216167 574-575,590-594,597-623,627-628,632-635,638,641-645,657-658,660-664,673-687
+  s_31551dae73c5a1::t_bb8e1694ac7491 28,38,576-578,672
+  s_31551dae73c5a1::t_9a40ba97b61102 579-589,595-596,624-626,629-631,636-637,639-640,646-656,659,665-671
+docs/reference/cli.md
+  s_31551dae73c5a1::t_9c20a34f898801 67-72,74
+  s_31551dae73c5a1::t_2155a2758b1d95 1-2,4-7,10-11,16,20-23,25-43,45-46,48-50,55,59,64-66,75-76,79-94
+  s_31551dae73c5a1::t_bb8e1694ac7491 3
+  s_31551dae73c5a1::t_81e400099f29d8 8-9,12-15,17-19,24,44,47,60-63,73,77-78
+  s_31551dae73c5a1::t_9a40ba97b61102 51-54,56-58
+docs/reference/checks.md
+  s_31551dae73c5a1::t_2402135f36eade 3,84,94-95
+packages/marimo-lens/src/marimo_lens/_marimo/notebook_file.py
+  s_31551dae73c5a1::t_73de516e3958eb 7,17-19,28-33,36-56,58-66,76-92,120
+  s_31551dae73c5a1::t_62c07349f0ffd4 1,6,9-14
+  s_31551dae73c5a1::t_bab677cc0e4773 34-35
+  s_31551dae73c5a1::t_fa2f7f7744d872 57
+packages/marimo-lens/tests/test_context_types.py
+  s_31551dae73c5a1::t_4e60b624807482 27,32,57,64
+apps/docs/.vitepress/config.mts
+  s_31551dae73c5a1::t_2402135f36eade 49
+scripts/verify_release.py
+  s_31551dae73c5a1::t_d13fc397c46061 77
+packages/marimo-lens/pyproject.toml
+  s_31551dae73c5a1::t_122c34f8bc4406 31-33
+packages/marimo-lens/src/marimo_lens/_context/lens_context.py
+  s_31551dae73c5a1::t_2402135f36eade 30,65-66
+  s_31551dae73c5a1::t_15076d1e64c1f1 31-33
+packages/marimo-lens/src/marimo_lens/__main__.py
+  s_31551dae73c5a1::t_a9c97d898cde6f 152,154-159
+  s_31551dae73c5a1::t_fa0f43bbaf2501 14-19,61-63,98,139-140,145-148,180,184-185,189,202,217-220,228,234,238
+  s_31551dae73c5a1::t_bab677cc0e4773 1
+  s_31551dae73c5a1::t_7f5ee98804c511 9-13,23,35,37-38,64-97,99-138,141-144,149-151,153,160-179,181-183,186-188,190-201,203-216,221-227,229-233,235-237,239-248
+packages/marimo-lens/tests/test_notebook_context.py
+  s_31551dae73c5a1::t_8ea8ee521d0085 363
+  s_31551dae73c5a1::t_43f253c372563f 13,26-31,38,53,82-83,169,214-218,267,292
+  s_31551dae73c5a1::t_8082f3d52ff67d 1-4,6-12,14-15,17-25,32-37,39-52,54-71,76-80,84-112,115-130,134-168,170-202,209-213,219-266,268-291,293-330
+  s_31551dae73c5a1::t_eb5ac0cc5c7f8b 16
+  s_31551dae73c5a1::t_4f98d91cdead5d 81
+  s_31551dae73c5a1::t_997eefdf2ecfc1 342-343,345-346,348-349
+  s_31551dae73c5a1::t_01605bc1d877a2 5,72-75,113-114,131-133,203-208
+  s_31551dae73c5a1::t_cb6f347213d4fe 331-341,344,347,350-362,364-385
+packages/marimo-lens/tests/support/files.py
+  s_31551dae73c5a1::t_43f253c372563f 1-59
+packages/marimo-lens/src/marimo_lens/_file_context.py
+  s_31551dae73c5a1::t_bab677cc0e4773 5-6,15,19,22,45,73
+  s_31551dae73c5a1::t_d0dfce75ff1b39 30,275-276,281,286
+  s_31551dae73c5a1::t_8f9f7fe97b9657 313-315,321
+  s_31551dae73c5a1::t_507b39d46799ed 244
+  s_31551dae73c5a1::t_137f90e6ce2457 1-4,7,24,43,46,72,81,94-95,106-107,114,116-119,121,125-128,132-184,186,188-189,191,203-211,214,216,218-227,261-274,277-280,282-285,287-300
+  s_31551dae73c5a1::t_506173cc26da34 8-14,16-18,20-21,23,25-29,31-42,44,47-71,74-80,82-93,96-105,108-113,115,120,122-124,129-131,185,187,190,192-202,212-213,215,217,228-243,245-260,301-312,316-320,322-372
+skills/marimo-lens/references/notebook-files.md
+  s_31551dae73c5a1::t_d13fc397c46061 1-2,5-10,12-15
+  s_31551dae73c5a1::t_9c20a34f898801 3-4,11,16-17
+packages/marimo-lens/src/marimo_lens/__init__.py
+  s_31551dae73c5a1::t_507b39d46799ed 53,59
+  s_31551dae73c5a1::t_bab677cc0e4773 26
+packages/marimo-lens/tests/test_package_layers.py
+  s_31551dae73c5a1::t_d0dfce75ff1b39 24
+docs/reference/context.md
+  s_31551dae73c5a1::t_2402135f36eade 36-38
+README.md
+  s_31551dae73c5a1::t_bc13efca6c9490 69-73,75-76
+  s_31551dae73c5a1::t_90194d8d9b525e 67-68,77
+development_docs/context-and-evidence.md
+  s_31551dae73c5a1::t_d4d940606b4d77 523-525,544
+  s_31551dae73c5a1::t_9c20a34f898801 519-522,526-543
+development_docs/agent-integration.md
+  s_31551dae73c5a1::t_1949e82e16453f 351
+packages/marimo-lens/src/marimo_lens/_selection/images.py
+  s_31551dae73c5a1::t_653ce3ad5bc62e 142-147
+  s_31551dae73c5a1::t_c144aa8e582bdd 126,141
+packages/marimo-lens/src/marimo_lens/_context/build.py
+  s_31551dae73c5a1::t_3cf134659178d9 65
+  s_31551dae73c5a1::t_7dff0231b3c92a 59,120
+skills/marimo-lens/SKILL.md
+  s_31551dae73c5a1::t_d13fc397c46061 212
+development_docs/architecture.md
+  s_31551dae73c5a1::t_6f0d656331cdb4 144
+  s_31551dae73c5a1::t_9c20a34f898801 131-143,146-149
+packages/marimo-lens/README.md
+  s_31551dae73c5a1::t_90194d8d9b525e 80-81,89
+  s_31551dae73c5a1::t_6f0d656331cdb4 87
+  s_31551dae73c5a1::t_bc13efca6c9490 82-86,88,90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "48ce9aa87b7bf180796a0e4c29aa7a37b5e3f59e",
+  "prompts": {},
+  "sessions": {
+    "s_31551dae73c5a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5b43bae7-87af-4abb-8ab5-535fbbc45629",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
