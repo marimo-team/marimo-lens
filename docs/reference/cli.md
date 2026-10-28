@@ -42,10 +42,15 @@ Trace:
 Earlier requests on these cells and upstream: none recorded.
 
 Next Lens calls:
-- context.history(context.request): earlier requests on its cells and upstream, with the statements each undone change lost.
+- `--format history` output: earlier requests on its cells and upstream, with the statements each undone change lost.
+- `--format text` output: the code of the selected cells and the cells upstream, with what each defines and reads.
 ```
 
-`--format history` prints what `context.history(context.request)` returns.
+The brief names this command's formats as its next calls, and the absolute
+path of the `--image` file as the analyst's view. `--format history` prints what
+`context.history(context.request)` returns. Cell states come from the last
+run marimo saved beside the notebook, as
+[Notebook files](../api#notebook-files) describes.
 
 ### Selection options
 
@@ -80,8 +85,8 @@ a selection is invalid.
 
 ## `record`
 
-`marimo-lens record NOTEBOOK REQUESTS` appends each request in `REQUESTS`,
-oldest first, to the record beside `NOTEBOOK`, through
+`marimo-lens record NOTEBOOK REQUESTS` appends each selection or chat request
+in `REQUESTS`, oldest first, to the record beside `NOTEBOOK`, through
 [`record_request()`](../api#record-request). It prints each request's ID:
 
 ```bash
@@ -100,20 +105,38 @@ marimo-lens record wars.py requests.json
     },
     "summary": "Filtered the Cross-Regional wars out of the wars the charts show.",
     "resolved_at": "2026-09-02T10:12:00Z"
+  },
+  {
+    "before": "states/r1-after.py",
+    "after": "states/r2-after.py",
+    "chat": {
+      "note": "Name the wars the charts leave out.",
+      "cells": ["region_chart"],
+      "id": "r2"
+    },
+    "summary": "Listed the two cross-regional wars under the chart.",
+    "resolved_at": "2026-09-02T10:40:00Z"
   }
 ]
 ```
 
 ```text
 r1
+r2
 ```
 
-Each request takes `before`, `after`, `selection`, `resolved_at`, and
-optional `summary` and `opened_at`. A selection takes the
+Each request takes `before`, `after`, a `selection` or a `chat`,
+`resolved_at`, and optional `summary` and `opened_at`. A selection takes the
 [`Selection`](../api#selection) fields `cell`, `note`, `mark` as a list,
-`dom_hint`, `image`, and `id`. Paths are relative to `REQUESTS`, and `-` reads
-the list from standard input. The command stops with exit `2` at the first
-request it cannot record and keeps the requests it already wrote.
+`dom_hint`, `image`, and `id`. A chat takes the
+[`ChatRequest`](../api#chatrequest) fields `note`, `cells` as a list, and
+`id`. Paths are relative to `REQUESTS`, and `-` reads the list from standard
+input with paths relative to the working directory. The command stops with
+exit `2` at the first request it cannot record, names it as `request N`, and
+keeps the requests it already wrote. A request with an `id` that the record
+already holds at the same `resolved_at` fails, so a batch whose requests carry
+IDs fails on its first recorded request when it runs again. Drop the written
+requests and run the rest.
 
 ## `check`
 

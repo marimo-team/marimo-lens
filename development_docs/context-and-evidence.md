@@ -532,20 +532,33 @@ them, and keeps the rest as stale unregistered cells. Each call builds a fresh
 cells by their code, and a `FileJournal` on the record path gives it a
 `KeptRecord` with History off.
 
-`notebook_context()` puts each selection through `LensSession.put_selection()`
-and returns `LensSession.context(mounted=False)`, whose brief leaves out the
-calls on a mounted Lens. A `Selection` becomes the `SelectionInput` the widget
+`notebook_context()` opens each selection through
+`LensSession.put_selection()` and each `ChatRequest` through
+`LensSession.open_request()`. The brief names its calls through a
+`BriefCalls` table: `MOUNTED_CALLS` for a live Lens, the same Python calls
+with `context.text` and without the `mounted` calls for a file, and the
+command's `--format` options and `--image` path for `marimo-lens context`. A
+`Selection` becomes the `SelectionInput` the widget
 sends for a plain cell output: the anchor from `mark`, the description label
 from the cell name, and an `available` snapshot when it carries a PNG. A
 selection mapping is validated as given.
 
-`record_request()` opens the selection on the `before` file, then
+`record_request()` opens the request on the `before` file, then
 `NotebookFile.reload()` loads the `after` file and calls marimo's
 `sort_cell_ids_by_similarity()`, as `AppFileManager.reload()` does for an edit
 on disk. An edited cell keeps its ID and an added cell takes a new one. The
 session then resolves the request, and the session clock stamps the given
 `opened_at` and `resolved_at`.
 
-A file snapshot has no run state or controls. Cells that parse read as
-`idle`, and the text has no `Current controls` section. The public
+A file snapshot takes run state from the session file marimo writes in
+`__marimo__/session/`, through marimo's `get_session_cache_file()`. marimo
+keys each saved cell by the `hash_code()` of the code it ran, so a cell whose
+current code has a saved entry takes `exception` or `success` from its
+outputs. A cell without one is stale, and so is a cell that reads a name no
+registered cell defines once a saved cell's code is gone, with marimo's
+`transitive_closure()` of both downstream. `DirectedGraph.is_disabled()`
+marks disabled cells with or without a session file, and without one, other
+cells that parse read as `idle`. `record_request()` and `check_notebook()`
+load the file with `last_run=False`, since neither reads cell states. The file holds no
+controls, so the text has no `Current controls` section. The public
 [Python API](../docs/api.md#notebook-files) owns the contract.

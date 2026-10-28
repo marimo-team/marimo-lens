@@ -14,6 +14,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Protocol
 
 from .._checks import check_record, check_selections
+from .._context.brief import MOUNTED_CALLS, BriefCalls
 from .._context.build import RecordView, build_lens_context, target_cell_ids
 from .._context.lens_context import LensContext
 from .._core.bounds import MAX_CHAT_REQUESTS, MAX_SELECTIONS, utcnow
@@ -267,11 +268,11 @@ class LensSession:
                 )
             return record.image
 
-    def context(self, *, mounted: bool = True) -> LensContext:
+    def context(self, *, calls: BriefCalls = MOUNTED_CALLS) -> LensContext:
         """Project the selection state, and the record when kept, into a context.
 
-        ``mounted`` False leaves the brief's calls on a mounted Lens out, for a
-        host that serves none, such as a notebook file.
+        The brief names ``calls``, the calls its reader's host makes to fetch
+        more.
         """
 
         with self._runtime.lock:
@@ -303,7 +304,7 @@ class LensSession:
                 chat_requests=chats,
                 opened=opened,
                 order=self._runtime.requests.order(),
-                mounted=mounted,
+                calls=calls,
             )
 
     def check(self) -> list[Diagnostic]:
@@ -361,7 +362,11 @@ class LensSession:
         require_cell(self._notebook.cell_status(cell_id), revision=revision)
         return (cell_id,)
 
-    def open_request(self, note: str, cell_ids: tuple[str, ...]) -> str:
+    def open_request(
+        self, note: str, cell_ids: tuple[str, ...], *, request_id: str | None = None
+    ) -> str:
+        """Open a chat request, with a new ``chat-`` ID unless ``request_id`` names one."""
+
         with self._runtime.lock:
             self._require_open()
             revision = self._state.revision
@@ -390,7 +395,9 @@ class LensSession:
                     revision=revision,
                 )
             request = OpenRequest(
-                id=f"chat-{uuid.uuid4().hex[:12]}",
+                id=f"chat-{uuid.uuid4().hex[:12]}"
+                if request_id is None
+                else request_id,
                 channel="chat",
                 opened_at=self._clock(),
                 baseline=notebook,

@@ -5,8 +5,9 @@ import pathlib
 from typing import Any, cast
 
 import pytest
-from marimo_lens import LensError, Selection, notebook_context
+from marimo_lens import ChatRequest, LensError, Selection, notebook_context
 from marimo_lens.__main__ import main
+from marimo_lens._marimo.kernel import record_path_for
 
 from tests.support.browser import BrowserLens
 from tests.support.factories import png, selection, snapshot_metadata
@@ -26,10 +27,11 @@ def kernel(monkeypatch: pytest.MonkeyPatch, path: pathlib.Path) -> FakeNotebook:
     return start_kernel(monkeypatch, path)
 
 
-def _without_mounted_calls(brief: str) -> str:
-    return "\n".join(
-        line for line in brief.splitlines() if not line.startswith("- mounted.")
-    )
+def _calls(brief: str) -> tuple[str, list[str]]:
+    """Split a brief into its body and the lines of its call menu."""
+
+    body, _, menu = brief.partition("\n\nNext Lens calls:\n")
+    return body, menu.splitlines()
 
 
 def test_a_cell_named_in_a_selection_has_the_id_the_editor_gives_it(
@@ -76,11 +78,18 @@ def test_file_context_matches_the_context_of_a_lens_on_the_running_notebook(
         images={"selection-live": image},
     )
 
-    assert "Earlier requests on these cells and upstream" in from_file.brief
-    assert "in force on" in from_file.brief
-    assert "- mounted.check()" in live.brief
-    assert "- mounted." not in from_file.brief
-    assert from_file.brief == _without_mounted_calls(live.brief)
+    file_body, file_calls = _calls(from_file.brief)
+    live_body, live_calls = _calls(live.brief)
+    assert "Earlier requests on these cells and upstream" in file_body
+    assert "in force on" in file_body
+    assert file_body == live_body
+    assert file_calls == [
+        *(line for line in live_calls if not line.startswith("- mounted.")),
+        (
+            "- context.text: the code of the selected cells and the cells upstream, "
+            "with what each defines and reads."
+        ),
+    ]
     assert from_file.text == live.text
     assert from_file.images == live.images
     assert from_file.history(from_file.request) == live.history(live.request)
@@ -117,7 +126,10 @@ def test_a_selection_records_the_mark_note_hint_and_image(path: pathlib.Path) ->
     assert 'Part: a region on the output of its producing cell, "revenue_chart".' in (
         context.brief
     )
-    assert "Image: the analyst's view is in context.images." in context.brief
+    assert (
+        f'Image: the analyst\'s view is in context.images["{reference["id"]}"].'
+        in context.brief
+    )
     assert 'accessible label="region: Central"' in context.text
 
 
@@ -162,6 +174,140 @@ def test_the_last_selection_is_the_current_request(path: pathlib.Path) -> None:
     assert 'Other open requests:\n- S1 (selection) "Drop refunds"' in context.brief
 
 
+def test_a_chat_request_opened_last_is_the_current_request(
+    path: pathlib.Path,
+) -> None:
+    net_id = kernel_cells(path)["net"][0]
+
+    context = notebook_context(
+        path,
+        Selection(cell="revenue_chart", note="Central looks off"),
+        ChatRequest("Why is Central so low?", cells=("net",)),
+    )
+
+    assert context.request is not None
+    assert context.request["id"] == "chat-2"
+    assert context.request["channel"] == "chat"
+    assert [cell["id"] for cell in context.request["cells"]] == [net_id]
+    assert "Part: none. A chat request points at no output." in context.brief
+    assert "- S1 (selection)" in context.brief
+
+
+def _save_run(path: pathlib.Path, *, raised: str) -> pathlib.Path:
+    """Write the session file marimo saves after running every cell of ``path``.
+
+    marimo keys each cell by the ``hash_code`` of the code it ran and keeps
+    its outputs in the session schema it publishes for external readers.
+    """
+
+    from marimo import __version__
+    from marimo._ast.app import InternalApp
+    from marimo._ast.load import load_app
+    from marimo._schemas.session import (
+        VERSION,
+        Cell,
+        DataOutput,
+        ErrorOutput,
+        NotebookSessionMetadata,
+        NotebookSessionV1,
+    )
+    from marimo._session.state.serialize import get_session_cache_file
+    from marimo._utils.code import hash_code
+
+    app = load_app(str(path))
+    assert app is not None
+    session = NotebookSessionV1(
+        version=VERSION,
+        metadata=NotebookSessionMetadata(
+            marimo_version=__version__, script_metadata_hash=None
+        ),
+        cells=[
+            Cell(
+                id=cell.cell_id,
+                code_hash=hash_code(cell.code),
+                outputs=[
+                    ErrorOutput(
+                        type="error",
+                        ename="ZeroDivisionError",
+                        evalue="division by zero",
+                        traceback=[],
+                    )
+                    if cell.name == raised
+                    else DataOutput(type="data", data={"text/plain": ""})
+                ],
+                console=[],
+            )
+            for cell in InternalApp(app).cell_manager.cell_data()
+        ],
+    )
+    saved = get_session_cache_file(path)
+    saved.parent.mkdir(parents=True)
+    saved.write_text(json.dumps(session))
+    return saved
+
+
+def test_cells_read_as_the_last_run_marimo_saved_left_them(
+    tmp_path: pathlib.Path,
+) -> None:
+    path = tmp_path / "sales.py"
+    path.write_text(
+        SALES.replace("sales = load()", "sales = [3, -1, 4]")
+        .replace("sales[sales.amount > 0]", "[x for x in sales if x > 0]")
+        .replace("    chart(net)", "    sum(net) / 0")
+        + "\n\n@app.cell\ndef here():\n    where = (__file__, len([1]))\n    return (where,)\n"
+    )
+    saved = _save_run(path, raised="revenue_chart")
+    source = path.read_text()
+
+    def states(code: str) -> dict[str, str]:
+        path.write_text(code)
+        return {
+            cell: notebook_context(path, Selection(cell=cell))
+            .brief.split("Trace:\n- Cell ", 1)[1]
+            .split("\n", 1)[0]
+            .rsplit(": ", 1)[1]
+            for cell in ("data", "net", "revenue_chart", "here")
+        }
+
+    assert states(source) == {
+        "data": "idle",
+        "net": "idle",
+        "revenue_chart": "failed",
+        "here": "idle",
+    }
+    assert states(source.replace("x > 0", "x > 1")) == {
+        "data": "idle",
+        "net": "stale",
+        "revenue_chart": "stale",
+        "here": "idle",
+    }
+    # An upstream cell that no longer parses leaves its readers without inputs.
+    assert states(source.replace("[3, -1, 4]", "[3, -1, 4")) == {
+        "data": "stale",
+        "net": "stale",
+        "revenue_chart": "stale",
+        "here": "idle",
+    }
+    unread = {"data": "idle", "net": "idle", "revenue_chart": "idle", "here": "idle"}
+    saved.write_text(saved.read_text().replace('"version": "1"', '"version": "0"'))
+    assert states(source) == unread
+    saved.write_text("{}")
+    assert states(source) == unread
+
+
+def test_a_disabled_cell_reads_as_disabled(tmp_path: pathlib.Path) -> None:
+    path = tmp_path / "sales.py"
+    path.write_text(
+        SALES.replace("@app.cell\ndef net", "@app.cell(disabled=True)\ndef net")
+    )
+
+    disabled = notebook_context(path, Selection(cell="net")).brief
+    downstream = notebook_context(path, Selection(cell="revenue_chart")).brief
+
+    assert "(net): disabled" in disabled
+    assert "(revenue_chart): disabled" in downstream
+
+
 def test_labels_continue_after_the_record(
     path: pathlib.Path, kernel: FakeNotebook
 ) -> None:
@@ -185,15 +331,18 @@ def test_a_record_path_reads_that_record(
     lens = BrowserLens(record=True)
     request_id = lens.open_request("Keep refunds")
     lens.resolve(request_id, expected_revision=lens.revision)
-    [record] = tmp_path.rglob("*.jsonl")
     moved = tmp_path / "elsewhere.jsonl"
-    record.rename(moved)
+    record_path_for(path).rename(moved)
 
     beside = notebook_context(path)
     elsewhere = notebook_context(path, record=moved)
 
     assert beside.history() == []
     assert [row["note"] for row in elsewhere.history()] == ["Keep refunds"]
+    assert elsewhere.brief.endswith(
+        "Next:\n- context.history() lists every recorded request and whether "
+        "its changes still hold."
+    )
 
 
 @pytest.mark.parametrize(
@@ -217,16 +366,52 @@ def test_a_record_path_reads_that_record(
             "has an outdated image",
         ),
         (({"id": "selection-1"},), None, "is no valid Lens selection"),
+        (
+            (selection(output_cell_id="ZZZZ"),),
+            None,
+            "names cell 'ZZZZ', which sales.py does not hold",
+        ),
+        ((ChatRequest("  "),), None, "note must quote"),
+        ((ChatRequest("Why?", cells=("chart",)),), None, "no cell named 'chart'"),
+        (
+            (selection(), ChatRequest("Why?", id="selection-1")),
+            None,
+            "share the id 'selection-1'",
+        ),
     ],
 )
-def test_invalid_selections_say_what_to_change(
+def test_invalid_requests_say_what_to_change(
     path: pathlib.Path,
     selections: tuple[Any, ...],
     images: dict[str, bytes] | None,
     message: str,
 ) -> None:
+    # The factory's placeholder cell stands for a cell the file holds.
+    net_id = kernel_cells(path)["net"][0]
+    given = [
+        json.loads(json.dumps(item).replace('"cell-view"', json.dumps(net_id)))
+        if isinstance(item, dict)
+        else item
+        for item in selections
+    ]
+
     with pytest.raises(ValueError, match=message):
-        notebook_context(path, *selections, images=images)
+        notebook_context(path, *given, images=images)
+
+
+@pytest.mark.parametrize(
+    ("cells", "message"),
+    [
+        ("net", "sequence of cell names"),
+        ({"net"}, "sequence of cell names"),
+        ((["net"],), "as a string"),
+    ],
+)
+def test_chat_request_cells_are_a_sequence_of_names(
+    path: pathlib.Path, cells: Any, message: str
+) -> None:
+    with pytest.raises(TypeError, match=message):
+        notebook_context(path, ChatRequest("Why?", cells=cells))
 
 
 def test_a_file_marimo_cannot_load_is_refused(tmp_path: pathlib.Path) -> None:
@@ -259,6 +444,47 @@ def test_cli_prints_the_brief_for_a_cell(
     brief = capsys.readouterr().out
     assert brief.startswith('# Request S1 (selection)\n\nNote: "Central looks off"')
     assert "Part: a point on the output of its producing cell" in brief
+    assert _calls(brief)[1] == [
+        (
+            "- `--format history` output: earlier requests on its cells and "
+            "upstream, with the statements each undone change lost."
+        ),
+        (
+            "- `--format text` output: the code of the selected cells and the "
+            "cells upstream, with what each defines and reads."
+        ),
+    ]
+
+
+def test_cli_brief_names_the_image_file(
+    path: pathlib.Path,
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    image_file = tmp_path / "pointed.png"
+    image_file.write_bytes(png())
+
+    monkeypatch.chdir(tmp_path)
+
+    status = main(["context", str(path), "--cell", "net", "--image", "pointed.png"])
+
+    assert status == 0
+    assert f"Image: the analyst's view is in `{image_file}`." in (
+        capsys.readouterr().out
+    )
+
+
+def test_cli_refuses_selection_files_that_hold_no_selection(
+    path: pathlib.Path, tmp_path: pathlib.Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    empty = tmp_path / "empty.json"
+    empty.write_text("[]")
+
+    status = main(["context", str(path), "--selection", str(empty), "--image", "x.png"])
+
+    assert status == 2
+    assert "hold no selection" in capsys.readouterr().err
 
 
 def test_cli_prints_text_history_and_json(
@@ -277,8 +503,12 @@ def test_cli_prints_text_history_and_json(
     assert main([*arguments, "--format", "json"]) == 0
     full = json.loads(capsys.readouterr().out)
 
+    assert main(["context", str(path), "--cell", "data", "--format", "history"]) == 0
+    upstream_only = capsys.readouterr().out
+
     assert "## Relevant cells" in text
     assert [row["note"] for row in history] == ["Keep refunds"]
+    assert upstream_only == ""
     assert full["history"] == history
     assert full["text"] == text.rstrip("\n")
     assert full["request"]["note"] == ""

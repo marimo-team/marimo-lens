@@ -10,6 +10,7 @@ import pytest
 from marimo_lens import (
     ActivityHandle,
     CellReference,
+    ChatRequest,
     ChatRequestReference,
     Diagnostic,
     Lens,
@@ -42,6 +43,7 @@ def test_package_exports_the_public_api() -> None:
     expected = {
         "ActivityHandle": ActivityHandle,
         "CellReference": CellReference,
+        "ChatRequest": ChatRequest,
         "ChatRequestReference": ChatRequestReference,
         "Diagnostic": Diagnostic,
         "Lens": Lens,

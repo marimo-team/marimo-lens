@@ -17,7 +17,7 @@ from .._record.lines import OpenRequest, RecordHealth, code_hashes
 from .._record.status import RecordStatus
 from .._selection.references import build_references
 from .._selection.state import SelectionState
-from .brief import current_request, render_brief
+from .brief import MOUNTED_CALLS, BriefCalls, current_request, render_brief
 from .lens_context import LensContext
 from .text import render_text
 
@@ -56,13 +56,13 @@ def build_lens_context(
     chat_requests: Sequence[Mapping[str, Any]],
     opened: Mapping[str, OpenRequest],
     order: Mapping[str, int],
-    mounted: bool = True,
+    calls: BriefCalls = MOUNTED_CALLS,
 ) -> LensContext:
     """Project one selection state, and the record when the Lens keeps one.
 
     ``opened`` holds the ledger's request for each open selection, so the
     brief can report a producing cell that changed since it opened.
-    ``mounted`` False renders a brief without the calls on a mounted Lens.
+    The brief names ``calls`` to fetch more.
     """
 
     selections = state.selections()
@@ -117,7 +117,7 @@ def build_lens_context(
             others=others,
             history=None if record is None else record.status.history,
             checks=checks,
-            mounted=mounted,
+            calls=calls,
         )
 
     def history(cell_ids: Sequence[str] | None) -> list[RecordedRequest]:

@@ -879,7 +879,7 @@ def test_document_only_cells_share_the_notebook_bound(
 def test_a_notebook_file_names_a_top_level_function_cell_as_written(
     tmp_path: pathlib.Path,
 ) -> None:
-    from marimo_lens._marimo.notebook_file import notebook_file_snapshot
+    from marimo_lens._marimo.notebook_file import NotebookFile
 
     path = tmp_path / "sales.py"
     path.write_text(
@@ -901,6 +901,6 @@ def test_a_notebook_file_names_a_top_level_function_cell_as_written(
         )
     )
 
-    snapshot = notebook_file_snapshot(path)
+    snapshot = NotebookFile(path).contents
 
     assert [cell.name for cell in snapshot.cells] == ["net_by_store"]

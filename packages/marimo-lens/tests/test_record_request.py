@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import io
 import json
 import pathlib
 from typing import Any
 
 import pytest
-from marimo_lens import RecordedRequest, Selection, notebook_context, record_request
+from marimo_lens import (
+    ChatRequest,
+    RecordedRequest,
+    Selection,
+    notebook_context,
+    record_request,
+)
 from marimo_lens.__main__ import main
 
 from tests.support.browser import BrowserLens
@@ -61,6 +68,36 @@ def test_a_recorded_request_reads_as_one_resolved_through_a_live_lens(
 
     assert request_id == "r1"
     assert _changes(live[0]) == [("net", "in_force")]
+    assert recorded == live
+
+
+def test_a_recorded_chat_request_reads_as_one_resolved_through_a_live_lens(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: pathlib.Path
+) -> None:
+    notebook = _write(tmp_path / "live", "sales.py", SALES)
+    kernel = start_kernel(monkeypatch, notebook)
+    net_id = kernel_cells(notebook)["net"][0]
+    lens = BrowserLens(record=True)
+    chat_id = lens.open_request("Drop small sales", cells=[net_id])
+    kernel.set(net_id, "net = sales[sales.amount > 100]")
+    lens.resolve(chat_id, expected_revision=lens.revision, summary="Raised the cut.")
+    notebook.write_text(FILTERED)
+    live = notebook_context(notebook).history()
+    from_files = tmp_path / "files" / "record.jsonl"
+
+    request_id = record_request(
+        _write(tmp_path / "files", "before.py", SALES),
+        _write(tmp_path / "files", "after.py", FILTERED),
+        ChatRequest("Drop small sales", cells=("net",), id=chat_id),
+        summary="Raised the cut.",
+        resolved_at=live[0]["resolvedAt"],
+        opened_at=live[0]["openedAt"],
+        record=from_files,
+    )
+    recorded = notebook_context(notebook, record=from_files).history()
+
+    assert request_id == chat_id
+    assert (live[0]["channel"], _changes(live[0])) == ("chat", [("net", "in_force")])
     assert recorded == live
 
 
@@ -159,16 +196,26 @@ def test_cli_records_requests_beside_the_notebook(
                     },
                     "summary": "Raised the cut.",
                     "resolved_at": "2026-09-02T10:12:00Z",
-                }
+                },
+                {
+                    "before": "states/r1-after.py",
+                    "after": "states/r1-after.py",
+                    "chat": {"note": "Is the cut right?", "cells": ["net"], "id": "r2"},
+                    "summary": "Yes: refunds stay out.",
+                    "resolved_at": "2026-09-02T11:00:00Z",
+                },
             ]
         ),
     )
 
     assert main(["record", str(notebook), str(requests)]) == 0
-    assert capsys.readouterr().out == "r1\n"
+    assert capsys.readouterr().out == "r1\nr2\n"
     assert main(["context", str(notebook), "--cell", "net", "--format", "history"]) == 0
-    [row] = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
-    assert (row["id"], row["summary"]) == ("r1", "Raised the cut.")
+    rows = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    assert [(row["id"], row["channel"], row["summary"]) for row in rows] == [
+        ("r1", "selection", "Raised the cut."),
+        ("r2", "chat", "Yes: refunds stay out."),
+    ]
 
 
 def test_cli_names_the_request_it_cannot_record(
@@ -176,8 +223,75 @@ def test_cli_names_the_request_it_cannot_record(
 ) -> None:
     notebook = _write(tmp_path, "sales.py", SALES)
     requests = _write(
-        tmp_path, "requests.json", json.dumps([{"before": "sales.py", "after": 3}])
+        tmp_path,
+        "requests.json",
+        json.dumps(
+            [
+                {
+                    "before": "sales.py",
+                    "after": "sales.py",
+                    "chat": {"note": "Why?"},
+                    "resolved_at": "2026-09-02T10:12:00Z",
+                },
+                {"before": "sales.py", "after": 3, "selection": {"cell": "net"}},
+            ]
+        ),
     )
 
     assert main(["record", str(notebook), str(requests)]) == 2
-    assert "Request 1 needs a selection with a cell." in capsys.readouterr().err
+    output = capsys.readouterr()
+    assert output.out.startswith("chat-")
+    assert "requests.json: request 2: after must be a path string." in output.err
+    assert main(["record", str(tmp_path / "sale.py"), str(requests)]) == 2
+    assert "no notebook file" in capsys.readouterr().err
+
+
+def test_cli_reads_requests_from_standard_input_beside_the_working_directory(
+    tmp_path: pathlib.Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    notebook = _write(tmp_path, "sales.py", SALES)
+    _write(tmp_path / "states", "before.py", SALES)
+    request = {
+        "before": "states/before.py",
+        "after": "sales.py",
+        "chat": {"note": "Why?", "id": "c1"},
+        "resolved_at": "2026-09-02T10:12:00Z",
+    }
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps([request])))
+
+    assert main(["record", str(notebook), "-"]) == 0
+    assert capsys.readouterr().out == "c1\n"
+
+
+def test_a_request_is_recorded_once_beside_its_after_file(
+    tmp_path: pathlib.Path,
+) -> None:
+    before = _write(tmp_path / "states", "before.py", SALES)
+    after = _write(tmp_path, "sales.py", SALES)
+    request = ChatRequest("Is the cut right?", cells=("net",), id="c1")
+    record_request(before, after, request, resolved_at="2026-09-02T10:12:00Z")
+
+    with pytest.raises(ValueError, match="already holds request 'c1'"):
+        record_request(before, after, request, resolved_at="2026-09-02T10:12:00+00:00")
+    record_request(before, after, request, resolved_at="2026-09-03T10:12:00Z")
+    assert [row["id"] for row in notebook_context(after).history()] == ["c1", "c1"]
+    assert notebook_context(before).history() == []
+
+
+def test_a_record_lens_cannot_write_fails_the_request(tmp_path: pathlib.Path) -> None:
+    before = _write(tmp_path, "before.py", SALES)
+    # A directory stands where the record file belongs.
+    unwritable = tmp_path / "record.jsonl"
+    unwritable.mkdir()
+
+    with pytest.raises(OSError, match="could not write the record"):
+        record_request(
+            before,
+            before,
+            ChatRequest("Why?"),
+            resolved_at="2026-09-02T10:12:00Z",
+            record=unwritable,
+        )

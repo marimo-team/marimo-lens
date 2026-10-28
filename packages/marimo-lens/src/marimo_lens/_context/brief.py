@@ -2,7 +2,8 @@
 
 The brief names cells by ID and name and values by variable name. It holds no
 cell code, values, images, or control state, and it names no code-mode call.
-The agent reads those through Lens calls or its own notebook tools.
+The agent reads those through Lens calls or its own notebook tools, which the
+brief names as its reader's host spells them.
 """
 
 from __future__ import annotations
@@ -29,6 +30,35 @@ MAX_BRIEF_ROWS = 8
 _SHORT_NOTE = 80
 _NO_RECORD = "This Lens keeps no record."
 _CODES_THE_TRACE_STATES = frozenset({"LV001", "LV002"})
+
+
+@dataclass(frozen=True, slots=True)
+class BriefCalls:
+    """The calls that fetch more, as the brief's reader makes them.
+
+    ``history`` lists every recorded request and ``request_history`` those on
+    the request's cells and upstream. ``image`` names where a selection's PNG
+    is. ``text`` fetches the code of the request's cells, or is None for a
+    reader whose notebook tools read code. ``mounted`` adds the calls on a
+    mounted Lens: open a request, check, reveal, and resolve.
+    """
+
+    history: str
+    request_history: str
+    references: str
+    image: Callable[[str], str]
+    text: str | None
+    mounted: bool
+
+
+MOUNTED_CALLS = BriefCalls(
+    history="context.history()",
+    request_history="context.history(context.request)",
+    references="context.references",
+    image=lambda selection_id: f"context.images[{_json(selection_id)}]",
+    text=None,
+    mounted=True,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,33 +125,32 @@ def render_brief(
     others: Sequence[BriefRequest],
     history: Callable[[Sequence[str] | None], list[RecordedRequest]] | None,
     checks: Sequence[Diagnostic] = (),
-    mounted: bool = True,
+    calls: BriefCalls = MOUNTED_CALLS,
 ) -> str:
-    """Render the brief for ``request``.
+    """Render the brief for ``request``, naming ``calls`` to fetch more.
 
     ``history`` None means the Lens keeps no record: the brief says so and
-    its call menu leaves out ``context.history()``. ``mounted`` False leaves
-    out the calls on a mounted Lens.
+    leaves out the history calls.
     """
 
     if request is None:
-        calls = []
-        if mounted:
-            calls.append(
+        menu = []
+        if calls.mounted:
+            menu.append(
                 '- mounted.open_request("<the analyst\'s message>", cells=[...]) '
                 + ("opens" if history is None else "records")
                 + " a request made in chat."
             )
         if history is not None:
-            calls.append(
-                "- context.history() lists every recorded request and "
+            menu.append(
+                f"- {calls.history} lists every recorded request and "
                 "whether its changes still hold."
             )
         return _bounded(
             "No open request. The analyst has no open selection, and no chat "
             "request is open."
             + (f" {_NO_RECORD}" if history is None else "")
-            + ("\n\nNext:\n" + "\n".join(calls) if calls else "")
+            + ("\n\nNext:\n" + "\n".join(menu) if menu else "")
         )
 
     cells = {cell.id: cell for cell in (*snapshot.unregistered, *snapshot.cells)}
@@ -129,22 +158,22 @@ def render_brief(
     sections = [
         f"# Request {title} ({request.channel})",
         f"Note: {_quote(request.note, MAX_BRIEF_NOTE) if request.note else '(none)'}",
-        _part(request),
+        _part(request, calls),
         _trace(request, snapshot, cells),
         _checks(checks),
-        _earlier(request, history, cells),
-        _others(others),
+        _earlier(request, history, cells, calls),
+        _others(others, calls),
     ]
     # The calls that fetch more stay whole. The sections above them shorten.
-    calls = _next(request, revision, recorded=history is not None, mounted=mounted)
+    menu = _next(request, revision, calls, recorded=history is not None)
     body = _bounded(
         "\n\n".join(section for section in sections if section),
-        max(0, MAX_BRIEF_CHARACTERS - len(calls) - 2),
+        max(0, MAX_BRIEF_CHARACTERS - len(menu) - 2),
     )
-    return _bounded(f"{body}\n\n{calls}" if calls else body)
+    return _bounded(f"{body}\n\n{menu}" if menu else body)
 
 
-def _part(request: BriefRequest) -> str:
+def _part(request: BriefRequest, calls: BriefCalls) -> str:
     if request.selection is None:
         return "Part: none. A chat request points at no output."
     selection = request.selection
@@ -165,7 +194,7 @@ def _part(request: BriefRequest) -> str:
     if detail:
         lines.append(f"Detail: {_quote(detail, 200)}.")
     lines.append(
-        "Image: the analyst's view is in context.images."
+        f"Image: the analyst's view is in {calls.image(request.id)}."
         if request.has_image
         else f"Image: none ({selection['snapshot']['status']})."
     )
@@ -227,6 +256,7 @@ def _earlier(
     request: BriefRequest,
     history: Callable[[Sequence[str] | None], list[RecordedRequest]] | None,
     cells: Mapping[str, RuntimeCell],
+    calls: BriefCalls,
 ) -> str:
     if history is None:
         return f"Earlier requests: none kept. {_NO_RECORD}"
@@ -243,7 +273,8 @@ def _earlier(
     for row in ordered[:MAX_BRIEF_ROWS]:
         lines.append(f"- {_request(row)}: {_changes(row, cells, by_id)}")
     if len(rows) > MAX_BRIEF_ROWS:
-        lines.append(f"- {len(rows) - MAX_BRIEF_ROWS} more in context.history()")
+        more = calls.request_history if request.cell_ids else calls.history
+        lines.append(f"- {len(rows) - MAX_BRIEF_ROWS} more in {more}")
     return "\n".join(lines)
 
 
@@ -317,7 +348,7 @@ def _undone_by(
     return f" by {title}, which also changed {changed}"
 
 
-def _others(others: Sequence[BriefRequest]) -> str:
+def _others(others: Sequence[BriefRequest], calls: BriefCalls) -> str:
     if not others:
         return ""
     lines = ["Other open requests:"]
@@ -325,25 +356,28 @@ def _others(others: Sequence[BriefRequest]) -> str:
         note = f" {_quote(other.note, _SHORT_NOTE)}" if other.note else ""
         lines.append(f"- {other.label or other.id} ({other.channel}){note}")
     if len(others) > MAX_BRIEF_ROWS:
-        lines.append(f"- {len(others) - MAX_BRIEF_ROWS} more in context.references")
+        lines.append(f"- {len(others) - MAX_BRIEF_ROWS} more in {calls.references}")
     return "\n".join(lines)
 
 
 def _next(
-    request: BriefRequest, revision: int, *, recorded: bool, mounted: bool
+    request: BriefRequest, revision: int, calls: BriefCalls, *, recorded: bool
 ) -> str:
     lines = ["Next Lens calls:"]
     if recorded:
         lines.append(
-            "- context.history(context.request): earlier requests on its cells "
+            f"- {calls.request_history}: earlier requests on its cells "
             "and upstream, with the statements each undone change lost."
             if request.cell_ids
-            else "- context.history(): every recorded request, with the statements "
+            else f"- {calls.history}: every recorded request, with the statements "
             "each undone change lost."
         )
-    if request.has_image:
-        lines.append(f"- context.images[{_json(request.id)}]: the PNG the analyst saw.")
-    if not mounted:
+    if calls.text is not None and request.selection is not None:
+        lines.append(
+            f"- {calls.text}: the code of the selected cells and the cells "
+            "upstream, with what each defines and reads."
+        )
+    if not calls.mounted:
         return "\n".join(lines) if len(lines) > 1 else ""
     lines.append(
         "- mounted.check() after editing: stale or failed outputs, changed "

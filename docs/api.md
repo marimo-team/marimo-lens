@@ -70,6 +70,7 @@ The top-level package exports:
 from marimo_lens import (
     ActivityHandle,
     CellReference,
+    ChatRequest,
     ChatRequestReference,
     Diagnostic,
     Lens,
@@ -586,17 +587,30 @@ session that a `Lens` widget uses. Cell IDs are the ones marimo assigns by
 position when that kernel loads the file. Each cell reference's `codeHash` is
 the `code_hash` a marimo host reports for the cell.
 
-The file holds code, cell names, and the dataflow graph, with no run results
-or UI element values. Every cell whose code parses reads as `idle`, a cell
-that does not parse reads as `stale`, and `context.text` lists no current
-controls. Run the notebook with marimo to read values.
+The file holds code, cell names, and the dataflow graph. Cell states come
+from the last run marimo saved in `__marimo__/session/` beside the notebook,
+which marimo matches to cells by the code each ran:
+
+| Cell                                                               | State      |
+| ------------------------------------------------------------------ | ---------- |
+| It is disabled, or a cell upstream of it is                        | `disabled` |
+| Its code ran in the saved run and raised                           | `failed`   |
+| Its code ran in the saved run without raising                      | `idle`     |
+| Its code, or a cell upstream of it, changed since the saved run    | `stale`    |
+| It reads a name whose defining cell changed, broke, or was deleted | `stale`    |
+| Its code does not parse                                            | `stale`    |
+
+Without a saved run, every cell whose code parses and is not disabled reads as
+`idle`, as in a notebook marimo opened without running. `marimo export session
+NOTEBOOK` runs the notebook and saves a run. UI element values live in the
+kernel, so `context.text` lists no current controls.
 
 ### `notebook_context`
 
-`notebook_context(notebook, *selections, images=None, record=True) -> LensContext`
+`notebook_context(notebook, *requests, images=None, record=True) -> LensContext`
 
 Returns the brief, references, text, history, and images that
-`Lens.context()` returns for the same selections on a fresh kernel:
+`Lens.context()` returns for the same requests on a fresh kernel:
 
 ```python
 import marimo_lens
@@ -627,18 +641,24 @@ Earlier requests on these cells and upstream: none recorded.
 
 Next Lens calls:
 - context.history(context.request): earlier requests on its cells and upstream, with the statements each undone change lost.
+- context.text: the code of the selected cells and the cells upstream, with what each defines and reads.
 ```
 
-The brief lists the calls this `LensContext` serves and leaves out the
-`mounted` calls of a live Lens.
+The brief names `context.history(...)` and `context.text`, the calls this
+`LensContext` serves. `context.text` holds the code that a live Lens's agent
+reads through code mode.
 
 - `notebook`: a marimo notebook file, `.py` or `.md`.
-- `selections`: each a [`Selection`](#selection), or a selection mapping as
+- `requests`: each a [`Selection`](#selection), a
+  [`ChatRequest`](#chatrequest), or a selection mapping as
   the widget sends it, with `id`, `label`, `note`, `target`, `createdAt`,
-  `anchor`, optional `domHint`, `description`, and `snapshot` in the shapes
+  `anchor`, `description`, `snapshot`, and optional `domHint` in the shapes
   of the [Context reference](./reference/context). A mapping's cell IDs must
-  come from a kernel started on the current file. Lens keeps a mapping as
-  given, apart from its label. The last selection is the current one.
+  come from a kernel started on the current file, and Lens refuses an ID the
+  file does not hold. Lens keeps a mapping as
+  given, apart from its label. Lens opens the requests in order, and the last
+  one is the current request. A request without an ID takes its position,
+  as in `selection-1` or `chat-2`.
 - `images`: the PNG of each selection mapping whose `snapshot` is
   `available`, keyed by selection ID, as bytes or a file path. The PNG must
   match the snapshot's `sha256`, `width`, and `height`.
@@ -652,18 +672,22 @@ after the highest label in the record. History follows each recorded cell by
 its code, as a new kernel does.
 
 Raises `ValueError` when marimo cannot load the notebook, the record path
-names no file, a `Selection` names no cell or has an invalid mark, note, or
-DOM hint, a mapping is no valid selection, or an image is missing, unused, or
-does not match its selection. The message names the change to make. An image
-file that cannot be read raises `OSError`.
+names no file, a request names a cell the file does not hold, a `Selection`
+has an invalid mark, note, or DOM hint, a `ChatRequest` has a blank note, a
+mapping is no valid selection, two requests share an ID, or an image is
+missing, unused, or does not match its selection. The message names the
+change to make. A `ChatRequest` whose note is no string or whose cells are no
+sequence of names raises `TypeError`, and more than 16 chat requests raise
+`LensError(code="request_limit_reached")`. An image file that cannot be read
+raises `OSError`.
 
 ### `record_request`
 
-`record_request(before, after, selection, *, resolved_at, summary=None, opened_at=None, images=None, record=None) -> str`
+`record_request(before, after, request, *, resolved_at, summary=None, opened_at=None, images=None, record=None) -> str`
 
-Writes one resolved selection request to a notebook's record and returns its
-ID. Lens opens the request on the `before` file, reloads the notebook from
-the `after` file, and resolves the request with `summary`:
+Writes one resolved request to a notebook's record and returns its ID. Lens
+opens the request on the `before` file, reloads the notebook from the `after`
+file, and resolves the request with `summary`:
 
 ```python
 import marimo_lens
@@ -682,8 +706,9 @@ marimo_lens.record_request(
 )
 ```
 
-The record gains the line a live Lens writes for the request: its selection
-and label, the code of each changed cell before and after, and the summary.
+The record gains the line a live Lens writes for the request: its note, its
+selection and label or its chat cells, the code of each changed cell before
+and after, and the summary.
 marimo matches the cells of `after` to those of `before` by their code, as
 its editor does when a notebook changes on disk, so an edited cell keeps its
 ID and an added cell is new. Record requests oldest first. `notebook_context`
@@ -692,8 +717,8 @@ it.
 
 - `before`, `after`: the notebook file when the request opened and when it
   resolved.
-- `selection`: a [`Selection`](#selection) or selection mapping on the cells
-  of `before`.
+- `request`: a [`Selection`](#selection), a [`ChatRequest`](#chatrequest),
+  or a selection mapping, naming the cells of `before`.
 - `resolved_at`: when the request resolved, an ISO 8601 time with a UTC
   offset.
 - `summary`: the resolution summary.
@@ -702,10 +727,44 @@ it.
 - `record`: the record file to append to. Defaults to the record beside
   `after`. Lens creates the file and its folder.
 
+A record line is one resolution of a request, so `record_request` refuses a
+request ID the record already holds at the same `resolved_at` instant. Give
+each request an `id` so that recording it twice fails. A request without one
+gets a new ID on every call.
+
 Raises `ValueError` for a notebook marimo cannot load, a time that is invalid
-or an `opened_at` after `resolved_at`, and the selection errors of
-`notebook_context`. Raises `LensError(code="record_full")` when the record
-cannot be written.
+or an `opened_at` after `resolved_at`, a request the record already holds,
+and the request errors of `notebook_context`. Raises `TypeError` for a
+non-string `summary` and as `notebook_context` does. Raises `OSError` when an
+image file cannot be read or the record cannot be written, such as a
+read-only `__marimo__` folder.
+
+### `ChatRequest`
+
+`ChatRequest(note, cells=(), id=None)`
+
+Describes a request an analyst made in chat, as `mounted.open_request()`
+opens it. `note` quotes the message, `cells` names the cells it is about by
+name or ID, and `id` is the request ID the record keeps. A request without an
+ID gets a `chat-` ID.
+
+```python
+request_id = marimo_lens.record_request(
+    "states/r1-after.py",
+    "states/r2-after.py",
+    marimo_lens.ChatRequest(
+        "Name the wars the charts leave out.", cells=("region_chart",), id="r2"
+    ),
+    summary="Listed the two cross-regional wars under the chart.",
+    resolved_at="2026-09-02T10:40:00Z",
+    record="wars/__marimo__/lens/wars.py.jsonl",
+)
+print(request_id)
+```
+
+```text
+r2
+```
 
 ### `Selection`
 

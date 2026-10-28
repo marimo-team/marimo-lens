@@ -128,20 +128,20 @@ imports only the layers listed above it in this table, and only `_marimo` and
 `_widget` import marimo, AnyWidget, or traitlets.
 `packages/marimo-lens/tests/test_package_layers.py` enforces both rules.
 
-| Layer           | Owns                                                                                     |
-| --------------- | ---------------------------------------------------------------------------------------- |
-| `_core`         | Public types including `Record`, `LensError`, `Rejection`, limits, and bounded scalars   |
-| `_schema`       | Pydantic shapes for selections and History, shared by state and transport                |
-| `_notebook`     | Detached runtime snapshots, statement splitting, provenance, and control serialization   |
-| `_selection`    | The revisioned `SelectionState` aggregate, selection images, and compact references      |
-| `_record`       | Open requests, record lines, journals, the record file, record status, and History       |
-| `_checks.py`    | LV, LT, and LR diagnostics                                                               |
-| `_context`      | `LensContext`, the brief, and standalone text                                            |
-| `_session`      | `LensSession` use cases, the per-runtime `LensRuntime`, and its `RecordStore`s           |
-| `_protocol`     | Validation of browser commands, responses, and events                                    |
-| `_marimo`       | Kernel reads, creator-cell lifecycle, and the storage and journal for a `Record`         |
-| `_widget`       | The `Lens` widget, argument validation, command dispatch, output capture, and the mounts |
-| `_file_context` | The notebook-file host: `notebook_context()`, `record_request()`, and `Selection`        |
+| Layer           | Owns                                                                                             |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `_core`         | Public types including `Record`, `LensError`, `Rejection`, limits, and bounded scalars           |
+| `_schema`       | Pydantic shapes for selections and History, shared by state and transport                        |
+| `_notebook`     | Detached runtime snapshots, statement splitting, provenance, and control serialization           |
+| `_selection`    | The revisioned `SelectionState` aggregate, selection images, and compact references              |
+| `_record`       | Open requests, record lines, journals, the record file, record status, and History               |
+| `_checks.py`    | LV, LT, and LR diagnostics                                                                       |
+| `_context`      | `LensContext`, the brief, and standalone text                                                    |
+| `_session`      | `LensSession` use cases, the per-runtime `LensRuntime`, and its `RecordStore`s                   |
+| `_protocol`     | Validation of browser commands, responses, and events                                            |
+| `_marimo`       | Kernel reads, creator-cell lifecycle, and the storage and journal for a `Record`                 |
+| `_widget`       | The `Lens` widget, argument validation, command dispatch, output capture, and the mounts         |
+| `_file_context` | The notebook-file host: `notebook_context()`, `record_request()`, `Selection`, and `ChatRequest` |
 
 `_file_context.py` composes a `LensSession` for notebook files the way
 `_widget/lens.py` composes one for a kernel: `NotebookFile` from `_marimo`

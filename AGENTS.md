@@ -29,7 +29,8 @@ Build the browser assets before Python tests. `Lens` loads the generated
 - Python owns open selections, selection-image bytes, request baselines, the
   record and its History projection, runtime context, revision checks, and the
   public API. `_widget/lens.py` is the
-  composition root. Inner Python layers import only the layers below them, as
+  composition root of the widget, and `_file_context.py` composes the same
+  session for notebook files. Inner Python layers import only the layers below them, as
   `packages/marimo-lens/tests/test_package_layers.py` enforces.
 - The browser owns gestures, selection-image composition, notebook DOM access,
   the dock, and transient activity, reveal, and resolution-receipt presentation.
@@ -58,17 +59,17 @@ runtime and notebook adapters.
 Unqualified Python paths in this table live in
 `packages/marimo-lens/src/marimo_lens/`.
 
-| Change                          | Primary source                                                                                 | Required companions                                                          |
-| ------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| Public Python API               | `__init__.py`, `_widget/lens.py`, `_widget/arguments.py`, `_context/lens_context.py`, `_core/` | Package README, API docs, and Python boundary tests                          |
-| Selection lifecycle or History  | `_selection/`, `_record/history.py`, `_protocol/`, `packages/protocol/`, widget selection      | Python and browser contract tests, context projection, built assets          |
-| Runtime context                 | `_notebook/`, `_marimo/`, `_context/`                                                          | Context, control, and runtime tests and the public context reference         |
-| Request record and status       | `_core/record.py`, `_record/`, `_session/runtime.py`, `_checks.py`, `__main__.py`              | Record choice, record, journal, and check tests                              |
-| Agent capture or feedback       | `_widget/capture.py`, `_protocol/`, widget anywidget and transient modules                     | Transport, image, agent, and browser checks, and built assets                |
-| Browser interaction             | `packages/widget/src/` folders                                                                 | Owning package checks, tests, build, and real-browser evidence               |
-| PNG composition                 | `packages/image-capture/`                                                                      | Image-capture tests and real-browser capture                                 |
-| Documentation                   | `docs/` and `apps/docs/`                                                                       | Docs build, links, generated text views, desktop and narrow browser checks   |
-| Bundling, packaging, or release | Vite, Hatch, workspace manifests, `Makefile`, and `scripts/`                                   | Built assets, `make package`, archive and shell checks, and contributor docs |
+| Change                          | Primary source                                                                                                     | Required companions                                                          |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| Public Python API               | `__init__.py`, `_widget/lens.py`, `_widget/arguments.py`, `_context/lens_context.py`, `_core/`, `_file_context.py` | Package README, API docs, and Python boundary tests                          |
+| Selection lifecycle or History  | `_selection/`, `_record/history.py`, `_protocol/`, `packages/protocol/`, widget selection                          | Python and browser contract tests, context projection, built assets          |
+| Runtime context                 | `_notebook/`, `_marimo/`, `_context/`                                                                              | Context, control, and runtime tests and the public context reference         |
+| Request record and status       | `_core/record.py`, `_record/`, `_session/runtime.py`, `_checks.py`, `__main__.py`                                  | Record choice, record, journal, and check tests                              |
+| Agent capture or feedback       | `_widget/capture.py`, `_protocol/`, widget anywidget and transient modules                                         | Transport, image, agent, and browser checks, and built assets                |
+| Browser interaction             | `packages/widget/src/` folders                                                                                     | Owning package checks, tests, build, and real-browser evidence               |
+| PNG composition                 | `packages/image-capture/`                                                                                          | Image-capture tests and real-browser capture                                 |
+| Documentation                   | `docs/` and `apps/docs/`                                                                                           | Docs build, links, generated text views, desktop and narrow browser checks   |
+| Bundling, packaging, or release | Vite, Hatch, workspace manifests, `Makefile`, and `scripts/`                                                       | Built assets, `make package`, archive and shell checks, and contributor docs |
 
 ## Conventions
 

@@ -12,6 +12,8 @@ analyst named, in fractions of the output, and `--image PNG` for the view
 they saw. `--format text` prints the cells' code, and `--format history` the
 recorded requests on those cells and upstream, one JSON object per line.
 
-The file holds no run results or control values, so every cell reads as idle.
-Edit the file, then run the command again to read the brief against your
-edit.
+Cell states come from the last run marimo saved beside the notebook: a cell
+that raised reads as failed, and a cell whose code or upstream changed since
+reads as stale. `marimo export session analysis.py` runs the notebook and
+saves a new run. The brief names the `--format` options that fetch more. Edit
+the file, then run the command again to read the brief against your edit.

@@ -9,21 +9,25 @@ import sys
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from ._context.brief import BriefCalls
 from ._context.lens_context import LensContext
 from ._core.errors import LensError
 from ._file_context import (
+    ChatRequest,
     ImageSource,
+    Request,
     Selection,
     check_notebook,
-    notebook_context,
+    notebook_session,
     record_request,
 )
 from ._marimo.kernel import record_path_for
 
 _REQUEST_KEYS = frozenset(
-    {"before", "after", "selection", "summary", "resolved_at", "opened_at"}
+    {"before", "after", "selection", "chat", "summary", "resolved_at", "opened_at"}
 )
 _SELECTION_KEYS = frozenset({"cell", "note", "mark", "dom_hint", "image", "id"})
+_CHAT_KEYS = frozenset({"note", "cells", "id"})
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -44,7 +48,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "record",
         help="Write past requests to a notebook's Lens record.",
         description=(
-            "Append each request in REQUESTS, oldest first, to the record beside "
+            "Append each selection or chat request in REQUESTS, oldest first, to "
+            "the record beside "
             "NOTEBOOK, as a Lens that opened it on the request's before file and "
             "resolved it on its after file writes it. Print each request's ID. "
             "Stop with exit 2 at the first request Lens cannot record."
@@ -55,8 +60,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "requests",
         help=(
             "A JSON file, or - for standard input, holding a list of requests "
-            "with before, after, selection, resolved_at, and optional summary "
-            "and opened_at. Paths are relative to the file."
+            "with before, after, a selection or chat, resolved_at, and optional "
+            "summary and opened_at. Paths are relative to the file."
         ),
     )
     arguments = parser.parse_args(argv)
@@ -178,13 +183,15 @@ def _context(parser: argparse.ArgumentParser, arguments: argparse.Namespace) -> 
     notebook: pathlib.Path = arguments.notebook
     try:
         mappings = [item for source in arguments.selection for item in _items(source)]
+        if not mappings and arguments.cell is None:
+            raise ValueError("The --selection files hold no selection.")
         images: dict[str, ImageSource] = {}
         if arguments.cell is None and arguments.image is not None:
             image_id = mappings[-1].get("id")
             if not isinstance(image_id, str):
                 raise ValueError("The last --selection has no id to give --image to.")
             images[image_id] = arguments.image
-        given: list[Selection | Mapping[str, Any]] = [*mappings]
+        given: list[Request] = [*mappings]
         if arguments.cell is not None:
             given.append(
                 Selection(
@@ -195,7 +202,7 @@ def _context(parser: argparse.ArgumentParser, arguments: argparse.Namespace) -> 
                     image=arguments.image,
                 )
             )
-        context = notebook_context(
+        session = notebook_session(
             notebook,
             *given,
             images=images,
@@ -205,6 +212,7 @@ def _context(parser: argparse.ArgumentParser, arguments: argparse.Namespace) -> 
                 else (arguments.record if arguments.record is not None else True)
             ),
         )
+        context = session.context(calls=_calls(arguments.image))
         output = _render(context, arguments.format, recorded=not arguments.no_record)
     except (ValueError, OSError, LensError) as error:
         print(f"{notebook}: {error}", file=sys.stderr)
@@ -212,6 +220,21 @@ def _context(parser: argparse.ArgumentParser, arguments: argparse.Namespace) -> 
     if output:
         print(output)
     return 0
+
+
+def _calls(image: pathlib.Path | None) -> BriefCalls:
+    """Name this command's formats as the calls that fetch more."""
+
+    shown = None if image is None else f"`{image.absolute()}`"
+    return BriefCalls(
+        history="`--format history` output",
+        request_history="`--format history` output",
+        references="`--format json` output",
+        # Lens holds the PNG of the current request only from --image.
+        image=lambda _selection_id: str(shown),
+        text="`--format text` output",
+        mounted=False,
+    )
 
 
 def _render(context: LensContext, form: str, *, recorded: bool) -> str:
@@ -245,53 +268,71 @@ def _history(context: LensContext) -> list[Any]:
 
 def _record(arguments: argparse.Namespace) -> int:
     source: str = arguments.requests
-    folder = pathlib.Path("." if source == "-" else source).absolute().parent
+    folder = (
+        pathlib.Path.cwd() if source == "-" else pathlib.Path(source).absolute().parent
+    )
+    if not arguments.notebook.is_file():
+        print(f"{arguments.notebook}: no notebook file.", file=sys.stderr)
+        return 2
     try:
         requests = _items(source)
-        record = record_path_for(arguments.notebook.absolute())
-        for index, request in enumerate(requests, start=1):
-            print(_record_one(request, folder, record, index))
-    except (ValueError, OSError, LensError) as error:
+    except (ValueError, OSError) as error:
         print(f"{source}: {error}", file=sys.stderr)
         return 2
+    record = record_path_for(arguments.notebook.absolute())
+    for index, request in enumerate(requests, start=1):
+        try:
+            print(_record_one(request, folder, record))
+        except (ValueError, TypeError, OSError, LensError) as error:
+            print(f"{source}: request {index}: {error}", file=sys.stderr)
+            return 2
     return 0
 
 
 def _record_one(
-    request: Mapping[str, Any], folder: pathlib.Path, record: pathlib.Path, index: int
+    request: Mapping[str, Any], folder: pathlib.Path, record: pathlib.Path
 ) -> str:
     def path(value: object, key: str) -> pathlib.Path:
         if not isinstance(value, str):
-            raise ValueError(  # noqa: TRY004 - the CLI reports input errors as ValueError
-                f"Request {index} needs {key} as a path string."
-            )
+            raise TypeError(f"{key} must be a path string.")
         return folder / value
 
-    unknown = (set(request) - _REQUEST_KEYS) | (
-        set(request.get("selection") or {}) - _SELECTION_KEYS
+    selection = request.get("selection")
+    chat = request.get("chat")
+    unknown = (
+        (set(request) - _REQUEST_KEYS)
+        | (set(selection if isinstance(selection, dict) else ()) - _SELECTION_KEYS)
+        | (set(chat if isinstance(chat, dict) else ()) - _CHAT_KEYS)
     )
     if unknown:
-        raise ValueError(
-            f"Request {index} has unknown keys: {', '.join(sorted(unknown))}."
+        raise ValueError(f"unknown keys {', '.join(sorted(unknown))}.")
+    given: Request
+    if isinstance(chat, dict) and selection is None:
+        cells = chat.get("cells", [])
+        if not isinstance(cells, list):
+            raise TypeError("chat cells must be a list of cell names.")
+        given = ChatRequest(
+            note=chat.get("note", ""), cells=tuple(cells), id=chat.get("id")
         )
-    selection = request.get("selection")
-    if not isinstance(selection, dict) or "cell" not in selection:
-        raise ValueError(f"Request {index} needs a selection with a cell.")
-    mark = selection.get("mark")
-    if mark is not None and not isinstance(mark, list):
-        raise ValueError(f"Request {index} needs mark as a list of numbers.")
-    image = selection.get("image")
-    return record_request(
-        path(request.get("before"), "before"),
-        path(request.get("after"), "after"),
-        Selection(
+    elif isinstance(selection, dict) and "cell" in selection and chat is None:
+        mark = selection.get("mark")
+        if mark is not None and not isinstance(mark, list):
+            raise TypeError("mark must be a list of numbers.")
+        image = selection.get("image")
+        given = Selection(
             cell=selection["cell"],
             note=selection.get("note", ""),
             mark=None if mark is None else tuple(mark),
             dom_hint=selection.get("dom_hint"),
             image=None if image is None else path(image, "selection.image"),
             id=selection.get("id"),
-        ),
+        )
+    else:
+        raise ValueError("give either a selection with a cell or a chat with a note.")
+    return record_request(
+        path(request.get("before"), "before"),
+        path(request.get("after"), "after"),
+        given,
         resolved_at=request.get("resolved_at", ""),
         summary=request.get("summary"),
         opened_at=request.get("opened_at"),
