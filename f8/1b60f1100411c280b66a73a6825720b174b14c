@@ -1,0 +1,52 @@
+skills/marimo-lens/references/notebook-files.md
+  s_aa2346d6d45574::t_23ab035fb18397 3-4,10-13
+  s_aa2346d6d45574::t_0e7550401291c4 16-20
+docs/reference/cli.md
+  s_aa2346d6d45574::t_6786a89bd8ed1b 3,59,62,64-66
+packages/marimo-lens/tests/test_record_request.py
+  s_aa2346d6d45574::t_c5aee0c393c2ff 44-48,60-66,176,179-180,183,185,187-189,192-203
+docs/api.md
+  s_aa2346d6d45574::t_63286d79d2d2c0 601-606
+  s_aa2346d6d45574::t_7d7a4ec2f287f8 581-582,592-600,613-615,688,705,722-727,741-743,761,785
+packages/marimo-lens/src/marimo_lens/__main__.py
+  s_aa2346d6d45574::t_92bc6f34029c5d 132,145-146
+  s_aa2346d6d45574::t_a7ef27e4571f6d 181,183
+  s_aa2346d6d45574::t_71f1e2d44a638e 1,9,15,75-77,94,127-131,133,140-144,147-149
+development_docs/context-and-evidence.md
+  s_aa2346d6d45574::t_23ab035fb18397 544-546,556-558,561-564
+  s_aa2346d6d45574::t_0e7550401291c4 559-560
+docs/data-and-trust.md
+  s_aa2346d6d45574::t_23ab035fb18397 32
+packages/marimo-lens/tests/test_notebook_context.py
+  s_aa2346d6d45574::t_4921cec7621bfe 63-71,76,84-94,97-111,291-293
+  s_aa2346d6d45574::t_0a89de106b614f 284,287-290,294
+  s_aa2346d6d45574::t_fbd3b02127a97c 362-366,504-505,514,557
+docs/reference/context.md
+  s_aa2346d6d45574::t_23ab035fb18397 288
+packages/marimo-lens/src/marimo_lens/_marimo/notebook_file.py
+  s_aa2346d6d45574::t_3d61f34a2e18e9 161-162,165,168,170,172-174,191,193-195,207-211
+packages/marimo-lens/src/marimo_lens/_file_context.py
+  s_aa2346d6d45574::t_5de66effdbe41e 151-155
+  s_aa2346d6d45574::t_6412e024916e9d 38,45-47,232,234,256,267-271,291-294,301,310,496-501,537
+  s_aa2346d6d45574::t_74e7bc51e9e891 62-63
+  s_aa2346d6d45574::t_b46fb3ac86b991 136-139
+  s_aa2346d6d45574::t_aaceb28a189fa5 85-86
+packages/marimo-lens/README.md
+  s_aa2346d6d45574::t_23ab035fb18397 88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.2",
+  "base_commit_sha": "f81b60f1100411c280b66a73a6825720b174b14c",
+  "prompts": {},
+  "sessions": {
+    "s_aa2346d6d45574": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "91d720ee-2947-49ae-adf7-59db8a71854c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Péter Ferenc Gyarmati <dev.petergy@gmail.com>"
+    }
+  }
+}
