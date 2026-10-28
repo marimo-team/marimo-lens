@@ -84,7 +84,8 @@ notebook file and its record:
 uvx marimo-lens context analysis.py --cell revenue_chart --note "Central looks off"
 ```
 
-`marimo_lens.notebook_context()` returns the same context in Python. The
+`marimo_lens.notebook_context()` returns the same context in Python, and
+`marimo_lens.record_request()` writes past requests to the record. The
 [command line](https://marimo-team.github.io/marimo-lens/reference/cli)
 reference covers each `marimo-lens` command.
 

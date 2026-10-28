@@ -539,6 +539,13 @@ sends for a plain cell output: the anchor from `mark`, the description label
 from the cell name, and an `available` snapshot when it carries a PNG. A
 selection mapping is validated as given.
 
+`record_request()` opens the selection on the `before` file, then
+`NotebookFile.reload()` loads the `after` file and calls marimo's
+`sort_cell_ids_by_similarity()`, as `AppFileManager.reload()` does for an edit
+on disk. An edited cell keeps its ID and an added cell takes a new one. The
+session then resolves the request, and the session clock stamps the given
+`opened_at` and `resolved_at`.
+
 A file snapshot has no run state or controls. Cells that parse read as
 `idle`, and the text has no `Current controls` section. The public
 [Python API](../docs/api.md#notebook-files) owns the contract.

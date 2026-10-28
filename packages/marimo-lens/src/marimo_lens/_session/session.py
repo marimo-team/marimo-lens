@@ -77,10 +77,12 @@ class LensSession:
 
     History follows the record, the notebook, and the open selections, so the
     session publishes it when a view prepares, when a resolution lands, when
-    the open selections change, and on refresh.
+    the open selections change, and on refresh. ``clock`` stamps the times
+    requests open and resolve.
     """
 
     __slots__ = (
+        "_clock",
         "_closed",
         "_generation",
         "_notebook",
@@ -103,8 +105,10 @@ class LensSession:
         owner: str,
         publish: Callable[[dict[str, Any]], None],
         publish_history: Callable[[dict[str, Any]], None],
+        clock: Callable[[], str] | None = None,
     ) -> None:
         self._runtime = runtime
+        self._clock = utcnow if clock is None else clock
         self._notebook = notebook
         self._record = record
         self._owner = owner
@@ -388,7 +392,7 @@ class LensSession:
             request = OpenRequest(
                 id=f"chat-{uuid.uuid4().hex[:12]}",
                 channel="chat",
-                opened_at=utcnow(),
+                opened_at=self._clock(),
                 baseline=notebook,
                 note=note,
                 cell_ids=cell_ids,
@@ -450,7 +454,7 @@ class LensSession:
                 if selection_ids
                 else (current, ())
             )
-            resolved_at = utcnow()
+            resolved_at = self._clock()
             if self._record is not None:
                 keep_images = self._record.choice.images
                 resolving = [
@@ -567,7 +571,7 @@ class LensSession:
         requests.sync_selections(
             self._owner,
             (record.id for record in state.records),
-            opened_at=utcnow(),
+            opened_at=self._clock(),
             baseline=baseline,
         )
         self._send(state)

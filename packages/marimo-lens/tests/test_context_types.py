@@ -31,6 +31,7 @@ from marimo_lens import (
     automatic_lens,
     notebook_context,
     notebook_lens,
+    record_request,
 )
 from marimo_lens._notebook.snapshot import RuntimeSnapshot
 
@@ -63,6 +64,7 @@ def test_package_exports_the_public_api() -> None:
         "automatic_lens": automatic_lens,
         "notebook_context": notebook_context,
         "notebook_lens": notebook_lens,
+        "record_request": record_request,
     }
 
     assert set(marimo_lens.__all__) == set(expected)

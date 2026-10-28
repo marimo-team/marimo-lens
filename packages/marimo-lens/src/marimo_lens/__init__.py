@@ -23,7 +23,7 @@ from ._core.types import (
     SelectionReference,
     SelectionTargetReference,
 )
-from ._file_context import Selection, notebook_context
+from ._file_context import Selection, notebook_context, record_request
 from ._widget.lens import Lens
 from ._widget.mount import automatic_lens, notebook_lens
 
@@ -58,4 +58,5 @@ __all__ = [
     "automatic_lens",
     "notebook_context",
     "notebook_lens",
+    "record_request",
 ]

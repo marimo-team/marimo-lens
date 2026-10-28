@@ -1,4 +1,4 @@
-"""Read notebook files and their Lens records: the ``marimo-lens`` command."""
+"""Read and write Lens records of notebook files: the ``marimo-lens`` command."""
 
 from __future__ import annotations
 
@@ -16,7 +16,14 @@ from ._file_context import (
     Selection,
     check_notebook,
     notebook_context,
+    record_request,
 )
+from ._marimo.kernel import record_path_for
+
+_REQUEST_KEYS = frozenset(
+    {"before", "after", "selection", "summary", "resolved_at", "opened_at"}
+)
+_SELECTION_KEYS = frozenset({"cell", "note", "mark", "dom_hint", "image", "id"})
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -33,9 +40,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     check.add_argument("notebooks", nargs="+", type=pathlib.Path)
     check.add_argument("--json", action="store_true", help="Print JSON Lines.")
     _add_context_command(commands)
+    record = commands.add_parser(
+        "record",
+        help="Write past requests to a notebook's Lens record.",
+        description=(
+            "Append each request in REQUESTS, oldest first, to the record beside "
+            "NOTEBOOK, as a Lens that opened it on the request's before file and "
+            "resolved it on its after file writes it. Print each request's ID. "
+            "Stop with exit 2 at the first request Lens cannot record."
+        ),
+    )
+    record.add_argument("notebook", type=pathlib.Path)
+    record.add_argument(
+        "requests",
+        help=(
+            "A JSON file, or - for standard input, holding a list of requests "
+            "with before, after, selection, resolved_at, and optional summary "
+            "and opened_at. Paths are relative to the file."
+        ),
+    )
     arguments = parser.parse_args(argv)
     if arguments.command == "context":
         return _context(parser, arguments)
+    if arguments.command == "record":
+        return _record(arguments)
 
     status = 0
     for notebook in arguments.notebooks:
@@ -213,6 +241,62 @@ def _history(context: LensContext) -> list[Any]:
     if request is not None and request["cells"]:
         return list(context.history(request))
     return list(context.history())
+
+
+def _record(arguments: argparse.Namespace) -> int:
+    source: str = arguments.requests
+    folder = pathlib.Path("." if source == "-" else source).absolute().parent
+    try:
+        requests = _items(source)
+        record = record_path_for(arguments.notebook.absolute())
+        for index, request in enumerate(requests, start=1):
+            print(_record_one(request, folder, record, index))
+    except (ValueError, OSError, LensError) as error:
+        print(f"{source}: {error}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _record_one(
+    request: Mapping[str, Any], folder: pathlib.Path, record: pathlib.Path, index: int
+) -> str:
+    def path(value: object, key: str) -> pathlib.Path:
+        if not isinstance(value, str):
+            raise ValueError(  # noqa: TRY004 - the CLI reports input errors as ValueError
+                f"Request {index} needs {key} as a path string."
+            )
+        return folder / value
+
+    unknown = (set(request) - _REQUEST_KEYS) | (
+        set(request.get("selection") or {}) - _SELECTION_KEYS
+    )
+    if unknown:
+        raise ValueError(
+            f"Request {index} has unknown keys: {', '.join(sorted(unknown))}."
+        )
+    selection = request.get("selection")
+    if not isinstance(selection, dict) or "cell" not in selection:
+        raise ValueError(f"Request {index} needs a selection with a cell.")
+    mark = selection.get("mark")
+    if mark is not None and not isinstance(mark, list):
+        raise ValueError(f"Request {index} needs mark as a list of numbers.")
+    image = selection.get("image")
+    return record_request(
+        path(request.get("before"), "before"),
+        path(request.get("after"), "after"),
+        Selection(
+            cell=selection["cell"],
+            note=selection.get("note", ""),
+            mark=None if mark is None else tuple(mark),
+            dom_hint=selection.get("dom_hint"),
+            image=None if image is None else path(image, "selection.image"),
+            id=selection.get("id"),
+        ),
+        resolved_at=request.get("resolved_at", ""),
+        summary=request.get("summary"),
+        opened_at=request.get("opened_at"),
+        record=record,
+    )
 
 
 def _items(source: str) -> list[dict[str, Any]]:

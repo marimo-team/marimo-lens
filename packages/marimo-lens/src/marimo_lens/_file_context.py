@@ -2,8 +2,9 @@
 
 A notebook file is a host with no runtime. ``NotebookFile`` serves the
 session's notebook reads and a ``FileJournal`` keeps the record, so the
-``LensSession`` that the widget builds labels selections and builds context
-as a Lens on a kernel started from the file does. Each call starts a new kernel, so the record follows cells from earlier
+``LensSession`` that the widget builds labels selections, opens and resolves
+requests, and builds context as a Lens on a kernel started from the file
+does. Each call starts a new kernel, so the record follows cells from earlier
 calls by their code.
 """
 
@@ -12,14 +13,15 @@ from __future__ import annotations
 import hashlib
 import os
 import pathlib
-from collections.abc import Mapping
+import uuid
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from ._context.lens_context import LensContext
-from ._core.bounds import utcnow
+from ._core.bounds import TimestampText, parse_timestamp, utcnow
 from ._core.record import Record
 from ._core.types import Diagnostic
 from ._marimo.kernel import record_path_for
@@ -34,6 +36,7 @@ from ._session.session import LensSession
 
 _DOCUMENT_ID = "document:notebook-file"
 _MAX_LISTED_CELLS = 24
+_TIMESTAMP = TypeAdapter(TimestampText)
 
 ImageSource = bytes | str | os.PathLike[str]
 
@@ -42,7 +45,8 @@ ImageSource = bytes | str | os.PathLike[str]
 class Selection:
     """A selection on one cell's output, as an analyst makes it in the browser.
 
-    Pass it to ``notebook_context``. Lens labels it and keeps its anchor, note, DOM hint, and image as the widget does for a
+    Pass it to ``notebook_context`` or ``record_request``. Lens labels it and
+    keeps its anchor, note, DOM hint, and image as the widget does for a
     notebook target.
 
     .. code-block:: python
@@ -70,7 +74,8 @@ class Selection:
         image: The PNG the analyst saw, as bytes or a file path. Without
             one, the selection image status is ``pending``.
         id: The selection's ID, which the record keeps as the request ID.
-            ``notebook_context`` numbers selections without one by position.
+            ``notebook_context`` numbers selections without one by position,
+            and ``record_request`` gives each a random ID.
     """
 
     cell: str
@@ -160,6 +165,92 @@ def notebook_context(
     return session.context(mounted=False)
 
 
+def record_request(
+    before: str | os.PathLike[str],
+    after: str | os.PathLike[str],
+    selection: Selection | Mapping[str, Any],
+    *,
+    resolved_at: str,
+    summary: str | None = None,
+    opened_at: str | None = None,
+    images: Mapping[str, ImageSource] | None = None,
+    record: str | os.PathLike[str] | None = None,
+) -> str:
+    """Write one resolved selection request to a notebook's record.
+
+    Lens opens the request on the ``before`` file, as a Lens on a kernel
+    started from it would, then reloads the notebook from the ``after`` file
+    and resolves the request with ``summary``. marimo matches the cells of
+    the two files by their code, as its editor does when a notebook changes
+    on disk, so an edited cell stays one cell and an added cell is new. The
+    record gains the line a live Lens writes: the selection, its label, the
+    code of each changed cell before and after, and the summary.
+
+    .. code-block:: python
+
+        marimo_lens.record_request(
+            "states/r1-before.py",
+            "states/r1-after.py",
+            marimo_lens.Selection(cell="region_chart", note="Leave the wars out"),
+            summary="Filtered the cross-regional wars out of the charts.",
+            resolved_at="2026-09-02T10:12:00Z",
+            record="__marimo__/lens/wars.py.jsonl",
+        )
+
+    Record requests oldest first. ``notebook_context`` and History then
+    report whether each change still holds and which request undid it.
+
+    Arguments:
+        before: The notebook file when the request opened.
+        after: The notebook file when the request resolved.
+        selection: The ``Selection`` or selection mapping the request was
+            made on, against the cells of ``before``.
+        resolved_at: When the request resolved, as an ISO 8601 time with a
+            UTC offset, such as ``2026-09-02T10:12:00Z``.
+        summary: The resolution summary the analyst sees.
+        opened_at: When the request opened. Defaults to ``resolved_at``.
+        images: The PNG of a selection mapping, as in ``notebook_context``.
+        record: The record file to append to. Defaults to the record beside
+            ``after``. Lens creates the file and its folder when needed.
+
+    Returns:
+        The request ID, which the record keeps as the line's ``id``.
+
+    Raises:
+        ValueError: marimo cannot load a notebook file, a time is invalid or
+            ``opened_at`` comes after ``resolved_at``, or the selection is
+            invalid as in ``notebook_context``.
+        LensError: ``record_full``: the record cannot be written.
+        OSError: An image file cannot be read.
+    """
+
+    resolved = _timestamp(resolved_at, "resolved_at")
+    opened = resolved if opened_at is None else _timestamp(opened_at, "opened_at")
+    if parse_timestamp(opened) > parse_timestamp(resolved):
+        raise ValueError(f"opened_at {opened} comes after resolved_at {resolved}.")
+    after_path = _path(after)
+    location = record_path_for(after_path) if record is None else _path(record)
+    file = NotebookFile(_path(before))
+    now = opened
+    session = _session(file, location, clock=lambda: now)
+    pending = dict(images or {})
+    given, image = _input(
+        selection,
+        file.contents,
+        pending,
+        created_at=opened,
+        default_id=f"selection-{uuid.uuid4().hex[:12]}",
+    )
+    _require_used(pending)
+    _put(session, given, image)
+    file.reload(after_path)
+    now = resolved
+    session.resolve(
+        (given.id,), expected_revision=session.state.revision, summary=summary
+    )
+    return given.id
+
+
 def check_notebook(notebook: str | os.PathLike[str]) -> list[Diagnostic]:
     """Run the record rules on a notebook file and the record beside it.
 
@@ -174,6 +265,8 @@ def check_notebook(notebook: str | os.PathLike[str]) -> list[Diagnostic]:
 def _session(
     file: NotebookFile,
     record: pathlib.Path | None,
+    *,
+    clock: Callable[[], str] | None = None,
 ) -> LensSession:
     runtime = LensRuntime()
     kept = (
@@ -193,6 +286,7 @@ def _session(
         owner="notebook-file",
         publish=_ignore,
         publish_history=_ignore,
+        clock=clock,
     )
 
 
@@ -203,6 +297,16 @@ def _ignore(_value: object) -> None:
 def _path(value: str | os.PathLike[str]) -> pathlib.Path:
     # marimo names a notebook by its normalized absolute path.
     return pathlib.Path(os.path.abspath(value))
+
+
+def _timestamp(value: str, name: str) -> str:
+    try:
+        return _TIMESTAMP.validate_python(value)
+    except ValidationError:
+        raise ValueError(
+            f"{name} must be an ISO 8601 time with a UTC offset, such as "
+            f"2026-09-02T10:12:00Z. Got {value!r}."
+        ) from None
 
 
 def _input(

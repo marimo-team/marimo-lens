@@ -1,6 +1,6 @@
 ---
 title: Command line
-description: The marimo-lens command prints Lens context for a selection on a notebook file and checks a notebook's record.
+description: The marimo-lens command prints Lens context for a selection on a notebook file, writes past requests to a notebook's record, and checks the record.
 ---
 
 # Command line
@@ -12,6 +12,7 @@ no kernel or browser. Installing `marimo-lens` adds it, and
 | Command                           | Does                                                        |
 | --------------------------------- | ----------------------------------------------------------- |
 | [`marimo-lens context`](#context) | Prints the Lens context for a selection on a notebook file. |
+| [`marimo-lens record`](#record)   | Writes past requests to a notebook's record.                |
 | [`marimo-lens check`](#check)     | Prints the `LR` diagnostics of each notebook's record.      |
 
 [Notebook files](../api#notebook-files) describes how Lens reads a file and
@@ -76,6 +77,43 @@ is `available`.
 The command exits with `2` and names the change to make when marimo cannot
 load the notebook, the record path names no file, `--cell` names no cell, or
 a selection is invalid.
+
+## `record`
+
+`marimo-lens record NOTEBOOK REQUESTS` appends each request in `REQUESTS`,
+oldest first, to the record beside `NOTEBOOK`, through
+[`record_request()`](../api#record-request). It prints each request's ID:
+
+```bash
+marimo-lens record wars.py requests.json
+```
+
+```json
+[
+  {
+    "before": "states/r1-before.py",
+    "after": "states/r1-after.py",
+    "selection": {
+      "cell": "region_chart",
+      "note": "Leave the two cross-regional wars out of the charts.",
+      "id": "r1"
+    },
+    "summary": "Filtered the Cross-Regional wars out of the wars the charts show.",
+    "resolved_at": "2026-09-02T10:12:00Z"
+  }
+]
+```
+
+```text
+r1
+```
+
+Each request takes `before`, `after`, `selection`, `resolved_at`, and
+optional `summary` and `opened_at`. A selection takes the
+[`Selection`](../api#selection) fields `cell`, `note`, `mark` as a list,
+`dom_hint`, `image`, and `id`. Paths are relative to `REQUESTS`, and `-` reads
+the list from standard input. The command stops with exit `2` at the first
+request it cannot record and keeps the requests it already wrote.
 
 ## `check`
 

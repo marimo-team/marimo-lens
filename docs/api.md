@@ -9,23 +9,23 @@ Use `marimo_lens.agent.connect()` in the live notebook kernel to reuse an
 existing Lens. Notebook authors can mount `Lens` when the host has not already
 provided one.
 
-| Task                                       | API                                                                                                              |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| Discover existing instances                | [`discover()`](#discover)                                                                                        |
-| Add the notebook interface                 | [`Lens`](#lens)                                                                                                  |
-| Keep a record of resolved requests         | [`Lens(record=...)`](#lens), [`Record`](#record), [`RecordOptions`](#recordoptions)                              |
-| Read the current request first             | [`LensContext.brief`](./reference/context#brief), [`LensContext.request`](./reference/context#request)           |
-| Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                          |
-| Check what recorded requests changed       | [`LensContext.history()`](./reference/context#history)                                                           |
-| Check selections and the record            | [`check()`](#lens-check), [Checks](./reference/checks)                                                           |
-| Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal) |
-| Record a request the analyst made in chat  | [`open_request()`](#lens-open-request)                                                                           |
-| Resolve requests                           | [`resolve()`](#lens-resolve)                                                                                     |
-| Show a user-paced notebook walkthrough     | [`reveal()`](#lens-reveal)                                                                                       |
-| Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                |
-| Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
-| Share the notebook's Lens with a host      | [`automatic_lens()`](#automatic-lens), [`notebook_lens()`](#notebook-lens)                                       |
-| Work from a notebook file without a kernel | [`notebook_context()`](#notebook-context), [`marimo-lens context`](./reference/cli#context)                      |
+| Task                                       | API                                                                                                                |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| Discover existing instances                | [`discover()`](#discover)                                                                                          |
+| Add the notebook interface                 | [`Lens`](#lens)                                                                                                    |
+| Keep a record of resolved requests         | [`Lens(record=...)`](#lens), [`Record`](#record), [`RecordOptions`](#recordoptions)                                |
+| Read the current request first             | [`LensContext.brief`](./reference/context#brief), [`LensContext.request`](./reference/context#request)             |
+| Read selections, source, and images        | [`Lens.context()`](#lens-context), [`LensContext`](./reference/context)                                            |
+| Check what recorded requests changed       | [`LensContext.history()`](./reference/context#history)                                                             |
+| Check selections and the record            | [`check()`](#lens-check), [Checks](./reference/checks)                                                             |
+| Show agent work and return a result        | [`start_activity()`](#lens-start-activity), [`stop_activity()`](#lens-stop-activity), [`reveal()`](#lens-reveal)   |
+| Record a request the analyst made in chat  | [`open_request()`](#lens-open-request)                                                                             |
+| Resolve requests                           | [`resolve()`](#lens-resolve)                                                                                       |
+| Show a user-paced notebook walkthrough     | [`reveal()`](#lens-reveal)                                                                                         |
+| Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                  |
+| Release a Lens instance                    | [`close()`](#lens-close)                                                                                           |
+| Share the notebook's Lens with a host      | [`automatic_lens()`](#automatic-lens), [`notebook_lens()`](#notebook-lens)                                         |
+| Work from a notebook file without a kernel | [`notebook_context()`](#notebook-context), [`record_request()`](#record-request), [`marimo-lens`](./reference/cli) |
 
 The caller roles are:
 
@@ -35,7 +35,8 @@ The caller roles are:
 - marimo and host integrations call the [host API](#host-api) to show one Lens
   per notebook runtime.
 - Evaluation harnesses, CI, and terminal agents call
-  [`notebook_context()`](#notebook-context) on notebook files.
+  [`notebook_context()`](#notebook-context) and
+  [`record_request()`](#record-request) on notebook files.
 
 Authors and agents share context, activity, reveal, and resolution behavior.
 The agent handle adds stable reconnection identity and current cell-output
@@ -91,6 +92,7 @@ from marimo_lens import (
     automatic_lens,
     notebook_context,
     notebook_lens,
+    record_request,
 )
 ```
 
@@ -573,9 +575,10 @@ notebook and the host document each show a dock for the same selections.
 
 ## Notebook files
 
-`notebook_context()` builds a `LensContext` from a notebook file with no
-kernel or browser. The [`marimo-lens context`](./reference/cli#context)
-command prints it from a terminal.
+`notebook_context()` builds a `LensContext` from a notebook file, and
+`record_request()` writes a past request to a notebook's record. Neither needs
+a kernel or a browser. The [`marimo-lens`](./reference/cli) command runs both
+from a terminal.
 
 A notebook file is a document with no runtime. Lens loads it as a kernel
 started on the file would, without running it, and serves it to the same
@@ -654,6 +657,56 @@ DOM hint, a mapping is no valid selection, or an image is missing, unused, or
 does not match its selection. The message names the change to make. An image
 file that cannot be read raises `OSError`.
 
+### `record_request`
+
+`record_request(before, after, selection, *, resolved_at, summary=None, opened_at=None, images=None, record=None) -> str`
+
+Writes one resolved selection request to a notebook's record and returns its
+ID. Lens opens the request on the `before` file, reloads the notebook from
+the `after` file, and resolves the request with `summary`:
+
+```python
+import marimo_lens
+
+marimo_lens.record_request(
+    "states/r1-before.py",
+    "states/r1-after.py",
+    marimo_lens.Selection(
+        cell="region_chart",
+        note="Leave the two cross-regional wars out of the charts.",
+        id="r1",
+    ),
+    summary="Filtered the Cross-Regional wars out of the wars the charts show.",
+    resolved_at="2026-09-02T10:12:00Z",
+    record="wars/__marimo__/lens/wars.py.jsonl",
+)
+```
+
+The record gains the line a live Lens writes for the request: its selection
+and label, the code of each changed cell before and after, and the summary.
+marimo matches the cells of `after` to those of `before` by their code, as
+its editor does when a notebook changes on disk, so an edited cell keeps its
+ID and an added cell is new. Record requests oldest first. `notebook_context`
+and History then report whether each change holds and which request undid
+it.
+
+- `before`, `after`: the notebook file when the request opened and when it
+  resolved.
+- `selection`: a [`Selection`](#selection) or selection mapping on the cells
+  of `before`.
+- `resolved_at`: when the request resolved, an ISO 8601 time with a UTC
+  offset.
+- `summary`: the resolution summary.
+- `opened_at`: when the request opened. Defaults to `resolved_at`.
+- `images`: the PNG of a selection mapping, as in `notebook_context`.
+- `record`: the record file to append to. Defaults to the record beside
+  `after`. Lens creates the file and its folder.
+
+Raises `ValueError` for a notebook marimo cannot load, a time that is invalid
+or an `opened_at` after `resolved_at`, and the selection errors of
+`notebook_context`. Raises `LensError(code="record_full")` when the record
+cannot be written.
+
 ### `Selection`
 
 `Selection(cell, note="", mark=None, dom_hint=None, image=None, id=None)`
@@ -669,7 +722,7 @@ target.
 | `mark`     | `tuple[float, ...] \| None`           | `(x, y)` for a point or `(x, y, width, height)` for a region, in fractions of the output with `(0, 0)` at its top-left corner. `None` marks the whole output. |
 | `dom_hint` | `Mapping[str, Any] \| None`           | The element under the mark in the [DOM hint shape](./reference/context#dom-hint-shape). Name the datum here, such as the `aria-label` a chart gives a bar.    |
 | `image`    | `bytes \| str \| os.PathLike \| None` | The PNG the analyst saw. Without one, the selection image status is `pending`.                                                                                |
-| `id`       | `str \| None`                         | The selection ID, which the record keeps as the request ID. `notebook_context` numbers selections without one by position.                                    |
+| `id`       | `str \| None`                         | The selection ID, which the record keeps as the request ID. `notebook_context` numbers selections without one, and `record_request` gives each a random ID.   |
 
 The mark becomes the selection's [anchor](./reference/context#anchor-shapes),
 and the target description takes the cell's name, or `Cell <id>` for an

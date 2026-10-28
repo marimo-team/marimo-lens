@@ -31,8 +31,9 @@ def notebook_file_snapshot(notebook: pathlib.Path) -> RuntimeSnapshot:
 class NotebookFile:
     """Serve a Lens session's notebook reads from a notebook file.
 
-    Every read sees the cells of one load, as a kernel started on the file
-    holds them.
+    Every read sees the cells of the last load, as a kernel started on the
+    file holds them. ``reload`` reads the file again the way marimo's editor
+    follows an edit on disk.
     """
 
     __slots__ = ("_app", "contents")
@@ -46,6 +47,22 @@ class NotebookFile:
 
         self._app = _load(notebook)
         self.contents = _snapshot(self._app, notebook)
+
+    def reload(self, notebook: pathlib.Path) -> None:
+        """Load ``notebook`` as the next version of the loaded one.
+
+        A cell keeps its ID when marimo matches it to a loaded cell by its
+        code, so an edited cell stays the same cell and a new one gets a new
+        ID.
+
+        Raises:
+            ValueError: marimo cannot load the file as a notebook.
+        """
+
+        app = _load(notebook)
+        app.cell_manager.sort_cell_ids_by_similarity(self._app.cell_manager)
+        self._app = app
+        self.contents = _snapshot(app, notebook)
 
     def snapshot(self, output_cell_ids: Sequence[str]) -> RuntimeSnapshot:
         return self.contents

@@ -141,7 +141,7 @@ imports only the layers listed above it in this table, and only `_marimo` and
 | `_protocol`     | Validation of browser commands, responses, and events                                    |
 | `_marimo`       | Kernel reads, creator-cell lifecycle, and the storage and journal for a `Record`         |
 | `_widget`       | The `Lens` widget, argument validation, command dispatch, output capture, and the mounts |
-| `_file_context` | The notebook-file host: `notebook_context()` and `Selection`                             |
+| `_file_context` | The notebook-file host: `notebook_context()`, `record_request()`, and `Selection`        |
 
 `_file_context.py` composes a `LensSession` for notebook files the way
 `_widget/lens.py` composes one for a kernel: `NotebookFile` from `_marimo`
