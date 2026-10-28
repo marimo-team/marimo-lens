@@ -25,6 +25,7 @@ provided one.
 | Connect an agent or capture current output | [`discover()`](#discover), [`connect()`](#connect), [`MountedLens`](#mountedlens)                                |
 | Release a Lens instance                    | [`close()`](#lens-close)                                                                                         |
 | Share the notebook's Lens with a host      | [`automatic_lens()`](#automatic-lens), [`notebook_lens()`](#notebook-lens)                                       |
+| Work from a notebook file without a kernel | [`notebook_context()`](#notebook-context), [`marimo-lens context`](./reference/cli#context)                      |
 
 The caller roles are:
 
@@ -33,6 +34,8 @@ The caller roles are:
   `MountedLens` handle.
 - marimo and host integrations call the [host API](#host-api) to show one Lens
   per notebook runtime.
+- Evaluation harnesses, CI, and terminal agents call
+  [`notebook_context()`](#notebook-context) on notebook files.
 
 Authors and agents share context, activity, reveal, and resolution behavior.
 The agent handle adds stable reconnection identity and current cell-output
@@ -80,11 +83,13 @@ from marimo_lens import (
     RecordedRequest,
     RequestReference,
     RevealStep,
+    Selection,
     SelectionReference,
     SelectionTargetReference,
     __version__,
     agent,
     automatic_lens,
+    notebook_context,
     notebook_lens,
 )
 ```
@@ -496,8 +501,8 @@ wait in memory for the next write. Expected errors are `lens_closed`,
 Checks open selections, and the record when the Lens keeps one, against the
 notebook now. Returns one `Diagnostic` per finding, warnings first, or an empty
 list when every check passed. [Checks](./reference/checks) lists the rules, the
-diagnostic keys, and the `python -m marimo_lens check` command for notebook
-files.
+diagnostic keys, and the [`marimo-lens check`](./reference/cli#check)
+command for notebook files.
 
 ```python
 for diagnostic in lens.check():
@@ -565,6 +570,120 @@ lens = marimo_lens.notebook_lens()
 
 Each browser document gives one Lens view interaction ownership, so the
 notebook and the host document each show a dock for the same selections.
+
+## Notebook files
+
+`notebook_context()` builds a `LensContext` from a notebook file with no
+kernel or browser. The [`marimo-lens context`](./reference/cli#context)
+command prints it from a terminal.
+
+A notebook file is a document with no runtime. Lens loads it as a kernel
+started on the file would, without running it, and serves it to the same
+session that a `Lens` widget uses. Cell IDs are the ones marimo assigns by
+position when that kernel loads the file. Each cell reference's `codeHash` is
+the `code_hash` a marimo host reports for the cell.
+
+The file holds code, cell names, and the dataflow graph, with no run results
+or UI element values. Every cell whose code parses reads as `idle`, a cell
+that does not parse reads as `stale`, and `context.text` lists no current
+controls. Run the notebook with marimo to read values.
+
+### `notebook_context`
+
+`notebook_context(notebook, *selections, images=None, record=True) -> LensContext`
+
+Returns the brief, references, text, history, and images that
+`Lens.context()` returns for the same selections on a fresh kernel:
+
+```python
+import marimo_lens
+
+context = marimo_lens.notebook_context(
+    "sales.py",
+    marimo_lens.Selection(
+        cell="revenue_chart",
+        note="Central looks off",
+        mark=(0.42, 0.31),
+    ),
+)
+print(context.brief)
+```
+
+```text
+# Request S1 (selection)
+
+Note: "Central looks off"
+
+Part: a point on the output of its producing cell, "revenue_chart".
+Image: none (pending).
+
+Trace:
+- Cell `vblA` (revenue_chart): idle
+
+Earlier requests on these cells and upstream: none recorded.
+
+Next Lens calls:
+- context.history(context.request): earlier requests on its cells and upstream, with the statements each undone change lost.
+```
+
+The brief lists the calls this `LensContext` serves and leaves out the
+`mounted` calls of a live Lens.
+
+- `notebook`: a marimo notebook file, `.py` or `.md`.
+- `selections`: each a [`Selection`](#selection), or a selection mapping as
+  the widget sends it, with `id`, `label`, `note`, `target`, `createdAt`,
+  `anchor`, optional `domHint`, `description`, and `snapshot` in the shapes
+  of the [Context reference](./reference/context). A mapping's cell IDs must
+  come from a kernel started on the current file. Lens keeps a mapping as
+  given, apart from its label. The last selection is the current one.
+- `images`: the PNG of each selection mapping whose `snapshot` is
+  `available`, keyed by selection ID, as bytes or a file path. The PNG must
+  match the snapshot's `sha256`, `width`, and `height`.
+- `record`: `True` reads the record a `Lens(record=True)` keeps beside the
+  notebook, and an absent file reads as an empty record. A path reads that
+  record file and the `images/` folder beside it. `False` gives the context
+  of a `Lens()` that keeps no record.
+
+Selections take the labels a live Lens gives them, `S1`, `S2`, and so on,
+after the highest label in the record. History follows each recorded cell by
+its code, as a new kernel does.
+
+Raises `ValueError` when marimo cannot load the notebook, the record path
+names no file, a `Selection` names no cell or has an invalid mark, note, or
+DOM hint, a mapping is no valid selection, or an image is missing, unused, or
+does not match its selection. The message names the change to make. An image
+file that cannot be read raises `OSError`.
+
+### `Selection`
+
+`Selection(cell, note="", mark=None, dom_hint=None, image=None, id=None)`
+
+Describes a selection on one cell's output, as an analyst makes it in the
+browser. Lens turns it into the selection the widget sends for a notebook
+target.
+
+| Field      | Type                                  | Meaning                                                                                                                                                       |
+| ---------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cell`     | `str`                                 | The target cell's name, or its ID.                                                                                                                            |
+| `note`     | `str`                                 | The analyst's note.                                                                                                                                           |
+| `mark`     | `tuple[float, ...] \| None`           | `(x, y)` for a point or `(x, y, width, height)` for a region, in fractions of the output with `(0, 0)` at its top-left corner. `None` marks the whole output. |
+| `dom_hint` | `Mapping[str, Any] \| None`           | The element under the mark in the [DOM hint shape](./reference/context#dom-hint-shape). Name the datum here, such as the `aria-label` a chart gives a bar.    |
+| `image`    | `bytes \| str \| os.PathLike \| None` | The PNG the analyst saw. Without one, the selection image status is `pending`.                                                                                |
+| `id`       | `str \| None`                         | The selection ID, which the record keeps as the request ID. `notebook_context` numbers selections without one by position.                                    |
+
+The mark becomes the selection's [anchor](./reference/context#anchor-shapes),
+and the target description takes the cell's name, or `Cell <id>` for an
+unnamed cell, as the widget labels a plain output:
+
+```python
+marimo_lens.Selection(
+    cell="revenue_chart",
+    note="Central looks off",
+    mark=(0.3, 0.2, 0.2, 0.6),
+    dom_hint={"tag": "path", "ariaLabel": "region: Central; amount: 1200"},
+    image="pointed.png",
+)
+```
 
 ## Agent adapter
 

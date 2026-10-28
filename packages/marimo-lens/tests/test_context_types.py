@@ -24,10 +24,12 @@ from marimo_lens import (
     RecordOptions,
     RequestReference,
     RevealStep,
+    Selection,
     SelectionReference,
     SelectionTargetReference,
     agent,
     automatic_lens,
+    notebook_context,
     notebook_lens,
 )
 from marimo_lens._notebook.snapshot import RuntimeSnapshot
@@ -52,12 +54,14 @@ def test_package_exports_the_public_api() -> None:
         "RecordedImage": RecordedImage,
         "RecordedRequest": RecordedRequest,
         "RequestReference": RequestReference,
+        "Selection": Selection,
         "SelectionReference": SelectionReference,
         "SelectionTargetReference": SelectionTargetReference,
         "RevealStep": RevealStep,
         "__version__": pkg.version("marimo-lens"),
         "agent": agent,
         "automatic_lens": automatic_lens,
+        "notebook_context": notebook_context,
         "notebook_lens": notebook_lens,
     }
 

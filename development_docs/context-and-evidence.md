@@ -516,10 +516,29 @@ reuses `check_selections()` for its current request. `check_record()` reports
 a failed or partial read as `LR005` or `LR006`, so an empty result covers the
 whole record.
 
-`python -m marimo_lens check` (`__main__.py`) runs only the `LR` rules, since
-`LV` and `LT` need live selections. `notebook_file_snapshot()` in
-`_marimo/notebook_file.py` loads the file through marimo's `load_app()` and
-`InternalApp`, which assign the same positional cell IDs a new kernel would.
-The command uses a kernel token no line carries, so every recorded cell is
-followed by its code. The public [Checks](../docs/reference/checks.md) page
-owns the rule list.
+`marimo-lens check` runs `LensSession.check()` on a notebook file, as
+[Notebook files](#notebook-files) composes it. The session holds no
+selections, so only the `LR` rules report. The public
+[Checks](../docs/reference/checks.md) page owns the rule list.
+
+## Notebook files
+
+`_file_context.py` serves a notebook file as a host with no runtime.
+`NotebookFile` implements `NotebookReads` from one load: marimo's `load_app()`
+assigns positional cell IDs, the IDs of a kernel started on the file. The
+snapshot builds its graph from the cells that parse, as a kernel registers
+them, and keeps the rest as stale unregistered cells. Each call builds a fresh
+`LensRuntime`, so the session has a new kernel token and follows recorded
+cells by their code, and a `FileJournal` on the record path gives it a
+`KeptRecord` with History off.
+
+`notebook_context()` puts each selection through `LensSession.put_selection()`
+and returns `LensSession.context(mounted=False)`, whose brief leaves out the
+calls on a mounted Lens. A `Selection` becomes the `SelectionInput` the widget
+sends for a plain cell output: the anchor from `mark`, the description label
+from the cell name, and an `available` snapshot when it carries a PNG. A
+selection mapping is validated as given.
+
+A file snapshot has no run state or controls. Cells that parse read as
+`idle`, and the text has no `Current controls` section. The public
+[Python API](../docs/api.md#notebook-files) owns the contract.

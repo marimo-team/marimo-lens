@@ -33,7 +33,9 @@ print({selection_id: len(png) for selection_id, png in context.images.items()})
 
 ## Construction
 
-`lens.context()` and `mounted.context()` create every `LensContext`. Calling
+`lens.context()` and `mounted.context()` create a `LensContext` from the live
+notebook, and [`marimo_lens.notebook_context()`](../api#notebook-context)
+creates one from a notebook file. Calling
 `LensContext()` directly raises `TypeError`. To keep the evidence, save
 `context.brief`, `context.references`, `context.text`, the bytes in
 `context.images`, and `context.history()` when the Lens keeps a record. Each

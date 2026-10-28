@@ -1,4 +1,4 @@
-"""Check notebook files against their Lens records: ``python -m marimo_lens check``."""
+"""Read notebook files and their Lens records: the ``marimo-lens`` command."""
 
 from __future__ import annotations
 
@@ -6,38 +6,21 @@ import argparse
 import json
 import pathlib
 import sys
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any
 
-from ._checks import check_record
-from ._core.types import Diagnostic
-from ._marimo.kernel import record_path_for
-from ._marimo.notebook_file import notebook_file_snapshot
-from ._record.file_journal import FileJournal
-from ._record.journal import has_image
-from ._record.status import RecordStatus
-
-
-def check_notebook(notebook: pathlib.Path) -> list[Diagnostic]:
-    """Run the record rules on one notebook file and its record.
-
-    Raises:
-        ValueError: marimo cannot load the file as a notebook.
-    """
-
-    snapshot = notebook_file_snapshot(notebook)
-    record = record_path_for(notebook)
-    journal = FileJournal(lambda: record)
-    read = journal.read()
-    status = RecordStatus(read.lines, snapshot, kernel=None)
-    return check_record(
-        read,
-        status,
-        has_image=lambda sha256: has_image(journal, sha256),
-    )
+from ._context.lens_context import LensContext
+from ._core.errors import LensError
+from ._file_context import (
+    ImageSource,
+    Selection,
+    check_notebook,
+    notebook_context,
+)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="python -m marimo_lens")
+    parser = argparse.ArgumentParser(prog="marimo-lens")
     commands = parser.add_subparsers(dest="command", required=True)
     check = commands.add_parser(
         "check",
@@ -49,7 +32,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     check.add_argument("notebooks", nargs="+", type=pathlib.Path)
     check.add_argument("--json", action="store_true", help="Print JSON Lines.")
+    _add_context_command(commands)
     arguments = parser.parse_args(argv)
+    if arguments.command == "context":
+        return _context(parser, arguments)
 
     status = 0
     for notebook in arguments.notebooks:
@@ -70,6 +56,196 @@ def main(argv: Sequence[str] | None = None) -> int:
             if diagnostic["severity"] == "warning" and status == 0:
                 status = 1
     return status
+
+
+def _add_context_command(
+    commands: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> None:
+    context = commands.add_parser(
+        "context",
+        help="Print the Lens context for a selection on a notebook file.",
+        description=(
+            "Load the notebook as a new kernel would, without running it, and "
+            "print the context a Lens gives an agent for the selection: the "
+            "brief, the standalone text, the recorded history of the selected "
+            "cells, or all of them as JSON. Exit with 2 when the notebook "
+            "cannot be loaded or a selection is invalid."
+        ),
+    )
+    context.add_argument("notebook", type=pathlib.Path)
+    selection = context.add_argument_group(
+        "selection", "Describe the selection the analyst made on a cell's output."
+    )
+    selection.add_argument("--cell", help="The selected cell's name or ID.")
+    selection.add_argument("--note", default="", help="The analyst's note.")
+    selection.add_argument(
+        "--mark",
+        type=_mark,
+        help=(
+            "X,Y for a point or X,Y,WIDTH,HEIGHT for a region, in fractions of "
+            "the output. Omit it to mark the whole output."
+        ),
+    )
+    selection.add_argument(
+        "--dom-hint",
+        type=_json_object,
+        metavar="JSON",
+        help='The element under the mark, such as \'{"tag": "rect", "ariaLabel": "Central"}\'.',
+    )
+    selection.add_argument(
+        "--image",
+        type=pathlib.Path,
+        metavar="PNG",
+        help=(
+            "The PNG the analyst saw. It belongs to the --cell selection, or "
+            "else to the last --selection."
+        ),
+    )
+    selection.add_argument(
+        "--selection",
+        action="append",
+        default=[],
+        metavar="FILE",
+        help=(
+            "A JSON file, or - for standard input, holding a selection as the "
+            "widget sends it, or a list of them. Repeat it for more. The "
+            "--cell selection comes last and is the current one."
+        ),
+    )
+    record = context.add_mutually_exclusive_group()
+    record.add_argument(
+        "--record",
+        type=pathlib.Path,
+        metavar="PATH",
+        help="Read this record file instead of the one beside the notebook.",
+    )
+    record.add_argument(
+        "--no-record",
+        action="store_true",
+        help="Build the context of a Lens that keeps no record.",
+    )
+    context.add_argument(
+        "--format",
+        choices=("brief", "text", "history", "json"),
+        default="brief",
+        help=(
+            "brief (the default), text, history as JSON Lines, or json with "
+            "the request, references, brief, text, and history."
+        ),
+    )
+
+
+def _context(parser: argparse.ArgumentParser, arguments: argparse.Namespace) -> int:
+    if arguments.cell is None and not arguments.selection:
+        parser.error("name the selection with --cell or --selection.")
+    if arguments.cell is None and (
+        arguments.note or arguments.mark or arguments.dom_hint is not None
+    ):
+        parser.error("--note, --mark, and --dom-hint describe the --cell selection.")
+    if arguments.selection.count("-") > 1:
+        parser.error("standard input can hold one --selection.")
+    if arguments.no_record and arguments.format == "history":
+        parser.error("--format history reads the record, so drop --no-record.")
+
+    notebook: pathlib.Path = arguments.notebook
+    try:
+        mappings = [item for source in arguments.selection for item in _items(source)]
+        images: dict[str, ImageSource] = {}
+        if arguments.cell is None and arguments.image is not None:
+            image_id = mappings[-1].get("id")
+            if not isinstance(image_id, str):
+                raise ValueError("The last --selection has no id to give --image to.")
+            images[image_id] = arguments.image
+        given: list[Selection | Mapping[str, Any]] = [*mappings]
+        if arguments.cell is not None:
+            given.append(
+                Selection(
+                    cell=arguments.cell,
+                    note=arguments.note,
+                    mark=arguments.mark,
+                    dom_hint=arguments.dom_hint,
+                    image=arguments.image,
+                )
+            )
+        context = notebook_context(
+            notebook,
+            *given,
+            images=images,
+            record=(
+                False
+                if arguments.no_record
+                else (arguments.record if arguments.record is not None else True)
+            ),
+        )
+        output = _render(context, arguments.format, recorded=not arguments.no_record)
+    except (ValueError, OSError, LensError) as error:
+        print(f"{notebook}: {error}", file=sys.stderr)
+        return 2
+    if output:
+        print(output)
+    return 0
+
+
+def _render(context: LensContext, form: str, *, recorded: bool) -> str:
+    if form == "brief":
+        return context.brief
+    if form == "text":
+        return context.text
+    if form == "history":
+        return "\n".join(json.dumps(row) for row in _history(context))
+    return json.dumps(
+        {
+            "request": context.request,
+            "references": context.references,
+            "brief": context.brief,
+            "text": context.text,
+            "history": _history(context) if recorded else None,
+        },
+        indent=2,
+        ensure_ascii=False,
+    )
+
+
+def _history(context: LensContext) -> list[Any]:
+    """The recorded requests on the request's cells and upstream, as the brief lists them."""
+
+    request = context.request
+    if request is not None and request["cells"]:
+        return list(context.history(request))
+    return list(context.history())
+
+
+def _items(source: str) -> list[dict[str, Any]]:
+    """Read a JSON object or a list of objects from a file or standard input."""
+
+    text = sys.stdin.read() if source == "-" else pathlib.Path(source).read_text()
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"{source} holds no JSON: {error}.") from None
+    items = value if isinstance(value, list) else [value]
+    if not all(isinstance(item, dict) for item in items):
+        raise ValueError(f"{source} must hold a JSON object or a list of them.")
+    return items
+
+
+def _mark(value: str) -> tuple[float, ...]:
+    try:
+        return tuple(float(part) for part in value.split(","))
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            "use X,Y for a point or X,Y,WIDTH,HEIGHT for a region, such as 0.4,0.3"
+        ) from None
+
+
+def _json_object(value: str) -> dict[str, Any]:
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError as error:
+        raise argparse.ArgumentTypeError(f"not JSON: {error}") from None
+    if not isinstance(parsed, dict):
+        raise argparse.ArgumentTypeError("must be a JSON object")
+    return parsed
 
 
 if __name__ == "__main__":

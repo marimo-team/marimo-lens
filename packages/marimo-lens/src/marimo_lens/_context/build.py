@@ -56,11 +56,13 @@ def build_lens_context(
     chat_requests: Sequence[Mapping[str, Any]],
     opened: Mapping[str, OpenRequest],
     order: Mapping[str, int],
+    mounted: bool = True,
 ) -> LensContext:
     """Project one selection state, and the record when the Lens keeps one.
 
     ``opened`` holds the ledger's request for each open selection, so the
     brief can report a producing cell that changed since it opened.
+    ``mounted`` False renders a brief without the calls on a mounted Lens.
     """
 
     selections = state.selections()
@@ -115,6 +117,7 @@ def build_lens_context(
             others=others,
             history=None if record is None else record.status.history,
             checks=checks,
+            mounted=mounted,
         )
 
     def history(cell_ids: Sequence[str] | None) -> list[RecordedRequest]:

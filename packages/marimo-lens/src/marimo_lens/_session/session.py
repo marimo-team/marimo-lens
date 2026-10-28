@@ -263,7 +263,13 @@ class LensSession:
                 )
             return record.image
 
-    def context(self) -> LensContext:
+    def context(self, *, mounted: bool = True) -> LensContext:
+        """Project the selection state, and the record when kept, into a context.
+
+        ``mounted`` False leaves the brief's calls on a mounted Lens out, for a
+        host that serves none, such as a notebook file.
+        """
+
         with self._runtime.lock:
             self._require_open()
             state = self._state
@@ -293,6 +299,7 @@ class LensSession:
                 chat_requests=chats,
                 opened=opened,
                 order=self._runtime.requests.order(),
+                mounted=mounted,
             )
 
     def check(self) -> list[Diagnostic]:

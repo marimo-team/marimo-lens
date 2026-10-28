@@ -95,28 +95,33 @@ def render_brief(
     others: Sequence[BriefRequest],
     history: Callable[[Sequence[str] | None], list[RecordedRequest]] | None,
     checks: Sequence[Diagnostic] = (),
+    mounted: bool = True,
 ) -> str:
     """Render the brief for ``request``.
 
     ``history`` None means the Lens keeps no record: the brief says so and
-    its call menu leaves out ``context.history()``.
+    its call menu leaves out ``context.history()``. ``mounted`` False leaves
+    out the calls on a mounted Lens.
     """
 
     if request is None:
+        calls = []
+        if mounted:
+            calls.append(
+                '- mounted.open_request("<the analyst\'s message>", cells=[...]) '
+                + ("opens" if history is None else "records")
+                + " a request made in chat."
+            )
+        if history is not None:
+            calls.append(
+                "- context.history() lists every recorded request and "
+                "whether its changes still hold."
+            )
         return _bounded(
             "No open request. The analyst has no open selection, and no chat "
             "request is open."
             + (f" {_NO_RECORD}" if history is None else "")
-            + "\n\nNext:\n"
-            '- mounted.open_request("<the analyst\'s message>", cells=[...]) '
-            + ("opens" if history is None else "records")
-            + " a request made in chat."
-            + (
-                ""
-                if history is None
-                else "\n- context.history() lists every recorded request and "
-                "whether its changes still hold."
-            )
+            + ("\n\nNext:\n" + "\n".join(calls) if calls else "")
         )
 
     cells = {cell.id: cell for cell in (*snapshot.unregistered, *snapshot.cells)}
@@ -131,12 +136,12 @@ def render_brief(
         _others(others),
     ]
     # The calls that fetch more stay whole. The sections above them shorten.
-    calls = _next(request, revision, recorded=history is not None)
+    calls = _next(request, revision, recorded=history is not None, mounted=mounted)
     body = _bounded(
         "\n\n".join(section for section in sections if section),
         max(0, MAX_BRIEF_CHARACTERS - len(calls) - 2),
     )
-    return _bounded(f"{body}\n\n{calls}")
+    return _bounded(f"{body}\n\n{calls}" if calls else body)
 
 
 def _part(request: BriefRequest) -> str:
@@ -324,7 +329,9 @@ def _others(others: Sequence[BriefRequest]) -> str:
     return "\n".join(lines)
 
 
-def _next(request: BriefRequest, revision: int, *, recorded: bool) -> str:
+def _next(
+    request: BriefRequest, revision: int, *, recorded: bool, mounted: bool
+) -> str:
     lines = ["Next Lens calls:"]
     if recorded:
         lines.append(
@@ -336,6 +343,8 @@ def _next(request: BriefRequest, revision: int, *, recorded: bool) -> str:
         )
     if request.has_image:
         lines.append(f"- context.images[{_json(request.id)}]: the PNG the analyst saw.")
+    if not mounted:
+        return "\n".join(lines) if len(lines) > 1 else ""
     lines.append(
         "- mounted.check() after editing: stale or failed outputs, changed "
         "cells, and record issues."
