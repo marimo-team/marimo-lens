@@ -33,7 +33,7 @@ jobs:
       (github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 5
     outputs:
       channel: ${{ steps.identity.outputs.channel }}
@@ -85,7 +85,7 @@ jobs:
     name: Build
     needs: resolve
     if: needs.resolve.outputs.publish == 'true'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 30
     steps:
       - name: Check out repository
@@ -157,7 +157,7 @@ jobs:
   attest:
     name: Attest provenance
     needs: [resolve, build]
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     outputs:
       predicate_type: ${{ steps.provenance.outputs.predicate_type }}
@@ -202,7 +202,7 @@ jobs:
     name: Publish
     needs: [resolve, attest]
     if: needs.resolve.outputs.channel == 'release'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     environment:
       name: pypi
@@ -226,7 +226,7 @@ jobs:
   verify-pypi:
     name: Verify PyPI
     needs: publish
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     steps:
       - name: Check out repository
@@ -264,7 +264,7 @@ jobs:
     needs:
       - publish
       - verify-pypi
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     permissions:
       contents: write
@@ -288,7 +288,7 @@ jobs:
     name: Publish preview
     needs: [resolve, attest]
     if: needs.resolve.outputs.channel == 'preview'
-    runs-on: ubuntu-p-small
+    runs-on: "${{ vars.CI_RUNNER_SMALL || 'ubuntu-latest' }}"
     timeout-minutes: 10
     # Every preview edits the same release, so uploads, notes, announcements,
     # and pruning run one commit at a time.
