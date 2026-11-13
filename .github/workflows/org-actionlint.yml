@@ -11,6 +11,7 @@ jobs:
   actionlint:
     permissions:
       contents: read
-    uses: marimo-team/.github/.github/workflows/actionlint.yml@de2b01564f3e384e92eae7f2b1585105ef36d716
+    uses: marimo-team/.github/.github/workflows/actionlint.yml@f56cfcfa4ccf47c81aa20868597b41b94af8ffdd
     with:
-      policy-ref: "de2b01564f3e384e92eae7f2b1585105ef36d716"
+      policy-ref: "f56cfcfa4ccf47c81aa20868597b41b94af8ffdd"
+      allow-concurrency-queue: true
