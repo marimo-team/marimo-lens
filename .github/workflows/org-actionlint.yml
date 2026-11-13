@@ -1,0 +1,17 @@
+# Managed by github-maintenance: actionlint-rollout
+name: Org Actionlint
+on:
+  pull_request:
+  merge_group:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  actionlint:
+    permissions:
+      contents: read
+    uses: marimo-team/.github/.github/workflows/actionlint.yml@f56cfcfa4ccf47c81aa20868597b41b94af8ffdd
+    with:
+      policy-ref: "f56cfcfa4ccf47c81aa20868597b41b94af8ffdd"
+      allow-concurrency-queue: true
