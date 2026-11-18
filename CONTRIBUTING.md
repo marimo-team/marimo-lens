@@ -103,3 +103,7 @@ prompt you on your first pull request.
   change.
 - Report any skipped verification command and the reason.
 - Remove comments or prose that only restate the code or heading.
+
+## Releases
+
+See [Releases](RELEASING.md) to request, review, and publish a version through a release PR.
