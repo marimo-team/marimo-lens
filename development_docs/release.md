@@ -1,114 +1,6 @@
 # Release
 
-A release publishes the package version already committed to `main`. The local
-script verifies repository state and successful CI, then creates and pushes one
-annotated `vX.Y.Z` tag. The tag starts GitHub Actions, which rebuilds and
-validates the archives, publishes them to PyPI through
-[Trusted Publishing](https://docs.pypi.org/trusted-publishers/),
-verifies a fresh public installation, and creates GitHub release notes.
-Every validated `main` commit also publishes its wheel, source distribution,
-and checksum manifest to the rolling
-[`preview` GitHub prerelease](https://github.com/marimo-team/marimo-lens/releases/tag/preview).
-See [Rolling previews](#rolling-previews).
-
-Publishing changes external state. [PyPI](https://pypi.org/) versions and uploaded artifacts are
-immutable. Prepare and validate the version before pushing its tag.
-
-## Release actors
-
-| Stage                                 | Owner                                            |
-| ------------------------------------- | ------------------------------------------------ |
-| Version change                        | Release-bearing pull request                     |
-| Local preflight and annotated tag     | `scripts/release.sh`                             |
-| Channel and version resolution        | `resolve` job in `.github/workflows/publish.yml` |
-| Archive build and validation          | `build` job                                      |
-| Build provenance                      | `attest` job                                     |
-| PyPI upload                           | `publish` job and `pypi` environment             |
-| Public index and install verification | `verify-pypi` job                                |
-| GitHub release notes                  | `release-notes` job                              |
-| Preview publication                   | `preview` job and `preview` environment          |
-
-## Prepare the release pull request
-
-Start from a branch based on current `main`.
-
-1. Choose `major`, `minor`, or `patch` from the user-visible behavior change.
-2. Update the package version:
-
-   ```sh
-   uv version --package marimo-lens --bump patch
-   ```
-
-3. Inspect the package metadata and `uv.lock` changes.
-4. Run:
-
-   ```sh
-   make check
-   make package
-   shellcheck scripts/*.sh
-   ```
-
-5. Inspect the direct wheel, source distribution, and rebuilt wheel described in
-   [Build and distribution](build-and-distribution.md#make-package).
-6. Confirm the user documentation, package README, and public API reference
-   describe the release-bearing behavior.
-7. Merge the pull request and wait for the push-triggered CI workflow on `main`.
-
-Use `major` or `minor` in the command when that is the chosen release level.
-The package version must use final `X.Y.Z` form before tagging.
-
-## Prepare local `main`
-
-The release script requires:
-
-- `gh`, `git`, and `uv` on `PATH`.
-- Authenticated GitHub CLI access to the repository.
-- A local branch named `main`.
-- A clean worktree.
-- Local `HEAD` equal to `origin/main` after fetch.
-- A final `X.Y.Z` package version.
-- No existing local release tag for that version.
-- A completed successful push-triggered `ci.yml` run for the exact commit.
-
-Synchronize local `main` with the remote through the repository's normal
-fast-forward workflow before release.
-
-## Dry run
-
-Run:
-
-```sh
-./scripts/release.sh --dry-run
-```
-
-The dry run performs repository and CI preflight. It also runs
-`git fetch origin main --tags`, so it requires network access and updates local
-remote-tracking and tag references. It does not create or push the release tag.
-
-A successful dry run prints:
-
-- The planned `vX.Y.Z` tag.
-- The exact commit.
-- The successful CI run URL.
-- The command that starts the release.
-
-Resolve every preflight failure before continuing. Do not bypass clean-tree,
-commit, version, tag, or CI checks.
-
-## Start the release
-
-Run:
-
-```sh
-./scripts/release.sh
-```
-
-The script creates an annotated tag with message `release: X.Y.Z` and pushes it
-to `origin`. If the push fails, the script deletes the newly created local tag
-so the command can be retried after the transport problem is fixed.
-
-A successful push prints the publish workflow URL. At that point GitHub Actions
-owns the release.
+Use the [release PR workflow](../RELEASING.md) to request and approve a version.
 
 ## Publish workflow
 
@@ -259,17 +151,9 @@ verify:
 
 ## Recovery
 
-### Local preflight fails
+### Preparation or tagging fails
 
-Follow the script's recovery text. Clean or preserve the worktree as appropriate,
-fast-forward local `main`, wait for exact-commit CI, or correct the version in a
-new pull request. Run the dry run again.
-
-### Tag push fails
-
-The script removes the local tag it created. Fix authentication or transport,
-confirm the remote tag is absent, then rerun the script from the same validated
-commit.
+Use the retry instructions in [the maintainer runbook](https://github.com/marimo-team/github-maintenance/blob/main/docs/releases.md#retry-a-failed-release) (internal).
 
 ### Build job fails before publication
 
