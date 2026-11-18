@@ -36,24 +36,10 @@ jobs:
         run: |
           python3 scripts/release-metadata.py > "$RUNNER_TEMP/release-manifest.json"
       - name: Wait for merged commit checks
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          commit="$(git rev-parse HEAD)"
-          for workflow in ci.yml; do
-            run_id=""
-            for _attempt in {1..30}; do
-              run_id="$(gh run list --workflow "$workflow" --branch main --commit "$commit" --event push --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-              if [[ -n "$run_id" ]]; then break; fi
-              sleep 10
-            done
-            if [[ -z "$run_id" ]]; then
-              echo "::error::No $workflow push run found for $commit"
-              exit 1
-            fi
-            gh run watch "$run_id" --exit-status --interval 20
-          done
+        uses: marimo-team/internal-gh-actions/wait-for-workflows@ddcee43722c904b25d4ab57a238df11e1a506ed0
+        with:
+          commit: ${{ github.event.pull_request.merge_commit_sha }}
+          workflows: ci.yml
       - name: Tag merged release
         uses: marimo-team/internal-gh-actions/release-tag@3a52681ab8e200a34175ec8e5d14985e4e7ce3c3
         with:
