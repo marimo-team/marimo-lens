@@ -106,4 +106,4 @@ prompt you on your first pull request.
 
 ## Releases
 
-See [Releases](RELEASING.md) to request, review, and publish a version through a release PR.
+See [Releases](RELEASING.md) for the release PR workflow.
