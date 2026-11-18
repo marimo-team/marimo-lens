@@ -153,7 +153,7 @@ verify:
 
 ### Preparation or tagging fails
 
-Use the retry instructions in [Releases](../RELEASING.md#retry).
+Use the retry instructions in [the maintainer runbook](https://github.com/marimo-team/github-maintenance/blob/main/docs/releases.md#retry-a-failed-release) (internal).
 
 ### Build job fails before publication
 
