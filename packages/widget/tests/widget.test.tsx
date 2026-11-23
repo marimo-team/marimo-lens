@@ -20,6 +20,7 @@ afterEach(() => {
   }
   cleanups.clear();
   document.body.replaceChildren();
+  delete window.__MARIMO_STATIC__;
   vi.restoreAllMocks();
 });
 
@@ -44,6 +45,18 @@ describe("Lens widget views", () => {
     renderWidget(nextContainer, new Proxy(underlyingModel, {}));
     expect(nextContainer.querySelector("[data-widget-content]")).not.toBeNull();
   });
+
+  test("mounts nothing in a static marimo export", () => {
+    window.__MARIMO_STATIC__ = { files: {} };
+    const container = appendContainer();
+
+    act(() => {
+      expect(render(renderProps(container, fakeModel()))).toBeUndefined();
+    });
+
+    expect(container.childNodes).toHaveLength(0);
+    expect([...document.body.childNodes]).toEqual([container]);
+  });
 });
 
 function TestContent() {
@@ -56,17 +69,20 @@ function appendContainer(): HTMLDivElement {
   return container;
 }
 
-function renderWidget(container: HTMLElement, model: AnyModel): RenderCleanup {
-  const props = {
+function renderProps(container: HTMLElement, model: AnyModel): RenderProps {
+  return {
     model,
     el: container,
     signal: new AbortController().signal,
     host: fakeHost(),
     experimental: fakeExperimental(),
-  } satisfies RenderProps;
+  };
+}
+
+function renderWidget(container: HTMLElement, model: AnyModel): RenderCleanup {
   const rendered = Array<ReturnType<typeof render>>();
   act(() => {
-    rendered.push(render(props));
+    rendered.push(render(renderProps(container, model)));
   });
   const cleanup = rendered[0];
   if (cleanup instanceof Promise) throw new Error("Expected synchronous widget cleanup");
