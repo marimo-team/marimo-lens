@@ -27,8 +27,7 @@ def test_brief_starts_with_the_current_selection_and_its_part(
     assert brief.startswith('# Request S1 (selection)\n\nNote: "Central looks off"')
     part = _sections(brief)["Part"]
     assert part.startswith("Part: a point on the output of its producing cell")
-    assert "Image: the analyst's view is in context.images." in part
-    assert 'context.images["selection-1"]' in brief
+    assert 'Image: the analyst\'s view is in context.images["selection-1"].' in part
 
 
 def test_brief_traces_producing_cells_with_their_state(notebook: FakeNotebook) -> None:

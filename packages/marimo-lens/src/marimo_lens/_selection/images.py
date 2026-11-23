@@ -123,7 +123,7 @@ def _prepare_png(
             f"Lens image exceeds {MAX_IMAGE_BYTES} bytes.",
         )
     data = bytes(buffer)
-    width, height = _validate_png(data)
+    width, height = validate_png(data)
     if image.width != width or image.height != height:
         raise Rejection(
             "image_metadata_mismatch",
@@ -138,7 +138,13 @@ def _prepare_png(
     return data, width, height, digest, image.captured_at
 
 
-def _validate_png(data: bytes) -> tuple[int, int]:
+def validate_png(data: bytes) -> tuple[int, int]:
+    """Return the width and height of a PNG within Lens's image bounds.
+
+    Raises:
+        Rejection: The bytes are no PNG Lens accepts.
+    """
+
     if not data.startswith(_PNG_SIGNATURE):
         raise Rejection("invalid_png", "Lens image must be a PNG.")
 

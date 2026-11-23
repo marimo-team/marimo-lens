@@ -27,9 +27,10 @@ from .._core.types import (
 class LensContext:
     """Detached brief, references, history, standalone text, and images.
 
-    ``Lens.context()`` and ``MountedLens.context()`` create it from one
-    selection-state revision, one runtime snapshot, and one read of the
-    record when the Lens keeps one. ``brief`` describes the open request
+    ``Lens.context()``, ``MountedLens.context()``, and ``notebook_context()``
+    create it from one selection-state revision, one runtime snapshot, and
+    one read of the record when the Lens keeps one. ``brief`` describes the
+    open request
     identified by ``request``.
     ``references`` contains compact notebook or DOM targets and their
     producing cells. ``history()`` joins recorded requests with the notebook.
@@ -61,7 +62,8 @@ class LensContext:
 
     def __init__(self) -> None:
         raise TypeError(
-            "Read a LensContext with Lens.context() or MountedLens.context()."
+            "Read a LensContext with Lens.context(), MountedLens.context(), or "
+            "marimo_lens.notebook_context()."
         )
 
     @classmethod

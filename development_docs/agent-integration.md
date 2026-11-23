@@ -348,3 +348,4 @@ stays visible outside the exception object.
 | Setup and mounting                       | `skills/marimo-lens/references/setup.md`                   |
 | Target authoring                         | `skills/marimo-lens/references/targets.md`                 |
 | Cross-call recipes                       | `skills/marimo-lens/references/workflow.md`                |
+| Context from a notebook file             | `skills/marimo-lens/references/notebook-files.md`          |

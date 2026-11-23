@@ -1,6 +1,6 @@
 ---
 title: Checks
-description: The LV, LT, and LR rules that Lens.check() runs, the LR rules that python -m marimo_lens check runs on notebook files, and their severities.
+description: The LV, LT, and LR rules that Lens.check() runs, the LR rules that marimo-lens check runs on notebook files, and their severities.
 ---
 
 # Checks
@@ -81,7 +81,7 @@ Run the `LR` rules on notebook files and their file records without a kernel,
 for example in CI:
 
 ```bash
-python -m marimo_lens check analysis.py
+marimo-lens check analysis.py
 ```
 
 ```text
@@ -91,4 +91,5 @@ analysis.py: LR001 unreadable-record-line [warning] The record holds 1 line Lens
 The command loads each file as a new kernel would and follows recorded cells
 by their code. Pass `--json` for one JSON object per line. It exits with `1`
 when it finds a warning, such as `LR005` for a record it cannot read, and `2`
-when marimo cannot load a file. A notebook with no record passes.
+when marimo cannot load a file. A notebook with no record passes. The
+[command line](./cli) reference lists the other `marimo-lens` commands.

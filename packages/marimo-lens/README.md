@@ -77,6 +77,18 @@ package. [Connect an agent](https://marimo-team.github.io/marimo-lens/agents)
 covers the briefing, `marimo_lens.agent.connect()`, and the inspection,
 verification, and review workflow.
 
+From a terminal with no kernel, print the brief Lens gives for a cell of a
+notebook file and its record:
+
+```console
+uvx marimo-lens context analysis.py --cell revenue_chart --note "Central looks off"
+```
+
+`marimo_lens.notebook_context()` returns the same context in Python, and
+`marimo_lens.record_request()` writes past requests to a record. The
+[command line](https://marimo-team.github.io/marimo-lens/reference/cli)
+reference covers each `marimo-lens` command.
+
 ## Documentation
 
 [What is Lens?](https://marimo-team.github.io/marimo-lens/overview) ·

@@ -21,6 +21,7 @@ LAYERS = (
     "_protocol",
     "_marimo",
     "_widget",
+    "_file_context",
 )
 HOSTS = {"marimo", "anywidget", "traitlets"}
 HOST_ADAPTERS = {"_marimo", "_widget"}

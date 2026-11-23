@@ -516,10 +516,52 @@ reuses `check_selections()` for its current request. `check_record()` reports
 a failed or partial read as `LR005` or `LR006`, so an empty result covers the
 whole record.
 
-`python -m marimo_lens check` (`__main__.py`) runs only the `LR` rules, since
-`LV` and `LT` need live selections. `notebook_file_snapshot()` in
-`_marimo/notebook_file.py` loads the file through marimo's `load_app()` and
-`InternalApp`, which assign the same positional cell IDs a new kernel would.
-The command uses a kernel token no line carries, so every recorded cell is
-followed by its code. The public [Checks](../docs/reference/checks.md) page
-owns the rule list.
+`marimo-lens check` runs `LensSession.check()` on a notebook file, as
+[Notebook files](#notebook-files) composes it. The session holds no
+selections, so only the `LR` rules report. The public
+[Checks](../docs/reference/checks.md) page owns the rule list.
+
+## Notebook files
+
+`_file_context.py` serves a notebook file as a host with no runtime.
+`NotebookFile` implements `NotebookReads` from one load: marimo's `load_app()`
+assigns positional cell IDs, the IDs of a kernel started on the file. The
+snapshot builds its graph from the cells that parse, as a kernel registers
+them, and keeps the rest as stale unregistered cells. Each call builds a fresh
+`LensRuntime`, so the session has a new kernel token and follows recorded
+cells by their code, and a `FileJournal` on the record path gives it a
+`KeptRecord` with History off.
+
+`notebook_context()` opens each selection through
+`LensSession.put_selection()` and each `ChatRequest` through
+`LensSession.open_request()`. The brief names its calls through a
+`BriefCalls` table: `MOUNTED_CALLS` for a live Lens, the same Python calls
+with `context.text` and without the `mounted` calls for a file, and the
+command's `--format` options and `--image` path for `marimo-lens context`. A
+`Selection` becomes the `SelectionInput` the widget
+sends for a plain cell output: the anchor from `mark`, the description label
+from the cell name, and an `available` snapshot when it carries a PNG. A
+selection mapping is validated as given. The parity test in
+`test_notebook_context.py` holds both forms to the context of a live Lens.
+`record_request()` takes the `Selection` and `ChatRequest` forms only.
+
+`record_request()` opens the request on the `before` file, then
+`NotebookFile.reload()` loads the `after` file and calls marimo's
+`sort_cell_ids_by_similarity()`, as `AppFileManager.reload()` does for an edit
+on disk. An edited cell keeps its ID and an added cell takes a new one. The
+session then resolves the request, and the session clock stamps the given
+`opened_at` and `resolved_at`.
+
+A file snapshot takes run state from the session file marimo writes in
+`__marimo__/session/`, through marimo's `get_session_cache_file()`, when
+marimo's `is_session_snapshot_stale()` accepts it. That is the test
+`marimo export session` runs before it reuses a session: the multiset of cell
+code hashes and the inline script metadata hash must match. Lens applies
+that test whole, so a file's cell states agree with marimo's. A cell then takes
+`exception` or `success` from the outputs saved under the `hash_code()` of its
+code. `DirectedGraph.is_disabled()` marks disabled cells with or without a
+session file, and without an accepted one, other cells that parse read as
+`idle`. `record_request()` and `check_notebook()`
+load the file with `last_run=False`, since neither reads cell states. The file holds no
+controls, so the text has no `Current controls` section. The public
+[Python API](../docs/api.md#notebook-files) owns the contract.

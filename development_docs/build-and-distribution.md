@@ -92,6 +92,7 @@ The authored Agent Plugin contract consists of:
 - `plugin.json`
 - `skills/marimo-lens/SKILL.md`
 - `skills/marimo-lens/agents/openai.yaml`
+- `skills/marimo-lens/references/notebook-files.md`
 - `skills/marimo-lens/references/setup.md`
 - `skills/marimo-lens/references/selections.md`
 - `skills/marimo-lens/references/targets.md`

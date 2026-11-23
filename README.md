@@ -64,8 +64,17 @@ runs it from a terminal:
 marimo pair execute --url <URL> --session <session_id> -c 'import marimo_lens._capability; help(marimo_lens._capability)'
 ```
 
+From a terminal with no kernel, print the brief Lens gives for a cell of a
+notebook file and its record:
+
+```console
+uvx marimo-lens context analysis.py --cell revenue_chart --note "Central looks off"
+```
+
 [Connect an agent](https://marimo-team.github.io/marimo-lens/agents) covers
-connection and resource access.
+connection and resource access. The
+[command line](https://marimo-team.github.io/marimo-lens/reference/cli)
+reference covers each `marimo-lens` command.
 
 ## Documentation
 
