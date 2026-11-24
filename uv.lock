@@ -521,7 +521,7 @@ wheels = [
 
 [[package]]
 name = "marimo-lens"
-version = "0.2.4"
+version = "0.2.5"
 source = { editable = "packages/marimo-lens" }
 dependencies = [
     { name = "agent-plugins" },
