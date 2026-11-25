@@ -36,12 +36,12 @@ jobs:
         run: |
           python3 scripts/release-metadata.py > "$RUNNER_TEMP/release-manifest.json"
       - name: Wait for merged commit checks
-        uses: marimo-team/internal-gh-actions/wait-for-workflows@ddcee43722c904b25d4ab57a238df11e1a506ed0
+        uses: marimo-team/internal-gh-actions/wait-for-workflows@3c6ddeb4b132541309e3c56bbca8b3605d24ecfd
         with:
           commit: ${{ github.event.pull_request.merge_commit_sha }}
           workflows: ci.yml
       - name: Tag merged release
-        uses: marimo-team/internal-gh-actions/release-tag@3a52681ab8e200a34175ec8e5d14985e4e7ce3c3
+        uses: marimo-team/internal-gh-actions/release-tag@3c6ddeb4b132541309e3c56bbca8b3605d24ecfd
         with:
           app-id: ${{ vars.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
@@ -58,6 +58,6 @@ jobs:
       pull-requests: read
       contents: read
     steps:
-      - uses: marimo-team/internal-gh-actions/release-approval-notification@0a3db0e04217aaa03b3d011502874b020e9466a3
+      - uses: marimo-team/internal-gh-actions/release-approval-notification@3c6ddeb4b132541309e3c56bbca8b3605d24ecfd
         with:
           slack-webhook-url: ${{ secrets.SLACK_WEBHOOK_URL_RELEASES }}
